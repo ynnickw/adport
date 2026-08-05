@@ -18,9 +18,9 @@ function run(...args: string[]) {
 beforeEach(() => {
   home = mkdtempSync(path.join(os.tmpdir(), 'adport-cli-test-'));
   process.env.ADPORT_HOME = home;
-  // Never let the developer's real Google env credentials leak into tests.
+  // Never let the developer's real provider env credentials leak into tests.
   for (const key of Object.keys(process.env)) {
-    if (key.startsWith('GOOGLE_ADS_')) delete process.env[key];
+    if (key.startsWith('GOOGLE_ADS_') || key.startsWith('META_')) delete process.env[key];
   }
   out = [];
   err = [];

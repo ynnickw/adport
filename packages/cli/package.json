@@ -18,6 +18,7 @@
     "@adport/core": "workspace:*",
     "@adport/mcp": "workspace:*",
     "@adport/provider-google": "workspace:*",
+    "@adport/provider-meta": "workspace:*",
     "commander": "^13.0.0",
     "yaml": "^2.6.0",
     "zod": "^3.25.0"

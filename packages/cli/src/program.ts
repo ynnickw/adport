@@ -171,11 +171,16 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
         await connectGoogle({ openBrowser: opts.browser, io });
         return;
       }
+      if (provider === 'meta') {
+        const { connectMeta } = await import('./connect/meta.js');
+        await connectMeta({ io });
+        return;
+      }
       if (provider === 'mock') {
         io.out('The mock provider needs no credentials — it is available out of the box. Try: adport accounts');
         return;
       }
-      io.err(`Provider "${provider}" is not supported yet. Available: google, mock. Meta lands in M2, TikTok in v1.1.`);
+      io.err(`Provider "${provider}" is not supported yet. Available: google, meta, mock. TikTok lands in v1.1.`);
       process.exitCode = 1;
     });
 
@@ -191,17 +196,19 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
       for (const record of records) {
         io.out(`${record.provider}: credentials stored (source: ${record.source}, updated ${record.updatedAt})`);
       }
-      const google = rt.ctx.providers.list().find((p) => p.id === 'google');
-      if (google) {
+      for (const id of ['google', 'meta'] as const) {
+        const provider = rt.ctx.providers.list().find((p) => p.id === id);
+        if (!provider) {
+          io.out(`${id}: not connected (run \`adport connect ${id}\`)`);
+          continue;
+        }
         try {
-          const accounts = await google.listAccounts();
-          io.out(`google: OK — ${accounts.length} accessible account(s)`);
+          const accounts = await provider.listAccounts();
+          io.out(`${id}: OK — ${accounts.length} accessible account(s)`);
         } catch (err) {
-          io.err(`google: FAILED — ${err instanceof Error ? err.message : String(err)}`);
+          io.err(`${id}: FAILED — ${err instanceof Error ? err.message : String(err)}`);
           process.exitCode = 1;
         }
-      } else {
-        io.out('google: not connected (run `adport connect google`) — mock provider active');
       }
     });
 

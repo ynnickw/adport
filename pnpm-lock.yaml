@@ -23,6 +23,9 @@ importers:
       '@adport/provider-google':
         specifier: workspace:*
         version: link:../google
+      '@adport/provider-meta':
+        specifier: workspace:*
+        version: link:../meta
       commander:
         specifier: ^13.0.0
         version: 13.1.0
@@ -98,9 +101,34 @@ importers:
       '@adport/provider-google':
         specifier: workspace:*
         version: link:../google
+      '@adport/provider-meta':
+        specifier: workspace:*
+        version: link:../meta
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.0
         version: 1.30.0(zod@3.25.76)
+      zod:
+        specifier: ^3.25.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(postcss@8.5.25)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.1)(yaml@2.9.0)
+
+  packages/meta:
+    dependencies:
+      '@adport/core':
+        specifier: workspace:*
+        version: link:../core
       zod:
         specifier: ^3.25.0
         version: 3.25.76

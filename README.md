@@ -2,7 +2,7 @@
 
 > Open-source multi-platform ads management for AI agents. Connect your Google Ads, Meta Ads, and TikTok Ads accounts once, then monitor and manage them by talking to any agent — through an MCP server and CLI, with real read *and* write access behind auditable safety rails.
 
-**Status: v0 (unpublished).** Google Ads works end-to-end (read + write behind the policy engine); Meta is next, TikTok after. See [start-spec.md](./start-spec.md) for the full plan.
+**Status: v0.1 (unpublished).** Google Ads works end-to-end (live-verified read + write behind the policy engine). Meta Ads is integrated (insights, campaign/ad-set management, `validate_only` dry runs) and E2E-verified against doc-faithful Marketing API mocks. TikTok is next. See [start-spec.md](./start-spec.md) for the full plan.
 
 ## Why
 
@@ -50,6 +50,14 @@ Then verify and use it:
 node packages/cli/dist/index.js doctor
 node packages/cli/dist/index.js report --provider google --metrics spend,clicks,roas --range last_7_days
 ```
+
+## Connect Meta Ads
+
+```sh
+node packages/cli/dist/index.js connect meta
+```
+
+No App Review is needed for your own ad accounts: create a dev-mode Business app, generate a **system-user token** (never expires — the wizard explains where), paste it, done (~20-30 min the first time). User tokens work too; adport warns you about their ~60-day expiry. Budgets use Meta's native minor units (cents), and every write supports Meta's server-side `execution_options=["validate_only"]` dry run.
 
 ## Use from an MCP client (Claude Code, Claude Desktop, Cursor, ...)
 

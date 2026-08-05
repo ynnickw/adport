@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { AdportError, CredentialStore, createContext, type AdportRuntime, type ProviderModule } from '@adport/core';
 import { createGoogleModule } from '@adport/provider-google';
+import { createMetaModule } from '@adport/provider-meta';
 
 /**
  * Standard runtime assembly: real providers when credentials exist, the mock
@@ -10,8 +11,10 @@ import { createGoogleModule } from '@adport/provider-google';
 export async function assembleRuntime(): Promise<AdportRuntime> {
   const store = new CredentialStore();
   const modules: ProviderModule[] = [];
-  const google = await createGoogleModule(store);
-  if (google) modules.push(google);
+  for (const factory of [createGoogleModule, createMetaModule]) {
+    const module = await factory(store);
+    if (module) modules.push(module);
+  }
   return createContext({ providerModules: modules });
 }
 
