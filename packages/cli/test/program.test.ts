@@ -1,0 +1,81 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { buildProgram, type ProgramIO } from '../src/program.js';
+
+let home: string;
+let out: string[];
+let err: string[];
+let io: ProgramIO;
+
+function run(...args: string[]) {
+  const program = buildProgram(io);
+  program.exitOverride();
+  return program.parseAsync(['node', 'adport', ...args]);
+}
+
+beforeEach(() => {
+  home = mkdtempSync(path.join(os.tmpdir(), 'adport-cli-test-'));
+  process.env.ADPORT_HOME = home;
+  // Never let the developer's real Google env credentials leak into tests.
+  for (const key of Object.keys(process.env)) {
+    if (key.startsWith('GOOGLE_ADS_')) delete process.env[key];
+  }
+  out = [];
+  err = [];
+  io = { out: (l) => out.push(l), err: (l) => err.push(l) };
+});
+
+afterEach(() => {
+  delete process.env.ADPORT_HOME;
+  rmSync(home, { recursive: true, force: true });
+});
+
+describe('adport CLI', () => {
+  it('lists tools as JSON', async () => {
+    await run('tools', 'list', '--json');
+    const tools = JSON.parse(out.join('\n')) as Array<{ name: string }>;
+    expect(tools.map((t) => t.name)).toContain('accounts_list');
+  });
+
+  it('lists mock accounts', async () => {
+    await run('accounts', '--json');
+    const accounts = JSON.parse(out.join('\n')) as Array<{ id: string }>;
+    expect(accounts.map((a) => a.id)).toEqual(['mock-1', 'mock-2']);
+  });
+
+  it('runs a report with human table output', async () => {
+    await run('report', '--metrics', 'spend,clicks', '--range', 'last_7_days');
+    expect(out.join('\n')).toContain('Brand Search');
+  });
+
+  it('runs the two-step write through tools run', async () => {
+    await run('tools', 'run', 'mock_set_budget', '--input', '{"account_id":"mock-1","campaign_id":"c1","daily_budget_micros":11000000}');
+    const first = JSON.parse(out.join('\n')) as { status: string; pending_operation_id: string };
+    expect(first.status).toBe('pending_validation');
+
+    out = [];
+    await run(
+      'tools',
+      'run',
+      'mock_set_budget',
+      '--input',
+      JSON.stringify({
+        account_id: 'mock-1',
+        campaign_id: 'c1',
+        daily_budget_micros: 11_000_000,
+        pending_operation_id: first.pending_operation_id,
+      }),
+    );
+    const second = JSON.parse(out.join('\n')) as { status: string };
+    expect(second.status).toBe('applied');
+  });
+
+  it('shows the policy with its source', async () => {
+    await run('policy');
+    const policy = JSON.parse(out.join('\n')) as { source: string; policy: { require_validation: boolean } };
+    expect(policy.source).toBe('defaults');
+    expect(policy.policy.require_validation).toBe(true);
+  });
+});

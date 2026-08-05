@@ -1,0 +1,31 @@
+{
+  "name": "adport",
+  "version": "0.0.1",
+  "description": "adport CLI — manage your ad accounts from the terminal or any AI agent",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "adport": "./dist/index.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --sourcemap --clean",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@adport/core": "workspace:*",
+    "@adport/mcp": "workspace:*",
+    "@adport/provider-google": "workspace:*",
+    "commander": "^13.0.0",
+    "yaml": "^2.6.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.0"
+  }
+}
