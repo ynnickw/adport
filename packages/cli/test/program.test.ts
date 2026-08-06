@@ -72,6 +72,17 @@ describe('adport CLI', () => {
     expect(second.status).toBe('applied');
   });
 
+  it('records and shows external-change audit notes', async () => {
+    await run('audit', 'note', 'CPC ceiling set to 1.2M via direct API call', '--provider', 'google', '--account', '5622048100');
+    expect(out).toContain('Noted.');
+    out = [];
+    await run('audit');
+    const entry = JSON.parse(out.join('\n')) as { event: string; provider: string; summary: string };
+    expect(entry.event).toBe('note');
+    expect(entry.provider).toBe('google');
+    expect(entry.summary).toContain('CPC ceiling');
+  });
+
   it('shows the policy with its source', async () => {
     await run('policy');
     const policy = JSON.parse(out.join('\n')) as { source: string; policy: { require_validation: boolean } };

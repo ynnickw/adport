@@ -59,6 +59,36 @@ export function googleTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
       payload: z.object({ campaign_id: z.string(), daily_budget_micros: z.number().int().positive() }),
     }),
     guardedWriteTool({
+      name: 'google_set_bid_ceiling',
+      namespace: 'google',
+      description:
+        "Set a campaign's max CPC bid ceiling (micros). Works for MAXIMIZE_CLICKS (target spend) and " +
+        'TARGET_IMPRESSION_SHARE strategies; fails with guidance for others.',
+      provider: 'google',
+      kind: 'update',
+      payload: z.object({
+        campaign_id: z.string(),
+        cpc_bid_ceiling_micros: z.number().int().positive().describe('1 currency unit = 1,000,000 micros'),
+      }),
+    }),
+    guardedWriteTool({
+      name: 'google_set_bidding_strategy',
+      namespace: 'google',
+      description:
+        "Switch a campaign's bidding strategy: MANUAL_CPC, MAXIMIZE_CLICKS (optional cpc_bid_ceiling_micros), " +
+        'MAXIMIZE_CONVERSIONS (optional target_cpa_micros), MAXIMIZE_CONVERSION_VALUE (optional target_roas). ' +
+        'Also updates the target of the current strategy when the strategy stays the same.',
+      provider: 'google',
+      kind: 'update',
+      payload: z.object({
+        campaign_id: z.string(),
+        strategy: z.enum(['MANUAL_CPC', 'MAXIMIZE_CLICKS', 'MAXIMIZE_CONVERSIONS', 'MAXIMIZE_CONVERSION_VALUE']),
+        target_cpa_micros: z.number().int().positive().optional(),
+        target_roas: z.number().positive().optional().describe('e.g. 3.5 = 350% return on ad spend'),
+        cpc_bid_ceiling_micros: z.number().int().positive().optional(),
+      }),
+    }),
+    guardedWriteTool({
       name: 'google_create_ad_group',
       namespace: 'google',
       description: 'Create a SEARCH_STANDARD ad group in a campaign.',

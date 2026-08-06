@@ -148,8 +148,10 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
       io.out(json({ source: rt.policySource, policy: rt.ctx.engine.policy }));
     });
 
-  program
-    .command('audit')
+  const audit = program.command('audit').description('Inspect or extend the write-audit trail');
+
+  audit
+    .command('show', { isDefault: true })
     .description('Show recent write-audit entries')
     .option('--limit <n>', 'Max entries', '20')
     .action(async (opts: { limit: string }) => {
@@ -159,6 +161,22 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
         return;
       }
       io.out(entries.map((e) => JSON.stringify(e)).join('\n'));
+    });
+
+  audit
+    .command('note <text>')
+    .description('Record an external/manual change in the audit trail (e.g. a change made in the platform UI)')
+    .option('--provider <id>', 'Provider the change concerns', 'external')
+    .option('--account <id>', 'Account id the change concerns', '-')
+    .action(async (text: string, opts: { provider: string; account: string }) => {
+      await new AuditLog().append({
+        event: 'note',
+        provider: opts.provider,
+        tool: 'audit_note',
+        accountId: opts.account,
+        summary: text,
+      });
+      io.out('Noted.');
     });
 
   program

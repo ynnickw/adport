@@ -232,6 +232,10 @@ export class GoogleAdsProvider implements AdProvider {
         return this.planRemoveKeywords(cid, payload);
       case 'google_create_responsive_search_ad':
         return this.planCreateRsa(cid, payload, guard);
+      case 'google_set_bid_ceiling':
+        return this.planSetBidCeiling(cid, payload);
+      case 'google_set_bidding_strategy':
+        return this.planSetBiddingStrategy(cid, payload);
       default:
         throw new AdportError('PROVIDER_ERROR', `google: unsupported write tool ${op.tool}`);
     }
@@ -512,6 +516,152 @@ export class GoogleAdsProvider implements AdProvider {
         const res = await this.client.mutate(cid, 'adGroupAds', [{ create }], { validateOnly });
         return (res.results ?? []).map((r) => r.resourceName ?? '');
       },
+    };
+  }
+
+  /** CPC ceilings exist on TARGET_SPEND (Maximize clicks) and TARGET_IMPRESSION_SHARE. */
+  private async planSetBidCeiling(
+    cid: string,
+    payload: { campaign_id: string; cpc_bid_ceiling_micros: number },
+  ): Promise<WritePlan> {
+    const current = await this.lookupCampaignBidding(cid, payload.campaign_id);
+    const resourceName = `customers/${cid}/campaigns/${payload.campaign_id}`;
+    let update: Record<string, unknown>;
+    let updateMask: string;
+    if (current.strategyType === 'TARGET_SPEND') {
+      update = { resourceName, targetSpend: { cpcBidCeilingMicros: String(payload.cpc_bid_ceiling_micros) } };
+      updateMask = 'target_spend.cpc_bid_ceiling_micros';
+    } else if (current.strategyType === 'TARGET_IMPRESSION_SHARE') {
+      update = {
+        resourceName,
+        targetImpressionShare: { cpcBidCeilingMicros: String(payload.cpc_bid_ceiling_micros) },
+      };
+      updateMask = 'target_impression_share.cpc_bid_ceiling_micros';
+    } else {
+      throw new AdportError(
+        'PROVIDER_ERROR',
+        `google: campaign "${current.name}" uses ${current.strategyType} bidding, which has no CPC bid ceiling. ` +
+          'Use google_set_bidding_strategy to switch strategy (e.g. MAXIMIZE_CLICKS supports a ceiling).',
+      );
+    }
+    // Note: bid ceilings are deliberately NOT reported as budgetDeltas — the
+    // budget-delta policy cap targets budgets; bid tuning routinely moves >25%.
+    return {
+      summary:
+        `Set "${current.name}" CPC bid ceiling ` +
+        `${current.cpcBidCeilingMicros ?? '(unset)'} → ${payload.cpc_bid_ceiling_micros} micros (${current.strategyType})`,
+      changes: [
+        `~ campaign ${payload.campaign_id} ${updateMask} ${current.cpcBidCeilingMicros ?? '(unset)'} → ${payload.cpc_bid_ceiling_micros}`,
+      ],
+      coercions: [],
+      budgetDeltas: [],
+      execute: async (validateOnly) => {
+        const res = await this.client.mutate(cid, 'campaigns', [{ update, updateMask }], { validateOnly });
+        return (res.results ?? []).map((r) => r.resourceName ?? resourceName);
+      },
+    };
+  }
+
+  private async planSetBiddingStrategy(
+    cid: string,
+    payload: {
+      campaign_id: string;
+      strategy: 'MANUAL_CPC' | 'MAXIMIZE_CLICKS' | 'MAXIMIZE_CONVERSIONS' | 'MAXIMIZE_CONVERSION_VALUE';
+      target_cpa_micros?: number;
+      target_roas?: number;
+      cpc_bid_ceiling_micros?: number;
+    },
+  ): Promise<WritePlan> {
+    if (payload.target_cpa_micros && payload.strategy !== 'MAXIMIZE_CONVERSIONS') {
+      throw new AdportError('INVALID_INPUT', 'target_cpa_micros only applies to MAXIMIZE_CONVERSIONS');
+    }
+    if (payload.target_roas && payload.strategy !== 'MAXIMIZE_CONVERSION_VALUE') {
+      throw new AdportError('INVALID_INPUT', 'target_roas only applies to MAXIMIZE_CONVERSION_VALUE');
+    }
+    if (payload.cpc_bid_ceiling_micros && payload.strategy !== 'MAXIMIZE_CLICKS') {
+      throw new AdportError('INVALID_INPUT', 'cpc_bid_ceiling_micros only applies to MAXIMIZE_CLICKS (target spend)');
+    }
+    const current = await this.lookupCampaignBidding(cid, payload.campaign_id);
+    const resourceName = `customers/${cid}/campaigns/${payload.campaign_id}`;
+
+    let strategyField: Record<string, unknown>;
+    let updateMask: string;
+    const details: string[] = [];
+    switch (payload.strategy) {
+      case 'MANUAL_CPC':
+        strategyField = { manualCpc: {} };
+        updateMask = 'manual_cpc';
+        break;
+      case 'MAXIMIZE_CLICKS':
+        strategyField = {
+          targetSpend: payload.cpc_bid_ceiling_micros
+            ? { cpcBidCeilingMicros: String(payload.cpc_bid_ceiling_micros) }
+            : {},
+        };
+        updateMask = payload.cpc_bid_ceiling_micros ? 'target_spend.cpc_bid_ceiling_micros' : 'target_spend';
+        if (payload.cpc_bid_ceiling_micros) details.push(`ceiling ${payload.cpc_bid_ceiling_micros} micros`);
+        break;
+      case 'MAXIMIZE_CONVERSIONS':
+        strategyField = {
+          maximizeConversions: payload.target_cpa_micros
+            ? { targetCpaMicros: String(payload.target_cpa_micros) }
+            : {},
+        };
+        updateMask = payload.target_cpa_micros ? 'maximize_conversions.target_cpa_micros' : 'maximize_conversions';
+        if (payload.target_cpa_micros) details.push(`target CPA ${payload.target_cpa_micros} micros`);
+        break;
+      case 'MAXIMIZE_CONVERSION_VALUE':
+        strategyField = {
+          maximizeConversionValue: payload.target_roas ? { targetRoas: payload.target_roas } : {},
+        };
+        updateMask = payload.target_roas ? 'maximize_conversion_value.target_roas' : 'maximize_conversion_value';
+        if (payload.target_roas) details.push(`target ROAS ${payload.target_roas}`);
+        break;
+    }
+    return {
+      summary:
+        `Switch "${current.name}" bidding ${current.strategyType} → ${payload.strategy}` +
+        (details.length > 0 ? ` (${details.join(', ')})` : ''),
+      changes: [`~ campaign ${payload.campaign_id} bidding_strategy ${current.strategyType} → ${payload.strategy}`],
+      coercions: [],
+      budgetDeltas: [],
+      execute: async (validateOnly) => {
+        const res = await this.client.mutate(
+          cid,
+          'campaigns',
+          [{ update: { resourceName, ...strategyField }, updateMask }],
+          { validateOnly },
+        );
+        return (res.results ?? []).map((r) => r.resourceName ?? resourceName);
+      },
+    };
+  }
+
+  private async lookupCampaignBidding(
+    cid: string,
+    campaignId: string,
+  ): Promise<{ name: string; strategyType: string; cpcBidCeilingMicros?: number }> {
+    const rows = await this.client.search(
+      cid,
+      `SELECT campaign.name, campaign.bidding_strategy_type, campaign.target_spend.cpc_bid_ceiling_micros, campaign.target_impression_share.cpc_bid_ceiling_micros FROM campaign WHERE campaign.id = ${Number(campaignId)} LIMIT 1`,
+      { maxRows: 1 },
+    );
+    const row = rows[0];
+    if (!row) {
+      throw new AdportError('PROVIDER_ERROR', `google: campaign ${campaignId} not found in account ${cid}`);
+    }
+    const campaign = row.campaign as {
+      name?: string;
+      biddingStrategyType?: string;
+      targetSpend?: { cpcBidCeilingMicros?: string };
+      targetImpressionShare?: { cpcBidCeilingMicros?: string };
+    };
+    const ceiling =
+      campaign.targetSpend?.cpcBidCeilingMicros ?? campaign.targetImpressionShare?.cpcBidCeilingMicros;
+    return {
+      name: campaign.name ?? campaignId,
+      strategyType: campaign.biddingStrategyType ?? 'UNKNOWN',
+      cpcBidCeilingMicros: ceiling !== undefined ? Number(ceiling) : undefined,
     };
   }
 

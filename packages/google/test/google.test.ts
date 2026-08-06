@@ -228,6 +228,111 @@ describe('GoogleAdsProvider writes', () => {
   });
 });
 
+describe('GoogleAdsProvider bidding tools', () => {
+  const biddingLookup = (strategyType: string, ceiling?: string) => ({
+    match: (url: string, body: string) =>
+      url.includes('googleAds:search') && body.includes('campaign.bidding_strategy_type'),
+    reply: {
+      results: [
+        {
+          campaign: {
+            name: 'Search - Screenshots',
+            biddingStrategyType: strategyType,
+            ...(ceiling ? { targetSpend: { cpcBidCeilingMicros: ceiling } } : {}),
+          },
+        },
+      ],
+    },
+  });
+
+  it('sets a CPC ceiling on a TARGET_SPEND campaign with the right update mask', async () => {
+    const { impl, calls } = fakeFetch([
+      tokenRoute,
+      biddingLookup('TARGET_SPEND', '2000000'),
+      { match: (url) => url.includes('campaigns:mutate'), reply: { results: [] } },
+    ]);
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v24', impl));
+    const preview = await provider.previewWrite(
+      {
+        tool: 'google_set_bid_ceiling',
+        provider: 'google',
+        accountId: '5622048100',
+        kind: 'update',
+        payload: { campaign_id: '24030163641', cpc_bid_ceiling_micros: 1_200_000 },
+      },
+      { forcePausedCreation: true },
+    );
+    expect(preview.summary).toContain('2000000 → 1200000');
+    expect(preview.serverValidated).toBe(true);
+    const body = JSON.parse(String(calls.find((c) => c.url.includes('campaigns:mutate'))?.init.body)) as {
+      operations: Array<{ update: { targetSpend: { cpcBidCeilingMicros: string } }; updateMask: string }>;
+      validateOnly: boolean;
+    };
+    expect(body.operations[0]?.updateMask).toBe('target_spend.cpc_bid_ceiling_micros');
+    expect(body.operations[0]?.update.targetSpend.cpcBidCeilingMicros).toBe('1200000');
+    expect(body.validateOnly).toBe(true);
+  });
+
+  it('refuses a ceiling on strategies that have none, with guidance', async () => {
+    const { impl } = fakeFetch([tokenRoute, biddingLookup('MAXIMIZE_CONVERSIONS')]);
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v24', impl));
+    await expect(
+      provider.previewWrite(
+        {
+          tool: 'google_set_bid_ceiling',
+          provider: 'google',
+          accountId: '5622048100',
+          kind: 'update',
+          payload: { campaign_id: '24030163641', cpc_bid_ceiling_micros: 1_200_000 },
+        },
+        { forcePausedCreation: true },
+      ),
+    ).rejects.toThrow(/google_set_bidding_strategy/);
+  });
+
+  it('switches to MAXIMIZE_CONVERSIONS with a target CPA', async () => {
+    const { impl, calls } = fakeFetch([
+      tokenRoute,
+      biddingLookup('TARGET_SPEND', '1200000'),
+      { match: (url) => url.includes('campaigns:mutate'), reply: { results: [] } },
+    ]);
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v24', impl));
+    const preview = await provider.previewWrite(
+      {
+        tool: 'google_set_bidding_strategy',
+        provider: 'google',
+        accountId: '5622048100',
+        kind: 'update',
+        payload: { campaign_id: '24030163641', strategy: 'MAXIMIZE_CONVERSIONS', target_cpa_micros: 5_000_000 },
+      },
+      { forcePausedCreation: true },
+    );
+    expect(preview.summary).toContain('TARGET_SPEND → MAXIMIZE_CONVERSIONS');
+    const body = JSON.parse(String(calls.find((c) => c.url.includes('campaigns:mutate'))?.init.body)) as {
+      operations: Array<{ update: { maximizeConversions: { targetCpaMicros: string } }; updateMask: string }>;
+    };
+    expect(body.operations[0]?.updateMask).toBe('maximize_conversions.target_cpa_micros');
+    expect(body.operations[0]?.update.maximizeConversions.targetCpaMicros).toBe('5000000');
+  });
+
+  it('rejects mismatched strategy targets client-side', async () => {
+    const { impl } = fakeFetch([tokenRoute]);
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v24', impl));
+    await expect(
+      provider.previewWrite(
+        {
+          tool: 'google_set_bidding_strategy',
+          provider: 'google',
+          accountId: '5622048100',
+          kind: 'update',
+          payload: { campaign_id: '24030163641', strategy: 'MANUAL_CPC', target_cpa_micros: 5_000_000 },
+        },
+        { forcePausedCreation: true },
+      ),
+    ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+  });
+});
+
 describe('GoogleAdsProvider report', () => {
   it('builds GAQL with date range and maps camelCase metrics', async () => {
     const { impl, calls } = fakeFetch([
