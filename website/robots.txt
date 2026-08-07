@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://adport.dev/sitemap.xml
+Sitemap: https://www.adport.dev/sitemap.xml
