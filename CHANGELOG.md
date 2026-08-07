@@ -2,7 +2,7 @@
 
 All notable changes to adport. Format loosely follows [Keep a Changelog](https://keepachangelog.com/); pre-1.0, minor versions may break.
 
-## Unreleased (0.1.0)
+## 0.1.0 — 2026-08-07
 
 ### Added
 - **Five providers**, all with doc-faithful mocked test suites:

@@ -38,7 +38,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
   const program = new Command('adport');
   program
     .description('Open-source multi-platform ads management for AI agents (MCP + CLI)')
-    .version('0.0.1')
+    .version('0.1.0')
     .configureOutput({ writeOut: (s) => io.out(s.trimEnd()), writeErr: (s) => io.err(s.trimEnd()) });
 
   const tools = program.command('tools').description('Inspect and invoke the shared tool registry');
