@@ -37,9 +37,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release view "$RELEASE_TAG" >/dev/null 2>&1 || gh release create "$RELEASE_TAG" --title "$RELEASE_TAG" --generate-notes
-      - name: Publish to npm (skipped until NPM_TOKEN is configured)
+      - name: Publish missing packages to npm
         if: ${{ env.NPM_TOKEN != '' }}
         env:
           NODE_AUTH_TOKEN: ${{ env.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
-        run: pnpm -r publish --access public --no-git-checks
+        run: |
+          pnpm -r --workspace-concurrency=1 exec sh -c '
+            package_name=$(node -p "require(\"./package.json\").name")
+            package_version=$(node -p "require(\"./package.json\").version")
+            if npm view "${package_name}@${package_version}" version >/dev/null 2>&1; then
+              echo "Skipping ${package_name}@${package_version}: already published"
+            else
+              pnpm publish --access public --no-git-checks
+            fi
+          '
