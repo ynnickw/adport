@@ -12,6 +12,7 @@ import type {
   Account,
   AdProvider,
   ProviderCapabilities,
+  StandardActions,
   WriteGuard,
   WriteOperation,
   WritePreview,
@@ -42,6 +43,8 @@ function seedAccounts(): MockAccount[] {
       campaigns: [
         { id: 'c1', name: 'Brand Search', status: 'ENABLED', dailyBudgetMicros: 10_000_000 },
         { id: 'c2', name: 'Prospecting', status: 'ENABLED', dailyBudgetMicros: 25_000_000 },
+        // Deliberately conversion-less: exercises the audit harness.
+        { id: 'c4', name: 'Legacy Retargeting', status: 'ENABLED', dailyBudgetMicros: 8_000_000 },
       ],
     },
     {
@@ -67,6 +70,15 @@ export class MockProvider implements AdProvider {
     return { serverDryRun: false };
   }
 
+  standardActions(): StandardActions {
+    return {
+      pauseCampaign: (accountId, campaignId) => ({
+        tool: 'mock_set_campaign_status',
+        input: { account_id: accountId, campaign_id: campaignId, status: 'PAUSED' },
+      }),
+    };
+  }
+
   async listAccounts(): Promise<Account[]> {
     return this.accounts.map(({ campaigns: _campaigns, ...account }) => account);
   }
@@ -87,7 +99,7 @@ export class MockProvider implements AdProvider {
           provider: this.id,
           accountId: account.id,
           entity: { level: 'campaign', id: campaign.id, name: campaign.name, status: campaign.status },
-          metrics: mockMetrics(query.metrics, index, days, campaign.dailyBudgetMicros),
+          metrics: mockMetrics(query.metrics, index, days, campaign.dailyBudgetMicros, campaign.id === 'c4'),
         });
       }
     }
@@ -205,11 +217,12 @@ function mockMetrics(
   seed: number,
   days: number,
   dailyBudgetMicros: number,
+  zeroConversions = false,
 ): Partial<Record<MetricName, number>> {
   const spend = ((dailyBudgetMicros / 1_000_000) * 0.83 + seed) * days;
   const impressions = (2_000 + seed * 700) * days;
   const clicks = (90 + seed * 35) * days;
-  const conversions = (4 + seed) * days;
+  const conversions = zeroConversions ? 0 : (4 + seed) * days;
   const conversionValue = conversions * (35 + seed * 5);
   const all: Record<MetricName, number> = {
     spend: round2(spend),
@@ -220,8 +233,8 @@ function mockMetrics(
     ctr: round2((clicks / impressions) * 100),
     cpc: round2(spend / clicks),
     cpm: round2((spend / impressions) * 1000),
-    cpa: round2(spend / conversions),
-    roas: round2(conversionValue / spend),
+    cpa: conversions > 0 ? round2(spend / conversions) : 0,
+    roas: spend > 0 ? round2(conversionValue / spend) : 0,
   };
   return Object.fromEntries(requested.map((m) => [m, all[m]]));
 }

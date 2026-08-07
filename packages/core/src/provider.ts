@@ -52,6 +52,20 @@ export interface ProviderCapabilities {
   serverDryRun: boolean;
 }
 
+/** A ready-to-call tool invocation (flows through the normal validate→apply gate). */
+export interface StandardAction {
+  tool: string;
+  input: Record<string, unknown>;
+}
+
+/**
+ * Provider-declared mappings for cross-platform actions the audit harness can
+ * propose (each provider knows its own tool names and native status values).
+ */
+export interface StandardActions {
+  pauseCampaign?: (accountId: string, campaignId: string) => StandardAction;
+}
+
 export interface AdProvider {
   readonly id: string;
   capabilities(): ProviderCapabilities;
@@ -61,6 +75,8 @@ export interface AdProvider {
   previewWrite(op: WriteOperation, guard: WriteGuard): Promise<WritePreview>;
   /** Execute the operation for real. Only the policy engine may call this. */
   applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult>;
+  /** Optional cross-platform action mappings used by the recommendation harness. */
+  standardActions?(): StandardActions;
 }
 
 export class ProviderRegistry {

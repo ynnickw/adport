@@ -13,6 +13,8 @@ export interface ToolContext {
   providers: ProviderRegistry;
   engine: PolicyEngine;
   credentials: CredentialStore;
+  /** Set by createContext; lets tools invoke other tools (e.g. recommendation_apply). */
+  registry?: ToolRegistry;
 }
 
 export interface AnyToolDefinition {

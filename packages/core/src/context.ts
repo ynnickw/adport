@@ -1,3 +1,4 @@
+import { auditTools } from './audit/tools.js';
 import { CredentialStore } from './credentials/store.js';
 import { PolicyEngine } from './policy/engine.js';
 import { loadPolicy } from './policy/policy.js';
@@ -39,6 +40,7 @@ export async function createContext(options: CreateContextOptions = {}): Promise
 
   const registry = new ToolRegistry();
   registry.register(builtinTools());
+  registry.register(auditTools());
 
   for (const module of modules) {
     providers.register(module.provider);
@@ -49,5 +51,7 @@ export async function createContext(options: CreateContextOptions = {}): Promise
     registry.register(mockTools());
   }
 
-  return { ctx: { providers, engine, credentials }, registry, policySource: source };
+  const ctx: ToolContext = { providers, engine, credentials };
+  ctx.registry = registry;
+  return { ctx, registry, policySource: source };
 }

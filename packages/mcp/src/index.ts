@@ -3,6 +3,11 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { AdportError, CredentialStore, createContext, type AdportRuntime, type ProviderModule } from '@adport/core';
 import { createGoogleModule } from '@adport/provider-google';
 import { createMetaModule } from '@adport/provider-meta';
+import { createTikTokModule } from '@adport/provider-tiktok';
+import { createAppleModule } from '@adport/provider-apple';
+import { createMicrosoftModule } from '@adport/provider-microsoft';
+
+export const PROVIDER_IDS = ['google', 'meta', 'tiktok', 'apple', 'microsoft'] as const;
 
 /**
  * Standard runtime assembly: real providers when credentials exist, the mock
@@ -11,7 +16,7 @@ import { createMetaModule } from '@adport/provider-meta';
 export async function assembleRuntime(): Promise<AdportRuntime> {
   const store = new CredentialStore();
   const modules: ProviderModule[] = [];
-  for (const factory of [createGoogleModule, createMetaModule]) {
+  for (const factory of [createGoogleModule, createMetaModule, createTikTokModule, createAppleModule, createMicrosoftModule]) {
     const module = await factory(store);
     if (module) modules.push(module);
   }

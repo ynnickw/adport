@@ -20,12 +20,27 @@ export {
   type AdProvider,
   type BudgetDelta,
   type ProviderCapabilities,
+  type StandardAction,
+  type StandardActions,
   type WriteGuard,
   type WriteKind,
   type WriteOperation,
   type WritePreview,
   type WriteResult,
 } from './provider.js';
+export {
+  type AuditFinding,
+  type FindingSeverity,
+  type FindingStatus,
+  type Rule,
+  type RuleContext,
+  type RuleFinding,
+  type RulePack,
+} from './audit/types.js';
+export { corePerformancePack } from './audit/packs/core-performance.js';
+export { FindingsStore } from './audit/store.js';
+export { AuditRunner, type AuditRunOptions, type AuditRunResult } from './audit/runner.js';
+export { auditTools } from './audit/tools.js';
 export { CredentialStore, type CredentialRecord, type CredentialSource } from './credentials/store.js';
 export { policySchema, loadPolicy, DEFAULT_POLICY, type Policy, type LoadedPolicy } from './policy/policy.js';
 export { PendingStore, type PendingOperation } from './policy/pending.js';

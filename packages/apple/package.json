@@ -1,7 +1,7 @@
 {
-  "name": "@adport/mcp",
+  "name": "@adport/provider-apple",
   "version": "0.0.1",
-  "description": "adport MCP server — talk to your ad accounts from any MCP client",
+  "description": "Apple Ads (Apple Search Ads) provider for adport — Campaign Management API with ES256 OAuth",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -12,24 +12,15 @@
       "import": "./dist/index.js"
     }
   },
-  "bin": {
-    "adport-mcp": "./dist/bin.js"
-  },
   "files": ["dist"],
   "scripts": {
-    "build": "tsup src/index.ts src/bin.ts --format esm --dts --sourcemap --clean",
+    "build": "tsup src/index.ts --format esm --dts --sourcemap --clean",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
   "dependencies": {
     "@adport/core": "workspace:*",
-    "@adport/provider-apple": "workspace:*",
-    "@adport/provider-google": "workspace:*",
-    "@adport/provider-meta": "workspace:*",
-    "@adport/provider-microsoft": "workspace:*",
-    "@adport/provider-tiktok": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.12.0",
     "zod": "^3.25.0"
   },
   "devDependencies": {

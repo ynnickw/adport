@@ -164,6 +164,28 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     });
 
   audit
+    .command('run')
+    .description('Run the audit rule packs over connected accounts and persist findings')
+    .option('--provider <id>', 'Limit to one provider')
+    .option('--range <range>', 'Preset or START..END', 'last_30_days')
+    .action(async (opts: { provider?: string; range: string }) => {
+      const rt = await runtime();
+      const dateRange = opts.range.includes('..')
+        ? { start: opts.range.split('..')[0]!, end: opts.range.split('..')[1]! }
+        : opts.range;
+      const result = (await rt.registry.call(
+        'audit_run',
+        { provider: opts.provider, date_range: dateRange },
+        rt.ctx,
+      )) as { findings: Array<{ id: string; severity: string; title: string }>; counts: Record<string, number>; evaluatedAccounts: number };
+      io.out(`Evaluated ${result.evaluatedAccounts} account(s): ${result.counts.critical} critical, ${result.counts.warn} warn, ${result.counts.info} info`);
+      for (const finding of result.findings) {
+        io.out(`  [${finding.severity.toUpperCase()}] ${finding.id}\n    ${finding.title}`);
+      }
+      if (result.findings.length > 0) io.out('Next: adport recommendations  ·  adport recommendations apply <id>');
+    });
+
+  audit
     .command('note <text>')
     .description('Record an external/manual change in the audit trail (e.g. a change made in the platform UI)')
     .option('--provider <id>', 'Provider the change concerns', 'external')
@@ -194,12 +216,77 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
         await connectMeta({ io });
         return;
       }
+      if (provider === 'tiktok') {
+        const { connectTikTok } = await import('./connect/tiktok.js');
+        await connectTikTok({ io });
+        return;
+      }
+      if (provider === 'apple') {
+        const { connectApple } = await import('./connect/apple.js');
+        await connectApple({ io });
+        return;
+      }
+      if (provider === 'microsoft') {
+        const { connectMicrosoft } = await import('./connect/microsoft.js');
+        await connectMicrosoft({ openBrowser: opts.browser, io });
+        return;
+      }
       if (provider === 'mock') {
         io.out('The mock provider needs no credentials — it is available out of the box. Try: adport accounts');
         return;
       }
-      io.err(`Provider "${provider}" is not supported yet. Available: google, meta, mock. TikTok lands in v1.1.`);
+      io.err(`Provider "${provider}" is not supported. Available: google, meta, tiktok, apple, microsoft, mock.`);
       process.exitCode = 1;
+    });
+
+  const recommendations = program.command('recommendations').description('Review and act on audit findings');
+
+  recommendations
+    .command('list', { isDefault: true })
+    .description('List findings (default: open), most severe first')
+    .option('--status <status>', 'open | dismissed | applied', 'open')
+    .option('--json', 'JSON output')
+    .action(async (opts: { status: string; json?: boolean }) => {
+      const rt = await runtime();
+      const result = (await rt.registry.call('recommendations_list', { status: opts.status }, rt.ctx)) as {
+        findings: Array<{ id: string; severity: string; title: string; recommendation: string; proposedAction?: unknown }>;
+      };
+      if (opts.json) {
+        io.out(json(result.findings));
+        return;
+      }
+      if (result.findings.length === 0) {
+        io.out(`No ${opts.status} findings. Run: adport audit run`);
+        return;
+      }
+      for (const f of result.findings) {
+        io.out(`[${f.severity.toUpperCase()}] ${f.id}`);
+        io.out(`  ${f.title}`);
+        io.out(`  → ${f.recommendation}${f.proposedAction ? '  (has ready-to-apply action)' : ''}`);
+      }
+    });
+
+  recommendations
+    .command('apply <findingId>')
+    .description('Run a finding\'s proposed action through the two-step validate→apply flow')
+    .option('--pending <id>', 'pending_operation_id from the validation step')
+    .action(async (findingId: string, opts: { pending?: string }) => {
+      const rt = await runtime();
+      const result = await rt.registry.call(
+        'recommendation_apply',
+        { finding_id: findingId, pending_operation_id: opts.pending },
+        rt.ctx,
+      );
+      io.out(json(result));
+    });
+
+  recommendations
+    .command('dismiss <findingId>')
+    .description('Dismiss a finding (never reopened by future runs)')
+    .action(async (findingId: string) => {
+      const rt = await runtime();
+      const result = await rt.registry.call('recommendation_dismiss', { finding_id: findingId }, rt.ctx);
+      io.out(json(result));
     });
 
   program
@@ -214,7 +301,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
       for (const record of records) {
         io.out(`${record.provider}: credentials stored (source: ${record.source}, updated ${record.updatedAt})`);
       }
-      for (const id of ['google', 'meta'] as const) {
+      for (const id of ['google', 'meta', 'tiktok', 'apple', 'microsoft'] as const) {
         const provider = rt.ctx.providers.list().find((p) => p.id === id);
         if (!provider) {
           io.out(`${id}: not connected (run \`adport connect ${id}\`)`);

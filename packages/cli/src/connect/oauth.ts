@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from 'node:crypto';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { AdportError } from '@adport/core';
@@ -96,6 +97,58 @@ export async function startLoopbackServer(): Promise<LoopbackServer> {
     waitForCode,
     close: () => server.close(),
   };
+}
+
+// ---- Microsoft identity platform (public client + PKCE) ---------------------
+
+const MS_AUTHORIZE = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize';
+const MS_TOKEN = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
+export const MS_ADS_SCOPE = 'openid profile https://ads.microsoft.com/msads.manage offline_access';
+
+export function generatePkce(): { verifier: string; challenge: string } {
+  const verifier = randomBytes(32).toString('base64url');
+  const challenge = createHash('sha256').update(verifier).digest('base64url');
+  return { verifier, challenge };
+}
+
+export function buildMicrosoftAuthUrl(clientId: string, redirectUri: string, challenge: string): string {
+  const params = new URLSearchParams({
+    client_id: clientId,
+    response_type: 'code',
+    redirect_uri: redirectUri,
+    scope: MS_ADS_SCOPE,
+    code_challenge: challenge,
+    code_challenge_method: 'S256',
+    prompt: 'login',
+  });
+  return `${MS_AUTHORIZE}?${params}`;
+}
+
+export async function exchangeMicrosoftCode(
+  input: { clientId: string; code: string; redirectUri: string; codeVerifier: string },
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ refreshToken: string }> {
+  const response = await fetchImpl(MS_TOKEN, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: input.clientId,
+      scope: 'https://ads.microsoft.com/msads.manage offline_access',
+      code: input.code,
+      redirect_uri: input.redirectUri,
+      grant_type: 'authorization_code',
+      code_verifier: input.codeVerifier,
+    }),
+  });
+  const data = (await response.json()) as { refresh_token?: string; error?: string; error_description?: string };
+  if (!response.ok || !data.refresh_token) {
+    throw new AdportError(
+      'PROVIDER_ERROR',
+      `Microsoft OAuth exchange failed${data.error ? ` (${data.error})` : ''}: ${data.error_description ?? ''}`,
+      data,
+    );
+  }
+  return { refreshToken: data.refresh_token };
 }
 
 export function openInBrowser(url: string): void {

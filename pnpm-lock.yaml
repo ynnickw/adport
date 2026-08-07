@@ -12,6 +12,28 @@ importers:
         specifier: ^2.5.0
         version: 2.10.8
 
+  packages/apple:
+    dependencies:
+      '@adport/core':
+        specifier: workspace:*
+        version: link:../core
+      zod:
+        specifier: ^3.25.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(postcss@8.5.25)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.1)(yaml@2.9.0)
+
   packages/cli:
     dependencies:
       '@adport/core':
@@ -20,12 +42,21 @@ importers:
       '@adport/mcp':
         specifier: workspace:*
         version: link:../mcp
+      '@adport/provider-apple':
+        specifier: workspace:*
+        version: link:../apple
       '@adport/provider-google':
         specifier: workspace:*
         version: link:../google
       '@adport/provider-meta':
         specifier: workspace:*
         version: link:../meta
+      '@adport/provider-microsoft':
+        specifier: workspace:*
+        version: link:../microsoft
+      '@adport/provider-tiktok':
+        specifier: workspace:*
+        version: link:../tiktok
       commander:
         specifier: ^13.0.0
         version: 13.1.0
@@ -98,12 +129,21 @@ importers:
       '@adport/core':
         specifier: workspace:*
         version: link:../core
+      '@adport/provider-apple':
+        specifier: workspace:*
+        version: link:../apple
       '@adport/provider-google':
         specifier: workspace:*
         version: link:../google
       '@adport/provider-meta':
         specifier: workspace:*
         version: link:../meta
+      '@adport/provider-microsoft':
+        specifier: workspace:*
+        version: link:../microsoft
+      '@adport/provider-tiktok':
+        specifier: workspace:*
+        version: link:../tiktok
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.0
         version: 1.30.0(zod@3.25.76)
@@ -125,6 +165,53 @@ importers:
         version: 3.2.7(@types/node@22.20.1)(yaml@2.9.0)
 
   packages/meta:
+    dependencies:
+      '@adport/core':
+        specifier: workspace:*
+        version: link:../core
+      zod:
+        specifier: ^3.25.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(postcss@8.5.25)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.1)(yaml@2.9.0)
+
+  packages/microsoft:
+    dependencies:
+      '@adport/core':
+        specifier: workspace:*
+        version: link:../core
+      fflate:
+        specifier: ^0.8.2
+        version: 0.8.3
+      zod:
+        specifier: ^3.25.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(postcss@8.5.25)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.1)(yaml@2.9.0)
+
+  packages/tiktok:
     dependencies:
       '@adport/core':
         specifier: workspace:*
@@ -912,6 +999,9 @@ packages:
     peerDependenciesMeta:
       picomatch:
         optional: true
+
+  fflate@0.8.3:
+    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
 
   finalhandler@2.1.1:
     resolution: {integrity: sha512-S8KoZgRZN+a5rNwqTxlZZePjT/4cnm0ROV70LedRHZ0p8u9fRID0hJUZQpkKLzro8LfmC8sx23bY6tVNxv8pQA==}
@@ -2015,6 +2105,8 @@ snapshots:
   fdir@6.5.0(picomatch@4.0.5):
     optionalDependencies:
       picomatch: 4.0.5
+
+  fflate@0.8.3: {}
 
   finalhandler@2.1.1:
     dependencies:

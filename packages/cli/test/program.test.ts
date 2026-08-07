@@ -20,7 +20,7 @@ beforeEach(() => {
   process.env.ADPORT_HOME = home;
   // Never let the developer's real provider env credentials leak into tests.
   for (const key of Object.keys(process.env)) {
-    if (key.startsWith('GOOGLE_ADS_') || key.startsWith('META_')) delete process.env[key];
+    if (/^(GOOGLE_ADS_|META_|TIKTOK_|APPLE_ADS_|MICROSOFT_ADS_)/.test(key)) delete process.env[key];
   }
   out = [];
   err = [];
@@ -81,6 +81,26 @@ describe('adport CLI', () => {
     expect(entry.event).toBe('note');
     expect(entry.provider).toBe('google');
     expect(entry.summary).toContain('CPC ceiling');
+  });
+
+  it('runs the audit and lists + applies recommendations end-to-end', async () => {
+    await run('audit', 'run');
+    expect(out.join('\n')).toContain('zero-conversion-spend:mock:mock-1:c4');
+
+    out = [];
+    await run('recommendations', '--json');
+    const findings = JSON.parse(out.join('\n')) as Array<{ id: string }>;
+    const finding = findings.find((f) => f.id.startsWith('zero-conversion-spend'))!;
+
+    out = [];
+    await run('recommendations', 'apply', finding.id);
+    const first = JSON.parse(out.join('\n')) as { result: { status: string; pending_operation_id: string } };
+    expect(first.result.status).toBe('pending_validation');
+
+    out = [];
+    await run('recommendations', 'apply', finding.id, '--pending', first.result.pending_operation_id);
+    const second = JSON.parse(out.join('\n')) as { result: { status: string } };
+    expect(second.result.status).toBe('applied');
   });
 
   it('shows the policy with its source', async () => {
