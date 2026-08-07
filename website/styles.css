@@ -31,8 +31,9 @@ a {
   place-items: center;
   overflow: hidden;
   background:
-    radial-gradient(circle at 50% 46%, rgba(255, 255, 255, 0.055), transparent 30rem),
-    linear-gradient(145deg, #09090b 0%, #0d0d11 55%, #09090b 100%);
+    linear-gradient(rgba(5, 5, 8, 0.2), rgba(5, 5, 8, 0.42)),
+    url("/hero-background.webp") center / cover no-repeat,
+    #09090b;
 }
 
 .landing::before {
@@ -43,7 +44,8 @@ a {
     linear-gradient(90deg, rgba(255, 255, 255, 0.026) 1px, transparent 1px);
   background-size: 44px 44px;
   content: "";
-  mask-image: radial-gradient(circle at center, black, transparent 72%);
+  opacity: 0.55;
+  mask-image: radial-gradient(circle at center, black, transparent 68%);
 }
 
 .ambient {
@@ -77,6 +79,7 @@ a {
   align-items: center;
   padding: 4rem 1.5rem;
   text-align: center;
+  text-shadow: 0 2px 30px rgba(0, 0, 0, 0.75);
 }
 
 .mark {
@@ -288,6 +291,10 @@ footer a:hover {
 }
 
 @media (max-width: 520px) {
+  .landing {
+    background-position: center bottom;
+  }
+
   .hero {
     padding-inline: 1rem;
   }
