@@ -59,7 +59,7 @@ a { color: inherit; }
 }
 
 .brand-lockup { display: inline-flex; align-items: center; gap: 0.72rem; text-decoration: none; }
-.domain-wordmark { color: var(--ink); font-size: 1rem; font-weight: 720; letter-spacing: -0.04em; }
+.domain-wordmark { color: var(--ink); font-size: 1.4rem; font-weight: 720; letter-spacing: -0.04em; }
 .domain-wordmark span { color: var(--orange); }
 .mark { display: flex; align-items: flex-end; justify-content: center; gap: 0.17rem; border: 1px solid rgba(29, 29, 31, 0.1); border-radius: 0.68rem; background: rgba(255, 255, 255, 0.8); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.04); padding-bottom: 0.55rem; }
 .mark-small { width: 2.35rem; height: 2.35rem; }
@@ -87,7 +87,7 @@ a { color: inherit; }
 
 .hero-copy { max-width: 42rem; }
 .eyebrow { margin: 0 0 1.5rem; color: var(--orange-dark); font: 720 0.72rem ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: 0.14em; text-transform: uppercase; }
-.hero h1 { margin: 0; color: var(--ink); font-size: clamp(3.35rem, 5.6vw, 5.9rem); font-weight: 650; letter-spacing: -0.075em; line-height: 0.96; }
+.hero h1 { margin: 0; color: var(--ink); font-size: clamp(3.35rem, 4.3vw, 4.35rem); font-weight: 650; letter-spacing: -0.075em; line-height: 0.96; }
 .agent-line { display: flex; height: 1em; align-items: center; gap: 0.12em; }
 .agent-rotator { position: relative; display: block; width: 6.45em; height: 1em; color: var(--orange); }
 .agent { position: absolute; inset: 50% auto auto 0; display: inline-flex; align-items: center; gap: 0.18em; line-height: 1; white-space: nowrap; opacity: 0; transform: translateY(calc(-50% + 0.28em)); animation: agent-cycle 9s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
@@ -126,19 +126,10 @@ a { color: inherit; }
 .setup-heading span { display: grid; width: 1.7rem; height: 1.7rem; place-items: center; border-radius: 0.42rem; background: var(--orange-soft); color: var(--orange-dark); font: 760 0.58rem ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
 .setup-heading h2 { margin: 0; font-size: 0.92rem; letter-spacing: -0.02em; }
 .setup-heading small { color: #86868b; font: 580 0.59rem ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-.setup-card pre { overflow-x: auto; margin: 1.35rem 0 1.25rem; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 0.9rem; background: #1d1d1f; color: #f5f5f7; padding: 1.2rem 1.3rem; box-shadow: inset 0 1px rgba(255, 255, 255, 0.05); }
+.setup-card pre { overflow-x: auto; margin: 1.35rem 0 0; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 0.9rem; background: #1d1d1f; color: #f5f5f7; padding: 1.2rem 1.3rem; box-shadow: inset 0 1px rgba(255, 255, 255, 0.05); }
 .setup-card code { font: 560 0.72rem/1.65 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
 .command-label { display: block; color: #86868b; font-size: 0.58rem; line-height: 1.5; text-transform: uppercase; letter-spacing: 0.08em; }
 .prompt { color: #fb923c; user-select: none; }
-.setup-result { display: flex; align-items: center; gap: 0.8rem; border: 1px solid rgba(29, 29, 31, 0.08); border-radius: 0.8rem; background: rgba(255, 255, 255, 0.72); padding: 0.82rem 0.9rem; }
-.status-icon { display: grid; width: 1.75rem; height: 1.75rem; flex: 0 0 auto; place-items: center; border-radius: 50%; background: var(--orange); color: white; font-size: 0.78rem; font-weight: 800; }
-.setup-result strong, .setup-result small { display: block; }
-.setup-result strong { color: #3b2d23; font-size: 0.75rem; }
-.setup-result small { margin-top: 0.18rem; color: #8e7f72; font: 560 0.59rem ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-.policy-flow { display: flex; align-items: center; justify-content: center; gap: 0.65rem; margin-top: 1.1rem; color: #8b7f74; font: 620 0.59rem ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; text-transform: uppercase; }
-.policy-flow i { color: #c5b6aa; font-style: normal; }
-.policy-flow strong { color: var(--orange-dark); }
-
 .platforms { display: flex; min-height: 6rem; align-items: center; justify-content: space-between; gap: 2rem; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); color: #6e6e73; }
 .platform-intro { flex: 0 0 auto; font-size: 0.72rem; font-weight: 680; letter-spacing: -0.01em; }
 .platforms ul { display: flex; align-items: center; justify-content: flex-end; gap: clamp(1rem, 2.2vw, 2rem); margin: 0; padding: 0; list-style: none; }
