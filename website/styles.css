@@ -60,6 +60,7 @@ a { color: inherit; }
 
 .brand-lockup { display: inline-flex; align-items: center; gap: 0.72rem; text-decoration: none; }
 .domain-wordmark { color: var(--ink); font-size: 1rem; font-weight: 720; letter-spacing: -0.04em; }
+.domain-wordmark span { color: var(--orange); }
 .mark { display: flex; align-items: flex-end; justify-content: center; gap: 0.17rem; border: 1px solid rgba(29, 29, 31, 0.1); border-radius: 0.68rem; background: rgba(255, 255, 255, 0.8); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.04); padding-bottom: 0.55rem; }
 .mark-small { width: 2.35rem; height: 2.35rem; }
 .mark span { width: 0.2rem; border-radius: 999px; background: var(--orange); }
