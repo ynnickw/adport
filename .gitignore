@@ -6,3 +6,10 @@ coverage/
 .env
 .env.*
 .DS_Store
+
+# Local planning, research, agent context, and generated internal reports.
+# Never force-add these paths to the public repository.
+/private/
+/AGENTS.md
+/.codex/
+/.pnpm-store/

@@ -24,6 +24,7 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
+      - run: node scripts/check-public-tree.mjs
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm typecheck
