@@ -1,7 +1,7 @@
 {
   "name": "adport-monorepo",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "adport — open-source multi-platform ads management for AI agents (MCP + CLI)",
   "license": "Apache-2.0",
   "packageManager": "pnpm@11.8.0",
@@ -12,6 +12,7 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
+    "check:public-tree": "node scripts/check-public-tree.mjs",
     "clean": "turbo run clean && rm -rf node_modules/.cache"
   },
   "devDependencies": {

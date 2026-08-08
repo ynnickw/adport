@@ -2,6 +2,22 @@
 
 All notable changes to adport. Format loosely follows [Keep a Changelog](https://keepachangelog.com/); pre-1.0, minor versions may break.
 
+## 0.2.0 — 2026-08-08
+
+### Added
+- Public `adport.dev` landing page with privacy and terms pages.
+- Public-tree guard in CI and release workflows so internal planning paths cannot be published accidentally.
+- Explicit documentation of the current self-hosted/BYO-credentials model and the boundary for a future hosted OAuth broker.
+- Live connection verification for Google Ads, Apple Ads, and Microsoft Advertising.
+
+### Fixed
+- Microsoft desktop OAuth now advertises the registered `http://localhost` loopback host while retaining PKCE and a local ephemeral port.
+- Apple campaign reporting orders by the supported `campaignId` field instead of the rejected `countryOrRegion` field.
+
+### Security
+- Internal launch plans, research, agent context, and generated marketing material are excluded from the public tree.
+- Security reports now use `yannick@adport.dev`.
+
 ## 0.1.0 — 2026-08-07
 
 ### Added

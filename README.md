@@ -2,7 +2,7 @@
 
 > Open-source multi-platform ads management for AI agents. Connect your Google Ads, Meta Ads, and TikTok Ads accounts once, then monitor and manage them by talking to any agent — through an MCP server and CLI, with real read *and* write access behind auditable safety rails.
 
-**Status: v0.1 (unpublished).** Five providers integrated, every one verified against mocked API responses whose shapes come from the current official docs; Google additionally live-verified. See [start-spec.md](./start-spec.md) for the plan and [CHANGELOG.md](./CHANGELOG.md) for what's in.
+**Status: v0.2.0.** Five providers are implemented with doc-faithful mocked API suites. Google, Apple, and Microsoft have also been exercised against live accounts; Meta production access and TikTok production access still depend on their respective platform setup and review. See [CHANGELOG.md](./CHANGELOG.md) for release details.
 
 | Provider | API | Reads | Writes | Dry run | Sandbox |
 | --- | --- | --- | --- | --- | --- |
@@ -48,6 +48,13 @@ pnpm build
 pnpm test
 ```
 
+Install the published CLI:
+
+```sh
+npm install -g adport
+adport --help
+```
+
 Try it against the built-in mock provider (no credentials needed):
 
 ```sh
@@ -79,6 +86,8 @@ node packages/cli/dist/index.js connect apple       # self-serve: local EC keypa
 node packages/cli/dist/index.js connect microsoft   # easiest: self-serve token, PKCE sign-in, sandbox universal token
 ```
 
+The complete credential and authorization checklist for every provider is in [docs/providers.md](./docs/providers.md). Never commit provider tokens, app secrets, refresh tokens, or private keys to this repository.
+
 ## Connect Meta Ads
 
 ```sh
@@ -101,6 +110,14 @@ No App Review is needed for your own ad accounts: create a dev-mode Business app
 ```
 
 Every mutation is two-step by contract: the first call returns a dry-run preview plus a `pending_operation_id`; only a second call with that id applies the change. Campaign creation is paused-by-default, budget jumps beyond the policy cap are rejected, and everything is written to a local audit log (`adport audit`). Tune the rails in `~/.config/adport/policy.yaml` (see `adport policy`).
+
+## Self-hosted now, cloud later
+
+v0.2.0 is a local, bring-your-own-credentials release. `adport connect <provider>` authorizes on the operator's machine, credentials remain in `~/.config/adport/credentials.json`, and the MCP server uses stdio. There is no hosted token broker, remote HTTP MCP endpoint, multi-tenant credential vault, or user dashboard in this release.
+
+A managed cloud version is planned. It will use separately reviewed provider applications and hosted OAuth callbacks so customers can connect without creating their own developer apps. The open-source CLI will continue to support self-hosted credentials. Apple Ads currently uses an API-user key flow rather than an end-user OAuth consent flow.
+
+See [docs/deployment-model.md](./docs/deployment-model.md) for the boundary between the current release and the planned cloud service.
 
 ## License
 
