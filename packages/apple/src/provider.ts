@@ -133,7 +133,7 @@ export class AppleAdsProvider implements AdProvider {
             startTime: range.start,
             endTime: range.end,
             selector: {
-              orderBy: [{ field: 'countryOrRegion', sortOrder: 'ASCENDING' }],
+              orderBy: [{ field: 'campaignId', sortOrder: 'ASCENDING' }],
               pagination: { offset: 0, limit: Math.min(query.limit ?? 200, 1000) },
             },
             timeZone: 'UTC',
