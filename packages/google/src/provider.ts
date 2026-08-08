@@ -272,6 +272,7 @@ export class GoogleAdsProvider implements AdProvider {
             name: payload.name,
             status,
             advertisingChannelType: channelType,
+            containsEuPoliticalAdvertising: 'DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING',
             manualCpc: {},
             campaignBudget: budgetTempResource,
           },
