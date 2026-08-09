@@ -1,6 +1,6 @@
 {
   "name": "@adport/provider-apple",
-  "version": "0.0.1",
+  "version": "0.2.0",
   "description": "Apple Ads (Apple Search Ads) provider for adport — Campaign Management API with ES256 OAuth",
   "license": "Apache-2.0",
   "type": "module",
@@ -24,7 +24,7 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
-    "@types/node": "^22.10.0",
+    "@types/node": "^26.1.2",
     "tsup": "^8.3.0",
     "typescript": "^5.8.0",
     "vitest": "^4.1.10"

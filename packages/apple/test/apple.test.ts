@@ -157,7 +157,10 @@ describe('AppleAdsProvider', () => {
     const body = JSON.parse(String(calls.find((c) => c.url.includes('/reports/campaigns'))!.init.body)) as Record<string, unknown>;
     expect(body.startTime).toBe('2026-07-01');
     expect(body.returnRowTotals).toBe(true);
-    expect((body.selector as { orderBy: unknown[] }).orderBy).toHaveLength(1);
+    expect(body.selector).toEqual({
+      orderBy: [{ field: 'campaignId', sortOrder: 'ASCENDING' }],
+      pagination: { offset: 0, limit: 200 },
+    });
   });
 
   it('creates campaigns with dailyBudgetAmount Money strings and pause coercion (no budgetAmount — removed in 5.6)', async () => {

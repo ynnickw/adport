@@ -1,6 +1,6 @@
 {
   "name": "@adport/provider-microsoft",
-  "version": "0.0.1",
+  "version": "0.2.0",
   "description": "Microsoft Advertising (Bing Ads) provider for adport — REST API v13 with sandbox support",
   "license": "Apache-2.0",
   "type": "module",
@@ -25,7 +25,7 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
-    "@types/node": "^22.10.0",
+    "@types/node": "^26.1.2",
     "tsup": "^8.3.0",
     "typescript": "^5.8.0",
     "vitest": "^4.1.10"

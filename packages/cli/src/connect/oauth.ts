@@ -67,7 +67,9 @@ export interface LoopbackServer {
 }
 
 /** Loopback listener for the OAuth redirect — the desktop-app flow's return path. */
-export async function startLoopbackServer(): Promise<LoopbackServer> {
+export async function startLoopbackServer(
+  redirectHostname: '127.0.0.1' | 'localhost' = '127.0.0.1',
+): Promise<LoopbackServer> {
   let resolveCode!: (code: string) => void;
   let rejectCode!: (err: Error) => void;
   const waitForCode = new Promise<string>((resolve, reject) => {
@@ -93,7 +95,7 @@ export async function startLoopbackServer(): Promise<LoopbackServer> {
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('Loopback server failed to bind');
   return {
-    redirectUri: `http://127.0.0.1:${address.port}`,
+    redirectUri: `http://${redirectHostname}:${address.port}`,
     waitForCode,
     close: () => server.close(),
   };

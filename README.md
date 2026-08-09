@@ -1,107 +1,162 @@
 # adport
 
-> Open-source multi-platform ads management for AI agents. Connect your Google Ads, Meta Ads, and TikTok Ads accounts once, then monitor and manage them by talking to any agent — through an MCP server and CLI, with real read *and* write access behind auditable safety rails.
+> Manage Google, Meta, TikTok, Apple, and Microsoft Ads from the terminal or any AI agent.
 
-**Status: v0.1 (unpublished).** Five providers integrated, every one verified against mocked API responses whose shapes come from the current official docs; Google additionally live-verified. See [start-spec.md](./start-spec.md) for the plan and [CHANGELOG.md](./CHANGELOG.md) for what's in.
+I built adport because I wanted an agent to help with ad operations, but I did not want a prompt to be the only thing standing between the agent and an expensive change.
 
-| Provider | API | Reads | Writes | Dry run | Sandbox |
-| --- | --- | --- | --- | --- | --- |
-| Google Ads | REST v24 | GAQL + normalized report | campaigns, ad groups, keywords, RSAs, budgets, bidding | server-side `validate_only` | test accounts |
-| Meta Ads | Graph v26.0 | Insights + normalized report | campaigns, ad sets, budgets, status | server-side `execution_options` | dev-mode accounts |
-| TikTok Ads | Business API v1.3 | sync reporting + normalized report | campaigns, budgets, status | client-side diff | ✅ sandbox env |
-| Apple Ads | Campaign Mgmt v5* | campaign reports + normalized report | campaigns, budgets, status | client-side diff | — |
-| Microsoft Advertising | REST v13 | async CSV reporting + normalized report | campaigns, budgets, status | client-side diff | ✅ universal token |
+adport is an Apache-2.0 CLI and local MCP server. It connects to your own ad accounts, gives every client the same typed tools, normalizes reporting across providers, and makes every write show a preview before the exact approved change can run. Credentials stay on your machine and there is no telemetry.
 
-*Apple's v5 sunsets Jan 2027; the provider has a version-isolated client ready for the new Ads Platform API.
+Google Ads, Apple Ads, and Microsoft Advertising have been exercised against live accounts. Meta and TikTok are implemented, but still need more testing with advertisers who use them day to day. If that is you, I would love to test and improve the integration with you.
 
-## Why
+## Install
 
-- **Agent-first.** The product surface is an MCP server and a CLI — connect it to Claude, Cursor, or any agent and talk to your ads.
-- **Genuinely open.** The entire multi-platform core is Apache-2.0 and self-hostable with your own API credentials.
-- **Writes with structural safety.** Every mutation is two-step: a dry-run returns a preview and a `pending_operation_id`; applying requires that ID. Created entities are paused by default, budget changes are capped by policy, and everything lands in an audit log.
-- **Connection as a product.** `adport connect <provider>` walks you through each platform's credential maze (and yes — since Google's Explorer tier, a fresh Google Ads developer token works the same day).
-
-## The recommendation harness
-
-adport goes beyond consolidation: `adport audit run` evaluates pluggable **rule packs** (OPA-style — rules decoupled from provider code) over normalized cross-platform campaign data and persists structured findings: zero-conversion spend, low CTR, CPA outliers, below-break-even ROAS. Findings that carry a proposed fix can be applied with `adport recommendations apply <id>` — which routes through the same two-step validate→apply gate as every other write. Findings wait durably for your decision (open/dismissed/applied) across restarts. There is deliberately **no "account score"**: interaction-based scores are gameable and distrusted; adport reports concrete findings instead.
-
-## Repo layout
-
-```
-packages/
-  core/       @adport/core                — provider interface, tool registry, policy engine,
-              audit harness (rule packs), credential store
-  google/     @adport/provider-google     — Google Ads (REST, no heavy SDK)
-  meta/       @adport/provider-meta       — Meta Marketing API
-  tiktok/     @adport/provider-tiktok     — TikTok Business API (+ sandbox)
-  apple/      @adport/provider-apple      — Apple Ads (ES256-JWT OAuth)
-  microsoft/  @adport/provider-microsoft  — Microsoft Advertising REST (+ sandbox)
-  mcp/        @adport/mcp                 — MCP server (stdio) over the shared tool registry
-  cli/        adport                      — CLI over the same tool registry
-```
-
-## Development
+Requires Node.js 22.13 or newer.
 
 ```sh
-pnpm install
-pnpm build
-pnpm test
+npm install -g adport
+adport --version
 ```
 
-Try it against the built-in mock provider (no credentials needed):
+Connect a provider and confirm the account is available:
 
 ```sh
-node packages/cli/dist/index.js tools list
-node packages/cli/dist/index.js accounts
-node packages/cli/dist/index.js mcp   # stdio MCP server
+adport connect google
+adport accounts
+adport doctor
 ```
 
-## Connect Google Ads
+Then pull a normalized report:
 
 ```sh
-node packages/cli/dist/index.js connect google
+adport report --provider google --metrics spend,clicks,conversions,roas --range last_7_days
 ```
 
-The wizard walks you through the four credentials (MCC + developer token + OAuth desktop client + refresh token via a local OAuth flow) and imports an existing `~/google-ads.yaml` automatically if you have one. Since Google's Explorer access tier, a fresh developer token works on production accounts the same day — no approval wait to get started.
-
-Then verify and use it:
+Supported connection commands:
 
 ```sh
-node packages/cli/dist/index.js doctor
-node packages/cli/dist/index.js report --provider google --metrics spend,clicks,roas --range last_7_days
+adport connect google
+adport connect meta
+adport connect tiktok
+adport connect apple
+adport connect microsoft
 ```
 
-## Connect the other providers
+The complete credential and authorization checklist is in [docs/providers.md](./docs/providers.md). Never commit provider tokens, app secrets, refresh tokens, or private keys.
+
+## Use it with Claude Code
+
+After installing adport and connecting a provider:
 
 ```sh
-node packages/cli/dist/index.js connect tiktok      # sandbox same-day; production after TikTok's app review
-node packages/cli/dist/index.js connect apple       # self-serve: local EC keypair + public-key upload, no approval
-node packages/cli/dist/index.js connect microsoft   # easiest: self-serve token, PKCE sign-in, sandbox universal token
+claude mcp add adport -- adport mcp
 ```
 
-## Connect Meta Ads
-
-```sh
-node packages/cli/dist/index.js connect meta
-```
-
-No App Review is needed for your own ad accounts: create a dev-mode Business app, generate a **system-user token** (never expires — the wizard explains where), paste it, done (~20-30 min the first time). User tokens work too; adport warns you about their ~60-day expiry. Budgets use Meta's native minor units (cents), and every write supports Meta's server-side `execution_options=["validate_only"]` dry run.
-
-## Use from an MCP client (Claude Code, Claude Desktop, Cursor, ...)
+Restart Claude Code, then ask it to list your ad accounts or report campaign performance. The same stdio server works with other MCP clients:
 
 ```json
 {
   "mcpServers": {
     "adport": {
-      "command": "node",
-      "args": ["/path/to/adport/packages/mcp/dist/bin.js"]
+      "command": "adport",
+      "args": ["mcp"]
     }
   }
 }
 ```
 
-Every mutation is two-step by contract: the first call returns a dry-run preview plus a `pending_operation_id`; only a second call with that id applies the change. Campaign creation is paused-by-default, budget jumps beyond the policy cap are rejected, and everything is written to a local audit log (`adport audit`). Tune the rails in `~/.config/adport/policy.yaml` (see `adport policy`).
+The CLI is not a separate implementation. `adport accounts`, `adport report`, and `adport tools run` use the same tool registry and policy engine exposed through MCP.
+
+## What happens before a write
+
+Every mutation uses the same two-step contract:
+
+1. The first call can only return a dry-run preview.
+2. The preview includes the proposed changes, coercions, budget deltas, and a short-lived `pending_operation_id`.
+3. Applying requires a second call with that ID and identical arguments.
+
+Changed arguments, expired approvals, protected accounts, and budget-cap violations are rejected. New campaigns are created paused, coercions are always reported, and applied changes are written to an append-only local audit log.
+
+Use the CLI to inspect the active policy and audit trail:
+
+```sh
+adport policy
+adport audit show
+```
+
+Policy lives at `~/.config/adport/policy.yaml`; credentials live at `~/.config/adport/credentials.json` with local-only file permissions.
+
+## Provider status
+
+| Provider | Reads | Writes | Provider-side validation | Current validation |
+| --- | --- | --- | --- | --- |
+| Google Ads | GAQL and normalized reports | campaigns, ad groups, keywords, RSAs, budgets, bidding | `validate_only` | exercised against a live account |
+| Meta Ads | Insights and normalized reports | campaigns, ad sets, budgets, status | `execution_options=["validate_only"]` | needs more real-account testing |
+| TikTok Ads | reporting and normalized reports | campaigns, budgets, status | client-side preview; sandbox available | needs sandbox and production testers |
+| Apple Ads | campaign reports and normalized reports | campaigns, budgets, status | client-side preview | exercised against a live account |
+| Microsoft Advertising | asynchronous reports and normalized reports | campaigns, budgets, status | client-side preview; sandbox available | exercised against a live account |
+
+Apple Campaign Management API v5 sunsets in January 2027. Its client is version-isolated so the future Ads Platform API migration does not leak into the shared tool layer.
+
+## Help test a provider
+
+If you currently run ads on Meta, TikTok, Apple, Microsoft, or Google, practical workflow feedback is more useful than a star.
+
+Start with connection health and reads, or use a provider sandbox where available:
+
+```sh
+adport connect <provider>
+adport doctor
+adport accounts --provider <provider>
+adport report --provider <provider> --range last_7_days
+```
+
+If something fails or a workflow is missing, [open an issue](https://github.com/ynnickw/adport/issues) with the provider, command, expected result, and sanitized error. Do not include credentials, account details, access tokens, or private request data. I am especially interested in working with active advertisers on authentication edge cases, reporting fields, safe write previews, and the first useful provider-specific audit rules.
+
+## Findings instead of an account score
+
+`adport audit run` evaluates pluggable rule packs over normalized campaign data and persists concrete findings such as zero-conversion spend, low CTR, CPA outliers, and below-break-even ROAS.
+
+```sh
+adport audit run
+adport recommendations list
+```
+
+Recommendations remain open until they are dismissed or applied. Any proposed fix goes through the normal preview-and-approve gate. There is deliberately no account score: a concrete finding with evidence is more useful than a gameable number.
+
+## Local now, cloud later
+
+Today, adport is the terminal product: a local CLI and stdio MCP server using your own provider credentials. There is no dashboard, hosted token broker, remote MCP endpoint, or multi-tenant credential vault.
+
+A managed cloud version may come later with reviewed provider applications and hosted OAuth callbacks. It will not replace the self-hosted CLI or create a second tool-definition or write path. See [docs/deployment-model.md](./docs/deployment-model.md) for the boundary.
+
+## Development
+
+```sh
+git clone https://github.com/ynnickw/adport.git
+cd adport
+corepack enable
+pnpm install
+pnpm build
+pnpm test
+pnpm typecheck
+```
+
+Repository layout:
+
+```text
+packages/
+  core/       shared tool registry, policy engine, audit harness, credentials
+  google/     Google Ads provider
+  meta/       Meta Marketing API provider
+  tiktok/     TikTok Business API provider
+  apple/      Apple Ads provider
+  microsoft/  Microsoft Advertising provider
+  mcp/        stdio MCP adapter over the shared registry
+  cli/        npm CLI over the shared registry
+```
+
+Provider tests assert outgoing API wire formats, unit conversions, headers, and validation behavior. Every new write path must go through the shared policy engine.
 
 ## License
 
-[Apache-2.0](./LICENSE). Contributions require a DCO sign-off (`git commit -s`) — see [CONTRIBUTING.md](./CONTRIBUTING.md).
+[Apache-2.0](./LICENSE). Contributions require a DCO sign-off (`git commit -s`); see [CONTRIBUTING.md](./CONTRIBUTING.md).

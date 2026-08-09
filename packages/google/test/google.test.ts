@@ -202,6 +202,9 @@ describe('GoogleAdsProvider writes', () => {
     };
     expect(body.mutateOperations[0]?.campaignBudgetOperation?.create.explicitlyShared).toBe(false);
     expect(body.mutateOperations[1]?.campaignOperation?.create.status).toBe('PAUSED');
+    expect(body.mutateOperations[1]?.campaignOperation?.create.containsEuPoliticalAdvertising).toBe(
+      'DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING',
+    );
   });
 
   it('rejects an invalid RSA client-side before any API call', async () => {
