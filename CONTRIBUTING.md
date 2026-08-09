@@ -14,7 +14,7 @@ This adds a `Signed-off-by: Your Name <you@example.com>` trailer. PRs with unsig
 
 ## Development setup
 
-Requirements: Node ≥ 20.19, pnpm ≥ 9.
+Requirements: Node ≥ 22.13 (pnpm 11's floor; Node 20 is EOL), pnpm ≥ 11.
 
 ```sh
 pnpm install

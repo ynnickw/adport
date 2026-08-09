@@ -42,7 +42,7 @@ export async function connectMicrosoft({ openBrowser, io }: { openBrowser: boole
     io.out('');
     io.out('Starting the Microsoft sign-in (PKCE, no client secret)…');
     const pkce = generatePkce();
-    const loopback = await startLoopbackServer();
+    const loopback = await startLoopbackServer('localhost');
     const authUrl = buildMicrosoftAuthUrl(clientId, loopback.redirectUri, pkce.challenge);
     if (openBrowser) {
       openInBrowser(authUrl);

@@ -4,7 +4,7 @@ adport handles live advertising-account credentials. Take findings seriously and
 
 ## Reporting a vulnerability
 
-Email **management@reviewdoctor.ai** with details and reproduction steps. Do not open a public issue for security reports. You will get an acknowledgement within 72 hours.
+Email **yannick@adport.dev** with details and reproduction steps. Do not open a public issue for security reports. You will get an acknowledgement within 72 hours.
 
 ## Scope notes
 

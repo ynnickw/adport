@@ -63,4 +63,10 @@ describe('startLoopbackServer', () => {
     expect(await server.waitForCode).toBe('abc123');
     server.close();
   });
+
+  it('can advertise localhost for providers that require the registered loopback host', async () => {
+    const server = await startLoopbackServer('localhost');
+    expect(new URL(server.redirectUri).hostname).toBe('localhost');
+    server.close();
+  });
 });
