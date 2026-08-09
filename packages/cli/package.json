@@ -24,7 +24,7 @@
     "@adport/provider-tiktok": "workspace:*",
     "commander": "^13.0.0",
     "yaml": "^2.6.0",
-    "zod": "^3.25.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
