@@ -47,8 +47,17 @@ describe('resolveDateRange', () => {
 });
 
 describe('createContext + ToolRegistry', () => {
-  it('lists accounts and reports through the registry', async () => {
+  it('fails closed when no provider is connected', async () => {
     const { ctx, registry } = await createContext();
+    expect(registry.list().some((tool) => tool.name.startsWith('mock_'))).toBe(false);
+    await expect(registry.call('accounts_list', {}, ctx)).rejects.toMatchObject({
+      code: 'NOT_CONNECTED',
+      message: expect.stringContaining('No ad providers are connected'),
+    });
+  });
+
+  it('lists accounts and reports through the registry', async () => {
+    const { ctx, registry } = await createContext({ includeMock: true });
     const accounts = (await registry.call('accounts_list', {}, ctx)) as { accounts: unknown[] };
     expect(accounts.accounts).toHaveLength(2);
 
@@ -62,14 +71,14 @@ describe('createContext + ToolRegistry', () => {
   });
 
   it('rejects invalid tool input with INVALID_INPUT', async () => {
-    const { ctx, registry } = await createContext();
+    const { ctx, registry } = await createContext({ includeMock: true });
     await expect(registry.call('report', { metrics: ['nope'] }, ctx)).rejects.toMatchObject({
       code: 'INVALID_INPUT',
     });
   });
 
   it('runs the full two-step write through the guarded tool', async () => {
-    const { ctx, registry } = await createContext();
+    const { ctx, registry } = await createContext({ includeMock: true });
     const first = (await registry.call(
       'mock_set_budget',
       { account_id: 'mock-1', campaign_id: 'c1', daily_budget_micros: 11_000_000 },

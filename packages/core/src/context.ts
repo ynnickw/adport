@@ -17,8 +17,8 @@ export interface CreateContextOptions {
   /** Extra providers with their tools (e.g. the Google provider from @adport/provider-google). */
   providerModules?: ProviderModule[];
   /**
-   * Include the credential-free mock provider. Defaults to true when no real
-   * provider module is passed, so a fresh install always has something to try.
+   * Include the credential-free mock provider. Disabled by default so a
+   * misconfigured live runtime cannot silently substitute synthetic accounts.
    */
   includeMock?: boolean;
 }
@@ -31,7 +31,7 @@ export interface AdportRuntime {
 
 export async function createContext(options: CreateContextOptions = {}): Promise<AdportRuntime> {
   const modules = options.providerModules ?? [];
-  const includeMock = options.includeMock ?? modules.length === 0;
+  const includeMock = options.includeMock ?? false;
 
   const providers = new ProviderRegistry();
   const { policy, source } = await loadPolicy(options.policyPath);

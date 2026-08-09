@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { DATE_PRESETS, ENTITY_LEVELS, METRICS, type NormalizedQuery, type ReportRow } from '../model.js';
-import type { Account } from '../provider.js';
+import { selectConnectedProviders, type Account } from '../provider.js';
 import { defineTool, type AnyToolDefinition } from './registry.js';
 
 const dateRangeSchema = z.union([
@@ -22,7 +22,7 @@ export function builtinTools(): AnyToolDefinition[] {
       }),
       annotations: { readOnly: true },
       async handler(input, ctx) {
-        const providers = input.provider ? [ctx.providers.get(input.provider)] : ctx.providers.list();
+        const providers = selectConnectedProviders(ctx.providers, input.provider);
         const accounts: Account[] = [];
         for (const provider of providers) {
           accounts.push(...(await provider.listAccounts()));
@@ -46,7 +46,7 @@ export function builtinTools(): AnyToolDefinition[] {
       }),
       annotations: { readOnly: true },
       async handler(input, ctx) {
-        const providers = input.provider ? [ctx.providers.get(input.provider)] : ctx.providers.list();
+        const providers = selectConnectedProviders(ctx.providers, input.provider);
         const query: NormalizedQuery = {
           accountIds: input.account_ids,
           level: input.level,

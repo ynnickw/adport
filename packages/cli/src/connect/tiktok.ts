@@ -2,6 +2,7 @@ import readline from 'node:readline/promises';
 import { CredentialStore } from '@adport/core';
 import { TikTokAdsProvider, TikTokClient } from '@adport/provider-tiktok';
 import type { ProgramIO } from '../program.js';
+import { printLocalConnectionIntro, printLocalConnectionSaved } from './local.js';
 
 /**
  * TikTok requires app review before production access (2 days–2 weeks) — but
@@ -11,7 +12,7 @@ export async function connectTikTok({ io }: { io: ProgramIO }): Promise<void> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const store = new CredentialStore();
   try {
-    io.out('');
+    printLocalConnectionIntro(io, 'TikTok Ads');
     io.out('Connecting TikTok Ads (Marketing API). Setup:');
     io.out('  1. Register at https://business-api.tiktok.com/portal and create an app.');
     io.out('     Production needs human review (2 days–2 weeks). SANDBOX works today:');
@@ -47,6 +48,7 @@ export async function connectTikTok({ io }: { io: ProgramIO }): Promise<void> {
     for (const account of accounts) {
       io.out(`  ${account.id}  ${account.name}  ${account.currency ?? ''}  ${account.status ?? ''}`);
     }
+    printLocalConnectionSaved(io);
     io.out('');
     io.out('Try:  adport accounts   ·   adport report --provider tiktok   ·   adport mcp');
   } finally {

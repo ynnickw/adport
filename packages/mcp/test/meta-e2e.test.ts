@@ -25,6 +25,7 @@ function textOf(result: { content?: Array<{ type: string; text?: string }> }): u
 beforeEach(async () => {
   home = mkdtempSync(path.join(os.tmpdir(), 'adport-meta-e2e-'));
   process.env.ADPORT_HOME = home;
+  delete process.env.ADPORT_DEMO;
   for (const key of Object.keys(process.env)) {
     if (key.startsWith('GOOGLE_ADS_') || key.startsWith('META_')) delete process.env[key];
   }
@@ -83,10 +84,26 @@ afterEach(async () => {
   await client.close();
   vi.unstubAllGlobals();
   delete process.env.ADPORT_HOME;
+  delete process.env.ADPORT_DEMO;
   rmSync(home, { recursive: true, force: true });
 });
 
 describe('Meta E2E over MCP with doc-faithful Graph mocks', () => {
+  it('keeps explicit demo mode isolated from stored real credentials', async () => {
+    const runtime = await assembleRuntime({ includeMock: true });
+    const names = runtime.registry.list().map((tool) => tool.name);
+    expect(names).toContain('mock_list_campaigns');
+    expect(names.some((name) => name.startsWith('meta_'))).toBe(false);
+  });
+
+  it('supports isolated demo mode through ADPORT_DEMO', async () => {
+    process.env.ADPORT_DEMO = 'true';
+    const runtime = await assembleRuntime();
+    const names = runtime.registry.list().map((tool) => tool.name);
+    expect(names).toContain('mock_list_campaigns');
+    expect(names.some((name) => name.startsWith('meta_'))).toBe(false);
+  });
+
   it('assembles the meta provider from stored credentials (no mock provider)', async () => {
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name);

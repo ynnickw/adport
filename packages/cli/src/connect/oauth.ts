@@ -7,7 +7,12 @@ export const GOOGLE_ADS_SCOPE = 'https://www.googleapis.com/auth/adwords';
 const AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 
-export function buildGoogleAuthUrl(clientId: string, redirectUri: string): string {
+export function buildGoogleAuthUrl(
+  clientId: string,
+  redirectUri: string,
+  codeChallenge: string,
+  state: string,
+): string {
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
@@ -15,12 +20,15 @@ export function buildGoogleAuthUrl(clientId: string, redirectUri: string): strin
     scope: GOOGLE_ADS_SCOPE,
     access_type: 'offline',
     prompt: 'consent',
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
+    state,
   });
   return `${AUTH_ENDPOINT}?${params}`;
 }
 
 export async function exchangeCodeForTokens(
-  input: { clientId: string; clientSecret: string; code: string; redirectUri: string },
+  input: { clientId: string; clientSecret: string; code: string; redirectUri: string; codeVerifier: string },
   fetchImpl: typeof fetch = fetch,
 ): Promise<{ refreshToken: string; accessToken: string }> {
   const response = await fetchImpl(TOKEN_ENDPOINT, {
@@ -32,6 +40,7 @@ export async function exchangeCodeForTokens(
       code: input.code,
       redirect_uri: input.redirectUri,
       grant_type: 'authorization_code',
+      code_verifier: input.codeVerifier,
     }),
   });
   const data = (await response.json()) as { refresh_token?: string; access_token?: string; error?: string };
@@ -69,6 +78,7 @@ export interface LoopbackServer {
 /** Loopback listener for the OAuth redirect — the desktop-app flow's return path. */
 export async function startLoopbackServer(
   redirectHostname: '127.0.0.1' | 'localhost' = '127.0.0.1',
+  expectedState?: string,
 ): Promise<LoopbackServer> {
   let resolveCode!: (code: string) => void;
   let rejectCode!: (err: Error) => void;
@@ -81,11 +91,18 @@ export async function startLoopbackServer(
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     const code = url.searchParams.get('code');
     const error = url.searchParams.get('error');
-    res.writeHead(200, { 'content-type': 'text/html' });
+    const state = url.searchParams.get('state');
+    if (expectedState && state !== expectedState) {
+      res.writeHead(400, { 'content-type': 'text/html; charset=utf-8' });
+      res.end('<h2>Authorization failed</h2><p>OAuth state validation failed. Return to the terminal and retry.</p>');
+      rejectCode(new AdportError('PROVIDER_ERROR', 'OAuth state validation failed. Retry the connection.'));
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
     res.end(
       code
         ? '<h2>adport is connected.</h2><p>You can close this tab and return to the terminal.</p>'
-        : `<h2>Authorization failed${error ? `: ${error}` : ''}</h2><p>Return to the terminal and retry.</p>`,
+        : `<h2>Authorization failed${error ? `: ${escapeHtml(error)}` : ''}</h2><p>Return to the terminal and retry.</p>`,
     );
     if (code) resolveCode(code);
     else if (error) rejectCode(new Error(`OAuth authorization failed: ${error}`));
@@ -113,7 +130,11 @@ export function generatePkce(): { verifier: string; challenge: string } {
   return { verifier, challenge };
 }
 
-export function buildMicrosoftAuthUrl(clientId: string, redirectUri: string, challenge: string): string {
+export function generateOAuthState(): string {
+  return randomBytes(32).toString('base64url');
+}
+
+export function buildMicrosoftAuthUrl(clientId: string, redirectUri: string, challenge: string, state: string): string {
   const params = new URLSearchParams({
     client_id: clientId,
     response_type: 'code',
@@ -122,6 +143,7 @@ export function buildMicrosoftAuthUrl(clientId: string, redirectUri: string, cha
     code_challenge: challenge,
     code_challenge_method: 'S256',
     prompt: 'login',
+    state,
   });
   return `${MS_AUTHORIZE}?${params}`;
 }
@@ -161,4 +183,14 @@ export function openInBrowser(url: string): void {
         ? ['cmd', ['/c', 'start', '', url]]
         : ['xdg-open', [url]];
   spawn(cmd as string, args as string[], { detached: true, stdio: 'ignore' }).unref();
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[char]!);
 }

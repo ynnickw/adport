@@ -5,6 +5,7 @@ import readline from 'node:readline/promises';
 import { CredentialStore } from '@adport/core';
 import { AppleAdsClient, AppleAdsProvider } from '@adport/provider-apple';
 import type { ProgramIO } from '../program.js';
+import { printLocalConnectionIntro, printLocalConnectionSaved } from './local.js';
 
 /**
  * Apple Ads is fully self-serve for your own org: create an API user, generate
@@ -14,7 +15,7 @@ export async function connectApple({ io }: { io: ProgramIO }): Promise<void> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const store = new CredentialStore();
   try {
-    io.out('');
+    printLocalConnectionIntro(io, 'Apple Ads');
     io.out('Connecting Apple Ads (Apple Search Ads). One-time setup (~10 min, no approval):');
     io.out('  1. In ads.apple.com: Account Settings → API → create an API user (API role).');
     io.out('  2. Generate an EC key pair locally:');
@@ -23,6 +24,7 @@ export async function connectApple({ io }: { io: ProgramIO }): Promise<void> {
     io.out('  3. Upload public-key.pem in Account Settings → API; Apple shows your');
     io.out('     clientId, teamId, and keyId (all needed below).');
     io.out('  Note: access tokens last 1h and are re-minted automatically; no rotation chores.');
+    io.out('  Your private key stays on this machine; upload only the public key to Apple.');
     io.out('');
 
     const clientId = (await rl.question('clientId (SEARCHADS.xxxx): ')).trim();
@@ -49,6 +51,7 @@ export async function connectApple({ io }: { io: ProgramIO }): Promise<void> {
     for (const account of accounts) {
       io.out(`  ${account.id}  ${account.name}  ${account.currency ?? ''}  ${account.status ?? ''}`);
     }
+    printLocalConnectionSaved(io);
     io.out('');
     io.out('Heads-up: the Campaign Management API v5 sunsets 2027-01-26; adport will migrate');
     io.out('to the new Ads Platform API when its docs go live — your credentials carry over.');

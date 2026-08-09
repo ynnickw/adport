@@ -10,17 +10,24 @@ import { createMicrosoftModule } from '@adport/provider-microsoft';
 export const PROVIDER_IDS = ['google', 'meta', 'tiktok', 'apple', 'microsoft'] as const;
 
 /**
- * Standard runtime assembly: real providers when credentials exist, the mock
- * provider otherwise (so a fresh install always has something to talk to).
+ * Standard runtime assembly: real providers whose credentials exist. Mock data
+ * is opt-in so a live runtime never silently substitutes synthetic accounts.
  */
-export async function assembleRuntime(): Promise<AdportRuntime> {
+export interface AssembleRuntimeOptions {
+  includeMock?: boolean;
+}
+
+export async function assembleRuntime(options: AssembleRuntimeOptions = {}): Promise<AdportRuntime> {
   const store = new CredentialStore();
   const modules: ProviderModule[] = [];
-  for (const factory of [createGoogleModule, createMetaModule, createTikTokModule, createAppleModule, createMicrosoftModule]) {
-    const module = await factory(store);
-    if (module) modules.push(module);
+  const includeMock = options.includeMock ?? process.env.ADPORT_DEMO === 'true';
+  if (!includeMock) {
+    for (const factory of [createGoogleModule, createMetaModule, createTikTokModule, createAppleModule, createMicrosoftModule]) {
+      const module = await factory(store);
+      if (module) modules.push(module);
+    }
   }
-  return createContext({ providerModules: modules });
+  return createContext({ providerModules: modules, includeMock });
 }
 
 export interface CreateServerOptions {
@@ -71,4 +78,7 @@ export async function runStdioServer(runtime: AdportRuntime, version?: string): 
   await server.connect(new StdioServerTransport());
   // stdout is the protocol channel; stderr is for humans.
   console.error(`adport MCP server on stdio (${runtime.registry.list().length} tools, policy: ${runtime.policySource})`);
+  if (runtime.ctx.providers.list().length === 0) {
+    console.error('No ad providers connected. Run `adport connect <provider>` or restart with `--demo` for synthetic mock data.');
+  }
 }

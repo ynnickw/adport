@@ -1,5 +1,5 @@
 import { resolveDateRange, type DatePreset, type DateRange, type ReportRow } from '../model.js';
-import type { ProviderRegistry } from '../provider.js';
+import { selectConnectedProviders, type ProviderRegistry } from '../provider.js';
 import { corePerformancePack } from './packs/core-performance.js';
 import { FindingsStore } from './store.js';
 import type { AuditFinding, RulePack } from './types.js';
@@ -33,7 +33,7 @@ export class AuditRunner {
   async run(options: AuditRunOptions = {}): Promise<AuditRunResult> {
     const range = resolveDateRange(options.dateRange ?? 'last_30_days');
     const packs = options.packs ?? [corePerformancePack];
-    const providers = options.provider ? [this.providers.get(options.provider)] : this.providers.list();
+    const providers = selectConnectedProviders(this.providers, options.provider);
 
     const findings: AuditFinding[] = [];
     let evaluatedAccounts = 0;

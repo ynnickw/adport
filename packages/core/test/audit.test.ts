@@ -20,7 +20,7 @@ afterEach(() => {
 
 describe('AuditRunner + core-performance pack', () => {
   it('finds the zero-conversion campaign and proposes a pause action', async () => {
-    const { ctx } = await createContext();
+    const { ctx } = await createContext({ includeMock: true });
     const runner = new AuditRunner(ctx.providers);
     const result = await runner.run({ dateRange: 'last_30_days' });
 
@@ -39,7 +39,7 @@ describe('AuditRunner + core-performance pack', () => {
   });
 
   it('does not reopen dismissed findings on later runs', async () => {
-    const { ctx, registry } = await createContext();
+    const { ctx, registry } = await createContext({ includeMock: true });
     const first = await new AuditRunner(ctx.providers).run({});
     const finding = first.findings.find((f) => f.ruleId === 'zero-conversion-spend')!;
 
@@ -52,7 +52,7 @@ describe('AuditRunner + core-performance pack', () => {
 
 describe('recommendation tools', () => {
   it('applies a proposed action through the two-step policy gate and marks the finding applied', async () => {
-    const { ctx, registry } = await createContext();
+    const { ctx, registry } = await createContext({ includeMock: true });
     await registry.call('audit_run', {}, ctx);
 
     const listed = (await registry.call('recommendations_list', {}, ctx)) as {
@@ -82,7 +82,7 @@ describe('recommendation tools', () => {
   });
 
   it('refuses to apply findings without a proposed action', async () => {
-    const { ctx, registry } = await createContext();
+    const { ctx, registry } = await createContext({ includeMock: true });
     const store = new FindingsStore();
     await store.save({
       id: 'manual:mock:mock-1:c1',

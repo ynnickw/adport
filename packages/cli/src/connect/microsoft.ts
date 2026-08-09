@@ -5,10 +5,12 @@ import type { ProgramIO } from '../program.js';
 import {
   buildMicrosoftAuthUrl,
   exchangeMicrosoftCode,
+  generateOAuthState,
   generatePkce,
   openInBrowser,
   startLoopbackServer,
 } from './oauth.js';
+import { printLocalConnectionIntro, printLocalConnectionSaved } from './local.js';
 
 /**
  * Microsoft Advertising is the friendliest setup of all providers: the dev
@@ -18,13 +20,15 @@ export async function connectMicrosoft({ openBrowser, io }: { openBrowser: boole
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const store = new CredentialStore();
   try {
-    io.out('');
+    printLocalConnectionIntro(io, 'Microsoft Advertising');
     io.out('Connecting Microsoft Advertising. Setup:');
     io.out('  1. Azure Portal → App registrations → New: "Mobile and desktop applications"');
     io.out('     platform with redirect URI http://localhost (public client, no secret).');
     io.out('  2. Developer token (self-serve, no review): sign in as Super Admin at');
     io.out('     https://ads.microsoft.com/cc/Settings/DevSettings → Request Token.');
     io.out(`  3. Sandbox alternative: universal token ${SANDBOX_DEVELOPER_TOKEN} works for everyone.`);
+    io.out('  Microsoft may show an unverified-publisher or admin-consent notice for your');
+    io.out('  Entra app; its branding and tenant policy belong to you, not Adport Cloud.');
     io.out('');
 
     const sandboxAnswer = (await rl.question('Use the SANDBOX environment? [y/N] ')).trim().toLowerCase();
@@ -42,8 +46,9 @@ export async function connectMicrosoft({ openBrowser, io }: { openBrowser: boole
     io.out('');
     io.out('Starting the Microsoft sign-in (PKCE, no client secret)…');
     const pkce = generatePkce();
-    const loopback = await startLoopbackServer('localhost');
-    const authUrl = buildMicrosoftAuthUrl(clientId, loopback.redirectUri, pkce.challenge);
+    const state = generateOAuthState();
+    const loopback = await startLoopbackServer('localhost', state);
+    const authUrl = buildMicrosoftAuthUrl(clientId, loopback.redirectUri, pkce.challenge, state);
     if (openBrowser) {
       openInBrowser(authUrl);
       io.out(`If the browser did not open, visit:\n  ${authUrl}`);
@@ -83,6 +88,7 @@ export async function connectMicrosoft({ openBrowser, io }: { openBrowser: boole
     for (const account of accounts) {
       io.out(`  ${account.id}  ${account.name}  ${account.currency ?? ''}  ${account.status ?? ''}`);
     }
+    printLocalConnectionSaved(io);
     io.out('Note: public-client refresh tokens expire after ~90 days of disuse; adport');
     io.out('persists rotated tokens automatically on every use.');
     io.out('');
