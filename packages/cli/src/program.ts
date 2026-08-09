@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import packageJson from '../package.json';
 import {
   AdportError,
   AuditLog,
@@ -39,7 +40,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
   program
     .description('The open control plane for paid media (MCP + CLI)')
     .option('--demo', 'Use synthetic mock accounts and tools (never real provider data)')
-    .version('0.1.0')
+    .version(packageJson.version)
     .configureOutput({ writeOut: (s) => io.out(s.trimEnd()), writeErr: (s) => io.err(s.trimEnd()) });
   const commandRuntime = () => runtime(program.opts<{ demo?: boolean }>().demo === true ? true : undefined);
 

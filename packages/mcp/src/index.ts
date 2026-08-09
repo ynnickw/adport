@@ -6,6 +6,7 @@ import { createMetaModule } from '@adport/provider-meta';
 import { createTikTokModule } from '@adport/provider-tiktok';
 import { createAppleModule } from '@adport/provider-apple';
 import { createMicrosoftModule } from '@adport/provider-microsoft';
+import packageJson from '../package.json';
 
 export const PROVIDER_IDS = ['google', 'meta', 'tiktok', 'apple', 'microsoft'] as const;
 
@@ -40,7 +41,7 @@ export interface CreateServerOptions {
  * Thin adapter: every tool in the shared registry becomes an MCP tool.
  * No tool logic lives here — see the "one tool-definition layer" principle.
  */
-export function createMcpServer({ runtime, name = 'adport', version = '0.1.0' }: CreateServerOptions): McpServer {
+export function createMcpServer({ runtime, name = 'adport', version = packageJson.version }: CreateServerOptions): McpServer {
   const server = new McpServer({ name, version });
   for (const tool of runtime.registry.list()) {
     server.registerTool(
