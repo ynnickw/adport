@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+  <title id="title">Adport — Manage your ads from any AI agent</title>
+  <desc id="description">The open control plane for paid media.</desc>
+  <defs>
+    <radialGradient id="orangeGlow" cx="0" cy="0" r="1" gradientTransform="translate(1010 110) rotate(135) scale(420 330)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF6B00" stop-opacity=".13"/>
+      <stop offset="1" stop-color="#FF6B00" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="blueGlow" cx="0" cy="0" r="1" gradientTransform="translate(90 610) rotate(-42) scale(420 300)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0071E3" stop-opacity=".08"/>
+      <stop offset="1" stop-color="#0071E3" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFFFFF" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity=".72"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-40%" width="160%" height="190%">
+      <feDropShadow dx="0" dy="24" stdDeviation="30" flood-color="#000000" flood-opacity=".10"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" fill="#F5F5F7"/>
+  <rect width="1200" height="630" fill="url(#orangeGlow)"/>
+  <rect width="1200" height="630" fill="url(#blueGlow)"/>
+  <g stroke="#1D1D1F" stroke-opacity=".035">
+    <path d="M0 80H1200M0 160H1200M0 240H1200M0 320H1200M0 400H1200M0 480H1200M0 560H1200"/>
+  </g>
+
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif">
+    <text x="72" y="82" fill="#1D1D1F" font-size="30" font-weight="750" letter-spacing="-1.4">adport<tspan fill="#FF6B00">.</tspan>dev</text>
+    <text x="1128" y="78" fill="#6E6E73" font-size="15" font-weight="650" text-anchor="end">Apache-2.0 · Local-first</text>
+
+    <text x="72" y="176" fill="#D94F00" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" letter-spacing="2.2">THE OPEN CONTROL PLANE FOR PAID MEDIA</text>
+    <text x="68" y="277" fill="#1D1D1F" font-size="75" font-weight="680" letter-spacing="-5.2">Manage your ads</text>
+    <text x="68" y="359" fill="#1D1D1F" font-size="75" font-weight="680" letter-spacing="-5.2">from <tspan fill="#FF6B00">any AI agent.</tspan></text>
+
+    <text x="72" y="422" fill="#6E6E73" font-size="22" font-weight="450">Connect once. Report, audit, and make changes from the AI tools</text>
+    <text x="72" y="454" fill="#6E6E73" font-size="22" font-weight="450">you already use—with every write previewed first.</text>
+
+    <g filter="url(#shadow)">
+      <rect x="72" y="510" width="1056" height="70" rx="20" fill="url(#card)" stroke="#1D1D1F" stroke-opacity=".09"/>
+    </g>
+    <circle cx="106" cy="545" r="7" fill="#FF6B00"/>
+    <text x="128" y="552" fill="#515154" font-size="17" font-weight="650">Google Ads</text>
+    <text x="274" y="552" fill="#515154" font-size="17" font-weight="650">Meta Ads</text>
+    <text x="406" y="552" fill="#515154" font-size="17" font-weight="650">TikTok Ads</text>
+    <text x="548" y="552" fill="#515154" font-size="17" font-weight="650">Apple Ads</text>
+    <text x="680" y="552" fill="#515154" font-size="17" font-weight="650">Microsoft Ads</text>
+    <text x="1092" y="552" fill="#8B7F74" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="650" text-anchor="end">MCP · CLI · NO TELEMETRY</text>
+  </g>
+</svg>
