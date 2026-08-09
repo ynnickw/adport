@@ -88,6 +88,7 @@ a { color: inherit; }
 .hero-copy { max-width: 42rem; }
 .eyebrow { margin: 0 0 1.5rem; color: var(--orange-dark); font: 720 0.72rem ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: 0.14em; text-transform: uppercase; }
 .hero h1 { margin: 0; color: var(--ink); font-size: clamp(3.35rem, 4.3vw, 4.35rem); font-weight: 650; letter-spacing: -0.075em; line-height: 0.96; }
+.hero-lead { white-space: nowrap; }
 .agent-line { display: flex; height: 1em; align-items: center; gap: 0.12em; }
 .agent-rotator { position: relative; display: block; width: 6.45em; height: 1em; color: var(--orange); }
 .agent { position: absolute; inset: 50% auto auto 0; display: inline-flex; align-items: center; gap: 0.18em; line-height: 1; white-space: nowrap; opacity: 0; transform: translateY(calc(-50% + 0.28em)); animation: agent-cycle 9s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
@@ -179,6 +180,7 @@ a { color: inherit; }
   .availability { display: none; }
   .hero { padding-block: 3.75rem 4.5rem; }
   .hero h1 { font-size: clamp(2.8rem, 14vw, 4.2rem); }
+  .hero-lead { font-size: 0.78em; }
   .agent-line { height: 2em; align-items: flex-start; flex-direction: column; gap: 0; }
   .agent-rotator { width: 100%; height: 1em; margin-top: 0.08em; }
   .lede { font-size: 1rem; }
