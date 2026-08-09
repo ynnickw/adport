@@ -2,6 +2,22 @@
 
 All notable changes to adport. Format loosely follows [Keep a Changelog](https://keepachangelog.com/); pre-1.0, minor versions may break.
 
+## 0.3.0 — 2026-08-09
+
+### Added
+- Explicit `--demo` and `ADPORT_DEMO=true` modes for isolated synthetic accounts and `mock_*` tools.
+- `adport disconnect <provider>` for removing locally stored provider credentials.
+- Shared local/BYO onboarding guidance for Google, Meta, TikTok, Apple, and Microsoft.
+
+### Changed
+- Runtimes with no connected provider now fail closed with `NOT_CONNECTED` instead of silently substituting mock data.
+- Provider wizards distinguish local credentials from the future Adport Cloud OAuth broker and explain provider-owned consent or review notices.
+
+### Security
+- Google desktop OAuth now uses PKCE and state validation.
+- Microsoft OAuth retains PKCE and now validates state on the localhost callback.
+- Demo mode never loads configured real providers.
+
 ## 0.2.0 — 2026-08-08
 
 ### Added

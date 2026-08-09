@@ -1,6 +1,6 @@
 {
   "name": "@adport/provider-microsoft",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Microsoft Advertising (Bing Ads) provider for adport — REST API v13 with sandbox support",
   "license": "Apache-2.0",
   "type": "module",
