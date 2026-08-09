@@ -28,10 +28,14 @@ jobs:
       - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm test
-      - name: CLI smoke (mock provider, no credentials)
+      - name: CLI smoke (fail-closed and explicit demo mode)
         run: |
           export ADPORT_HOME="$(mktemp -d)"
           node packages/cli/dist/index.js tools list
-          node packages/cli/dist/index.js accounts --json
-          node packages/cli/dist/index.js report --metrics spend,clicks,roas
-          node packages/cli/dist/index.js audit run
+          if node packages/cli/dist/index.js accounts --json; then
+            echo "Expected accounts to fail without credentials or --demo"
+            exit 1
+          fi
+          node packages/cli/dist/index.js --demo accounts --json
+          node packages/cli/dist/index.js --demo report --metrics spend,clicks,roas
+          node packages/cli/dist/index.js --demo audit run
