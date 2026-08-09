@@ -30,12 +30,12 @@
     "@adport/provider-microsoft": "workspace:*",
     "@adport/provider-tiktok": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.12.0",
-    "zod": "^3.25.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^22.10.0",
+    "@types/node": "^26.1.2",
     "tsup": "^8.3.0",
     "typescript": "^5.8.0",
-    "vitest": "^3.0.0"
+    "vitest": "^4.1.10"
   }
 }
