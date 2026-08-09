@@ -9,10 +9,13 @@ import type { ProgramIO } from '../program.js';
 import {
   buildGoogleAuthUrl,
   exchangeCodeForTokens,
+  generateOAuthState,
+  generatePkce,
   openInBrowser,
   parseClientSecretJson,
   startLoopbackServer,
 } from './oauth.js';
+import { printLocalConnectionIntro, printLocalConnectionSaved } from './local.js';
 
 export interface ConnectGoogleOptions {
   openBrowser: boolean;
@@ -28,6 +31,11 @@ export async function connectGoogle({ openBrowser, io }: ConnectGoogleOptions): 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const store = new CredentialStore();
   try {
+    printLocalConnectionIntro(io, 'Google Ads');
+    io.out('Google may show "Google has not verified this app" for a private/unverified');
+    io.out('OAuth project. The developer shown will be your project contact. That warning');
+    io.out('is expected for BYO personal use; a verified Adport screen is Cloud-only.');
+    io.out('');
     // Re-auth fast path: keep the stored developer token + OAuth client and
     // only redo the browser consent (covers expired/revoked refresh tokens).
     const existing = await store.get('google');
@@ -61,12 +69,12 @@ export async function connectGoogle({ openBrowser, io }: ConnectGoogleOptions): 
       }
     }
 
-    io.out('');
     io.out('Connecting Google Ads. You need (the wizard guides each step):');
     io.out('  1. A manager account (MCC) — free, instant:  https://ads.google.com/home/tools/manager-accounts/');
     io.out('  2. A developer token from the MCC API Center (Explorer access is automatic): https://ads.google.com/aw/apicenter');
     io.out('  3. A Google Cloud OAuth "Desktop app" client:  https://console.cloud.google.com/apis/credentials');
-    io.out('     (enable the "Google Ads API" for the project, consent screen: External, add yourself as test user)');
+    io.out('     Enable Google Ads API; choose External; add yourself as a test user.');
+    io.out('     Suggested private app name: "Adport Local – <your organization>".');
     io.out('');
 
     // Fast path: import an existing google-ads.yaml (the ecosystem convention).
@@ -91,6 +99,12 @@ export async function connectGoogle({ openBrowser, io }: ConnectGoogleOptions): 
         clientSecret = (await rl.question('OAuth client secret: ')).trim();
       }
 
+      if (!developerToken || !clientId || !clientSecret) {
+        io.err('Missing developer token or OAuth client credentials — aborting.');
+        process.exitCode = 1;
+        return;
+      }
+
       const loginCustomerId =
         (await rl.question('Manager (MCC) customer id for login-customer-id (Enter to skip): ')).trim() || undefined;
 
@@ -113,8 +127,10 @@ async function runOAuthFlow(
   io.out('');
   io.out('Starting the OAuth flow (scope: Google Ads). A browser window should open;');
   io.out('sign in with the Google account that can access your ad accounts.');
-  const loopback = await startLoopbackServer();
-  const authUrl = buildGoogleAuthUrl(clientId, loopback.redirectUri);
+  const pkce = generatePkce();
+  const state = generateOAuthState();
+  const loopback = await startLoopbackServer('127.0.0.1', state);
+  const authUrl = buildGoogleAuthUrl(clientId, loopback.redirectUri, pkce.challenge, state);
   if (openBrowser) {
     openInBrowser(authUrl);
     io.out(`If the browser did not open, visit:\n  ${authUrl}`);
@@ -123,7 +139,13 @@ async function runOAuthFlow(
   }
   try {
     const code = await loopback.waitForCode;
-    const tokens = await exchangeCodeForTokens({ clientId, clientSecret, code, redirectUri: loopback.redirectUri });
+    const tokens = await exchangeCodeForTokens({
+      clientId,
+      clientSecret,
+      code,
+      redirectUri: loopback.redirectUri,
+      codeVerifier: pkce.verifier,
+    });
     return tokens.refreshToken;
   } finally {
     loopback.close();
@@ -147,6 +169,7 @@ async function verifyAndSave(creds: GoogleCredentials, store: CredentialStore, i
   });
   io.out('');
   io.out(`✓ Connected. ${customers.length} accessible customer id(s): ${customers.join(', ')}`);
+  printLocalConnectionSaved(io);
   io.out('');
   io.out('If this token expires again in ~7 days: your OAuth consent screen is in "Testing"');
   io.out('status — set it to "In production" at console.cloud.google.com/apis/credentials/consent');

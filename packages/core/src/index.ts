@@ -16,6 +16,7 @@ export {
 } from './model.js';
 export {
   ProviderRegistry,
+  selectConnectedProviders,
   type Account,
   type AdProvider,
   type BudgetDelta,

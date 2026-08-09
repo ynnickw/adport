@@ -18,7 +18,7 @@ function textOf(result: { content?: Array<{ type: string; text?: string }> }): u
 beforeEach(async () => {
   home = mkdtempSync(path.join(os.tmpdir(), 'adport-mcp-test-'));
   process.env.ADPORT_HOME = home;
-  const runtime = await createContext();
+  const runtime = await createContext({ includeMock: true });
   const server = createMcpServer({ runtime });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   client = new Client({ name: 'test-client', version: '0.0.0' });

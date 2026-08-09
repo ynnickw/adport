@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { CredentialStore } from '@adport/core';
 import { buildProgram, type ProgramIO } from '../src/program.js';
 
 let home: string;
@@ -12,12 +13,19 @@ let io: ProgramIO;
 function run(...args: string[]) {
   const program = buildProgram(io);
   program.exitOverride();
+  return program.parseAsync(['node', 'adport', '--demo', ...args]);
+}
+
+function runWithoutDemo(...args: string[]) {
+  const program = buildProgram(io);
+  program.exitOverride();
   return program.parseAsync(['node', 'adport', ...args]);
 }
 
 beforeEach(() => {
   home = mkdtempSync(path.join(os.tmpdir(), 'adport-cli-test-'));
   process.env.ADPORT_HOME = home;
+  delete process.env.ADPORT_DEMO;
   // Never let the developer's real provider env credentials leak into tests.
   for (const key of Object.keys(process.env)) {
     if (/^(GOOGLE_ADS_|META_|TIKTOK_|APPLE_ADS_|MICROSOFT_ADS_)/.test(key)) delete process.env[key];
@@ -29,14 +37,34 @@ beforeEach(() => {
 
 afterEach(() => {
   delete process.env.ADPORT_HOME;
+  delete process.env.ADPORT_DEMO;
   rmSync(home, { recursive: true, force: true });
 });
 
 describe('adport CLI', () => {
+  it('does not expose mock tools without explicit demo mode', async () => {
+    await runWithoutDemo('tools', 'list', '--json');
+    const tools = JSON.parse(out.join('\n')) as Array<{ name: string }>;
+    expect(tools.some((tool) => tool.name.startsWith('mock_'))).toBe(false);
+    await expect(runWithoutDemo('accounts', '--json')).rejects.toMatchObject({
+      code: 'NOT_CONNECTED',
+      message: expect.stringContaining('No ad providers are connected'),
+    });
+  }, 20_000);
+
   it('lists tools as JSON', async () => {
     await run('tools', 'list', '--json');
     const tools = JSON.parse(out.join('\n')) as Array<{ name: string }>;
     expect(tools.map((t) => t.name)).toContain('accounts_list');
+  });
+
+  it('disconnects a provider locally without claiming provider-side revocation', async () => {
+    const store = new CredentialStore();
+    await store.set({ provider: 'google', source: 'byo', data: { refresh_token: 'local-test-token' } });
+    await run('disconnect', 'google');
+    expect(await store.get('google')).toBeUndefined();
+    expect(out.join('\n')).toContain('Removed local google credentials');
+    expect(out.join('\n')).toContain('Provider-side access was not revoked');
   });
 
   it('lists mock accounts', async () => {

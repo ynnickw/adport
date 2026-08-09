@@ -25,6 +25,18 @@ adport accounts
 adport doctor
 ```
 
+Adport fails closed when no provider credentials are available: it exposes the core/audit tool definitions, but account, report, and audit operations return `NOT_CONNECTED`. It never substitutes demo accounts in a normal runtime.
+
+To explore synthetic data explicitly, opt into demo mode:
+
+```sh
+adport --demo accounts
+adport --demo report --range last_7_days
+adport --demo mcp
+```
+
+For an MCP host that configures environment variables instead of arguments, `ADPORT_DEMO=true` enables the same isolated mock provider. Mock tools are always named `mock_*` and never call an advertising platform.
+
 Then pull a normalized report:
 
 ```sh
@@ -40,6 +52,10 @@ adport connect tiktok
 adport connect apple
 adport connect microsoft
 ```
+
+These are deliberately **local/BYO** connections. You create and own each provider app, developer token, or API key; the CLI talks directly to the provider and writes secrets only to `${ADPORT_HOME:-~/.config/adport}/credentials.json` with mode `0600`. Adport Cloud and its hosted OAuth broker are not involved. Provider review, consent warnings, and tenant policies therefore belong to your provider app. Remove a stored connection with `adport disconnect <provider>`; revoke the credential separately at the provider when necessary.
+
+The future Adport Cloud onboarding is a separate flow: it will use Adport's approved platform apps and hosted OAuth broker for a verified, one-click connection.
 
 The complete credential and authorization checklist is in [docs/providers.md](./docs/providers.md). Never commit provider tokens, app secrets, refresh tokens, or private keys.
 

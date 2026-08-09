@@ -2,6 +2,7 @@ import readline from 'node:readline/promises';
 import { CredentialStore } from '@adport/core';
 import { MetaAdsProvider, MetaGraphClient, type MetaCredentials } from '@adport/provider-meta';
 import type { ProgramIO } from '../program.js';
+import { printLocalConnectionIntro, printLocalConnectionSaved } from './local.js';
 
 export interface ConnectMetaOptions {
   io: ProgramIO;
@@ -15,7 +16,7 @@ export async function connectMeta({ io }: ConnectMetaOptions): Promise<void> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const store = new CredentialStore();
   try {
-    io.out('');
+    printLocalConnectionIntro(io, 'Meta Ads');
     io.out('Connecting Meta Ads. One-time setup (~20-30 min, no review for your own accounts):');
     io.out('  1. Create a Business-type app (dev mode is fine): https://developers.facebook.com/apps/');
     io.out('     Add the "Marketing API" product to it.');
@@ -25,6 +26,8 @@ export async function connectMeta({ io }: ConnectMetaOptions): Promise<void> {
     io.out('     https://business.facebook.com/settings/system-users');
     io.out('  3. Alternative — a user token from Graph API Explorer (expires after ~60 days');
     io.out('     when extended; adport will warn you, but system-user tokens avoid this).');
+    io.out('  Meta App Review/business verification can be required for assets owned by');
+    io.out('  other businesses; your local Adport installation does not bypass that.');
     io.out('');
 
     const accessToken = (await rl.question('Paste your access token: ')).trim();
@@ -65,6 +68,7 @@ export async function connectMeta({ io }: ConnectMetaOptions): Promise<void> {
     for (const account of accounts) {
       io.out(`  ${account.id}  ${account.name}  ${account.currency ?? ''}  ${account.status ?? ''}`);
     }
+    printLocalConnectionSaved(io);
     if (debug?.expiresAt) {
       const days = Math.round((debug.expiresAt * 1000 - Date.now()) / 86_400_000);
       io.out(

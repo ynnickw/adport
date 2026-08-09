@@ -101,3 +101,16 @@ export class ProviderRegistry {
     return [...this.providers.values()];
   }
 }
+
+/** Select providers for a read operation and fail clearly when none exist. */
+export function selectConnectedProviders(registry: ProviderRegistry, providerId?: string): AdProvider[] {
+  if (providerId) return [registry.get(providerId)];
+  const providers = registry.list();
+  if (providers.length === 0) {
+    throw new AdportError(
+      'NOT_CONNECTED',
+      'No ad providers are connected. Run `adport connect <provider>` first, configure provider environment variables, or use `--demo` for synthetic mock data.',
+    );
+  }
+  return providers;
+}

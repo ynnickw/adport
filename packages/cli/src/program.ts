@@ -29,17 +29,19 @@ function table(rows: Array<Record<string, unknown>>): string {
   return [line(keys), line(widths.map((w) => '-'.repeat(w))), ...rows.map((r) => line(keys.map((k) => String(r[k] ?? ''))))].join('\n');
 }
 
-async function runtime(): Promise<AdportRuntime> {
+async function runtime(includeMock?: boolean): Promise<AdportRuntime> {
   const { assembleRuntime } = await import('@adport/mcp');
-  return assembleRuntime();
+  return assembleRuntime({ includeMock });
 }
 
 export function buildProgram(io: ProgramIO = defaultIO): Command {
   const program = new Command('adport');
   program
     .description('The open control plane for paid media (MCP + CLI)')
+    .option('--demo', 'Use synthetic mock accounts and tools (never real provider data)')
     .version('0.1.0')
     .configureOutput({ writeOut: (s) => io.out(s.trimEnd()), writeErr: (s) => io.err(s.trimEnd()) });
+  const commandRuntime = () => runtime(program.opts<{ demo?: boolean }>().demo === true ? true : undefined);
 
   const tools = program.command('tools').description('Inspect and invoke the shared tool registry');
 
@@ -48,7 +50,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .description('List available tools')
     .option('--json', 'JSON output')
     .action(async (opts: { json?: boolean }) => {
-      const { registry } = await runtime();
+      const { registry } = await commandRuntime();
       const defs = registry.list();
       if (opts.json) {
         io.out(
@@ -79,7 +81,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .description('Invoke a tool with JSON input (the same tools the MCP server exposes)')
     .option('--input <json>', 'JSON object with the tool arguments', '{}')
     .action(async (name: string, opts: { input: string }) => {
-      const rt = await runtime();
+      const rt = await commandRuntime();
       const result = await rt.registry.call(name, JSON.parse(opts.input), rt.ctx);
       io.out(json(result));
     });
@@ -90,7 +92,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .option('--provider <id>', 'Limit to one provider')
     .option('--json', 'JSON output')
     .action(async (opts: { provider?: string; json?: boolean }) => {
-      const rt = await runtime();
+      const rt = await commandRuntime();
       const result = (await rt.registry.call('accounts_list', { provider: opts.provider }, rt.ctx)) as {
         accounts: Array<Record<string, unknown>>;
       };
@@ -107,7 +109,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .option('--limit <n>', 'Max rows', '100')
     .option('--json', 'JSON output')
     .action(async (opts: { provider?: string; level: string; metrics: string; range: string; limit: string; json?: boolean }) => {
-      const rt = await runtime();
+      const rt = await commandRuntime();
       const dateRange = opts.range.includes('..')
         ? { start: opts.range.split('..')[0]!, end: opts.range.split('..')[1]! }
         : opts.range;
@@ -144,7 +146,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .command('policy')
     .description('Show the active write policy and where it was loaded from')
     .action(async () => {
-      const rt = await runtime();
+      const rt = await commandRuntime();
       io.out(json({ source: rt.policySource, policy: rt.ctx.engine.policy }));
     });
 
@@ -186,7 +188,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .option('--provider <id>', 'Limit to one provider')
     .option('--range <range>', 'Preset or START..END', 'last_30_days')
     .action(async (opts: { provider?: string; range: string }) => {
-      const rt = await runtime();
+      const rt = await commandRuntime();
       const dateRange = opts.range.includes('..')
         ? { start: opts.range.split('..')[0]!, end: opts.range.split('..')[1]! }
         : opts.range;
@@ -249,11 +251,29 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
         return;
       }
       if (provider === 'mock') {
-        io.out('The mock provider needs no credentials — it is available out of the box. Try: adport accounts');
+        io.out('The mock provider is explicit demo mode, not a connection. Try: adport --demo accounts');
         return;
       }
       io.err(`Provider "${provider}" is not supported. Available: google, meta, tiktok, apple, microsoft, mock.`);
       process.exitCode = 1;
+    });
+
+  program
+    .command('disconnect <provider>')
+    .description('Remove a provider connection from this machine')
+    .action(async (provider: string) => {
+      if (!['google', 'meta', 'tiktok', 'apple', 'microsoft'].includes(provider)) {
+        io.err(`Provider "${provider}" is not supported. Available: google, meta, tiktok, apple, microsoft.`);
+        process.exitCode = 1;
+        return;
+      }
+      const removed = await new CredentialStore().delete(provider);
+      if (!removed) {
+        io.out(`No local ${provider} credentials were stored.`);
+        return;
+      }
+      io.out(`Removed local ${provider} credentials.`);
+      io.out('Provider-side access was not revoked. Revoke the token or key at the provider if needed.');
     });
 
   const recommendations = program.command('recommendations').description('Review and act on audit findings');
@@ -264,7 +284,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .option('--status <status>', 'open | dismissed | applied', 'open')
     .option('--json', 'JSON output')
     .action(async (opts: { status: string; json?: boolean }) => {
-      const rt = await runtime();
+      const rt = await commandRuntime();
       const result = (await rt.registry.call('recommendations_list', { status: opts.status }, rt.ctx)) as {
         findings: Array<{ id: string; severity: string; title: string; recommendation: string; proposedAction?: unknown }>;
       };
@@ -288,7 +308,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .description('Run a finding\'s proposed action through the two-step validate→apply flow')
     .option('--pending <id>', 'pending_operation_id from the validation step')
     .action(async (findingId: string, opts: { pending?: string }) => {
-      const rt = await runtime();
+      const rt = await commandRuntime();
       const result = await rt.registry.call(
         'recommendation_apply',
         { finding_id: findingId, pending_operation_id: opts.pending },
@@ -301,7 +321,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .command('dismiss <findingId>')
     .description('Dismiss a finding (never reopened by future runs)')
     .action(async (findingId: string) => {
-      const rt = await runtime();
+      const rt = await commandRuntime();
       const result = await rt.registry.call('recommendation_dismiss', { finding_id: findingId }, rt.ctx);
       io.out(json(result));
     });
@@ -312,7 +332,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .action(async () => {
       const store = new CredentialStore();
       const records = await store.list();
-      const rt = await runtime();
+      const rt = await commandRuntime();
       io.out(`policy: ${rt.policySource}`);
       io.out(`providers loaded: ${rt.ctx.providers.list().map((p) => p.id).join(', ') || '(none)'}`);
       for (const record of records) {
@@ -339,7 +359,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .description('Start the adport MCP server on stdio')
     .action(async () => {
       const { runStdioServer } = await import('@adport/mcp');
-      await runStdioServer(await runtime());
+      await runStdioServer(await commandRuntime());
       // Keep the process alive for the stdio transport.
       await new Promise(() => {});
     });
