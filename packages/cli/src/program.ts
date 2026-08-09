@@ -37,7 +37,7 @@ async function runtime(): Promise<AdportRuntime> {
 export function buildProgram(io: ProgramIO = defaultIO): Command {
   const program = new Command('adport');
   program
-    .description('Open-source multi-platform ads management for AI agents (MCP + CLI)')
+    .description('The open control plane for paid media (MCP + CLI)')
     .version('0.1.0')
     .configureOutput({ writeOut: (s) => io.out(s.trimEnd()), writeErr: (s) => io.err(s.trimEnd()) });
 
@@ -161,6 +161,23 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
         return;
       }
       io.out(entries.map((e) => JSON.stringify(e)).join('\n'));
+    });
+
+  audit
+    .command('export')
+    .description('Export write-audit entries to stdout for archival or compliance ingestion')
+    .option('--limit <n>', 'Max entries', '10000')
+    .option('--format <format>', 'jsonl | json', 'jsonl')
+    .action(async (opts: { limit: string; format: string }) => {
+      const limit = Number(opts.limit);
+      if (!Number.isInteger(limit) || limit < 1) {
+        throw new AdportError('INVALID_INPUT', '--limit must be a positive integer');
+      }
+      if (opts.format !== 'jsonl' && opts.format !== 'json') {
+        throw new AdportError('INVALID_INPUT', '--format must be jsonl or json');
+      }
+      const entries = await new AuditLog().read(limit);
+      io.out(opts.format === 'json' ? json(entries) : entries.map((e) => JSON.stringify(e)).join('\n'));
     });
 
   audit

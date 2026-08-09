@@ -83,6 +83,20 @@ describe('adport CLI', () => {
     expect(entry.summary).toContain('CPC ceiling');
   });
 
+  it('exports the audit trail as JSON and JSONL', async () => {
+    await run('audit', 'note', 'Export fixture', '--provider', 'mock', '--account', 'acct-1');
+
+    out = [];
+    await run('audit', 'export', '--format', 'json', '--limit', '10');
+    expect(JSON.parse(out.join('\n'))).toEqual(
+      expect.arrayContaining([expect.objectContaining({ event: 'note', summary: 'Export fixture' })]),
+    );
+
+    out = [];
+    await run('audit', 'export', '--format', 'jsonl', '--limit', '10');
+    expect(out.join('\n')).toContain('"summary":"Export fixture"');
+  });
+
   it('runs the audit and lists + applies recommendations end-to-end', async () => {
     await run('audit', 'run');
     expect(out.join('\n')).toContain('zero-conversion-spend:mock:mock-1:c4');

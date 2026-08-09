@@ -1,6 +1,6 @@
 # adport
 
-> Manage Google, Meta, TikTok, Apple, and Microsoft Ads from the terminal or any AI agent.
+> The open control plane for paid media. Manage Google, Meta, TikTok, Apple, and Microsoft Ads from the terminal or any AI agent—with every write previewed first.
 
 I built adport because I wanted an agent to help with ad operations, but I did not want a prompt to be the only thing standing between the agent and an expensive change.
 
@@ -122,6 +122,20 @@ adport recommendations list
 ```
 
 Recommendations remain open until they are dismissed or applied. Any proposed fix goes through the normal preview-and-approve gate. There is deliberately no account score: a concrete finding with evidence is more useful than a gameable number.
+
+## Reporting and audit semantics
+
+Normalized metric definitions, currency behavior, date boundaries, attribution limits, and safe cross-provider comparison rules are documented in [docs/reporting-semantics.md](./docs/reporting-semantics.md). Provider reporting is not silently currency-converted and does not erase platform attribution differences.
+
+Write-audit entries are append-only JSONL locally. Inspect or export them without changing the source log:
+
+```sh
+adport audit show --limit 50
+adport audit export --format jsonl > adport-audit.jsonl
+adport audit export --format json > adport-audit.json
+```
+
+The policy contract and audit event schema are documented in [docs/write-safety.md](./docs/write-safety.md).
 
 ## Local now, cloud later
 

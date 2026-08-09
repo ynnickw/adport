@@ -1,7 +1,7 @@
 {
   "name": "adport",
   "version": "0.2.0",
-  "description": "adport CLI — manage your ad accounts from the terminal or any AI agent",
+  "description": "adport CLI — the open control plane for paid media",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
