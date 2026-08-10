@@ -13,3 +13,4 @@ coverage/
 /AGENTS.md
 /.codex/
 /.pnpm-store/
+.vercel
