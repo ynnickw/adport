@@ -17,7 +17,7 @@
     <main class="legal-content">
       <p class="eyebrow">Legal</p>
       <h1>Privacy Policy</h1>
-      <p class="updated">Effective August 8, 2026</p>
+      <p class="updated">Effective August 10, 2026</p>
 
       <p>Adport is an open-source, self-hosted tool for managing advertising accounts through a command-line interface and MCP server. This policy describes the limited information handled by the adport.dev website and the Adport software.</p>
 
@@ -27,8 +27,26 @@
       <h2>Self-hosted software</h2>
       <p>Adport runs on infrastructure controlled by the user. Credentials, advertising account data, reports, pending operations, findings, and audit records are processed locally or by the advertising platforms the user connects. Adport does not send this information to Yannick Westermann Labs.</p>
 
-      <h2>Advertising platform data</h2>
-      <p>When a user connects Google Ads, Meta, TikTok, Apple Ads, or Microsoft Advertising, Adport accesses only the data and permissions needed to perform actions requested by that user. The connected platform processes data under its own terms and privacy policy. Adport does not sell advertising data or use it for profiling, unrelated advertising, or automated decisions about individuals.</p>
+      <h2>Google user data</h2>
+      <p>When a user connects Google Ads, Adport requests the <code>https://www.googleapis.com/auth/adwords</code> OAuth scope. This permission allows Adport to access and manage the Google Ads accounts that the user is authorized to use.</p>
+
+      <h3>Data Adport accesses</h3>
+      <p>Depending on the command requested by the user, Adport may access Google Ads customer and account identifiers; campaigns; campaign budgets; bidding settings; ad groups; ads and ad assets; keywords and other targeting criteria; performance metrics; reporting data; and change history. Adport also receives OAuth access and refresh tokens used to authenticate requests to the Google Ads API. Adport does not request access to Gmail, Google Drive, Google Calendar, contacts, or unrelated Google Account data.</p>
+
+      <h3>How Adport uses Google user data</h3>
+      <p>Adport uses Google user data only to provide user-requested advertising-account functionality: connecting and listing accessible accounts; retrieving and normalizing reports; inspecting campaigns and their performance; previewing proposed changes; and, after the user confirms Adport's two-step safety gate, creating or updating Google Ads resources such as campaigns, budgets, ad groups, ads, keywords, targeting criteria, and bidding settings. Adport may also use the data locally to produce findings, pending-operation previews, and audit records for the user.</p>
+      <p>Adport does not use Google user data for advertising, profiling, creditworthiness, surveillance, or any purpose unrelated to the functionality requested by the user. Adport does not sell Google user data and does not use it to train general-purpose artificial-intelligence or machine-learning models. Adport's use of information received from Google APIs complies with the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including its Limited Use requirements.</p>
+
+      <h3>Sharing and disclosure of Google user data</h3>
+      <p>The open-source Adport software does not send Google user data or Google OAuth tokens to Yannick Westermann Labs or to an Adport-operated server. The user's self-hosted installation communicates directly with Google's OAuth and Google Ads API endpoints. Results are returned to the command-line or MCP client selected by the user.</p>
+      <p>If a user connects Adport to an AI agent or another MCP client, data returned by Adport may be processed by that client and by the AI or infrastructure provider the user has chosen. Those services are independent of Adport and are governed by their own terms and privacy policies. Adport otherwise does not share, transfer, or disclose Google user data to third parties except when the user directs it, when required by law, or when necessary to protect against fraud, abuse, or security threats.</p>
+
+      <h3>Storage, retention, and deletion of Google user data</h3>
+      <p>OAuth credentials are stored locally on the user's device or infrastructure. Report results are returned to the requesting client and are not centrally stored by Yannick Westermann Labs. Pending operations, findings, and audit records may be stored locally so the user can review and control changes. Because Adport is self-hosted, the user controls how long these local records are retained and can delete them from the Adport configuration directory at any time.</p>
+      <p>A user can stop Adport's Google access by deleting the locally stored Google credentials and by revoking Adport's access in the Google Account permissions page. Revocation prevents Adport from obtaining new access tokens. Deleting local Adport data does not delete advertising records that remain in Google Ads; those records are controlled through Google Ads.</p>
+
+      <h2>Other advertising platform data</h2>
+      <p>When a user connects Meta, TikTok, Apple Ads, or Microsoft Advertising, Adport accesses only the data and permissions needed to perform actions requested by that user. The connected platform processes data under its own terms and privacy policy. Adport does not sell advertising data or use it for profiling, unrelated advertising, or automated decisions about individuals.</p>
 
       <h2>Credentials and security</h2>
       <p>Users supply and control their own platform credentials. The open-source application stores credentials locally and uses them only to communicate with the selected advertising platform. Users are responsible for securing their systems, limiting access, and revoking credentials when access is no longer needed.</p>
@@ -43,7 +61,7 @@
       <p>We may update this policy as Adport develops. The effective date above identifies the current version.</p>
 
       <h2>Contact</h2>
-      <p>Questions about privacy can be sent to <a href="mailto:yannick@adport.dev">yannick@adport.dev</a>.</p>
+      <p>Questions about privacy can be sent to <a href="mailto:ynnickw20@gmail.com">ynnickw20@gmail.com</a>.</p>
     </main>
     <footer class="legal-footer">
       <a href="/">Home</a><span aria-hidden="true">·</span><a href="/terms">Terms</a>

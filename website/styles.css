@@ -160,6 +160,8 @@ a { color: inherit; }
 .legal-content h1 { margin: 0; color: var(--ink); font-size: clamp(2.5rem, 8vw, 4.25rem); font-weight: 620; letter-spacing: -0.06em; line-height: 1; }
 .legal-content .updated { margin: 1rem 0 3.5rem; color: #9b8e82; font-size: 0.78rem; }
 .legal-content h2 { margin: 2.2rem 0 0.65rem; color: #342920; font-size: 1rem; font-weight: 680; letter-spacing: -0.015em; }
+.legal-content h3 { margin: 1.45rem 0 0.55rem; color: #342920; font-size: 0.92rem; font-weight: 680; letter-spacing: -0.01em; }
+.legal-content code { overflow-wrap: anywhere; font-size: 0.92em; }
 .legal-content p { margin: 0 0 1.15rem; color: #6f6359; font-size: 0.91rem; line-height: 1.78; }
 .legal-content > p:nth-of-type(3) { color: #4f4339; font-size: 1rem; }
 .legal-content a { color: var(--orange-dark); text-decoration-color: #e1b794; text-underline-offset: 0.2em; }
