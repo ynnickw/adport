@@ -47,7 +47,9 @@ jobs:
           pnpm -r --workspace-concurrency=1 exec sh -c '
             package_name=$(node -p "require(\"./package.json\").name")
             package_version=$(node -p "require(\"./package.json\").version")
-            if npm view "${package_name}@${package_version}" version >/dev/null 2>&1; then
+            # Query anonymously: a package-restricted publish token can return 404
+            # for a newly created package even after the public registry exposes it.
+            if npm view "${package_name}@${package_version}" version --userconfig=/dev/null >/dev/null 2>&1; then
               echo "Skipping ${package_name}@${package_version}: already published"
             else
               pnpm publish --access public --no-git-checks
