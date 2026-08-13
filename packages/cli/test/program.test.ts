@@ -28,7 +28,7 @@ beforeEach(() => {
   delete process.env.ADPORT_DEMO;
   // Never let the developer's real provider env credentials leak into tests.
   for (const key of Object.keys(process.env)) {
-    if (/^(GOOGLE_ADS_|META_|TIKTOK_|APPLE_ADS_|MICROSOFT_ADS_)/.test(key)) delete process.env[key];
+    if (/^(GOOGLE_ADS_|META_|TIKTOK_|APPLE_ADS_|MICROSOFT_ADS_|REDDIT_ADS_)/.test(key)) delete process.env[key];
   }
   out = [];
   err = [];

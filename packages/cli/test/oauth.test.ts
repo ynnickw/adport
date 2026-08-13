@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   buildGoogleAuthUrl,
   buildMicrosoftAuthUrl,
+  buildRedditAuthUrl,
   exchangeCodeForTokens,
+  exchangeRedditCode,
   generateOAuthState,
   generatePkce,
   parseClientSecretJson,
@@ -113,5 +115,32 @@ describe('OAuth security parameters', () => {
     expect(url.searchParams.get('code_challenge')).toBe(pkce.challenge);
     expect(url.searchParams.get('code_challenge_method')).toBe('S256');
     expect(url.searchParams.get('state')).toBe(state);
+  });
+});
+
+describe('Reddit OAuth', () => {
+  it('requests permanent read/edit/deletion access with state', () => {
+    const url = new URL(buildRedditAuthUrl('reddit-client', 'http://localhost:53682', 'reddit-state'));
+    expect(url.origin + url.pathname).toBe('https://www.reddit.com/api/v1/authorize');
+    expect(url.searchParams.get('duration')).toBe('permanent');
+    expect(url.searchParams.get('scope')).toBe('adsread,adsedit,adsdatadeletion');
+    expect(url.searchParams.get('state')).toBe('reddit-state');
+  });
+
+  it('exchanges the code using Basic auth, exact redirect URI, and User-Agent', async () => {
+    const fetchImpl = vi.fn(async (_url: string | URL, init?: RequestInit) => {
+      expect(init?.headers).toMatchObject({
+        authorization: `Basic ${Buffer.from('client:secret').toString('base64')}`,
+        'user-agent': 'desktop:adport:v0.3.0 (by /u/test)',
+      });
+      const body = new URLSearchParams(String(init?.body));
+      expect(body.get('code')).toBe('reddit-code');
+      expect(body.get('redirect_uri')).toBe('http://localhost:53682');
+      return new Response(JSON.stringify({ refresh_token: 'reddit-refresh', access_token: 'at' }));
+    });
+    await expect(exchangeRedditCode({
+      clientId: 'client', clientSecret: 'secret', code: 'reddit-code#_',
+      redirectUri: 'http://localhost:53682', userAgent: 'desktop:adport:v0.3.0 (by /u/test)',
+    }, fetchImpl as unknown as typeof fetch)).resolves.toEqual({ refreshToken: 'reddit-refresh' });
   });
 });

@@ -1,6 +1,6 @@
 {
   "name": "adport",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "adport CLI — the open control plane for paid media",
   "license": "Apache-2.0",
   "type": "module",
@@ -21,6 +21,7 @@
     "@adport/provider-google": "workspace:*",
     "@adport/provider-meta": "workspace:*",
     "@adport/provider-microsoft": "workspace:*",
+    "@adport/provider-reddit": "workspace:*",
     "@adport/provider-tiktok": "workspace:*",
     "commander": "^13.0.0",
     "yaml": "^2.6.0",

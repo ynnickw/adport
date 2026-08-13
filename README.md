@@ -1,6 +1,6 @@
 # adport
 
-> The open control plane for paid media. Manage Google, Meta, TikTok, Apple, and Microsoft Ads from the terminal or any AI agent—with every write previewed first.
+> The open control plane for paid media. Manage Google, Meta, TikTok, Apple, Microsoft, and Reddit Ads from the terminal or any AI agent—with every write previewed first.
 
 I built adport because I wanted an agent to help with ad operations, but I did not want a prompt to be the only thing standing between the agent and an expensive change.
 
@@ -51,6 +51,7 @@ adport connect meta
 adport connect tiktok
 adport connect apple
 adport connect microsoft
+adport connect reddit
 ```
 
 These are deliberately **local/BYO** connections. You create and own each provider app, developer token, or API key; the CLI talks directly to the provider and writes secrets only to `${ADPORT_HOME:-~/.config/adport}/credentials.json` with mode `0600`. Adport Cloud and its hosted OAuth broker are not involved. Provider review, consent warnings, and tenant policies therefore belong to your provider app. Remove a stored connection with `adport disconnect <provider>`; revoke the credential separately at the provider when necessary.
@@ -110,6 +111,7 @@ Policy lives at `~/.config/adport/policy.yaml`; credentials live at `~/.config/a
 | TikTok Ads | reporting and normalized reports | campaigns, budgets, status | client-side preview; sandbox available | needs sandbox and production testers |
 | Apple Ads | campaign reports and normalized reports | campaigns, budgets, status | client-side preview | exercised against a live account |
 | Microsoft Advertising | asynchronous reports and normalized reports | campaigns, budgets, status | client-side preview; sandbox available | exercised against a live account |
+| Reddit Ads | v3 reports and normalized reports | campaigns, CBO budgets, status | client-side preview | wire schemas verified; needs a real-account tester |
 
 Apple Campaign Management API v5 sunsets in January 2027. Its client is version-isolated so the future Ads Platform API migration does not leak into the shared tool layer.
 
@@ -181,6 +183,7 @@ packages/
   tiktok/     TikTok Business API provider
   apple/      Apple Ads provider
   microsoft/  Microsoft Advertising provider
+  reddit/     Reddit Ads API v3 provider
   mcp/        stdio MCP adapter over the shared registry
   cli/        npm CLI over the shared registry
 ```

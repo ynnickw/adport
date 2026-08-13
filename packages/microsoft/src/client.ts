@@ -85,7 +85,7 @@ export class MicrosoftAdsClient {
 
   async request<T>(
     service: MicrosoftService,
-    method: 'GET' | 'POST' | 'PUT',
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     path: string,
     body: unknown,
     scope: RequestScope = {},

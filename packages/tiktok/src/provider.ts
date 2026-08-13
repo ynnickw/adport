@@ -199,6 +199,15 @@ export class TikTokAdsProvider implements AdProvider {
     return data.list ?? [];
   }
 
+  async apiRead(input: {
+    account_id: string;
+    path: string;
+    params?: Record<string, unknown>;
+  }): Promise<unknown> {
+    const path = validateTikTokPath(input.path);
+    return this.client.get(path, { ...input.params, advertiser_id: input.account_id });
+  }
+
   async listCampaigns(accountId: string, campaignIds?: string[]): Promise<TikTokCampaign[]> {
     const data = await this.client.get<{ list?: TikTokCampaign[] }>('campaign/get', {
       advertiser_id: accountId,
@@ -236,9 +245,73 @@ export class TikTokAdsProvider implements AdProvider {
         return this.planSetStatus(op.accountId, payload);
       case 'tiktok_set_budget':
         return this.planSetBudget(op.accountId, payload);
+      case 'tiktok_api_create':
+        return this.planApiCreate(op.accountId, payload, guard);
+      case 'tiktok_api_update':
+        return this.planApiUpdate(op.accountId, payload);
+      case 'tiktok_api_delete':
+        return this.planApiDelete(op.accountId, payload);
       default:
         throw new AdportError('PROVIDER_ERROR', `tiktok: unsupported write tool ${op.tool}`);
     }
+  }
+
+  private async planApiCreate(
+    accountId: string,
+    payload: { path: string; body: Record<string, unknown> },
+    guard: WriteGuard,
+  ): Promise<WritePlan> {
+    const path = validateTikTokMutationPath(payload.path, 'create');
+    const body = structuredClone(payload.body);
+    body.advertiser_id = accountId;
+    const coercions: string[] = [];
+    if (guard.forcePausedCreation) {
+      coerceTikTokCreatedStatuses(body, coercions);
+      if (path === 'campaign/create' && body.operation_status !== 'DISABLE') {
+        body.operation_status = 'DISABLE';
+        coercions.push('operation_status set to DISABLE by policy (paused_creation)');
+      }
+    }
+    return {
+      summary: `Create TikTok resource via /${path}`,
+      changes: [`+ POST /${path} ${JSON.stringify(body)}`],
+      coercions,
+      budgetDeltas: collectTikTokBudgets(body),
+      execute: async () => extractTikTokIds(await this.client.post(path, body)),
+    };
+  }
+
+  private async planApiUpdate(
+    accountId: string,
+    payload: { path: string; body: Record<string, unknown> },
+  ): Promise<WritePlan> {
+    const path = validateTikTokMutationPath(payload.path, 'update');
+    if (containsTikTokBudget(payload.body)) {
+      throw new AdportError('INVALID_INPUT', 'tiktok: budget updates require a typed budget tool for policy checks');
+    }
+    const body = { ...payload.body, advertiser_id: accountId };
+    return {
+      summary: `Update TikTok resource via /${path}`,
+      changes: [`~ POST /${path} ${JSON.stringify(body)}`],
+      coercions: [],
+      budgetDeltas: [],
+      execute: async () => extractTikTokIds(await this.client.post(path, body)),
+    };
+  }
+
+  private async planApiDelete(
+    accountId: string,
+    payload: { path: string; body: Record<string, unknown> },
+  ): Promise<WritePlan> {
+    const path = validateTikTokMutationPath(payload.path, 'delete');
+    const body = { ...payload.body, advertiser_id: accountId };
+    return {
+      summary: `Permanently delete TikTok resource via /${path}`,
+      changes: [`- POST /${path} ${JSON.stringify(body)}`],
+      coercions: [],
+      budgetDeltas: [],
+      execute: async () => extractTikTokIds(await this.client.post(path, body)),
+    };
   }
 
   private async planCreateCampaign(
@@ -359,4 +432,79 @@ export class TikTokAdsProvider implements AdProvider {
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+function validateTikTokPath(path: string): string {
+  const normalized = path.replace(/^\/+|\/+$/g, '').trim();
+  if (!/^[a-z0-9_/-]{3,160}$/.test(normalized) || normalized.includes('..') || normalized.includes('//')) {
+    throw new AdportError('INVALID_INPUT', `tiktok: invalid Business API path "${path}"`);
+  }
+  return normalized;
+}
+
+function validateTikTokMutationPath(path: string, kind: 'create' | 'update' | 'delete'): string {
+  const normalized = validateTikTokPath(path);
+  if (!normalized.endsWith(`/${kind}`)) {
+    throw new AdportError('INVALID_INPUT', `tiktok: ${kind} tool requires an endpoint ending in /${kind}`);
+  }
+  return normalized;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function coerceTikTokCreatedStatuses(value: unknown, coercions: string[], path = 'body'): void {
+  if (Array.isArray(value)) return value.forEach((item, index) => coerceTikTokCreatedStatuses(item, coercions, `${path}[${index}]`));
+  if (!isRecord(value)) return;
+  for (const [key, child] of Object.entries(value)) {
+    if (key === 'operation_status' && child === 'ENABLE') {
+      value[key] = 'DISABLE';
+      coercions.push(`${path}.${key} coerced to DISABLE by policy (paused_creation)`);
+    } else {
+      coerceTikTokCreatedStatuses(child, coercions, `${path}.${key}`);
+    }
+  }
+}
+
+function containsTikTokBudget(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsTikTokBudget);
+  if (!isRecord(value)) return false;
+  return Object.entries(value).some(([key, child]) => /budget/i.test(key) || containsTikTokBudget(child));
+}
+
+function collectTikTokBudgets(value: unknown, path = 'body'): WritePreview['budgetDeltas'] {
+  const deltas: WritePreview['budgetDeltas'] = [];
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => deltas.push(...collectTikTokBudgets(item, `${path}[${index}]`)));
+    return deltas;
+  }
+  if (!isRecord(value)) return deltas;
+  for (const [key, child] of Object.entries(value)) {
+    const childPath = `${path}.${key}`;
+    if (/budget/i.test(key)) {
+      const amount = Number(child);
+      if (Number.isFinite(amount) && amount > 0) {
+        deltas.push({ target: childPath, toMicros: Math.round(amount * UNITS_TO_MICROS) });
+      }
+    }
+    deltas.push(...collectTikTokBudgets(child, childPath));
+  }
+  return deltas;
+}
+
+function extractTikTokIds(value: unknown): string[] {
+  const ids: string[] = [];
+  const visit = (item: unknown): void => {
+    if (Array.isArray(item)) return item.forEach(visit);
+    if (!isRecord(item)) return;
+    for (const [key, child] of Object.entries(item)) {
+      if (/(?:^|_)ids?$/.test(key)) {
+        if (Array.isArray(child)) child.forEach((id) => ids.push(String(id)));
+        else if (typeof child === 'string' || typeof child === 'number') ids.push(String(child));
+      } else visit(child);
+    }
+  };
+  visit(value);
+  return [...new Set(ids)];
 }

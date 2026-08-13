@@ -18,6 +18,20 @@ const operationStatusSchema = z.enum(['ENABLE', 'DISABLE']);
 export function tiktokTools(provider: TikTokAdsProvider): AnyToolDefinition[] {
   return [
     defineTool({
+      name: 'tiktok_api_read',
+      namespace: 'tiktok',
+      description: 'Call any documented TikTok Business API v1.3 GET endpoint with advertiser scoping and API-shaped parameters.',
+      input: z.object({
+        account_id: z.string(),
+        path: z.string().min(3).describe('Relative endpoint, e.g. adgroup/get, ad/get, creative/report/get'),
+        params: z.record(z.string(), z.unknown()).optional(),
+      }),
+      annotations: { readOnly: true },
+      async handler(input) {
+        return provider.apiRead(input);
+      },
+    }),
+    defineTool({
       name: 'tiktok_campaigns',
       namespace: 'tiktok',
       description: 'List TikTok campaigns (id, name, operation_status ENABLE/DISABLE, budget, budget_mode, objective).',
@@ -90,6 +104,32 @@ export function tiktokTools(provider: TikTokAdsProvider): AnyToolDefinition[] {
         campaign_id: z.string(),
         budget: z.number().positive(),
       }),
+    }),
+    guardedWriteTool({
+      name: 'tiktok_api_create',
+      namespace: 'tiktok',
+      description:
+        'Create through any documented TikTok Business API v1.3 /create endpoint. The advertiser is forced to account_id, campaign creation is paused, and budget fields are policy-checked.',
+      provider: 'tiktok',
+      kind: 'create',
+      payload: z.object({ path: z.string().min(3), body: z.record(z.string(), z.unknown()) }),
+    }),
+    guardedWriteTool({
+      name: 'tiktok_api_update',
+      namespace: 'tiktok',
+      description: 'Update non-budget fields through any documented TikTok Business API v1.3 /update endpoint.',
+      provider: 'tiktok',
+      kind: 'update',
+      payload: z.object({ path: z.string().min(3), body: z.record(z.string(), z.unknown()) }),
+    }),
+    guardedWriteTool({
+      name: 'tiktok_api_delete',
+      namespace: 'tiktok',
+      description: 'Permanently delete through any documented TikTok Business API v1.3 /delete endpoint.',
+      provider: 'tiktok',
+      kind: 'remove',
+      destructive: true,
+      payload: z.object({ path: z.string().min(3), body: z.record(z.string(), z.unknown()) }),
     }),
   ];
 }

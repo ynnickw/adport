@@ -1,6 +1,6 @@
 {
   "name": "@adport/provider-meta",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Meta (Facebook/Instagram) Ads provider for adport — Marketing API via Graph REST",
   "license": "Apache-2.0",
   "type": "module",

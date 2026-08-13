@@ -15,7 +15,7 @@ import {
   type WriteResult,
 } from '@adport/core';
 import { unzipSync } from 'fflate';
-import { formatPartialErrors, MicrosoftAdsClient } from './client.js';
+import { formatPartialErrors, MicrosoftAdsClient, type MicrosoftService } from './client.js';
 import { parseCsv } from './csv.js';
 
 /** DailyBudget is a double in whole account-currency units. */
@@ -119,6 +119,18 @@ export class MicrosoftAdsProvider implements AdProvider {
     return data.Campaigns ?? [];
   }
 
+  async apiRead(input: {
+    account_id: string;
+    service: MicrosoftService;
+    path: string;
+    body?: Record<string, unknown>;
+  }): Promise<unknown> {
+    const path = validateMicrosoftReadPath(input.path);
+    validateMicrosoftAccountScope(input.body, input.account_id);
+    const scope = await this.scopeFor(input.account_id);
+    return this.client.request(input.service, 'POST', path, input.body ?? {}, scope);
+  }
+
   async report(query: NormalizedQuery): Promise<Report> {
     if (query.level !== 'campaign' && query.level !== 'account') {
       throw new AdportError('INVALID_INPUT', 'microsoft: report supports campaign and account levels in v0');
@@ -127,7 +139,12 @@ export class MicrosoftAdsProvider implements AdProvider {
     const accountIds = query.accountIds ?? (await this.listAccounts()).map((a) => a.id);
     const rows: ReportRow[] = [];
     for (const accountId of accountIds) {
-      rows.push(...(await this.campaignReport(accountId, range.start, range.end, query)));
+      const providerRows = await this.campaignReport(accountId, range.start, range.end, query);
+      if (query.level === 'account') {
+        if (providerRows.length > 0) rows.push(aggregateAccountRows(providerRows, this.id, accountId));
+      } else {
+        rows.push(...providerRows);
+      }
     }
     return { rows };
   }
@@ -262,9 +279,80 @@ export class MicrosoftAdsProvider implements AdProvider {
         return this.planSetStatus(op.accountId, payload);
       case 'microsoft_set_budget':
         return this.planSetBudget(op.accountId, payload);
+      case 'microsoft_api_create':
+        return this.planApiCreate(op.accountId, payload, guard);
+      case 'microsoft_api_update':
+        return this.planApiUpdate(op.accountId, payload);
+      case 'microsoft_api_delete':
+        return this.planApiDelete(op.accountId, payload);
       default:
         throw new AdportError('PROVIDER_ERROR', `microsoft: unsupported write tool ${op.tool}`);
     }
+  }
+
+  private async planApiCreate(
+    accountId: string,
+    payload: { resource: string; body: Record<string, unknown> },
+    guard: WriteGuard,
+  ): Promise<WritePlan> {
+    const resource = validateMicrosoftResource(payload.resource);
+    const body = structuredClone(payload.body);
+    validateMicrosoftAccountScope(body, accountId);
+    const coercions: string[] = [];
+    if (guard.forcePausedCreation) coerceMicrosoftCreatedStatuses(body, coercions);
+    return {
+      summary: `Create Microsoft Advertising ${resource} resource(s)`,
+      changes: [`+ POST /${resource} ${JSON.stringify(body)}`],
+      coercions,
+      budgetDeltas: collectMicrosoftBudgets(body),
+      execute: async () => this.executeMicrosoftMutation(accountId, 'POST', resource, body),
+    };
+  }
+
+  private async planApiUpdate(
+    accountId: string,
+    payload: { resource: string; body: Record<string, unknown> },
+  ): Promise<WritePlan> {
+    const resource = validateMicrosoftResource(payload.resource);
+    validateMicrosoftAccountScope(payload.body, accountId);
+    if (containsMicrosoftBudget(payload.body)) {
+      throw new AdportError('INVALID_INPUT', 'microsoft: budget updates require microsoft_set_budget for policy checks');
+    }
+    return {
+      summary: `Update Microsoft Advertising ${resource} resource(s)`,
+      changes: [`~ PUT /${resource} ${JSON.stringify(payload.body)}`],
+      coercions: [],
+      budgetDeltas: [],
+      execute: async () => this.executeMicrosoftMutation(accountId, 'PUT', resource, payload.body),
+    };
+  }
+
+  private async planApiDelete(
+    accountId: string,
+    payload: { resource: string; body: Record<string, unknown> },
+  ): Promise<WritePlan> {
+    const resource = validateMicrosoftResource(payload.resource);
+    validateMicrosoftAccountScope(payload.body, accountId);
+    return {
+      summary: `Permanently delete Microsoft Advertising ${resource} resource(s)`,
+      changes: [`- DELETE /${resource} ${JSON.stringify(payload.body)}`],
+      coercions: [],
+      budgetDeltas: [],
+      execute: async () => this.executeMicrosoftMutation(accountId, 'DELETE', resource, payload.body),
+    };
+  }
+
+  private async executeMicrosoftMutation(
+    accountId: string,
+    method: 'POST' | 'PUT' | 'DELETE',
+    resource: string,
+    body: Record<string, unknown>,
+  ): Promise<string[]> {
+    const scope = await this.scopeFor(accountId);
+    const result = await this.client.request<Record<string, unknown>>('campaign', method, resource, body, scope);
+    const partial = formatPartialErrors(result.PartialErrors as Parameters<typeof formatPartialErrors>[0]);
+    if (partial) throw new AdportError('PROVIDER_ERROR', `microsoft: ${resource} partial errors — ${partial}`);
+    return extractMicrosoftIds(result);
   }
 
   private async planCreateCampaign(
@@ -375,6 +463,117 @@ export class MicrosoftAdsProvider implements AdProvider {
       },
     };
   }
+}
+
+function aggregateAccountRows(rows: ReportRow[], provider: string, accountId: string): ReportRow {
+  const metrics = Object.fromEntries(
+    Object.keys(rows[0]!.metrics).map((metric) => [
+      metric,
+      round2(rows.reduce((sum, row) => sum + (row.metrics[metric as MetricName] ?? 0), 0)),
+    ]),
+  ) as Partial<Record<MetricName, number>>;
+  const spend = metrics.spend ?? 0;
+  const impressions = metrics.impressions ?? 0;
+  const clicks = metrics.clicks ?? 0;
+  const conversions = metrics.conversions ?? 0;
+  const conversionValue = metrics.conversion_value ?? 0;
+  if ('ctr' in metrics) metrics.ctr = impressions > 0 ? round2((clicks / impressions) * 100) : 0;
+  if ('cpc' in metrics) metrics.cpc = clicks > 0 ? round2(spend / clicks) : 0;
+  if ('cpm' in metrics) metrics.cpm = impressions > 0 ? round2((spend / impressions) * 1000) : 0;
+  if ('cpa' in metrics) metrics.cpa = conversions > 0 ? round2(spend / conversions) : 0;
+  if ('roas' in metrics) metrics.roas = spend > 0 ? round2(conversionValue / spend) : 0;
+  return { provider, accountId, entity: { level: 'account', id: accountId, name: accountId }, metrics };
+}
+
+function validateMicrosoftReadPath(path: string): string {
+  const normalized = path.replace(/^\/+|\/+$/g, '').trim();
+  const action = normalized.split('/').at(-1) ?? '';
+  if (
+    !/^[A-Za-z][A-Za-z0-9]*(?:\/[A-Za-z][A-Za-z0-9]*){1,2}$/.test(normalized) ||
+    !/^(?:Query|Search|Get|Submit|Poll)/.test(action)
+  ) {
+    throw new AdportError('INVALID_INPUT', `microsoft: unsupported read operation path "${path}"`);
+  }
+  return normalized;
+}
+
+function validateMicrosoftResource(resource: string): string {
+  const normalized = resource.trim();
+  if (!/^[A-Z][A-Za-z0-9]{1,80}$/.test(normalized)) {
+    throw new AdportError('INVALID_INPUT', `microsoft: invalid Campaign Management resource "${resource}"`);
+  }
+  return normalized;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function validateMicrosoftAccountScope(value: unknown, accountId: string): void {
+  if (Array.isArray(value)) return value.forEach((item) => validateMicrosoftAccountScope(item, accountId));
+  if (!isRecord(value)) return;
+  for (const [key, child] of Object.entries(value)) {
+    if (key === 'AccountId' && String(child) !== accountId) {
+      throw new AdportError('INVALID_INPUT', `microsoft: body AccountId ${String(child)} does not match selected account ${accountId}`);
+    }
+    if (key === 'AccountIds' && Array.isArray(child) && child.some((id) => String(id) !== accountId)) {
+      throw new AdportError('INVALID_INPUT', `microsoft: body AccountIds must contain only selected account ${accountId}`);
+    }
+    validateMicrosoftAccountScope(child, accountId);
+  }
+}
+
+function coerceMicrosoftCreatedStatuses(value: unknown, coercions: string[], path = 'body'): void {
+  if (Array.isArray(value)) return value.forEach((item, index) => coerceMicrosoftCreatedStatuses(item, coercions, `${path}[${index}]`));
+  if (!isRecord(value)) return;
+  for (const [key, child] of Object.entries(value)) {
+    if (key === 'Status' && child === 'Active') {
+      value[key] = 'Paused';
+      coercions.push(`${path}.${key} coerced to Paused by policy (paused_creation)`);
+    } else coerceMicrosoftCreatedStatuses(child, coercions, `${path}.${key}`);
+  }
+}
+
+function containsMicrosoftBudget(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsMicrosoftBudget);
+  if (!isRecord(value)) return false;
+  return Object.entries(value).some(([key, child]) => /budget/i.test(key) || containsMicrosoftBudget(child));
+}
+
+function collectMicrosoftBudgets(value: unknown, path = 'body'): WritePreview['budgetDeltas'] {
+  const deltas: WritePreview['budgetDeltas'] = [];
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => deltas.push(...collectMicrosoftBudgets(item, `${path}[${index}]`)));
+    return deltas;
+  }
+  if (!isRecord(value)) return deltas;
+  for (const [key, child] of Object.entries(value)) {
+    const childPath = `${path}.${key}`;
+    if (/budget/i.test(key) && !/type|id/i.test(key)) {
+      const amount = Number(child);
+      if (Number.isFinite(amount) && amount > 0) {
+        deltas.push({ target: childPath, toMicros: Math.round(amount * UNITS_TO_MICROS) });
+      }
+    }
+    deltas.push(...collectMicrosoftBudgets(child, childPath));
+  }
+  return deltas;
+}
+
+function extractMicrosoftIds(value: unknown): string[] {
+  const ids: string[] = [];
+  const visit = (item: unknown): void => {
+    if (Array.isArray(item)) return item.forEach(visit);
+    if (!isRecord(item)) return;
+    for (const [key, child] of Object.entries(item)) {
+      if (/Ids?$/.test(key)) {
+        if (Array.isArray(child)) child.forEach((id) => { if (id !== null) ids.push(String(id)); });
+        else if (typeof child === 'string' || typeof child === 'number') ids.push(String(child));
+      } else visit(child);
+    }
+  };
+  visit(value);
+  return [...new Set(ids)];
 }
 
 function round2(n: number): number {

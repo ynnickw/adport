@@ -157,6 +157,15 @@ describe('TikTokAdsProvider reads', () => {
     expect(url).toContain('start_date=2026-07-29');
     expect(url).toContain('"campaign_name"');
   });
+
+  it('calls arbitrary v1.3 GET endpoints with forced advertiser scope', async () => {
+    const { impl, calls } = fakeFetch([
+      { match: (url) => url.includes('/adgroup/get/'), reply: { code: 0, message: 'OK', data: { list: [] } } },
+    ]);
+    const provider = new TikTokAdsProvider(new TikTokClient(CREDS, impl), APP);
+    await provider.apiRead({ account_id: '7000000001', path: 'adgroup/get', params: { page_size: 10 } });
+    expect(decodeURIComponent(calls[0]!.url)).toContain('advertiser_id=7000000001');
+  });
 });
 
 describe('TikTokAdsProvider writes', () => {
@@ -241,5 +250,35 @@ describe('TikTokAdsProvider writes', () => {
     const action = provider.standardActions().pauseCampaign!('7000000001', '17');
     expect(action.tool).toBe('tiktok_set_campaign_status');
     expect(action.input).toEqual({ account_id: '7000000001', campaign_ids: ['17'], operation_status: 'DISABLE' });
+  });
+
+  it('guards generic creates, forces advertiser/status, and checks budgets', async () => {
+    const { impl, calls } = fakeFetch([
+      { match: (url) => url.includes('/campaign/create/'), reply: { code: 0, message: 'OK', data: { campaign_id: '9' } } },
+    ]);
+    const provider = new TikTokAdsProvider(new TikTokClient(CREDS, impl), APP);
+    const op = {
+      tool: 'tiktok_api_create', provider: 'tiktok', accountId: '7000000001', kind: 'create' as const,
+      payload: { path: 'campaign/create', body: { campaign_name: 'Native', operation_status: 'ENABLE', budget: 75 } },
+    };
+    const preview = await provider.previewWrite(op, { forcePausedCreation: true });
+    expect(preview.coercions).toHaveLength(1);
+    expect(preview.budgetDeltas).toEqual([{ target: 'body.budget', toMicros: 75_000_000 }]);
+    expect(calls).toHaveLength(0);
+    await provider.applyWrite(op, { forcePausedCreation: true });
+    const body = JSON.parse(String(calls[0]!.init.body));
+    expect(body).toMatchObject({ advertiser_id: '7000000001', operation_status: 'DISABLE' });
+  });
+
+  it('rejects mismatched generic mutation kinds and budget updates', async () => {
+    const provider = new TikTokAdsProvider(new TikTokClient(CREDS, vi.fn() as unknown as typeof fetch), APP);
+    await expect(provider.previewWrite({
+      tool: 'tiktok_api_update', provider: 'tiktok', accountId: '7000000001', kind: 'update',
+      payload: { path: 'campaign/create', body: { name: 'wrong endpoint' } },
+    }, { forcePausedCreation: true })).rejects.toThrow('requires an endpoint ending in /update');
+    await expect(provider.previewWrite({
+      tool: 'tiktok_api_update', provider: 'tiktok', accountId: '7000000001', kind: 'update',
+      payload: { path: 'adgroup/update', body: { budget: 999 } },
+    }, { forcePausedCreation: true })).rejects.toThrow('budget updates require a typed budget tool');
   });
 });

@@ -37,7 +37,7 @@ export class TikTokClient {
     this.baseUrl = `${credentials.sandbox ? SANDBOX_BASE : PROD_BASE}/${TIKTOK_API_VERSION}`;
   }
 
-  async get<T>(path: string, params: Record<string, string | number | unknown[] | object | undefined> = {}): Promise<T> {
+  async get<T>(path: string, params: Record<string, unknown> = {}): Promise<T> {
     const search = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
       if (value === undefined) continue;

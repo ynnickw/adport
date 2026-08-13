@@ -9,8 +9,9 @@ export interface MetaCredentials {
 }
 
 const GRAPH_BASE = 'https://graph.facebook.com';
-// Latest Graph/Marketing API version as of 2026-08 (see docs/graph-api/changelog).
-export const DEFAULT_GRAPH_VERSION = 'v26.0';
+// Latest published Graph/Marketing API version. Bump only after Meta publishes
+// the matching reference and official Business SDK metadata.
+export const DEFAULT_GRAPH_VERSION = 'v25.0';
 
 /** Ad account ids are numeric; Graph URL paths require the "act_" prefix. */
 export function normalizeAccountId(id: string): string {
@@ -58,6 +59,15 @@ export class MetaGraphClient {
       body.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
     }
     return this.send<T>(path, { method: 'POST', body });
+  }
+
+  async delete<T>(path: string, fields: Record<string, unknown> = {}): Promise<T> {
+    const body = new URLSearchParams();
+    for (const [key, value] of Object.entries(fields)) {
+      if (value === undefined) continue;
+      body.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+    }
+    return this.send<T>(path, { method: 'DELETE', ...(body.size > 0 ? { body } : {}) });
   }
 
   private async send<T>(path: string, init: { method: string; body?: URLSearchParams }): Promise<T> {

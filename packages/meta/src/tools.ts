@@ -27,6 +27,24 @@ const specialAdCategorySchema = z.enum([
 export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
   return [
     defineTool({
+      name: 'meta_api_read',
+      namespace: 'meta',
+      description:
+        'Read any Meta Marketing API v25 ad-account edge with fields and string query parameters, following pagination.',
+      input: z.object({
+        account_id: z.string(),
+        edge: z.string().min(2).describe('Ad-account edge such as campaigns, adsets, ads, adcreatives, customaudiences, or pixels'),
+        fields: z.array(z.string()).optional(),
+        params: z.record(z.string(), z.string()).optional(),
+        limit: z.number().int().positive().max(5000).default(200),
+        paged: z.boolean().default(true).describe('Set false for endpoints that return a single object instead of a data page'),
+      }),
+      annotations: { readOnly: true },
+      async handler(input) {
+        return provider.apiRead(input);
+      },
+    }),
+    defineTool({
       name: 'meta_insights',
       namespace: 'meta',
       description:
@@ -68,6 +86,18 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
           .positive()
           .optional()
           .describe('Minor currency units (cents for EUR/USD) — campaign-level CBO budget'),
+        is_adset_budget_sharing_enabled: z
+          .boolean()
+          .optional()
+          .describe('For campaigns without a campaign budget: allow eligible ad sets to share up to 20% of their daily budgets; defaults to false'),
+      }).superRefine((value, ctx) => {
+        if (value.daily_budget_cents !== undefined && value.is_adset_budget_sharing_enabled !== undefined) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['is_adset_budget_sharing_enabled'],
+            message: 'Only set is_adset_budget_sharing_enabled when daily_budget_cents is omitted',
+          });
+        }
       }),
     }),
     guardedWriteTool({
@@ -116,6 +146,49 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
       provider: 'meta',
       kind: 'update',
       payload: z.object({ ad_set_id: z.string(), status: statusSchema }),
+    }),
+    guardedWriteTool({
+      name: 'meta_set_lifetime_budget',
+      namespace: 'meta',
+      description: 'Change a campaign or ad set lifetime budget with a current-value lookup and policy delta check.',
+      provider: 'meta',
+      kind: 'update',
+      payload: z.object({
+        object_id: z.string(),
+        lifetime_budget_cents: z.number().int().positive().describe('Minor currency units'),
+      }),
+    }),
+    guardedWriteTool({
+      name: 'meta_api_create',
+      namespace: 'meta',
+      description:
+        'Create an object on any Meta Marketing API v25 ad-account edge using API-shaped fields. Campaign, ad set, and ad status is forced to PAUSED; budget fields are policy-checked.',
+      provider: 'meta',
+      kind: 'create',
+      payload: z.object({
+        edge: z.string().min(2),
+        fields: z.record(z.string(), z.unknown()),
+      }),
+    }),
+    guardedWriteTool({
+      name: 'meta_api_update',
+      namespace: 'meta',
+      description: 'Update a non-budget Meta Marketing API v25 object after verifying it belongs to the selected ad account.',
+      provider: 'meta',
+      kind: 'update',
+      payload: z.object({
+        object_id: z.string(),
+        fields: z.record(z.string(), z.unknown()),
+      }),
+    }),
+    guardedWriteTool({
+      name: 'meta_api_delete',
+      namespace: 'meta',
+      description: 'Permanently delete a Meta Marketing API v25 object after verifying ad-account ownership.',
+      provider: 'meta',
+      kind: 'remove',
+      destructive: true,
+      payload: z.object({ object_id: z.string() }),
     }),
   ];
 }
