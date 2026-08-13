@@ -8,6 +8,7 @@ import {
   type ProviderCapabilities,
   type Report,
   type ReportRow,
+  type StandardActions,
   type WriteGuard,
   type WriteOperation,
   type WritePreview,
@@ -46,6 +47,15 @@ export class GoogleAdsProvider implements AdProvider {
 
   capabilities(): ProviderCapabilities {
     return { serverDryRun: true };
+  }
+
+  standardActions(): StandardActions {
+    return {
+      pauseCampaign: (accountId, campaignId) => ({
+        tool: 'google_set_campaign_status',
+        input: { account_id: accountId, campaign_id: campaignId, status: 'PAUSED' },
+      }),
+    };
   }
 
   async listAccounts(): Promise<Account[]> {
@@ -236,9 +246,90 @@ export class GoogleAdsProvider implements AdProvider {
         return this.planSetBidCeiling(cid, payload);
       case 'google_set_bidding_strategy':
         return this.planSetBiddingStrategy(cid, payload);
+      case 'google_api_create':
+        return this.planApiCreate(cid, payload, guard);
+      case 'google_api_update':
+        return this.planApiUpdate(cid, payload);
+      case 'google_api_remove':
+        return this.planApiRemove(cid, payload);
       default:
         throw new AdportError('PROVIDER_ERROR', `google: unsupported write tool ${op.tool}`);
     }
+  }
+
+  private async planApiCreate(
+    cid: string,
+    payload: { service: string; creates: Array<Record<string, unknown>> },
+    guard: WriteGuard,
+  ): Promise<WritePlan> {
+    const service = validateGoogleService(payload.service);
+    const creates = structuredClone(payload.creates);
+    validateCustomerReferences(creates, cid);
+    const coercions: string[] = [];
+    if (guard.forcePausedCreation && service === 'campaigns') {
+      for (const [index, create] of creates.entries()) {
+        if (create.status !== 'PAUSED') {
+          create.status = 'PAUSED';
+          coercions.push(`creates[${index}].status coerced to PAUSED by policy (paused_creation)`);
+        }
+      }
+    }
+    const budgetDeltas = service === 'campaignBudgets' ? collectGoogleBudgetCreates(creates) : [];
+    const operations = creates.map((create) => ({ create }));
+    return {
+      summary: `Create ${creates.length} Google Ads ${service} resource(s)`,
+      changes: creates.map((create) => `+ ${service} ${JSON.stringify(create)}`),
+      coercions,
+      budgetDeltas,
+      execute: async (validateOnly) => {
+        const result = await this.client.mutate(cid, service, operations, { validateOnly });
+        return (result.results ?? []).flatMap((item) => item.resourceName ? [item.resourceName] : []);
+      },
+    };
+  }
+
+  private async planApiUpdate(
+    cid: string,
+    payload: { service: string; updates: Array<{ update: Record<string, unknown>; update_mask: string }> },
+  ): Promise<WritePlan> {
+    const service = validateGoogleService(payload.service);
+    if (service === 'campaignBudgets' || payload.updates.some((item) => /budget/i.test(item.update_mask))) {
+      throw new AdportError(
+        'INVALID_INPUT',
+        'google: budget updates require google_set_budget so the current and proposed values can be policy-checked',
+      );
+    }
+    validateCustomerReferences(payload.updates, cid);
+    const operations = payload.updates.map((item) => ({ update: item.update, updateMask: item.update_mask }));
+    return {
+      summary: `Update ${operations.length} Google Ads ${service} resource(s)`,
+      changes: payload.updates.map((item) => `~ ${service} mask=${item.update_mask} ${JSON.stringify(item.update)}`),
+      coercions: [],
+      budgetDeltas: [],
+      execute: async (validateOnly) => {
+        const result = await this.client.mutate(cid, service, operations, { validateOnly });
+        return (result.results ?? []).flatMap((item) => item.resourceName ? [item.resourceName] : []);
+      },
+    };
+  }
+
+  private async planApiRemove(
+    cid: string,
+    payload: { service: string; resource_names: string[] },
+  ): Promise<WritePlan> {
+    const service = validateGoogleService(payload.service);
+    validateCustomerReferences(payload.resource_names, cid);
+    const operations = payload.resource_names.map((remove) => ({ remove }));
+    return {
+      summary: `Permanently remove ${operations.length} Google Ads ${service} resource(s)`,
+      changes: payload.resource_names.map((name) => `- ${name}`),
+      coercions: [],
+      budgetDeltas: [],
+      execute: async (validateOnly) => {
+        const result = await this.client.mutate(cid, service, operations, { validateOnly });
+        return (result.results ?? []).map((item, index) => item.resourceName ?? payload.resource_names[index]!);
+      },
+    };
   }
 
   private async planCreateCampaign(
@@ -705,6 +796,43 @@ function validateRsa(payload: { headlines: string[]; descriptions: string[]; fin
   if (problems.length > 0) {
     throw new AdportError('INVALID_INPUT', `Responsive search ad invalid: ${problems.join('; ')}`);
   }
+}
+
+function validateGoogleService(service: string): string {
+  if (!/^[a-z][A-Za-z0-9]{1,80}$/.test(service)) {
+    throw new AdportError('INVALID_INPUT', `google: invalid mutate service "${service}"`);
+  }
+  return service;
+}
+
+function validateCustomerReferences(value: unknown, customerId: string): void {
+  if (Array.isArray(value)) {
+    value.forEach((item) => validateCustomerReferences(item, customerId));
+    return;
+  }
+  if (!value || typeof value !== 'object') {
+    if (typeof value === 'string') {
+      const match = /^customers\/(\d+)/.exec(value);
+      if (match && match[1] !== customerId) {
+        throw new AdportError('INVALID_INPUT', `google: resource reference belongs to customer ${match[1]}, not ${customerId}`);
+      }
+    }
+    return;
+  }
+  Object.values(value as Record<string, unknown>).forEach((item) => validateCustomerReferences(item, customerId));
+}
+
+function collectGoogleBudgetCreates(creates: Array<Record<string, unknown>>): WritePreview['budgetDeltas'] {
+  return creates.map((create, index) => {
+    const amount = Number(create.amountMicros);
+    if (!Number.isSafeInteger(amount) || amount <= 0) {
+      throw new AdportError(
+        'INVALID_INPUT',
+        `google: campaignBudgets create ${index} must include a positive integer amountMicros for policy checks`,
+      );
+    }
+    return { target: `new campaign budget ${String(create.name ?? index)}`, toMicros: amount };
+  });
 }
 
 function round2(n: number): number {

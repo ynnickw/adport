@@ -94,6 +94,14 @@ describe('AppleAdsClient', () => {
 });
 
 describe('AppleAdsProvider', () => {
+  it('maps the recommendation pause action to the guarded status tool', () => {
+    const provider = new AppleAdsProvider(new AppleAdsClient(CREDS, vi.fn() as unknown as typeof fetch));
+    expect(provider.standardActions().pauseCampaign?.('40669820', '542370642')).toEqual({
+      tool: 'apple_set_campaign_status',
+      input: { account_id: '40669820', campaign_id: '542370642', status: 'PAUSED' },
+    });
+  });
+
   it('lists orgs from /acls as accounts', async () => {
     const { impl } = fakeFetch([
       tokenRoute,
@@ -225,5 +233,78 @@ describe('AppleAdsProvider', () => {
     expect(JSON.parse(String(putCall.init.body))).toEqual({
       campaign: { dailyBudgetAmount: { amount: '600', currency: 'USD' } },
     });
+  });
+
+  it('allows documented selector reads but rejects mutating POST paths', async () => {
+    const { impl } = fakeFetch([
+      tokenRoute,
+      {
+        match: (url, body) => url.includes('/campaigns/find') && body.includes('selector'),
+        reply: { data: [], pagination: null, error: null },
+      },
+    ]);
+    const provider = new AppleAdsProvider(new AppleAdsClient(CREDS, impl));
+    await expect(
+      provider.apiRead({ account_id: '40669820', method: 'POST', path: 'campaigns/find', body: { selector: {} } }),
+    ).resolves.toMatchObject({ data: [] });
+    await expect(
+      provider.apiRead({ account_id: '40669820', method: 'POST', path: 'campaigns', body: {} }),
+    ).rejects.toThrow('POST is read-only here only');
+  });
+
+  it('guards generic creates, coerces nested statuses, and reports Money budgets', async () => {
+    const { impl, calls } = fakeFetch([
+      tokenRoute,
+      {
+        match: (url) => url.endsWith('/api/v5/campaigns/542370642/adgroups'),
+        reply: { data: { id: 1234 }, pagination: null, error: null },
+      },
+    ]);
+    const provider = new AppleAdsProvider(new AppleAdsClient(CREDS, impl));
+    const op = {
+      tool: 'apple_api_create',
+      provider: 'apple',
+      accountId: '40669820',
+      kind: 'create' as const,
+      payload: {
+        path: 'campaigns/542370642/adgroups',
+        body: { adGroup: { name: 'Exact', status: 'ENABLED', defaultBidAmount: { amount: '2.5', currency: 'USD' } } },
+      },
+    };
+    const preview = await provider.previewWrite(op, { forcePausedCreation: true });
+    expect(preview.coercions).toHaveLength(1);
+    expect(preview.budgetDeltas).toEqual([{ target: 'body.adGroup.defaultBidAmount', toMicros: 2_500_000 }]);
+    await provider.applyWrite(op, { forcePausedCreation: true });
+    const body = JSON.parse(String(calls.find((call) => call.url.endsWith('/adgroups'))!.init.body));
+    expect(body.adGroup.status).toBe('PAUSED');
+  });
+
+  it('rejects monetary generic updates and permits guarded deletes', async () => {
+    const { impl, calls } = fakeFetch([
+      tokenRoute,
+      {
+        match: (url) => url.endsWith('/api/v5/campaigns/542370642/negativekeywords/99'),
+        reply: { data: null, pagination: null, error: null },
+      },
+    ]);
+    const provider = new AppleAdsProvider(new AppleAdsClient(CREDS, impl));
+    await expect(
+      provider.previewWrite(
+        {
+          tool: 'apple_api_update', provider: 'apple', accountId: '40669820', kind: 'update',
+          payload: { path: 'campaigns/542370642', body: { dailyBudgetAmount: { amount: '999', currency: 'USD' } } },
+        },
+        { forcePausedCreation: true },
+      ),
+    ).rejects.toThrow('monetary updates require a typed budget or bid tool');
+
+    const remove = {
+      tool: 'apple_api_delete', provider: 'apple', accountId: '40669820', kind: 'remove' as const,
+      payload: { path: 'campaigns/542370642/negativekeywords/99' },
+    };
+    const preview = await provider.previewWrite(remove, { forcePausedCreation: true });
+    expect(preview.changes).toEqual(['- DELETE /campaigns/542370642/negativekeywords/99']);
+    await provider.applyWrite(remove, { forcePausedCreation: true });
+    expect(calls.some((call) => call.init.method === 'DELETE')).toBe(true);
   });
 });

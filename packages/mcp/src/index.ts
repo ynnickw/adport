@@ -6,9 +6,10 @@ import { createMetaModule } from '@adport/provider-meta';
 import { createTikTokModule } from '@adport/provider-tiktok';
 import { createAppleModule } from '@adport/provider-apple';
 import { createMicrosoftModule } from '@adport/provider-microsoft';
+import { createRedditModule } from '@adport/provider-reddit';
 import packageJson from '../package.json';
 
-export const PROVIDER_IDS = ['google', 'meta', 'tiktok', 'apple', 'microsoft'] as const;
+export const PROVIDER_IDS = ['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit'] as const;
 
 /**
  * Standard runtime assembly: real providers whose credentials exist. Mock data
@@ -23,7 +24,7 @@ export async function assembleRuntime(options: AssembleRuntimeOptions = {}): Pro
   const modules: ProviderModule[] = [];
   const includeMock = options.includeMock ?? process.env.ADPORT_DEMO === 'true';
   if (!includeMock) {
-    for (const factory of [createGoogleModule, createMetaModule, createTikTokModule, createAppleModule, createMicrosoftModule]) {
+    for (const factory of [createGoogleModule, createMetaModule, createTikTokModule, createAppleModule, createMicrosoftModule, createRedditModule]) {
       const module = await factory(store);
       if (module) modules.push(module);
     }

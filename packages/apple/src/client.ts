@@ -67,7 +67,7 @@ export class AppleAdsClient {
 
   /** orgId (as X-AP-Context) is required on all endpoints except /acls and /me. */
   async request<T>(
-    method: 'GET' | 'POST' | 'PUT',
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     path: string,
     options: { orgId?: string; body?: unknown } = {},
   ): Promise<AppleEnvelope<T>> {

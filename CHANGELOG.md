@@ -2,6 +2,19 @@
 
 All notable changes to adport. Format loosely follows [Keep a Changelog](https://keepachangelog.com/); pre-1.0, minor versions may break.
 
+## 0.4.0 — 2026-08-13
+
+### Added
+- Reddit Ads API v3 provider with local OAuth, account discovery, normalized reporting, campaign creation, status controls, budget updates, and advanced API tools.
+- Provider-native read and guarded create/update/delete tools for Google, Meta, TikTok, Apple, Microsoft, and Reddit.
+
+### Changed
+- Local provider onboarding and documentation now cover Reddit and clearly separate bring-your-own credentials from the future Adport Cloud broker.
+- Provider-native mutations share the normal dry-run, pending-operation, policy, and audit path.
+
+### Security
+- Google user-data handling, retention, sharing, and revocation disclosures are documented explicitly.
+
 ## 0.3.0 — 2026-08-09
 
 ### Added

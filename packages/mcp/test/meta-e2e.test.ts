@@ -10,7 +10,7 @@ import { assembleRuntime, createMcpServer } from '../src/index.js';
 /**
  * Full-stack E2E: credential store → assembleRuntime → MCP server → MCP client,
  * with fetch mocked to return doc-faithful Meta Marketing API responses
- * (graph.facebook.com v26.0 shapes, verified against the live reference docs).
+ * (graph.facebook.com v25.0 shapes, verified against the live reference docs).
  */
 
 let home: string;
@@ -142,7 +142,7 @@ describe('Meta E2E over MCP with doc-faithful Graph mocks', () => {
     expect(first.preview.coercions).toEqual(['status coerced to PAUSED by policy (paused_creation)']);
 
     const validateCall = graphCalls.find((c) => c.url.includes('/campaigns'));
-    expect(validateCall?.url).toContain('/v26.0/act_426197654150180/campaigns');
+    expect(validateCall?.url).toContain('/v25.0/act_426197654150180/campaigns');
     const validateBody = new URLSearchParams(validateCall!.body);
     expect(validateBody.get('execution_options')).toBe('["validate_only"]');
     expect(validateBody.get('special_ad_categories')).toBe('[]');

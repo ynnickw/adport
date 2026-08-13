@@ -152,5 +152,44 @@ export function googleTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
         path2: z.string().max(15).optional(),
       }),
     }),
+    guardedWriteTool({
+      name: 'google_api_create',
+      namespace: 'google',
+      description:
+        'Create resources through any Google Ads v25 mutate service using API-shaped create objects. Campaign status is forced to PAUSED and campaign-budget amounts are policy-checked.',
+      provider: 'google',
+      kind: 'create',
+      payload: z.object({
+        service: z.string().min(2).describe('REST mutate service, e.g. adGroupAds, assets, campaignCriteria'),
+        creates: z.array(z.record(z.string(), z.unknown())).min(1).max(100),
+      }),
+    }),
+    guardedWriteTool({
+      name: 'google_api_update',
+      namespace: 'google',
+      description:
+        'Update non-budget resources through any Google Ads v25 mutate service. Budget updates must use google_set_budget.',
+      provider: 'google',
+      kind: 'update',
+      payload: z.object({
+        service: z.string().min(2),
+        updates: z.array(z.object({
+          update: z.record(z.string(), z.unknown()),
+          update_mask: z.string().min(1),
+        })).min(1).max(100),
+      }),
+    }),
+    guardedWriteTool({
+      name: 'google_api_remove',
+      namespace: 'google',
+      description: 'Permanently remove resources through any Google Ads v25 mutate service.',
+      provider: 'google',
+      kind: 'remove',
+      destructive: true,
+      payload: z.object({
+        service: z.string().min(2),
+        resource_names: z.array(z.string().min(1)).min(1).max(100),
+      }),
+    }),
   ];
 }

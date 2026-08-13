@@ -48,7 +48,7 @@ describe('GoogleAdsRestClient', () => {
         reply: { resourceNames: ['customers/1234567890', 'customers/9876543210'] },
       },
     ]);
-    const client = new GoogleAdsRestClient({ ...CREDS, loginCustomerId: '111-222-3333' }, 'v24', impl);
+    const client = new GoogleAdsRestClient({ ...CREDS, loginCustomerId: '111-222-3333' }, 'v25', impl);
     expect(await client.listAccessibleCustomers()).toEqual(['1234567890', '9876543210']);
     await client.listAccessibleCustomers();
 
@@ -59,6 +59,25 @@ describe('GoogleAdsRestClient', () => {
     expect(headers.authorization).toBe('Bearer access-token');
     expect(headers['developer-token']).toBe('dev-token');
     expect(headers['login-customer-id']).toBe('1112223333');
+  });
+
+  it('omits partialFailure for customer manager link mutations', async () => {
+    const { impl, calls } = fakeFetch([
+      tokenRoute,
+      { match: (url) => url.includes('customerManagerLinks:mutate'), reply: { results: [] } },
+    ]);
+    const client = new GoogleAdsRestClient(CREDS, 'v25', impl);
+    await client.mutate(
+      '1234567890',
+      'customerManagerLinks',
+      [{ update: { resourceName: 'customers/1234567890/customerManagerLinks/1~2', status: 'ACTIVE' }, updateMask: 'status' }],
+      { validateOnly: true },
+    );
+    const body = JSON.parse(String(calls.find((call) => call.url.includes('customerManagerLinks:mutate'))!.init.body));
+    expect(body).toEqual({
+      operations: [{ update: { resourceName: 'customers/1234567890/customerManagerLinks/1~2', status: 'ACTIVE' }, updateMask: 'status' }],
+      validateOnly: true,
+    });
   });
 
   it('paginates search until maxRows', async () => {
@@ -75,7 +94,7 @@ describe('GoogleAdsRestClient', () => {
         },
       },
     ]);
-    const client = new GoogleAdsRestClient(CREDS, 'v24', impl);
+    const client = new GoogleAdsRestClient(CREDS, 'v25', impl);
     const rows = await client.search('1234567890', 'SELECT campaign.id FROM campaign');
     expect(rows).toHaveLength(2);
   });
@@ -122,13 +141,21 @@ describe('GoogleAdsProvider writes', () => {
     },
   };
 
+  it('maps the recommendation pause action to the guarded status tool', () => {
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', vi.fn() as unknown as typeof fetch));
+    expect(provider.standardActions().pauseCampaign?.('1234567890', '77')).toEqual({
+      tool: 'google_set_campaign_status',
+      input: { account_id: '1234567890', campaign_id: '77', status: 'PAUSED' },
+    });
+  });
+
   it('previews a budget change with a server-side dry run and real deltas', async () => {
     const { impl, calls } = fakeFetch([
       tokenRoute,
       campaignLookupRoute,
       { match: (url) => url.includes('campaignBudgets:mutate'), reply: { results: [] } },
     ]);
-    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v24', impl));
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
     const preview = await provider.previewWrite(
       {
         tool: 'google_set_budget',
@@ -161,7 +188,7 @@ describe('GoogleAdsProvider writes', () => {
         reply: { results: [{ resourceName: 'customers/1234567890/campaignBudgets/42' }] },
       },
     ]);
-    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v24', impl));
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
     const result = await provider.applyWrite(
       {
         tool: 'google_set_budget',
@@ -185,7 +212,7 @@ describe('GoogleAdsProvider writes', () => {
         reply: { mutateOperationResponses: [] },
       },
     ]);
-    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v24', impl));
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
     const preview = await provider.previewWrite(
       {
         tool: 'google_create_campaign',
@@ -209,7 +236,7 @@ describe('GoogleAdsProvider writes', () => {
 
   it('rejects an invalid RSA client-side before any API call', async () => {
     const { impl, calls } = fakeFetch([tokenRoute]);
-    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v24', impl));
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
     await expect(
       provider.previewWrite(
         {
@@ -228,6 +255,59 @@ describe('GoogleAdsProvider writes', () => {
       ),
     ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
     expect(calls.filter((c) => c.url.includes(':mutate'))).toHaveLength(0);
+  });
+
+  it('server-validates generic creates and forces campaign status to PAUSED', async () => {
+    const { impl, calls } = fakeFetch([
+      tokenRoute,
+      { match: (url) => url.includes('campaigns:mutate'), reply: { results: [] } },
+    ]);
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
+    const preview = await provider.previewWrite(
+      {
+        tool: 'google_api_create', provider: 'google', accountId: '1234567890', kind: 'create',
+        payload: { service: 'campaigns', creates: [{ name: 'Native surface', status: 'ENABLED' }] },
+      },
+      { forcePausedCreation: true },
+    );
+    expect(preview.coercions).toHaveLength(1);
+    const body = JSON.parse(String(calls.find((call) => call.url.includes('campaigns:mutate'))!.init.body));
+    expect(body.validateOnly).toBe(true);
+    expect(body.operations[0].create.status).toBe('PAUSED');
+  });
+
+  it('policy-checks generic budget creates and rejects generic budget updates', async () => {
+    const { impl } = fakeFetch([
+      tokenRoute,
+      { match: (url) => url.includes('campaignBudgets:mutate'), reply: { results: [] } },
+    ]);
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
+    const preview = await provider.previewWrite(
+      {
+        tool: 'google_api_create', provider: 'google', accountId: '1234567890', kind: 'create',
+        payload: { service: 'campaignBudgets', creates: [{ name: 'Native budget', amountMicros: '7500000' }] },
+      },
+      { forcePausedCreation: true },
+    );
+    expect(preview.budgetDeltas).toEqual([{ target: 'new campaign budget Native budget', toMicros: 7_500_000 }]);
+    await expect(provider.previewWrite(
+      {
+        tool: 'google_api_update', provider: 'google', accountId: '1234567890', kind: 'update',
+        payload: { service: 'campaignBudgets', updates: [{ update: { resourceName: 'customers/1234567890/campaignBudgets/42', amountMicros: '9' }, update_mask: 'amount_micros' }] },
+      },
+      { forcePausedCreation: true },
+    )).rejects.toThrow('budget updates require google_set_budget');
+  });
+
+  it('rejects cross-customer resource references in generic mutations', async () => {
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', vi.fn() as unknown as typeof fetch));
+    await expect(provider.previewWrite(
+      {
+        tool: 'google_api_remove', provider: 'google', accountId: '1234567890', kind: 'remove',
+        payload: { service: 'assets', resource_names: ['customers/9999999999/assets/1'] },
+      },
+      { forcePausedCreation: true },
+    )).rejects.toThrow('belongs to customer 9999999999');
   });
 });
 
@@ -254,7 +334,7 @@ describe('GoogleAdsProvider bidding tools', () => {
       biddingLookup('TARGET_SPEND', '2000000'),
       { match: (url) => url.includes('campaigns:mutate'), reply: { results: [] } },
     ]);
-    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v24', impl));
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
     const preview = await provider.previewWrite(
       {
         tool: 'google_set_bid_ceiling',
@@ -278,7 +358,7 @@ describe('GoogleAdsProvider bidding tools', () => {
 
   it('refuses a ceiling on strategies that have none, with guidance', async () => {
     const { impl } = fakeFetch([tokenRoute, biddingLookup('MAXIMIZE_CONVERSIONS')]);
-    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v24', impl));
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
     await expect(
       provider.previewWrite(
         {
@@ -299,7 +379,7 @@ describe('GoogleAdsProvider bidding tools', () => {
       biddingLookup('TARGET_SPEND', '1200000'),
       { match: (url) => url.includes('campaigns:mutate'), reply: { results: [] } },
     ]);
-    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v24', impl));
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
     const preview = await provider.previewWrite(
       {
         tool: 'google_set_bidding_strategy',
@@ -320,7 +400,7 @@ describe('GoogleAdsProvider bidding tools', () => {
 
   it('rejects mismatched strategy targets client-side', async () => {
     const { impl } = fakeFetch([tokenRoute]);
-    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v24', impl));
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
     await expect(
       provider.previewWrite(
         {
@@ -352,7 +432,7 @@ describe('GoogleAdsProvider report', () => {
         },
       },
     ]);
-    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v24', impl));
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
     const report = await provider.report({
       accountIds: ['1234567890'],
       level: 'campaign',

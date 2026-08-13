@@ -251,11 +251,16 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
         await connectMicrosoft({ openBrowser: opts.browser, io });
         return;
       }
+      if (provider === 'reddit') {
+        const { connectReddit } = await import('./connect/reddit.js');
+        await connectReddit({ openBrowser: opts.browser, io });
+        return;
+      }
       if (provider === 'mock') {
         io.out('The mock provider is explicit demo mode, not a connection. Try: adport --demo accounts');
         return;
       }
-      io.err(`Provider "${provider}" is not supported. Available: google, meta, tiktok, apple, microsoft, mock.`);
+      io.err(`Provider "${provider}" is not supported. Available: google, meta, tiktok, apple, microsoft, reddit, mock.`);
       process.exitCode = 1;
     });
 
@@ -263,8 +268,8 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .command('disconnect <provider>')
     .description('Remove a provider connection from this machine')
     .action(async (provider: string) => {
-      if (!['google', 'meta', 'tiktok', 'apple', 'microsoft'].includes(provider)) {
-        io.err(`Provider "${provider}" is not supported. Available: google, meta, tiktok, apple, microsoft.`);
+      if (!['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit'].includes(provider)) {
+        io.err(`Provider "${provider}" is not supported. Available: google, meta, tiktok, apple, microsoft, reddit.`);
         process.exitCode = 1;
         return;
       }
@@ -339,7 +344,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
       for (const record of records) {
         io.out(`${record.provider}: credentials stored (source: ${record.source}, updated ${record.updatedAt})`);
       }
-      for (const id of ['google', 'meta', 'tiktok', 'apple', 'microsoft'] as const) {
+      for (const id of ['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit'] as const) {
         const provider = rt.ctx.providers.list().find((p) => p.id === id);
         if (!provider) {
           io.out(`${id}: not connected (run \`adport connect ${id}\`)`);

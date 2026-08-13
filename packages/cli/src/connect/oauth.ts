@@ -79,6 +79,8 @@ export interface LoopbackServer {
 export async function startLoopbackServer(
   redirectHostname: '127.0.0.1' | 'localhost' = '127.0.0.1',
   expectedState?: string,
+  port = 0,
+  callbackPath = '',
 ): Promise<LoopbackServer> {
   let resolveCode!: (code: string) => void;
   let rejectCode!: (err: Error) => void;
@@ -108,14 +110,66 @@ export async function startLoopbackServer(
     else if (error) rejectCode(new Error(`OAuth authorization failed: ${error}`));
   });
 
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, '127.0.0.1', () => {
+      server.off('error', reject);
+      resolve();
+    });
+  });
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('Loopback server failed to bind');
   return {
-    redirectUri: `http://${redirectHostname}:${address.port}`,
+    redirectUri: `http://${redirectHostname}:${address.port}${callbackPath}`,
     waitForCode,
     close: () => server.close(),
   };
+}
+
+// ---- Reddit Ads API (confidential web app + permanent refresh token) -------
+
+const REDDIT_AUTHORIZE = 'https://www.reddit.com/api/v1/authorize';
+const REDDIT_TOKEN = 'https://www.reddit.com/api/v1/access_token';
+export const REDDIT_ADS_SCOPES = 'adsread,adsedit,adsdatadeletion';
+
+export function buildRedditAuthUrl(clientId: string, redirectUri: string, state: string): string {
+  const params = new URLSearchParams({
+    client_id: clientId,
+    response_type: 'code',
+    state,
+    redirect_uri: redirectUri,
+    duration: 'permanent',
+    scope: REDDIT_ADS_SCOPES,
+  });
+  return `${REDDIT_AUTHORIZE}?${params}`;
+}
+
+export async function exchangeRedditCode(
+  input: { clientId: string; clientSecret: string; code: string; redirectUri: string; userAgent: string },
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ refreshToken: string }> {
+  const response = await fetchImpl(REDDIT_TOKEN, {
+    method: 'POST',
+    headers: {
+      authorization: `Basic ${Buffer.from(`${input.clientId}:${input.clientSecret}`).toString('base64')}`,
+      'content-type': 'application/x-www-form-urlencoded',
+      'user-agent': input.userAgent,
+    },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code',
+      code: input.code.replace(/#_$/, ''),
+      redirect_uri: input.redirectUri,
+    }),
+  });
+  const data = (await response.json()) as { refresh_token?: string; error?: string; message?: string };
+  if (!response.ok || !data.refresh_token) {
+    throw new AdportError(
+      'PROVIDER_ERROR',
+      `Reddit OAuth exchange failed${data.error ? ` (${data.error})` : ''}: ${data.message ?? 'no refresh token returned'}`,
+      data,
+    );
+  }
+  return { refreshToken: data.refresh_token };
 }
 
 // ---- Microsoft identity platform (public client + PKCE) ---------------------

@@ -61,6 +61,9 @@ interface WritePlan {
   execute: () => Promise<string[]>;
 }
 
+const APPLE_READ_ROOTS = /^(?:acls|me|apps(?:\/.*)?|campaigns(?:\/.*)?|adgroups(?:\/.*)?|targetingkeywords(?:\/.*)?|negativekeywords(?:\/.*)?|ads(?:\/.*)?|creatives(?:\/.*)?|product-pages(?:\/.*)?|search(?:\/.*)?|geolocations(?:\/.*)?|budgetorders(?:\/.*)?|reports(?:\/.*)?|customreports(?:\/.*)?)(?:\?.*)?$/;
+const APPLE_MUTATION_ROOTS = /^(?:campaigns|adgroups|targetingkeywords|negativekeywords|ads|creatives|budgetorders)(?:\/[^?#]+)*$/;
+
 export class AppleAdsProvider implements AdProvider {
   readonly id = 'apple';
 
@@ -116,6 +119,38 @@ export class AppleAdsProvider implements AdProvider {
     return campaign;
   }
 
+  /**
+   * Safe low-level access to the documented read surface. Apple uses POST for
+   * selectors and reports, so method alone cannot determine mutability.
+   */
+  async apiRead(input: {
+    account_id?: string;
+    method: 'GET' | 'POST';
+    path: string;
+    body?: Record<string, unknown>;
+  }): Promise<unknown> {
+    const path = normalizeApiPath(input.path);
+    if (!APPLE_READ_ROOTS.test(path)) {
+      throw new AdportError('INVALID_INPUT', `apple: unsupported read path "${path}"`);
+    }
+    if (
+      input.method === 'POST' &&
+      !path.includes('/find') &&
+      !path.startsWith('reports/') &&
+      !path.startsWith('customreports')
+    ) {
+      throw new AdportError(
+        'INVALID_INPUT',
+        'apple: POST is read-only here only for /find, reports/*, and customreports endpoints',
+      );
+    }
+    const envelope = await this.client.request(input.method, path, {
+      ...(input.account_id ? { orgId: input.account_id } : {}),
+      ...(input.body ? { body: input.body } : {}),
+    });
+    return envelope;
+  }
+
   async report(query: NormalizedQuery): Promise<Report> {
     if (query.level !== 'campaign' && query.level !== 'account') {
       throw new AdportError('INVALID_INPUT', 'apple: report supports campaign and account levels in v0');
@@ -143,8 +178,13 @@ export class AppleAdsProvider implements AdProvider {
           },
         },
       );
-      for (const row of envelope.data?.reportingDataResponse?.row ?? []) {
-        rows.push(this.toReportRow(row, orgId, query));
+      const providerRows = (envelope.data?.reportingDataResponse?.row ?? []).map((row) =>
+        this.toReportRow(row, orgId, query),
+      );
+      if (query.level === 'account') {
+        if (providerRows.length > 0) rows.push(aggregateAccountRows(providerRows, this.id, orgId));
+      } else {
+        rows.push(...providerRows);
       }
     }
     return { rows };
@@ -208,6 +248,12 @@ export class AppleAdsProvider implements AdProvider {
         return this.planSetStatus(op.accountId, payload);
       case 'apple_set_budget':
         return this.planSetBudget(op.accountId, payload);
+      case 'apple_api_create':
+        return this.planApiCreate(op.accountId, payload, guard);
+      case 'apple_api_update':
+        return this.planApiUpdate(op.accountId, payload);
+      case 'apple_api_delete':
+        return this.planApiDelete(op.accountId, payload);
       default:
         throw new AdportError('PROVIDER_ERROR', `apple: unsupported write tool ${op.tool}`);
     }
@@ -306,6 +352,163 @@ export class AppleAdsProvider implements AdProvider {
       },
     };
   }
+
+  private async planApiCreate(
+    orgId: string,
+    payload: { path: string; body: Record<string, unknown> },
+    guard: WriteGuard,
+  ): Promise<WritePlan> {
+    const path = validateMutationPath(payload.path);
+    const body = structuredClone(payload.body);
+    const coercions: string[] = [];
+    if (guard.forcePausedCreation) coerceCreatedStatuses(body, coercions);
+    const budgetDeltas = collectCreatedMoney(body);
+    return {
+      summary: `Create Apple Ads resource via POST /${path}`,
+      changes: [`+ POST /${path} ${JSON.stringify(body)}`],
+      coercions,
+      budgetDeltas,
+      execute: async () => {
+        const envelope = await this.client.request<unknown>('POST', path, { orgId, body });
+        return extractResourceIds(envelope.data);
+      },
+    };
+  }
+
+  private async planApiUpdate(
+    orgId: string,
+    payload: { path: string; body: Record<string, unknown> },
+  ): Promise<WritePlan> {
+    const path = validateMutationPath(payload.path);
+    if (containsMoneyField(payload.body)) {
+      throw new AdportError(
+        'INVALID_INPUT',
+        'apple: monetary updates require a typed budget or bid tool so current and proposed values can be policy-checked',
+      );
+    }
+    return {
+      summary: `Update Apple Ads resource via PUT /${path}`,
+      changes: [`~ PUT /${path} ${JSON.stringify(payload.body)}`],
+      coercions: [],
+      budgetDeltas: [],
+      execute: async () => {
+        const envelope = await this.client.request<unknown>('PUT', path, { orgId, body: payload.body });
+        return extractResourceIds(envelope.data, path);
+      },
+    };
+  }
+
+  private async planApiDelete(orgId: string, payload: { path: string }): Promise<WritePlan> {
+    const path = validateMutationPath(payload.path);
+    return {
+      summary: `Delete Apple Ads resource via DELETE /${path}`,
+      changes: [`- DELETE /${path}`],
+      coercions: [],
+      budgetDeltas: [],
+      execute: async () => {
+        await this.client.request('DELETE', path, { orgId });
+        return [path.split('/').at(-1)!];
+      },
+    };
+  }
+}
+
+function normalizeApiPath(path: string): string {
+  const normalized = path.replace(/^\/+/, '').trim();
+  if (!normalized || normalized.includes('://') || normalized.includes('..') || normalized.includes('#')) {
+    throw new AdportError('INVALID_INPUT', 'apple: path must be a relative API path without traversal or fragments');
+  }
+  return normalized;
+}
+
+function validateMutationPath(path: string): string {
+  const normalized = normalizeApiPath(path);
+  if (!APPLE_MUTATION_ROOTS.test(normalized) || normalized.includes('/find') || normalized.startsWith('reports/')) {
+    throw new AdportError('INVALID_INPUT', `apple: unsupported mutation path "${normalized}"`);
+  }
+  return normalized;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function coerceCreatedStatuses(value: unknown, coercions: string[], path = 'body'): void {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => coerceCreatedStatuses(item, coercions, `${path}[${index}]`));
+    return;
+  }
+  if (!isRecord(value)) return;
+  for (const [key, child] of Object.entries(value)) {
+    if ((key === 'status' || key === 'campaignStatus' || key === 'adGroupStatus') && child === 'ENABLED') {
+      value[key] = 'PAUSED';
+      coercions.push(`${path}.${key} coerced to PAUSED by policy (paused_creation)`);
+    } else {
+      coerceCreatedStatuses(child, coercions, `${path}.${key}`);
+    }
+  }
+}
+
+function isMoneyKey(key: string): boolean {
+  return /(budget|bidAmount|cpaGoal)/i.test(key);
+}
+
+function containsMoneyField(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsMoneyField);
+  if (!isRecord(value)) return false;
+  return Object.entries(value).some(([key, child]) => isMoneyKey(key) || containsMoneyField(child));
+}
+
+function collectCreatedMoney(value: unknown, path = 'body'): WritePreview['budgetDeltas'] {
+  const deltas: WritePreview['budgetDeltas'] = [];
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => deltas.push(...collectCreatedMoney(item, `${path}[${index}]`)));
+    return deltas;
+  }
+  if (!isRecord(value)) return deltas;
+  for (const [key, child] of Object.entries(value)) {
+    const childPath = `${path}.${key}`;
+    if (isMoneyKey(key)) {
+      const amount = isRecord(child) ? Number(child.amount) : Number(child);
+      if (Number.isFinite(amount) && amount >= 0) {
+        deltas.push({ target: childPath, toMicros: Math.round(amount * UNITS_TO_MICROS) });
+      }
+    }
+    deltas.push(...collectCreatedMoney(child, childPath));
+  }
+  return deltas;
+}
+
+function extractResourceIds(value: unknown, fallback?: string): string[] {
+  const ids: string[] = [];
+  const visit = (item: unknown) => {
+    if (Array.isArray(item)) return item.forEach(visit);
+    if (!isRecord(item)) return;
+    if (item.id !== undefined) ids.push(String(item.id));
+    for (const child of Object.values(item)) visit(child);
+  };
+  visit(value);
+  return ids.length > 0 ? [...new Set(ids)] : fallback ? [fallback.split('/').at(-1)!] : [];
+}
+
+function aggregateAccountRows(rows: ReportRow[], provider: string, accountId: string): ReportRow {
+  const metrics = Object.fromEntries(
+    Object.keys(rows[0]!.metrics).map((metric) => [
+      metric,
+      round2(rows.reduce((sum, row) => sum + (row.metrics[metric as MetricName] ?? 0), 0)),
+    ]),
+  ) as Partial<Record<MetricName, number>>;
+  const spend = metrics.spend ?? 0;
+  const impressions = metrics.impressions ?? 0;
+  const clicks = metrics.clicks ?? 0;
+  const conversions = metrics.conversions ?? 0;
+  const conversionValue = metrics.conversion_value ?? 0;
+  if ('ctr' in metrics) metrics.ctr = impressions > 0 ? round2((clicks / impressions) * 100) : 0;
+  if ('cpc' in metrics) metrics.cpc = clicks > 0 ? round2(spend / clicks) : 0;
+  if ('cpm' in metrics) metrics.cpm = impressions > 0 ? round2((spend / impressions) * 1000) : 0;
+  if ('cpa' in metrics) metrics.cpa = conversions > 0 ? round2(spend / conversions) : 0;
+  if ('roas' in metrics) metrics.roas = spend > 0 ? round2(conversionValue / spend) : 0;
+  return { provider, accountId, entity: { level: 'account', id: accountId, name: accountId }, metrics };
 }
 
 function round2(n: number): number {

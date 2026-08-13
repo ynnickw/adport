@@ -6,6 +6,19 @@ Every connection below is bring-your-own (BYO): you own the provider-side applic
 
 For a source checkout, replace `adport` below with `node packages/cli/dist/index.js` after `pnpm build`.
 
+## API versions and native coverage
+
+| Provider | API line | Native read surface | Native mutation surface |
+| --- | --- | --- | --- |
+| Google | Google Ads API v25 | `google_gaql` covers every GAQL resource and field available to the credential | `google_api_create`, `google_api_update`, and `google_api_remove` route to v25 mutate services |
+| Meta | Marketing API v25.0 | `meta_api_read` covers ad-account edges; `meta_insights` is the reporting convenience tool | `meta_api_create`, `meta_api_update`, and `meta_api_delete` cover account-owned Marketing API objects |
+| TikTok | Business API v1.3 | `tiktok_api_read` covers documented GET endpoints | `tiktok_api_create`, `tiktok_api_update`, and `tiktok_api_delete` cover endpoints with the matching action suffix |
+| Apple | Campaign Management API v5 | `apple_api_read` covers documented entity, selector, and report paths | `apple_api_create`, `apple_api_update`, and `apple_api_delete` cover campaign-management entities |
+| Microsoft | Advertising API v13 | `microsoft_api_read` covers query, search, get, and reporting operations | `microsoft_api_create`, `microsoft_api_update`, and `microsoft_api_delete` cover Campaign Management collections |
+| Reddit | Ads API v3 | `reddit_api_read` covers account-scoped GET and read-only POST endpoints; `reddit_report` exposes native reports | `reddit_api_create`, `reddit_api_update`, and `reddit_api_delete` cover account-owned v3 resources |
+
+The native tools accept provider-shaped payloads, so use the provider's current API reference when composing them. They are still normal Adport tools: every mutation goes through the same preview, pending-operation binding, policy checks, and audit log as the typed convenience tools. Created campaigns are forced paused. Generic budget updates are deliberately rejected; use the provider's typed budget tool so Adport can fetch the current value and enforce the exact before/after delta. Generic deletes use a client-side preview when the provider has no applicable validation endpoint.
+
 ## Google Ads
 
 You need a Google Ads developer token and a Google Cloud OAuth desktop client.
@@ -73,6 +86,20 @@ Microsoft requires an Entra application and a Microsoft Advertising developer to
 Adport persists rotated Microsoft refresh tokens after use. Public-client refresh tokens can expire after extended inactivity, in which case run the connect command again.
 
 Microsoft may show an unverified-publisher notice or require administrator consent based on your Entra application and tenant policy. That identity belongs to your local/BYO setup, not Adport Cloud.
+
+## Reddit Ads
+
+Reddit uses OAuth 2.0 with a confidential developer application and requires an honest, uniquely identifying `User-Agent` on every request.
+
+1. Create a **web app** at [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps) under the Reddit user that can access the intended Ads businesses.
+2. Register an exact local redirect URI such as `http://localhost:53682`.
+3. Run `adport connect reddit` and provide the app/client ID, app secret, the exact redirect URI, and a truthful User-Agent such as `desktop:dev.adport.local:v0.4.0 (by /u/yourname)`.
+4. Approve the requested `adsread`, `adsedit`, and `adsdatadeletion` scopes. Adport requests `duration=permanent` and stores the refresh token locally.
+5. Verify discovery with `adport accounts --provider reddit` and reporting with `adport report --provider reddit`.
+
+Reddit Ads API v3 campaign budget, bid, spend, CPC, and CPM fields use integer micros. Conversion total-value report fields use cents. Adport preserves the native integer micros for policy checks and converts report output to whole account-currency units. Reddit requires `conversion_pixel_id` for CBO campaigns as of July 13, 2026. Reddit has also announced new campaign objective enums for September 30, 2026, so use the current API reference when supplying a native objective.
+
+Read access is open to developers, while some create/edit/delete functionality can depend on Reddit API partner or advertiser approval. A successful OAuth connection therefore does not guarantee mutation access for every app.
 
 ## Verification
 

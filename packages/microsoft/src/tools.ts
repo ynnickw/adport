@@ -7,6 +7,22 @@ const statusSchema = z.enum(['Active', 'Paused']);
 export function microsoftTools(provider: MicrosoftAdsProvider): AnyToolDefinition[] {
   return [
     defineTool({
+      name: 'microsoft_api_read',
+      namespace: 'microsoft',
+      description:
+        'Call any documented Microsoft Advertising v13 query, search, get, or reporting submit/poll operation with selected-account headers.',
+      input: z.object({
+        account_id: z.string(),
+        service: z.enum(['campaign', 'customer', 'reporting']),
+        path: z.string().min(3).describe('REST operation path, e.g. AdGroups/QueryByCampaignId or GenerateReport/Submit'),
+        body: z.record(z.string(), z.unknown()).optional(),
+      }),
+      annotations: { readOnly: true },
+      async handler(input) {
+        return provider.apiRead(input);
+      },
+    }),
+    defineTool({
       name: 'microsoft_campaigns',
       namespace: 'microsoft',
       description:
@@ -49,6 +65,32 @@ export function microsoftTools(provider: MicrosoftAdsProvider): AnyToolDefinitio
       provider: 'microsoft',
       kind: 'update',
       payload: z.object({ campaign_id: z.string(), daily_budget: z.number().positive() }),
+    }),
+    guardedWriteTool({
+      name: 'microsoft_api_create',
+      namespace: 'microsoft',
+      description:
+        'Create through any Microsoft Advertising Campaign Management v13 collection using the documented API body. Active statuses are forced to Paused and budget fields are policy-checked.',
+      provider: 'microsoft',
+      kind: 'create',
+      payload: z.object({ resource: z.string().min(2), body: z.record(z.string(), z.unknown()) }),
+    }),
+    guardedWriteTool({
+      name: 'microsoft_api_update',
+      namespace: 'microsoft',
+      description: 'Update non-budget fields through any Microsoft Advertising Campaign Management v13 collection.',
+      provider: 'microsoft',
+      kind: 'update',
+      payload: z.object({ resource: z.string().min(2), body: z.record(z.string(), z.unknown()) }),
+    }),
+    guardedWriteTool({
+      name: 'microsoft_api_delete',
+      namespace: 'microsoft',
+      description: 'Permanently delete through any Microsoft Advertising Campaign Management v13 collection.',
+      provider: 'microsoft',
+      kind: 'remove',
+      destructive: true,
+      payload: z.object({ resource: z.string().min(2), body: z.record(z.string(), z.unknown()) }),
     }),
   ];
 }

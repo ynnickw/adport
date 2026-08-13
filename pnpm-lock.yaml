@@ -54,6 +54,9 @@ importers:
       '@adport/provider-microsoft':
         specifier: workspace:*
         version: link:../microsoft
+      '@adport/provider-reddit':
+        specifier: workspace:*
+        version: link:../reddit
       '@adport/provider-tiktok':
         specifier: workspace:*
         version: link:../tiktok
@@ -141,6 +144,9 @@ importers:
       '@adport/provider-microsoft':
         specifier: workspace:*
         version: link:../microsoft
+      '@adport/provider-reddit':
+        specifier: workspace:*
+        version: link:../reddit
       '@adport/provider-tiktok':
         specifier: workspace:*
         version: link:../tiktok
@@ -212,6 +218,28 @@ importers:
         version: 4.1.10(@types/node@26.1.2)(vite@7.3.6(@types/node@26.1.2)(yaml@2.9.0))
 
   packages/tiktok:
+    dependencies:
+      '@adport/core':
+        specifier: workspace:*
+        version: link:../core
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(postcss@8.5.26)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.2)(vite@7.3.6(@types/node@26.1.2)(yaml@2.9.0))
+
+  packages/reddit:
     dependencies:
       '@adport/core':
         specifier: workspace:*

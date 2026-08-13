@@ -8,6 +8,7 @@ import {
   type ProviderCapabilities,
   type Report,
   type ReportRow,
+  type StandardActions,
   type WriteGuard,
   type WriteOperation,
   type WritePreview,
@@ -51,6 +52,7 @@ interface WritePlan {
   coercions: string[];
   budgetDeltas: WritePreview['budgetDeltas'];
   execute: (validateOnly: boolean) => Promise<string[]>;
+  serverValidated?: boolean;
 }
 
 export class MetaAdsProvider implements AdProvider {
@@ -60,6 +62,15 @@ export class MetaAdsProvider implements AdProvider {
 
   capabilities(): ProviderCapabilities {
     return { serverDryRun: true };
+  }
+
+  standardActions(): StandardActions {
+    return {
+      pauseCampaign: (accountId, campaignId) => ({
+        tool: 'meta_set_campaign_status',
+        input: { account_id: accountId, campaign_id: campaignId, status: 'PAUSED' },
+      }),
+    };
   }
 
   async listAccounts(): Promise<Account[]> {
@@ -170,15 +181,32 @@ export class MetaAdsProvider implements AdProvider {
     return this.client.getPaged(`act_${act}/insights`, params, Math.min(input.limit ?? 200, 5000));
   }
 
+  async apiRead(input: {
+    account_id: string;
+    edge: string;
+    fields?: string[];
+    params?: Record<string, string>;
+    limit?: number;
+    paged?: boolean;
+  }): Promise<unknown> {
+    const act = normalizeAccountId(input.account_id);
+    const edge = validateMetaEdge(input.edge);
+    const params = { ...input.params, ...(input.fields?.length ? { fields: input.fields.join(',') } : {}) };
+    return input.paged === false
+      ? this.client.get(`act_${act}/${edge}`, params)
+      : this.client.getPaged(`act_${act}/${edge}`, params, Math.min(input.limit ?? 200, 5000));
+  }
+
   async previewWrite(op: WriteOperation, guard: WriteGuard): Promise<WritePreview> {
     const plan = await this.plan(op, guard);
-    await plan.execute(true); // execution_options=["validate_only"] — server-side dry run
+    const serverValidated = plan.serverValidated ?? true;
+    if (serverValidated) await plan.execute(true); // execution_options=["validate_only"]
     return {
       summary: plan.summary,
       changes: plan.changes,
       coercions: plan.coercions,
       budgetDeltas: plan.budgetDeltas,
-      serverValidated: true,
+      serverValidated,
     };
   }
 
@@ -204,8 +232,113 @@ export class MetaAdsProvider implements AdProvider {
         return this.planCreateAdSet(act, payload, guard);
       case 'meta_set_ad_set_status':
         return this.planSetStatus(payload, 'ad set');
+      case 'meta_set_lifetime_budget':
+        return this.planSetLifetimeBudget(payload);
+      case 'meta_api_create':
+        return this.planApiCreate(act, payload, guard);
+      case 'meta_api_update':
+        return this.planApiUpdate(act, payload);
+      case 'meta_api_delete':
+        return this.planApiDelete(act, payload);
       default:
         throw new AdportError('PROVIDER_ERROR', `meta: unsupported write tool ${op.tool}`);
+    }
+  }
+
+  private async planSetLifetimeBudget(payload: { object_id: string; lifetime_budget_cents: number }): Promise<WritePlan> {
+    const current = await this.client.get<{ name?: string; lifetime_budget?: string }>(payload.object_id, {
+      fields: 'name,lifetime_budget',
+    });
+    const fromCents = current.lifetime_budget !== undefined ? Number(current.lifetime_budget) : undefined;
+    if (fromCents === undefined) {
+      throw new AdportError('PROVIDER_ERROR', `meta: object ${payload.object_id} has no lifetime_budget`);
+    }
+    return {
+      summary: `Change "${current.name ?? payload.object_id}" lifetime budget ${fromCents} → ${payload.lifetime_budget_cents} minor units`,
+      changes: [`~ ${payload.object_id} lifetime_budget ${fromCents} → ${payload.lifetime_budget_cents}`],
+      coercions: [],
+      budgetDeltas: [{
+        target: `"${current.name ?? payload.object_id}" lifetime budget`,
+        fromMicros: fromCents * CENTS_TO_MICROS,
+        toMicros: payload.lifetime_budget_cents * CENTS_TO_MICROS,
+      }],
+      execute: async (validateOnly) => {
+        await this.client.post(payload.object_id, this.withExecutionOptions({ lifetime_budget: payload.lifetime_budget_cents }, validateOnly));
+        return [payload.object_id];
+      },
+    };
+  }
+
+  private async planApiCreate(
+    act: string,
+    payload: { edge: string; fields: Record<string, unknown> },
+    guard: WriteGuard,
+  ): Promise<WritePlan> {
+    const edge = validateMetaEdge(payload.edge);
+    const fields = structuredClone(payload.fields);
+    const coercions: string[] = [];
+    if (guard.forcePausedCreation && /^(campaigns|adsets|ads)$/.test(edge) && fields.status !== 'PAUSED') {
+      fields.status = 'PAUSED';
+      coercions.push('status coerced to PAUSED by policy (paused_creation)');
+    }
+    const budgetDeltas = collectMetaCreateBudgets(fields);
+    return {
+      summary: `Create Meta ${edge} resource`,
+      changes: [`+ act_${act}/${edge} ${JSON.stringify(fields)}`],
+      coercions,
+      budgetDeltas,
+      serverValidated: false,
+      execute: async (validateOnly) => {
+        const result = await this.client.post<{ id?: string }>(
+          `act_${act}/${edge}`,
+          this.withExecutionOptions(fields, validateOnly),
+        );
+        return result.id ? [result.id] : [];
+      },
+    };
+  }
+
+  private async planApiUpdate(
+    act: string,
+    payload: { object_id: string; fields: Record<string, unknown> },
+  ): Promise<WritePlan> {
+    if (containsMetaBudget(payload.fields)) {
+      throw new AdportError('INVALID_INPUT', 'meta: budget updates require a typed budget tool for policy checks');
+    }
+    await this.assertObjectOwnedByAccount(payload.object_id, act);
+    return {
+      summary: `Update Meta object ${payload.object_id}`,
+      changes: [`~ ${payload.object_id} ${JSON.stringify(payload.fields)}`],
+      coercions: [],
+      budgetDeltas: [],
+      serverValidated: false,
+      execute: async (validateOnly) => {
+        await this.client.post(payload.object_id, this.withExecutionOptions(payload.fields, validateOnly));
+        return [payload.object_id];
+      },
+    };
+  }
+
+  private async planApiDelete(act: string, payload: { object_id: string }): Promise<WritePlan> {
+    await this.assertObjectOwnedByAccount(payload.object_id, act);
+    return {
+      summary: `Permanently delete Meta object ${payload.object_id}`,
+      changes: [`- ${payload.object_id}`],
+      coercions: [],
+      budgetDeltas: [],
+      serverValidated: false,
+      execute: async (validateOnly) => {
+        await this.client.delete(payload.object_id, this.withExecutionOptions({}, validateOnly));
+        return [payload.object_id];
+      },
+    };
+  }
+
+  private async assertObjectOwnedByAccount(objectId: string, act: string): Promise<void> {
+    if (!/^\d+$/.test(objectId)) throw new AdportError('INVALID_INPUT', 'meta: object_id must be numeric');
+    const object = await this.client.get<{ account_id?: string }>(objectId, { fields: 'account_id' });
+    if (normalizeAccountId(object.account_id ?? '') !== act) {
+      throw new AdportError('INVALID_INPUT', `meta: object ${objectId} does not belong to ad account ${act}`);
     }
   }
 
@@ -221,6 +354,7 @@ export class MetaAdsProvider implements AdProvider {
       status?: string;
       special_ad_categories?: string[];
       daily_budget_cents?: number;
+      is_adset_budget_sharing_enabled?: boolean;
     },
     guard: WriteGuard,
   ): Promise<WritePlan> {
@@ -246,6 +380,14 @@ export class MetaAdsProvider implements AdProvider {
         target: `new campaign "${payload.name}" daily budget`,
         toMicros: payload.daily_budget_cents * CENTS_TO_MICROS,
       });
+    } else {
+      // Required by Marketing API v25 when the campaign does not own a budget.
+      // false keeps every ad set's budget isolated; true permits Meta to share
+      // up to 20% between eligible ad sets in this campaign.
+      fields.is_adset_budget_sharing_enabled = payload.is_adset_budget_sharing_enabled ?? false;
+      changes.push(
+        `+ ad set budget sharing ${fields.is_adset_budget_sharing_enabled ? 'enabled' : 'disabled'}`,
+      );
     }
     return {
       summary: `Create Meta campaign "${payload.name}" (${payload.objective}, ${status})`,
@@ -378,6 +520,41 @@ export class MetaAdsProvider implements AdProvider {
 function actionValue(stats: ActionStat[] | undefined, actionType: string): number {
   const stat = stats?.find((s) => s.action_type === actionType);
   return stat ? Number(stat.value) : 0;
+}
+
+function validateMetaEdge(edge: string): string {
+  const normalized = edge.replace(/^\/+|\/+$/g, '').trim();
+  if (!/^[a-z][a-z0-9_]{1,80}(?:\/[a-z0-9_]+)*$/.test(normalized) || normalized.includes('..')) {
+    throw new AdportError('INVALID_INPUT', `meta: invalid ad-account edge "${edge}"`);
+  }
+  return normalized;
+}
+
+function collectMetaCreateBudgets(fields: Record<string, unknown>): WritePreview['budgetDeltas'] {
+  const deltas: WritePreview['budgetDeltas'] = [];
+  const visit = (value: unknown, path: string): void => {
+    if (Array.isArray(value)) return value.forEach((item, index) => visit(item, `${path}[${index}]`));
+    if (!value || typeof value !== 'object') return;
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      const childPath = `${path}.${key}`;
+      if (/budget/i.test(key)) {
+        const cents = Number(child);
+        if (Number.isFinite(cents) && cents > 0) {
+          deltas.push({ target: childPath, toMicros: Math.round(cents * CENTS_TO_MICROS) });
+        }
+      }
+      visit(child, childPath);
+    }
+  };
+  visit(fields, 'fields');
+  return deltas;
+}
+
+function containsMetaBudget(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsMetaBudget);
+  if (!value || typeof value !== 'object') return false;
+  return Object.entries(value as Record<string, unknown>)
+    .some(([key, child]) => /budget/i.test(key) || containsMetaBudget(child));
 }
 
 function round2(n: number): number {

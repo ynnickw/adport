@@ -20,7 +20,7 @@ export interface SearchOptions {
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const API_BASE = 'https://googleads.googleapis.com';
 // Matches the API version the reference implementation pinned; bump deliberately.
-export const DEFAULT_API_VERSION = 'v24';
+export const DEFAULT_API_VERSION = 'v25';
 
 export function normalizeCustomerId(id: string): string {
   const normalized = id.replace(/^customers\//, '').replace(/-/g, '').trim();
@@ -130,9 +130,13 @@ export class GoogleAdsRestClient {
     operations: Array<Record<string, unknown>>,
     { validateOnly }: { validateOnly: boolean },
   ): Promise<{ results?: Array<{ resourceName?: string }> }> {
+    const body: Record<string, unknown> = { operations, validateOnly };
+    // CustomerManagerLinkService does not expose partial_failure in its mutate
+    // request, unlike most resource-specific Google Ads mutate services.
+    if (service !== 'customerManagerLinks') body.partialFailure = false;
     return this.request(`customers/${normalizeCustomerId(customerId)}/${service}:mutate`, {
       method: 'POST',
-      body: { operations, validateOnly, partialFailure: false },
+      body,
     });
   }
 

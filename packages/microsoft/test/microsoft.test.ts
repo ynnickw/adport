@@ -106,6 +106,14 @@ describe('parseCsv', () => {
 });
 
 describe('MicrosoftAdsProvider', () => {
+  it('maps recommendation pauses to the guarded campaign status tool', () => {
+    const provider = new MicrosoftAdsProvider(new MicrosoftAdsClient(CREDS));
+    expect(provider.standardActions().pauseCampaign?.('777', '8881')).toEqual({
+      tool: 'microsoft_set_campaign_status',
+      input: { account_id: '777', campaign_id: '8881', status: 'Paused' },
+    });
+  });
+
   it('discovers accounts via GetUser + SearchAccounts', async () => {
     const { impl, calls } = fakeFetch([tokenRoute, getUserRoute, searchAccountsRoute]);
     const provider = new MicrosoftAdsProvider(new MicrosoftAdsClient(CREDS, undefined, impl));
@@ -239,5 +247,63 @@ describe('MicrosoftAdsProvider', () => {
         { forcePausedCreation: true },
       ),
     ).rejects.toThrow(/SHARED budget/);
+  });
+
+  it('calls documented v13 read operations with account headers', async () => {
+    const { impl, calls } = fakeFetch([
+      tokenRoute, getUserRoute, searchAccountsRoute,
+      { match: (url) => url.includes('/AdGroups/QueryByCampaignId'), reply: { AdGroups: [] } },
+    ]);
+    const provider = new MicrosoftAdsProvider(new MicrosoftAdsClient(CREDS, undefined, impl));
+    await provider.apiRead({ account_id: '777', service: 'campaign', path: 'AdGroups/QueryByCampaignId', body: { CampaignId: 8881 } });
+    const call = calls.find((item) => item.url.includes('/AdGroups/QueryByCampaignId'))!;
+    expect(call.init.method).toBe('POST');
+    expect((call.init.headers as Record<string, string>).CustomerAccountId).toBe('777');
+  });
+
+  it('guards generic creates, forces Paused, and checks budgets', async () => {
+    const { impl, calls } = fakeFetch([
+      tokenRoute, getUserRoute, searchAccountsRoute,
+      { match: (url) => url.endsWith('/AdGroups'), reply: { AdGroupIds: [123], PartialErrors: [] } },
+    ]);
+    const provider = new MicrosoftAdsProvider(new MicrosoftAdsClient(CREDS, undefined, impl));
+    const op = {
+      tool: 'microsoft_api_create', provider: 'microsoft', accountId: '777', kind: 'create' as const,
+      payload: { resource: 'AdGroups', body: { AccountId: 777, AdGroups: [{ Name: 'Native', Status: 'Active', DailyBudget: 12 }] } },
+    };
+    const preview = await provider.previewWrite(op, { forcePausedCreation: true });
+    expect(preview.coercions).toHaveLength(1);
+    expect(preview.budgetDeltas).toEqual([{ target: 'body.AdGroups[0].DailyBudget', toMicros: 12_000_000 }]);
+    await provider.applyWrite(op, { forcePausedCreation: true });
+    const call = calls.find((item) => item.url.endsWith('/AdGroups'))!;
+    const body = JSON.parse(String(call.init.body));
+    expect(body.AdGroups[0].Status).toBe('Paused');
+  });
+
+  it('rejects cross-account reads and generic budget updates', async () => {
+    const provider = new MicrosoftAdsProvider(new MicrosoftAdsClient(CREDS));
+    await expect(provider.apiRead({
+      account_id: '777', service: 'campaign', path: 'Campaigns/QueryByAccountId', body: { AccountId: 999 },
+    })).rejects.toThrow('does not match selected account 777');
+    await expect(provider.previewWrite({
+      tool: 'microsoft_api_update', provider: 'microsoft', accountId: '777', kind: 'update',
+      payload: { resource: 'Campaigns', body: { AccountId: 777, Campaigns: [{ Id: 1, DailyBudget: 99 }] } },
+    }, { forcePausedCreation: true })).rejects.toThrow('budget updates require microsoft_set_budget');
+  });
+
+  it('uses DELETE only during generic delete apply', async () => {
+    const { impl, calls } = fakeFetch([
+      tokenRoute, getUserRoute, searchAccountsRoute,
+      { match: (url) => url.endsWith('/Keywords'), reply: { PartialErrors: [] } },
+    ]);
+    const provider = new MicrosoftAdsProvider(new MicrosoftAdsClient(CREDS, undefined, impl));
+    const op = {
+      tool: 'microsoft_api_delete', provider: 'microsoft', accountId: '777', kind: 'remove' as const,
+      payload: { resource: 'Keywords', body: { AccountId: 777, AdGroupId: 55, KeywordIds: [66] } },
+    };
+    await provider.previewWrite(op, { forcePausedCreation: true });
+    expect(calls.some((item) => item.init.method === 'DELETE')).toBe(false);
+    await provider.applyWrite(op, { forcePausedCreation: true });
+    expect(calls.some((item) => item.init.method === 'DELETE')).toBe(true);
   });
 });
