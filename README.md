@@ -109,11 +109,11 @@ Policy lives at `~/.config/adport/policy.yaml`; credentials live at `~/.config/a
 | Google Ads | GAQL and normalized reports | campaigns, ad groups, keywords, RSAs, budgets, bidding | `validate_only` | exercised against a live account |
 | Meta Ads | Insights and normalized reports | campaigns, ad sets, budgets, status | `execution_options=["validate_only"]` | needs more real-account testing |
 | TikTok Ads | reporting and normalized reports | campaigns, budgets, status | client-side preview; sandbox available | needs sandbox and production testers |
-| Apple Ads | campaign reports and normalized reports | campaigns, budgets, status | client-side preview | exercised against a live account |
+| Apple Ads | Platform API v1 queries, insights, recommendations, suggestions, reports, and normalized reports | all v1 campaign resources, guarded recommendation actions, asset uploads | client-side preview | v5 exercised against a live account; v1 wire contract locally verified |
 | Microsoft Advertising | asynchronous reports and normalized reports | campaigns, budgets, status | client-side preview; sandbox available | exercised against a live account |
 | Reddit Ads | v3 reports and normalized reports | campaigns, CBO budgets, status | client-side preview | wire schemas verified; needs a real-account tester |
 
-Apple Campaign Management API v5 sunsets in January 2027. Its client is version-isolated so the future Ads Platform API migration does not leak into the shared tool layer.
+Apple uses the Apple Ads Platform API v1 at `api.ads.apple.com/v1`. The provider covers the complete published v1 operation surface, including App Store and Apple Maps resources, insights, recommendations, shared budgets, bulk keyword operations, and SHA-bound multipart asset uploads. The retired Campaign Management API v5 is no longer used.
 
 ## Help test a provider
 

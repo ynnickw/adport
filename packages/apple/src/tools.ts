@@ -10,12 +10,12 @@ export function appleTools(provider: AppleAdsProvider): AnyToolDefinition[] {
       name: 'apple_api_read',
       namespace: 'apple',
       description:
-        'Call any documented Apple Ads v5 read/query/report endpoint. GET supports public entity reads; POST is restricted to selector /find endpoints and report endpoints.',
+        'Call any documented Apple Ads Platform API v1 read, query, insight, suggestion, recommendation-query, or report endpoint.',
       input: z.object({
-        account_id: z.string().optional().describe('Apple Ads orgId; omit only for unscoped endpoints such as acls'),
+        account_id: z.string().optional().describe('Apple Ads adAccountId; omit only for unscoped endpoints such as acls and me'),
         method: z.enum(['GET', 'POST']).default('GET'),
-        path: z.string().min(1).describe('Relative v5 path, for example campaigns/123/adgroups or reports/campaigns/123/keywords'),
-        body: z.record(z.string(), z.unknown()).optional().describe('Selector or reporting request for POST reads'),
+        path: z.string().min(1).describe('Relative v1 path, for example campaigns/query or reports/apps/campaigns/query'),
+        body: z.record(z.string(), z.unknown()).optional().describe('Query, reporting, insight, or suggestion request for POST reads'),
       }),
       annotations: { readOnly: true },
       async handler(input) {
@@ -26,10 +26,10 @@ export function appleTools(provider: AppleAdsProvider): AnyToolDefinition[] {
       name: 'apple_campaigns',
       namespace: 'apple',
       description:
-        'List Apple Ads campaigns for an organization (id, name, status, servingStatus, dailyBudgetAmount as string Money).',
+        'List Apple Ads Platform API v1 campaigns for an ad account.',
       input: z.object({
-        account_id: z.string().describe('Apple Ads organization id (orgId)'),
-        limit: z.number().int().positive().max(1000).default(100),
+        account_id: z.string().describe('Apple Ads ad account id (adAccountId)'),
+        limit: z.number().int().positive().max(5000).default(100),
       }),
       annotations: { readOnly: true },
       async handler(input) {
@@ -41,7 +41,7 @@ export function appleTools(provider: AppleAdsProvider): AnyToolDefinition[] {
       name: 'apple_create_campaign',
       namespace: 'apple',
       description:
-        'Create an Apple Ads search campaign (App Store search results, TAPS billing). ' +
+        'Create an Apple Ads Platform API v1 App Store campaign (search results, TAPS billing). ' +
         'daily_budget is a float in whole currency units; adam_id is the App Store app id. ' +
         'Apple has no dry run — previews are client-side diffs.',
       provider: 'apple',
@@ -75,7 +75,7 @@ export function appleTools(provider: AppleAdsProvider): AnyToolDefinition[] {
       name: 'apple_api_create',
       namespace: 'apple',
       description:
-        'Create a documented Apple Ads v5 entity using a relative endpoint and API-shaped body. Created ENABLED statuses are coerced to PAUSED; budget/bid Money fields are reported to policy.',
+        'Create a documented Apple Ads Platform API v1 entity using a relative endpoint and API-shaped body. Also supports keyword and negative-keyword bulk-create. Created ENABLED statuses are coerced to PAUSED; budget/bid Money fields are reported to policy.',
       provider: 'apple',
       kind: 'create',
       payload: z.object({
@@ -87,7 +87,7 @@ export function appleTools(provider: AppleAdsProvider): AnyToolDefinition[] {
       name: 'apple_api_update',
       namespace: 'apple',
       description:
-        'Update a documented non-monetary Apple Ads v5 entity. Budget/bid changes are rejected here and require typed tools with current-value policy checks.',
+        'Update a documented non-monetary Apple Ads Platform API v1 entity. Also supports keyword and negative-keyword bulk-update. Budget/bid changes are rejected here and require typed tools with current-value policy checks.',
       provider: 'apple',
       kind: 'update',
       payload: z.object({
@@ -98,11 +98,82 @@ export function appleTools(provider: AppleAdsProvider): AnyToolDefinition[] {
     guardedWriteTool({
       name: 'apple_api_delete',
       namespace: 'apple',
-      description: 'Delete a documented Apple Ads v5 campaign-management entity by relative path.',
+      description: 'Delete a documented Apple Ads Platform API v1 campaign-management entity by relative path.',
       provider: 'apple',
       kind: 'remove',
       destructive: true,
       payload: z.object({ path: z.string().min(1) }),
+    }),
+    guardedWriteTool({
+      name: 'apple_upload_asset',
+      namespace: 'apple',
+      description:
+        'Upload a PNG, JPG/JPEG, or HEIC creative asset for a Business Brand. The required SHA-256 binds the exact local file contents to the preview/apply approval.',
+      provider: 'apple',
+      kind: 'create',
+      payload: z.object({
+        file_path: z.string().min(1),
+        expected_sha256: z.string().regex(/^[a-fA-F0-9]{64}$/),
+        promoted_object_id: z.string().min(1),
+        promoted_object_type: z.literal('BUSINESS_BRAND').default('BUSINESS_BRAND'),
+      }),
+    }),
+    guardedWriteTool({
+      name: 'apple_apply_recommendations',
+      namespace: 'apple',
+      description:
+        'Apply Apple Ads v1 daily-budget or target-CPA recommendations. The provider re-queries every recommendation and policy-checks the current and proposed Money values before apply.',
+      provider: 'apple',
+      kind: 'update',
+      payload: z.object({
+        category: z.enum(['daily_budget', 'target_cpa']),
+        promoted_object_id: z.string().min(1),
+        promoted_object_type: z.enum(['APPSTORE_APP', 'BUSINESS_BRAND']),
+        recommendations: z.array(z.object({
+          id: z.string().min(1),
+          applied_amount: z.number().positive().optional(),
+          currency: z.string().length(3).optional(),
+        })).min(1),
+      }),
+    }),
+    guardedWriteTool({
+      name: 'apple_dismiss_recommendations',
+      namespace: 'apple',
+      description: 'Dismiss Apple Ads v1 daily-budget or target-CPA recommendations through the normal preview/apply gate.',
+      provider: 'apple',
+      kind: 'update',
+      payload: z.object({
+        category: z.enum(['daily_budget', 'target_cpa']),
+        promoted_object_id: z.string().min(1),
+        promoted_object_type: z.enum(['APPSTORE_APP', 'BUSINESS_BRAND']),
+        recommendation_ids: z.array(z.string().min(1)).min(1),
+      }),
+    }),
+    guardedWriteTool({
+      name: 'apple_set_bid',
+      namespace: 'apple',
+      description:
+        'Change a v1 campaign, ad-group, or keyword bid after fetching the current Money value for policy enforcement.',
+      provider: 'apple',
+      kind: 'update',
+      payload: z.object({
+        resource_type: z.enum(['campaign', 'ad_group', 'keyword']),
+        resource_id: z.string().min(1),
+        amount: z.number().positive(),
+        currency: z.string().length(3).optional(),
+      }),
+    }),
+    guardedWriteTool({
+      name: 'apple_set_shared_budget',
+      namespace: 'apple',
+      description: 'Change an Apple Ads v1 shared-budget value after fetching its current Money value.',
+      provider: 'apple',
+      kind: 'update',
+      payload: z.object({
+        shared_budget_id: z.string().min(1),
+        amount: z.number().positive(),
+        currency: z.string().length(3).optional(),
+      }),
     }),
   ];
 }

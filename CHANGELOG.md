@@ -2,6 +2,19 @@
 
 All notable changes to adport. Format loosely follows [Keep a Changelog](https://keepachangelog.com/); pre-1.0, minor versions may break.
 
+## 0.5.0 — 2026-08-15
+
+### Added
+- Complete Apple Ads Platform API v1 operation coverage, including App Store and Apple Maps resources, reports, insights, suggestions, recommendations, shared budgets, bulk keyword operations, and creative asset uploads.
+- Guarded Apple tools for recommendation actions, SHA-256-bound asset uploads, bids, and shared budgets.
+
+### Changed
+- Apple Ads now uses `api.ads.apple.com/v1`, v1 envelopes, and ad-account context instead of the retired Campaign Management API v5 wire contract.
+- Apple reads and writes retain the shared policy preview, pending-operation, budget-delta, and audit protections.
+
+### Tested
+- Apple v1 request and response contracts are covered by 17 provider tests and live read-only account, campaign, and report checks.
+
 ## 0.4.0 — 2026-08-13
 
 ### Added

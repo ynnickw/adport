@@ -47,14 +47,13 @@ export async function connectApple({ io }: { io: ProgramIO }): Promise<void> {
       data: { client_id: clientId, team_id: teamId, key_id: keyId, private_key: privateKeyPem },
     });
     io.out('');
-    io.out(`✓ Connected. ${accounts.length} organization(s):`);
+    io.out(`✓ Connected. ${accounts.length} ad account(s):`);
     for (const account of accounts) {
       io.out(`  ${account.id}  ${account.name}  ${account.currency ?? ''}  ${account.status ?? ''}`);
     }
     printLocalConnectionSaved(io);
     io.out('');
-    io.out('Heads-up: the Campaign Management API v5 sunsets 2027-01-26; adport will migrate');
-    io.out('to the new Ads Platform API when its docs go live — your credentials carry over.');
+    io.out('Using Apple Ads Platform API v1. The API-user credentials stay local.');
     io.out('');
     io.out('Try:  adport accounts   ·   adport report --provider apple   ·   adport mcp');
   } finally {

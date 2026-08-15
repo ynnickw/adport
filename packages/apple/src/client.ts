@@ -11,21 +11,17 @@ export interface AppleCredentials {
 
 const TOKEN_URL = 'https://appleid.apple.com/auth/oauth2/token';
 
-/**
- * VERSION ISOLATION: everything version-specific lives in these constants and
- * the envelope helpers. The Campaign Management API v5 sunsets 2027-01-26; the
- * successor "Apple Ads Platform API" (v1, preview July 2026) changes, per
- * Apple's preview guide: base URL → https://api.ads.apple.com/v1, envelope
- * `data` → `result`, X-AP-Context orgId= → adAccountId=, GET-all//find →
- * POST /{entity}/query, error shape → {error:{code,message,details[]}}.
- * Migrate here when the Platform API reference goes live.
- */
-export const APPLE_ADS_BASE = 'https://api.searchads.apple.com/api/v5';
+/** Apple Ads Platform API v1. The legacy Campaign Management API v5 retires 2027-01-26. */
+export const APPLE_ADS_BASE = 'https://api.ads.apple.com/v1';
 
 export interface AppleEnvelope<T> {
-  data: T;
-  pagination?: { totalResults: number; startIndex: number; itemsPerPage: number } | null;
-  error?: { errors?: Array<{ messageCode?: string; message?: string; field?: string }> } | null;
+  result: T;
+  pagination?: { offset?: number; pageSize?: number; totalCount?: number } | null;
+  error?: {
+    code?: string;
+    message?: string;
+    details?: Array<{ code?: string; message?: string }>;
+  } | null;
 }
 
 export class AppleAdsClient {
@@ -65,27 +61,31 @@ export class AppleAdsClient {
     return this.accessToken.token;
   }
 
-  /** orgId (as X-AP-Context) is required on all endpoints except /acls and /me. */
+  /** adAccountId context is required on account-scoped endpoints. */
   async request<T>(
     method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     path: string,
-    options: { orgId?: string; body?: unknown } = {},
+    options: { adAccountId?: string; body?: unknown; form?: FormData } = {},
   ): Promise<AppleEnvelope<T>> {
     const token = await this.getAccessToken();
+    if (options.body !== undefined && options.form !== undefined) {
+      throw new AdportError('INVALID_INPUT', 'Apple Ads request cannot contain both JSON and multipart bodies');
+    }
     const response = await this.fetchImpl(`${APPLE_ADS_BASE}/${path.replace(/^\//, '')}`, {
       method,
       headers: {
         authorization: `Bearer ${token}`,
-        ...(options.orgId ? { 'X-AP-Context': `orgId=${options.orgId}` } : {}),
+        accept: 'application/json',
+        ...(options.adAccountId ? { 'X-AP-Context': `adAccountId=${options.adAccountId}` } : {}),
         ...(options.body !== undefined ? { 'content-type': 'application/json' } : {}),
       },
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      body: options.form ?? (options.body === undefined ? undefined : JSON.stringify(options.body)),
     });
     const raw = await response.text();
     if (!response.ok) {
       throw new AdportError('PROVIDER_ERROR', formatAppleError(response.status, raw), safeJson(raw));
     }
-    return (raw ? JSON.parse(raw) : { data: undefined }) as AppleEnvelope<T>;
+    return (raw ? JSON.parse(raw) : { result: undefined }) as AppleEnvelope<T>;
   }
 }
 
@@ -97,17 +97,18 @@ function safeJson(raw: string): unknown {
   }
 }
 
-/** v5 error shape: {"error": {"errors": [{"messageCode", "message", "field"}]}} */
+/** v1 error shape: {"error":{"code","message","details":[{"code","message"}]}}. */
 export function formatAppleError(status: number, raw: string): string {
   const parsed = safeJson(raw) as {
-    error?: { errors?: Array<{ messageCode?: string; message?: string; field?: string }> };
+    error?: { code?: string; message?: string; details?: Array<{ code?: string; message?: string }> };
   };
-  const items = parsed?.error?.errors ?? [];
   const head = `Apple Ads API error (HTTP ${status})`;
-  if (items.length === 0) return head;
-  const lines = items.map(
-    (e) => `${e.messageCode ?? '?'}: ${e.message ?? ''}${e.field && e.field !== 'null' ? ` (field: ${e.field})` : ''}`,
-  );
-  const hint = status === 401 ? '\n  Token or org access problem — check credentials and org roles.' : '';
-  return `${head}\n  ${lines.join('\n  ')}${hint}`;
+  const error = parsed?.error;
+  if (!error) return head;
+  const lines = [
+    error.code || error.message ? `${error.code ?? '?'}: ${error.message ?? ''}` : undefined,
+    ...(error.details ?? []).map((detail) => `${detail.code ?? '?'}: ${detail.message ?? ''}`),
+  ].filter((line): line is string => Boolean(line));
+  const hint = status === 401 ? '\n  Token or ad-account access problem — check credentials and account roles.' : '';
+  return lines.length > 0 ? `${head}\n  ${lines.join('\n  ')}${hint}` : `${head}${hint}`;
 }
