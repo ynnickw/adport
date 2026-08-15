@@ -2,6 +2,11 @@
 
 All notable changes to adport. Format loosely follows [Keep a Changelog](https://keepachangelog.com/); pre-1.0, minor versions may break.
 
+## 0.5.1 — 2026-08-15
+
+### Fixed
+- Apple App Store campaign creation now sends `APPSTORE_SEARCH_RESULTS` as the `supplyPlacement` and includes the required `MANUAL_CPT`/`TAP` bid strategy, matching Apple Ads Platform API v1.
+
 ## 0.5.0 — 2026-08-15
 
 ### Added

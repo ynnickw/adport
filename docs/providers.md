@@ -95,7 +95,7 @@ Reddit uses OAuth 2.0 with a confidential developer application and requires an 
 
 1. Create a **web app** at [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps) under the Reddit user that can access the intended Ads businesses.
 2. Register an exact local redirect URI such as `http://localhost:53682`.
-3. Run `adport connect reddit` and provide the app/client ID, app secret, the exact redirect URI, and a truthful User-Agent such as `desktop:dev.adport.local:v0.5.0 (by /u/yourname)`.
+3. Run `adport connect reddit` and provide the app/client ID, app secret, the exact redirect URI, and a truthful User-Agent such as `desktop:dev.adport.local:v0.5.1 (by /u/yourname)`.
 4. Approve the requested `adsread`, `adsedit`, and `adsdatadeletion` scopes. Adport requests `duration=permanent` and stores the refresh token locally.
 5. Verify discovery with `adport accounts --provider reddit` and reporting with `adport report --provider reddit`.
 

@@ -29,7 +29,7 @@ export async function connectReddit(input: { openBrowser: boolean; io: ProgramIO
     const redirectUri = (await rl.question('Exact redirect URI [http://localhost:53682]: ')).trim()
       || 'http://localhost:53682';
     const userAgent = (await rl.question(
-      `Honest User-Agent${existing?.data.user_agent ? ' (Enter to reuse stored)' : ' (e.g. desktop:dev.adport.local:v0.5.0 (by /u/yourname))'}: `,
+      `Honest User-Agent${existing?.data.user_agent ? ' (Enter to reuse stored)' : ' (e.g. desktop:dev.adport.local:v0.5.1 (by /u/yourname))'}: `,
     )).trim() || existing?.data.user_agent || '';
     if (!clientId || !clientSecret || !userAgent) {
       input.io.err('Missing app id, app secret, or User-Agent — aborting.');

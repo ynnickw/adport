@@ -295,9 +295,10 @@ export class AppleAdsProvider implements AdProvider {
       promotedObjectId: String(payload.adam_id),
       dailyBudget: { value: { amount: String(payload.daily_budget), currency: payload.currency } },
       billingEvent: 'TAPS',
+      bidStrategy: { bidStrategyType: 'MANUAL_CPT', bidStrategyGoal: 'TAP' },
       targeting: {
         countryOrRegion: { include: payload.countries_or_regions },
-        supplySource: { include: ['APPSTORE_SEARCH_RESULTS'] },
+        supplyPlacement: { include: ['APPSTORE_SEARCH_RESULTS'] },
       },
       status,
     };

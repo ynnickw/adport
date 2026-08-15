@@ -1,6 +1,6 @@
 {
   "name": "@adport/mcp",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "adport MCP server — the open control plane for paid media",
   "license": "Apache-2.0",
   "type": "module",

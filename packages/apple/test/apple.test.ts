@@ -215,7 +215,11 @@ describe('AppleAdsProvider', () => {
     expect(body.promotedObjectId).toBe('535500008');
     expect(body.targeting).toEqual({
       countryOrRegion: { include: ['US', 'CA'] },
-      supplySource: { include: ['APPSTORE_SEARCH_RESULTS'] },
+      supplyPlacement: { include: ['APPSTORE_SEARCH_RESULTS'] },
+    });
+    expect(body.bidStrategy).toEqual({
+      bidStrategyType: 'MANUAL_CPT',
+      bidStrategyGoal: 'TAP',
     });
   });
 
