@@ -1,6 +1,6 @@
 # Deployment model
 
-Adport v0.5.1 is an open-source, local-first CLI and stdio MCP server. It is not a hosted OAuth service.
+Adport v0.5.2 is an open-source, local-first CLI and stdio MCP server. It is not a hosted OAuth service.
 
 ## Current release
 
@@ -17,7 +17,7 @@ The OAuth applications used for local testing are development fixtures. Their to
 
 A future managed service may provide reviewed provider applications and hosted OAuth callbacks. A customer would authorize an advertising account through an Adport-owned application, and the service would store that customer's credentials in an encrypted, tenant-isolated vault.
 
-That service requires work which is deliberately outside v0.5.1:
+That service requires work which is deliberately outside v0.5.2:
 
 - hosted OAuth callback and state validation;
 - encrypted, tenant-isolated token storage and rotation;

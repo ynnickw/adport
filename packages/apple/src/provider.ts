@@ -245,6 +245,10 @@ export class AppleAdsProvider implements AdProvider {
     switch (op.tool) {
       case 'apple_create_campaign':
         return this.planCreateCampaign(op.accountId, payload, guard);
+      case 'apple_create_ad_group':
+        return this.planCreateAdGroup(op.accountId, payload, guard);
+      case 'apple_create_keyword':
+        return this.planCreateKeyword(op.accountId, payload, guard);
       case 'apple_set_campaign_status':
         return this.planSetStatus(op.accountId, payload);
       case 'apple_set_budget':
@@ -338,6 +342,106 @@ export class AppleAdsProvider implements AdProvider {
     };
   }
 
+  private async planCreateAdGroup(
+    adAccountId: string,
+    payload: {
+      campaign_id: string;
+      name: string;
+      bid: number;
+      currency: string;
+      status?: 'ENABLED' | 'PAUSED';
+      device_classes?: Array<'IPHONE' | 'IPAD'>;
+      automated_keywords_opt_in?: boolean;
+      start_time?: string;
+      end_time?: string;
+    },
+    guard: WriteGuard,
+  ): Promise<WritePlan> {
+    const coercions: string[] = [];
+    let status = payload.status ?? 'ENABLED';
+    if (guard.forcePausedCreation && status === 'ENABLED') {
+      status = 'PAUSED';
+      coercions.push('status coerced to PAUSED by policy (paused_creation)');
+    }
+    const body = {
+      campaignId: Number(payload.campaign_id),
+      name: payload.name,
+      pricingModel: 'CPT',
+      status,
+      bidStrategy: {
+        bidStrategyType: 'MANUAL_CPT',
+        bidStrategyGoal: 'TAP',
+        bid: { amount: String(payload.bid), currency: payload.currency },
+      },
+      ...(payload.device_classes?.length
+        ? { targeting: { deviceClass: { include: payload.device_classes } } }
+        : {}),
+      ...(payload.automated_keywords_opt_in !== undefined
+        ? { automatedKeywordsOptIn: payload.automated_keywords_opt_in }
+        : {}),
+      ...(payload.start_time ? { startTime: payload.start_time } : {}),
+      ...(payload.end_time ? { endTime: payload.end_time } : {}),
+    };
+    return {
+      summary: `Create Apple Ads ad group "${payload.name}" (${status}) — bid ${payload.bid} ${payload.currency}`,
+      changes: [`+ ad group "${payload.name}" campaign=${payload.campaign_id} status=${status}`],
+      coercions,
+      budgetDeltas: [{
+        target: `new ad group "${payload.name}" bid`,
+        toMicros: payload.bid * UNITS_TO_MICROS,
+      }],
+      execute: async () => {
+        const envelope = await this.client.request<{ id?: number }>('POST', 'adgroups', { adAccountId, body });
+        return envelope.result?.id ? [String(envelope.result.id)] : [];
+      },
+    };
+  }
+
+  private async planCreateKeyword(
+    adAccountId: string,
+    payload: {
+      ad_group_id: string;
+      text: string;
+      match_type: 'BROAD' | 'EXACT';
+      bid?: number;
+      currency?: string;
+      status?: 'ENABLED' | 'PAUSED';
+    },
+    guard: WriteGuard,
+  ): Promise<WritePlan> {
+    const coercions: string[] = [];
+    let status = payload.status ?? 'ENABLED';
+    if (guard.forcePausedCreation && status === 'ENABLED') {
+      status = 'PAUSED';
+      coercions.push('status coerced to PAUSED by policy (paused_creation)');
+    }
+    if ((payload.bid === undefined) !== (payload.currency === undefined)) {
+      throw new AdportError('INVALID_INPUT', 'apple: keyword bid and currency must be provided together');
+    }
+    const body = {
+      adGroupId: Number(payload.ad_group_id),
+      text: payload.text,
+      matchType: payload.match_type,
+      status,
+      ...(payload.bid !== undefined && payload.currency
+        ? { bid: { amount: String(payload.bid), currency: payload.currency } }
+        : {}),
+    };
+    return {
+      summary: `Create Apple Ads ${payload.match_type.toLowerCase()} keyword "${payload.text}" (${status})`,
+      changes: [`+ keyword "${payload.text}" adGroup=${payload.ad_group_id} match=${payload.match_type} status=${status}`],
+      coercions,
+      budgetDeltas: payload.bid === undefined ? [] : [{
+        target: `new keyword "${payload.text}" bid`,
+        toMicros: payload.bid * UNITS_TO_MICROS,
+      }],
+      execute: async () => {
+        const envelope = await this.client.request<{ id?: number }>('POST', 'keywords', { adAccountId, body });
+        return envelope.result?.id ? [String(envelope.result.id)] : [];
+      },
+    };
+  }
+
   private async planSetBudget(
     adAccountId: string,
     payload: { campaign_id: string; daily_budget: number },
@@ -382,7 +486,12 @@ export class AppleAdsProvider implements AdProvider {
       coercions,
       budgetDeltas,
       execute: async () => {
-        const envelope = await this.client.request<unknown>('POST', path, { adAccountId, body });
+        // Ad-account creation is org-scoped. Apple explicitly rejects the
+        // account context used by every other create endpoint.
+        const envelope = await this.client.request<unknown>('POST', path, {
+          ...(path === 'ad-accounts' ? {} : { adAccountId }),
+          body,
+        });
         return extractResourceIds(envelope.result);
       },
     };

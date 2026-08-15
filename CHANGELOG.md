@@ -2,6 +2,19 @@
 
 All notable changes to adport. Format loosely follows [Keep a Changelog](https://keepachangelog.com/); pre-1.0, minor versions may break.
 
+## 0.5.2 — 2026-08-15
+
+### Fixed
+- Apple Ads Platform API v1 ad-group creation now uses the documented `pricingModel` and `bidStrategy.bid` shape instead of legacy bid fields.
+- Apple ad-account creation no longer sends an account-scoped context header.
+- Campaign creation matches Apple's live-proven App Store Search request contract.
+
+### Added
+- Typed, policy-guarded Apple ad-group and keyword creation tools with paused-by-default creation and bid-delta enforcement.
+
+### Tested
+- Apple v1 wire contracts now have 19 provider tests; the complete 147-test workspace, build, and typecheck gates pass.
+
 ## 0.5.1 — 2026-08-15
 
 ### Fixed

@@ -64,6 +64,43 @@ export function appleTools(provider: AppleAdsProvider): AnyToolDefinition[] {
       payload: z.object({ campaign_id: z.string(), status: statusSchema }),
     }),
     guardedWriteTool({
+      name: 'apple_create_ad_group',
+      namespace: 'apple',
+      description:
+        'Create an Apple Ads Platform API v1 App Store ad group using CPT pricing and a MANUAL_CPT/TAP bid strategy. The typed tool emits the documented bidStrategy.bid Money shape.',
+      provider: 'apple',
+      kind: 'create',
+      payload: z.object({
+        campaign_id: z.string().min(1),
+        name: z.string().min(1),
+        bid: z.number().positive(),
+        currency: z.string().length(3),
+        status: statusSchema.optional(),
+        device_classes: z.array(z.enum(['IPHONE', 'IPAD'])).min(1).optional(),
+        automated_keywords_opt_in: z.boolean().optional(),
+        start_time: z.string().min(1).optional(),
+        end_time: z.string().min(1).optional(),
+      }),
+    }),
+    guardedWriteTool({
+      name: 'apple_create_keyword',
+      namespace: 'apple',
+      description:
+        'Create a documented Apple Ads Platform API v1 keyword. Omit bid and currency together to inherit the ad-group bid.',
+      provider: 'apple',
+      kind: 'create',
+      payload: z.object({
+        ad_group_id: z.string().min(1),
+        text: z.string().min(1),
+        match_type: z.enum(['BROAD', 'EXACT']),
+        bid: z.number().positive().optional(),
+        currency: z.string().length(3).optional(),
+        status: statusSchema.optional(),
+      }).refine((value) => (value.bid === undefined) === (value.currency === undefined), {
+        message: 'bid and currency must be provided together',
+      }),
+    }),
+    guardedWriteTool({
       name: 'apple_set_budget',
       namespace: 'apple',
       description: "Change an Apple Ads campaign's daily budget (float, whole currency units).",
@@ -75,7 +112,9 @@ export function appleTools(provider: AppleAdsProvider): AnyToolDefinition[] {
       name: 'apple_api_create',
       namespace: 'apple',
       description:
-        'Create a documented Apple Ads Platform API v1 entity using a relative endpoint and API-shaped body. Also supports keyword and negative-keyword bulk-create. Created ENABLED statuses are coerced to PAUSED; budget/bid Money fields are reported to policy.',
+        'Create a documented Apple Ads Platform API v1 entity using a relative endpoint and API-shaped body. ' +
+        'For adgroups, v1 requires pricingModel and bidStrategy.bid Money; defaultBid and defaultBidAmount are not v1 fields. ' +
+        'Also supports keyword and negative-keyword bulk-create. Created ENABLED statuses are coerced to PAUSED; budget/bid Money fields are reported to policy.',
       provider: 'apple',
       kind: 'create',
       payload: z.object({

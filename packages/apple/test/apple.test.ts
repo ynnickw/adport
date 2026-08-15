@@ -90,10 +90,10 @@ describe('AppleAdsClient', () => {
   it('formats v1 errors with top-level and detailed codes', () => {
     const message = formatAppleError(
       400,
-      JSON.stringify({ error: { code: 'INVALID_REQUEST', message: 'Invalid request', details: [{ code: 'INVALID_BID', message: 'bidStrategy.bidAmount is invalid' }] } }),
+      JSON.stringify({ error: { code: 'INVALID_REQUEST', message: 'Invalid request', details: [{ code: 'INVALID_BID', message: 'bidStrategy.bid is invalid' }] } }),
     );
     expect(message).toContain('INVALID_REQUEST: Invalid request');
-    expect(message).toContain('INVALID_BID: bidStrategy.bidAmount is invalid');
+    expect(message).toContain('INVALID_BID: bidStrategy.bid is invalid');
   });
 });
 
@@ -289,15 +289,112 @@ describe('AppleAdsProvider', () => {
       kind: 'create' as const,
       payload: {
         path: 'adgroups',
-        body: { campaignId: 542370642, name: 'Exact', status: 'ENABLED', defaultBidAmount: { amount: '2.5', currency: 'USD' } },
+        body: {
+          campaignId: 542370642,
+          name: 'Exact',
+          pricingModel: 'CPT',
+          status: 'ENABLED',
+          bidStrategy: {
+            bidStrategyType: 'MANUAL_CPT',
+            bidStrategyGoal: 'TAP',
+            bid: { amount: '2.5', currency: 'USD' },
+          },
+        },
       },
     };
     const preview = await provider.previewWrite(op, { forcePausedCreation: true });
     expect(preview.coercions).toHaveLength(1);
-    expect(preview.budgetDeltas).toEqual([{ target: 'body.defaultBidAmount', toMicros: 2_500_000 }]);
+    expect(preview.budgetDeltas).toEqual([{ target: 'body.bidStrategy.bid', toMicros: 2_500_000 }]);
     await provider.applyWrite(op, { forcePausedCreation: true });
     const body = JSON.parse(String(calls.find((call) => call.url.endsWith('/adgroups'))!.init.body));
     expect(body.status).toBe('PAUSED');
+  });
+
+  it('creates ad accounts without an account-scoped context header', async () => {
+    const { impl, calls } = fakeFetch([
+      tokenRoute,
+      {
+        match: (url) => url.endsWith('/v1/ad-accounts'),
+        reply: { result: { id: 123456789 }, pagination: null, error: null },
+      },
+    ]);
+    const provider = new AppleAdsProvider(new AppleAdsClient(CREDS, impl));
+    const op = {
+      tool: 'apple_api_create',
+      provider: 'apple',
+      accountId: 'policy-scope',
+      kind: 'create' as const,
+      payload: {
+        path: 'ad-accounts',
+        body: {
+          name: 'AwayFinder Ad Account',
+          productFeatures: ['APPSTORE_APP_MANUAL'],
+          delegations: [{ resourceId: '12345678', resourceType: 'CONTENT_PROVIDER' }],
+        },
+      },
+    };
+    await provider.applyWrite(op, { forcePausedCreation: true });
+    const create = calls.find((call) => call.url.endsWith('/ad-accounts'))!;
+    expect((create.init.headers as Record<string, string>)['X-AP-Context']).toBeUndefined();
+  });
+
+  it('uses typed v1 contracts for ad-group and keyword creation', async () => {
+    const { impl, calls } = fakeFetch([
+      tokenRoute,
+      {
+        match: (url) => url.endsWith('/v1/adgroups'),
+        reply: { result: { id: 555666777 }, pagination: null, error: null },
+      },
+      {
+        match: (url) => url.endsWith('/v1/keywords'),
+        reply: { result: { id: 888999000 }, pagination: null, error: null },
+      },
+    ]);
+    const provider = new AppleAdsProvider(new AppleAdsClient(CREDS, impl));
+    const adGroup = {
+      tool: 'apple_create_ad_group', provider: 'apple', accountId: '40669820', kind: 'create' as const,
+      payload: {
+        campaign_id: '444555666', name: 'AwayFinder Brand', bid: 2.5, currency: 'USD',
+        status: 'ENABLED' as const, device_classes: ['IPHONE' as const],
+      },
+    };
+    expect((await provider.previewWrite(adGroup, { forcePausedCreation: true })).budgetDeltas).toEqual([{
+      target: 'new ad group "AwayFinder Brand" bid', toMicros: 2_500_000,
+    }]);
+    await provider.applyWrite(adGroup, { forcePausedCreation: true });
+    const adGroupBody = JSON.parse(String(calls.find((call) => call.url.endsWith('/adgroups'))!.init.body));
+    expect(adGroupBody).toEqual({
+      campaignId: 444555666,
+      name: 'AwayFinder Brand',
+      pricingModel: 'CPT',
+      status: 'PAUSED',
+      bidStrategy: {
+        bidStrategyType: 'MANUAL_CPT',
+        bidStrategyGoal: 'TAP',
+        bid: { amount: '2.5', currency: 'USD' },
+      },
+      targeting: { deviceClass: { include: ['IPHONE'] } },
+    });
+
+    const keyword = {
+      tool: 'apple_create_keyword', provider: 'apple', accountId: '40669820', kind: 'create' as const,
+      payload: {
+        ad_group_id: '555666777', text: 'photo editor', match_type: 'EXACT' as const,
+        bid: 3.75, currency: 'USD', status: 'ENABLED' as const,
+      },
+    };
+    expect((await provider.previewWrite(keyword, { forcePausedCreation: true })).budgetDeltas).toEqual([{
+      target: 'new keyword "photo editor" bid', toMicros: 3_750_000,
+    }]);
+    await provider.applyWrite(keyword, { forcePausedCreation: true });
+    const keywordBody = JSON.parse(String(calls.find((call) => call.url.endsWith('/keywords'))!.init.body));
+    expect(keywordBody).toEqual({
+      adGroupId: 555666777,
+      text: 'photo editor',
+      matchType: 'EXACT',
+      status: 'PAUSED',
+      bid: { amount: '3.75', currency: 'USD' },
+    });
   });
 
   it('rejects monetary generic updates and permits guarded deletes', async () => {
