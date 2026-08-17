@@ -29,8 +29,9 @@ const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
 const secretKey = process.env.SUPABASE_SECRET_KEY!;
 const admin = createClient(url, secretKey, { auth: { persistSession: false, autoRefreshToken: false } });
+const describeDatabase = process.env.ADPORT_RUN_DATABASE_TESTS === '1' ? describe : describe.skip;
 
-describe('Supabase tenant boundary', () => {
+describeDatabase('Supabase tenant boundary', () => {
   const password = 'Local-Test-Passw0rd!';
   const users: string[] = [];
   let firstUserId: string;

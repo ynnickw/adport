@@ -13,6 +13,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    setupFiles: ['./test/setup-env.ts'],
     testTimeout: 20_000,
     hookTimeout: 20_000,
     sequence: { concurrent: false },
