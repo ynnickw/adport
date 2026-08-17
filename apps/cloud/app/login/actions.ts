@@ -1,6 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { env } from '@/lib/env';
 import { createClient } from '@/lib/supabase/server';
 
 function credentials(formData: FormData) {
@@ -21,10 +22,14 @@ export async function signUp(formData: FormData) {
   const supabase = await createClient();
   const input = credentials(formData);
   const displayName = String(formData.get('display_name') ?? '').trim();
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     ...input,
-    options: { data: { full_name: displayName || input.email.split('@')[0] } },
+    options: {
+      data: { full_name: displayName || input.email.split('@')[0] },
+      emailRedirectTo: `${env().ADPORT_CLOUD_BASE_URL}/auth/callback`,
+    },
   });
   if (error) redirect(`/login?error=${encodeURIComponent(error.message)}`);
-  redirect('/dashboard');
+  if (data.session) redirect('/dashboard');
+  redirect('/login?message=Check+your+email+to+confirm+your+account');
 }
