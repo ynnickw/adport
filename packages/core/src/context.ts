@@ -21,6 +21,8 @@ export interface CreateContextOptions {
    * misconfigured live runtime cannot silently substitute synthetic accounts.
    */
   includeMock?: boolean;
+  /** Hosted runtimes inject a tenant-scoped engine with durable database stores. */
+  engine?: PolicyEngine;
 }
 
 export interface AdportRuntime {
@@ -35,7 +37,7 @@ export async function createContext(options: CreateContextOptions = {}): Promise
 
   const providers = new ProviderRegistry();
   const { policy, source } = await loadPolicy(options.policyPath);
-  const engine = new PolicyEngine(policy);
+  const engine = options.engine ?? new PolicyEngine(policy);
   const credentials = new CredentialStore();
 
   const registry = new ToolRegistry();

@@ -1,35 +1,60 @@
 # Deployment model
 
-Adport v0.5.2 is an open-source, local-first CLI and stdio MCP server. It is not a hosted OAuth service.
+Adport has one shared provider/tool/policy layer and two deployment modes. The self-hosted CLI remains local and bring-your-own-credentials. The managed cloud application is implemented in `apps/cloud` and is currently intended to be run and verified locally before a production deployment.
 
-## Current release
+## Self-hosted mode
 
-- Operators bring their own provider credentials and run `adport connect <provider>` locally.
-- Credentials are written to `${ADPORT_HOME:-~/.config/adport}/credentials.json` with file mode `0600`.
-- Provider API calls go directly from the operator's machine to the selected advertising platform.
-- The MCP server uses stdio. Remote HTTP transport is intentionally not included.
-- Mutations use the same policy engine as the CLI: preview first, then apply with an identical pending-operation token.
-- Adport sends no telemetry.
+- The operator runs the CLI and stdio MCP server on infrastructure they control.
+- Provider credentials remain in `${ADPORT_HOME:-~/.config/adport}/credentials.json` with file mode `0600`.
+- Provider calls go directly from that installation to the advertising platform.
+- Pending operations and audit JSONL files remain local.
+- No Adport Cloud account, Supabase project, hosted OAuth callback, or remote MCP endpoint is involved.
 
-The OAuth applications used for local testing are development fixtures. Their tokens and platform configuration are not shared with installations and are not part of the repository.
+## Cloud mode
 
-## Planned managed cloud
+The cloud application is a Next.js 16 service backed by Supabase Auth and Postgres.
 
-A future managed service may provide reviewed provider applications and hosted OAuth callbacks. A customer would authorize an advertising account through an Adport-owned application, and the service would store that customer's credentials in an encrypted, tenant-isolated vault.
+1. Supabase Auth establishes the user session.
+2. Every request resolves an organization membership and role on the server.
+3. Browser reads use explicit RLS policies and least-privilege PostgREST grants.
+4. Transactional server work uses the restricted `adport_backend` database role. It cannot read the Auth schema directly; narrowly scoped security-definer functions provide member lookup.
+5. Provider credentials are encrypted with AES-256-GCM using tenant/provider-bound additional authenticated data. OAuth state is hashed, one-time, PKCE-bound, and expires after 10 minutes.
+6. A tenant runtime decrypts only that organization's connected providers and constructs the existing provider modules.
+7. REST and remote MCP call the same `ToolRegistry` and `PolicyEngine` as the CLI. There is no cloud-only mutation path.
+8. Pending approvals and audit events are persisted in Postgres. The exact operation hash, tenant, provider, expiry, and policy are checked again before apply.
 
-That service requires work which is deliberately outside v0.5.2:
+The cloud runtime supports Google, Meta, TikTok, Apple, Microsoft, and Reddit providers. Google uses a hosted OAuth web flow requesting only `https://www.googleapis.com/auth/adwords`. The other providers can use encrypted BYO credentials while their reviewed hosted applications and delegated authorization flows are prepared. Microsoft and Reddit refresh-token rotations are persisted immediately.
 
-- hosted OAuth callback and state validation;
-- encrypted, tenant-isolated token storage and rotation;
-- tenant authentication and authorization;
-- provider app review, publisher verification, and production redirect configuration;
-- a remote service transport and operational controls;
-- cloud-specific privacy, retention, deletion, and incident-response policies.
+## Tenant and service controls
 
-The managed service must continue to route every write through the shared Adport policy engine. It must not introduce a mutation path that bypasses preview, confirmation, budget limits, paused creation, or audit logging.
+- Personal organizations are created by an Auth trigger; memberships use owner, admin, member, and viewer roles.
+- Owners and admins can invite members. Only owners can grant admin access, and the final owner cannot be removed or demoted.
+- API keys are random bearer secrets shown once; only a keyed digest and prefix are stored. MCP tool discovery is filtered by the key's read/write scopes.
+- Requests are rate-limited by a keyed subject hash.
+- Provider secrets, encryption keys, Supabase administrative keys, and OAuth client secrets are server-only.
+- Google disconnect revokes at Google before deleting the local encrypted refresh token. If revocation fails, the token remains available for retry.
+- Manual-provider disconnect removes the encrypted copy and explicitly tells the user that provider-side revocation is still required.
+- Safety settings and member changes commit atomically with their audit event.
+- Audit, pending-operation, OAuth-transaction, and rate-limit retention is enforced by a scheduled Postgres job.
+- Organization deletion cascades through tenant data and deletes the Auth user when no memberships remain.
 
-## Provider authorization models
+## Local cryptography and production key management
 
-Google, Meta, TikTok, and Microsoft can support a hosted authorization experience once their production applications are approved. Apple Ads currently uses an API user, an uploaded public key, and locally signed ES256 client credentials; cloud onboarding therefore requires a key or delegated API-user workflow unless Apple exposes a suitable delegated authorization flow.
+Local development reads a 256-bit master key from `ADPORT_CLOUD_ENCRYPTION_KEY`. This keeps the local stack reproducible but is not the intended production key-delivery mechanism.
 
-The self-hosted CLI will remain bring-your-own-credentials even after a managed service exists.
+Before production, provide that value through a managed secret/KMS boundary, restrict decrypt permission to the cloud runtime identity, define rotation and recovery procedures, and record the key version stored with each ciphertext. A production database login should inherit only `adport_backend`; do not run application queries as a database owner. Use TLS for browser, API, database, and provider traffic.
+
+## Production gates
+
+The local implementation is not itself authorization to launch publicly. A production rollout still requires:
+
+- a hosted Supabase project and dedicated backend database login;
+- managed secrets/KMS, backup policy, monitoring, alerting, and incident response;
+- exact production domains, OAuth redirect URIs, CSP and edge rate limits;
+- reviewed/approved provider applications and production developer access;
+- the published privacy policy, terms, deletion path, and subprocessor records;
+- Google OAuth verification evidence: exact scope match, public/unlisted end-to-end video, reviewer credentials, clear navigation instructions, and source-account proof for demonstrated writes/removals;
+- a staging project for unverified OAuth changes so production users are not exposed to unverified scopes; and
+- restore, revocation, retention, tenant-isolation, and operational runbooks tested before launch.
+
+Apple Ads uses an API-user public-key workflow rather than interactive delegated OAuth. A managed Apple connection therefore remains an encrypted key/API-user workflow unless Apple provides a suitable delegated flow.

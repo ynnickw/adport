@@ -82,4 +82,21 @@ describe('adport MCP server', () => {
     const parsed = textOf(result as never) as { error: string };
     expect(parsed.error).toBe('POLICY_VIOLATION');
   });
+
+  it('omits tools outside a remote API key scope', async () => {
+    const runtime = await createContext({ includeMock: true });
+    const scopedServer = createMcpServer({ runtime, scopes: ['tools:read'] });
+    const [scopedClientTransport, scopedServerTransport] = InMemoryTransport.createLinkedPair();
+    const scopedClient = new Client({ name: 'read-only-client', version: '0.0.0' });
+    await Promise.all([scopedServer.connect(scopedServerTransport), scopedClient.connect(scopedClientTransport)]);
+    try {
+      const names = (await scopedClient.listTools()).tools.map((tool) => tool.name);
+      expect(names).toContain('accounts_list');
+      expect(names).toContain('mock_list_campaigns');
+      expect(names).not.toContain('mock_set_budget');
+      expect(names).not.toContain('mock_remove_campaign');
+    } finally {
+      await scopedClient.close();
+    }
+  });
 });

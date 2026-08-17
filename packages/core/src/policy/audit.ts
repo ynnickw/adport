@@ -14,8 +14,13 @@ export interface AuditEntry {
   details?: unknown;
 }
 
+/** Append-only persistence contract shared by local and hosted runtimes. */
+export interface AuditEntryStore {
+  append(entry: Omit<AuditEntry, 'ts'>): Promise<void>;
+}
+
 /** Append-only JSONL, one file per month: ${ADPORT_HOME}/audit/audit-YYYY-MM.jsonl */
-export class AuditLog {
+export class AuditLog implements AuditEntryStore {
   constructor(private readonly dir: string = path.join(adportHome(), 'audit')) {}
 
   private file(now = new Date()): string {

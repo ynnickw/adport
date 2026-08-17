@@ -1,0 +1,2 @@
+-- Development data is created through Supabase Auth so the auth trigger and RLS
+-- path are exercised rather than bypassed with direct inserts.

@@ -1,6 +1,6 @@
 # Write safety and audit contract
 
-Every Adport mutation uses the same `ToolRegistry` definition and the same policy engine, whether invoked from the CLI or the stdio MCP server. A provider or adapter must not expose a separate write path.
+Every Adport mutation uses the same `ToolRegistry` definition and the same policy engine, whether invoked from the CLI, stdio MCP server, cloud REST API, or remote MCP endpoint. A provider or adapter must not expose a separate write path.
 
 ## Two-step operation
 
@@ -8,7 +8,7 @@ Every Adport mutation uses the same `ToolRegistry` definition and the same polic
 2. Review the summary, field changes, coercions, and budget deltas.
 3. Call the same tool with identical arguments and the returned pending id. Adport rejects expired ids, provider or argument mismatches, newly protected accounts, and policy violations. Only then can the provider apply the plan.
 
-Pending operations are file-backed under `${ADPORT_HOME:-~/.config/adport}/pending/` and expire after the configured TTL (15 minutes by default). The operation hash covers tool, provider, account, operation kind, and canonicalized payload.
+Self-hosted pending operations are file-backed under `${ADPORT_HOME:-~/.config/adport}/pending/`. Cloud pending operations are tenant-scoped Postgres rows. Both expire after the configured TTL (15 minutes by default), and both bind the tool, provider, account, operation kind, and canonicalized payload into the operation hash.
 
 ## Policy controls
 
@@ -24,7 +24,7 @@ Provider-native validation is used where available, but a provider dry run is no
 
 ## Append-only audit trail
 
-Audit files live under `${ADPORT_HOME:-~/.config/adport}/audit/` as monthly `audit-YYYY-MM.jsonl` files. Each entry contains:
+Self-hosted audit files live under `${ADPORT_HOME:-~/.config/adport}/audit/` as monthly `audit-YYYY-MM.jsonl` files. Cloud audit events use an organization-scoped Postgres identity table and include the actor user or API key. Each write entry contains:
 
 - `ts`: ISO timestamp;
 - `event`: `validated`, `applied`, `rejected`, or `note`;
@@ -35,4 +35,4 @@ Audit files live under `${ADPORT_HOME:-~/.config/adport}/audit/` as monthly `aud
 
 `adport audit note` appends a record for a relevant change made outside Adport. `adport audit export` reads the source log and emits JSONL or a JSON array to stdout; it never rewrites the original files.
 
-The local log is append-only by application behavior, not tamper-evident storage. Archive exports in an access-controlled system if regulatory retention, immutability, signatures, or centralized review is required.
+The local log is append-only by application behavior, not tamper-evident storage. Cloud rows are not exposed for browser mutation and are deleted only by configured retention or tenant deletion. Archive exports in an access-controlled system if regulatory retention, immutability, signatures, or centralized review is required.

@@ -36,15 +36,19 @@ export interface CreateServerOptions {
   runtime: AdportRuntime;
   name?: string;
   version?: string;
+  /** When set by a remote transport, only register tools authorized by this key. */
+  scopes?: readonly string[];
 }
 
 /**
  * Thin adapter: every tool in the shared registry becomes an MCP tool.
  * No tool logic lives here — see the "one tool-definition layer" principle.
  */
-export function createMcpServer({ runtime, name = 'adport', version = packageJson.version }: CreateServerOptions): McpServer {
+export function createMcpServer({ runtime, name = 'adport', version = packageJson.version, scopes }: CreateServerOptions): McpServer {
   const server = new McpServer({ name, version });
   for (const tool of runtime.registry.list()) {
+    const requiredScope = tool.annotations.readOnly ? 'tools:read' : 'tools:write';
+    if (scopes && !scopes.includes(requiredScope)) continue;
     server.registerTool(
       tool.name,
       {
