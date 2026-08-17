@@ -4,7 +4,7 @@
 
 I built adport because I wanted an agent to help with ad operations, but I did not want a prompt to be the only thing standing between the agent and an expensive change.
 
-adport is an Apache-2.0 CLI and local MCP server. It connects to your own ad accounts, gives every client the same typed tools, normalizes reporting across providers, and makes every write show a preview before the exact approved change can run. Credentials stay on your machine and there is no telemetry.
+adport is an Apache-2.0 CLI, local MCP server, and locally runnable cloud application. It connects to your ad accounts, gives every client the same typed tools, normalizes reporting across providers, and makes every write show a preview before the exact approved change can run. The released CLI remains self-hosted with credentials on your machine and no telemetry; the cloud application is implemented for local verification but is not yet a public production service.
 
 Google Ads, Apple Ads, and Microsoft Advertising have been exercised against live accounts. Meta and TikTok are implemented, but still need more testing with advertisers who use them day to day. If that is you, I would love to test and improve the integration with you.
 
@@ -56,7 +56,7 @@ adport connect reddit
 
 These are deliberately **local/BYO** connections. You create and own each provider app, developer token, or API key; the CLI talks directly to the provider and writes secrets only to `${ADPORT_HOME:-~/.config/adport}/credentials.json` with mode `0600`. Adport Cloud and its hosted OAuth broker are not involved. Provider review, consent warnings, and tenant policies therefore belong to your provider app. Remove a stored connection with `adport disconnect <provider>`; revoke the credential separately at the provider when necessary.
 
-The future Adport Cloud onboarding is a separate flow: it will use Adport's approved platform apps and hosted OAuth broker for a verified, one-click connection.
+The cloud application in `apps/cloud` is a separate flow. Google uses a hosted OAuth broker with the single Google Ads scope; all six providers share an encrypted tenant vault and remote REST/MCP runtime. Non-Google providers currently use encrypted BYO credentials until their reviewed hosted applications and delegated flows are production-ready.
 
 The complete credential and authorization checklist is in [docs/providers.md](./docs/providers.md). Never commit provider tokens, app secrets, refresh tokens, or private keys.
 
@@ -109,11 +109,11 @@ Policy lives at `~/.config/adport/policy.yaml`; credentials live at `~/.config/a
 | Google Ads | GAQL and normalized reports | campaigns, ad groups, keywords, RSAs, budgets, bidding | `validate_only` | exercised against a live account |
 | Meta Ads | Insights and normalized reports | campaigns, ad sets, budgets, status | `execution_options=["validate_only"]` | needs more real-account testing |
 | TikTok Ads | reporting and normalized reports | campaigns, budgets, status | client-side preview; sandbox available | needs sandbox and production testers |
-| Apple Ads | Platform API v1 queries, insights, recommendations, suggestions, reports, and normalized reports | all v1 campaign resources, guarded recommendation actions, asset uploads | client-side preview | v5 exercised against a live account; v1 wire contract locally verified |
+| Apple Ads | campaign reports and normalized reports | campaigns, budgets, status | client-side preview | exercised against a live account |
 | Microsoft Advertising | asynchronous reports and normalized reports | campaigns, budgets, status | client-side preview; sandbox available | exercised against a live account |
 | Reddit Ads | v3 reports and normalized reports | campaigns, CBO budgets, status | client-side preview | wire schemas verified; needs a real-account tester |
 
-Apple uses the Apple Ads Platform API v1 at `api.ads.apple.com/v1`. The provider covers the complete published v1 operation surface, including App Store and Apple Maps resources, insights, recommendations, shared budgets, bulk keyword operations, and SHA-bound multipart asset uploads. The retired Campaign Management API v5 is no longer used.
+Apple Campaign Management API v5 sunsets in January 2027. Its client is version-isolated so the future Ads Platform API migration does not leak into the shared tool layer.
 
 ## Help test a provider
 
@@ -155,11 +155,11 @@ adport audit export --format json > adport-audit.json
 
 The policy contract and audit event schema are documented in [docs/write-safety.md](./docs/write-safety.md).
 
-## Local now, cloud later
+## Self-hosted and cloud modes
 
-Today, adport is the terminal product: a local CLI and stdio MCP server using your own provider credentials. There is no dashboard, hosted token broker, remote MCP endpoint, or multi-tenant credential vault.
+The CLI and stdio MCP server remain local and BYO. They do not contact Adport Cloud.
 
-A managed cloud version may come later with reviewed provider applications and hosted OAuth callbacks. It will not replace the self-hosted CLI or create a second tool-definition or write path. See [docs/deployment-model.md](./docs/deployment-model.md) for the boundary.
+The repository now also contains a Next.js/Supabase cloud control center with tenant authentication and roles, RLS, encrypted multi-provider credentials, Google OAuth with PKCE/state, scoped API keys, a remote MCP endpoint, persistent pending approvals/audit events, retention, revocation, and organization deletion. It reuses the same provider modules, tool registry, and policy engine; it does not create a second write path. The implementation is local-first and still has explicit production gates. See [docs/deployment-model.md](./docs/deployment-model.md) and [docs/cloud-local-development.md](./docs/cloud-local-development.md).
 
 ## Development
 
@@ -171,6 +171,11 @@ pnpm install
 pnpm build
 pnpm test
 pnpm typecheck
+
+# Optional local cloud stack
+supabase start
+supabase db reset --local --yes
+pnpm --filter @adport/cloud dev
 ```
 
 Repository layout:
@@ -186,6 +191,10 @@ packages/
   reddit/     Reddit Ads API v3 provider
   mcp/        stdio MCP adapter over the shared registry
   cli/        npm CLI over the shared registry
+apps/
+  cloud/      Next.js/Supabase tenant dashboard, OAuth broker, REST, and remote MCP
+supabase/
+  migrations/ tenant schema, RLS, backend grants, retention, and database tests
 ```
 
 Provider tests assert outgoing API wire formats, unit conversions, headers, and validation behavior. Every new write path must go through the shared policy engine.

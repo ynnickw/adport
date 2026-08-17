@@ -2,7 +2,7 @@
 
 Adport stores credentials locally in `${ADPORT_HOME:-~/.config/adport}/credentials.json` with file mode `0600`. Do not paste credentials into issues, commit them to Git, or place them in shell history. Run `adport doctor` after connecting a provider.
 
-Every connection below is bring-your-own (BYO): you own the provider-side application and Adport communicates directly from your machine to that provider. The hosted Adport Cloud OAuth broker is not used. A provider may therefore show your application name, contact email, verification status, or organization policy during authorization. This is distinct from the future verified, one-click Adport Cloud flow.
+The CLI connection commands below are bring-your-own (BYO): you own the provider-side application and Adport communicates directly from your machine to that provider. The hosted Adport Cloud broker is not used by these commands. The locally runnable cloud application is documented separately in [cloud-local-development.md](./cloud-local-development.md): Google uses its hosted OAuth broker, while the other providers currently accept encrypted BYO credentials in the tenant vault.
 
 For a source checkout, replace `adport` below with `node packages/cli/dist/index.js` after `pnpm build`.
 
@@ -13,7 +13,7 @@ For a source checkout, replace `adport` below with `node packages/cli/dist/index
 | Google | Google Ads API v25 | `google_gaql` covers every GAQL resource and field available to the credential | `google_api_create`, `google_api_update`, and `google_api_remove` route to v25 mutate services |
 | Meta | Marketing API v25.0 | `meta_api_read` covers ad-account edges; `meta_insights` is the reporting convenience tool | `meta_api_create`, `meta_api_update`, and `meta_api_delete` cover account-owned Marketing API objects |
 | TikTok | Business API v1.3 | `tiktok_api_read` covers documented GET endpoints | `tiktok_api_create`, `tiktok_api_update`, and `tiktok_api_delete` cover endpoints with the matching action suffix |
-| Apple | Apple Ads Platform API v1 | `apple_api_read` covers every published GET, `/query`, report, insight, suggestion, eligibility, and recommendation-query operation | typed campaigns/budgets/recommendations/assets plus `apple_api_create`, `apple_api_update`, and `apple_api_delete` cover every published v1 mutation class without bypassing policy |
+| Apple | Campaign Management API v5 | `apple_api_read` covers documented entity, selector, and report paths | `apple_api_create`, `apple_api_update`, and `apple_api_delete` cover campaign-management entities |
 | Microsoft | Advertising API v13 | `microsoft_api_read` covers query, search, get, and reporting operations | `microsoft_api_create`, `microsoft_api_update`, and `microsoft_api_delete` cover Campaign Management collections |
 | Reddit | Ads API v3 | `reddit_api_read` covers account-scoped GET and read-only POST endpoints; `reddit_report` exposes native reports | `reddit_api_create`, `reddit_api_update`, and `reddit_api_delete` cover account-owned v3 resources |
 
@@ -32,7 +32,7 @@ You need a Google Ads developer token and a Google Cloud OAuth desktop client.
 
 Google refresh tokens are stored locally. If consent is still in testing mode, Google may expire the authorization after approximately seven days; publish the consent configuration or re-authorize as appropriate for your application.
 
-Google can show an “unverified app” warning when your private OAuth project requests the Google Ads scope without completing verification. That warning concerns your BYO project; it does not mean credentials are sent to Adport Cloud. Add yourself as a test user during development. Public use of your OAuth app may require Google verification.
+Google can show an “unverified app” warning when your private OAuth project requests the Google Ads scope without completing verification. For the CLI, that warning concerns your BYO project and credentials are not sent to Adport Cloud. Add yourself as a test user during development. The managed cloud application's own OAuth project must complete Google's production verification before public use.
 
 ## Meta Ads
 
@@ -71,9 +71,7 @@ Apple Ads uses an API-user key flow rather than an interactive end-user OAuth fl
 3. Upload only `public-key.pem` in Apple Ads and record the displayed client ID, team ID, and key ID.
 4. Run `adport connect apple` and provide the identifiers plus the local path to `private-key.pem`.
 
-Never upload or commit the private key. Adport mints short-lived ES256 client assertions locally and calls Apple Ads Platform API v1. Use the ad account ID returned by `/acls` as `account_id`; v1 sends it as `X-AP-Context: adAccountId=…`.
-
-The v1 provider includes App Store and Apple Maps campaign resources, reports, impression-share and search-term-popularity insights, recommendations and suggestions, shared budgets, bulk keyword operations, change history, and creative assets. Asset uploads require a local file path plus its SHA-256 so the preview/apply gate is bound to the exact bytes. Recommendation applies are re-queried before preview so daily-budget and target-CPA deltas are policy checked; raw monetary updates remain intentionally rejected.
+Never upload or commit the private key. Adport mints short-lived ES256 client assertions locally. Campaign Management API v5 sunsets on 2027-01-26; the provider isolates the version boundary for migration to Apple's successor API.
 
 ## Microsoft Advertising
 
@@ -87,7 +85,7 @@ Microsoft requires an Entra application and a Microsoft Advertising developer to
 
 Adport persists rotated Microsoft refresh tokens after use. Public-client refresh tokens can expire after extended inactivity, in which case run the connect command again.
 
-Microsoft may show an unverified-publisher notice or require administrator consent based on your Entra application and tenant policy. That identity belongs to your local/BYO setup, not Adport Cloud.
+Microsoft may show an unverified-publisher notice or require administrator consent based on your Entra application and tenant policy. For the CLI and current encrypted cloud BYO flow, that identity belongs to your application; a future Adport-owned delegated flow requires its own publisher verification.
 
 ## Reddit Ads
 
@@ -95,7 +93,7 @@ Reddit uses OAuth 2.0 with a confidential developer application and requires an 
 
 1. Create a **web app** at [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps) under the Reddit user that can access the intended Ads businesses.
 2. Register an exact local redirect URI such as `http://localhost:53682`.
-3. Run `adport connect reddit` and provide the app/client ID, app secret, the exact redirect URI, and a truthful User-Agent such as `desktop:dev.adport.local:v0.5.2 (by /u/yourname)`.
+3. Run `adport connect reddit` and provide the app/client ID, app secret, the exact redirect URI, and a truthful User-Agent such as `desktop:dev.adport.local:v0.4.0 (by /u/yourname)`.
 4. Approve the requested `adsread`, `adsedit`, and `adsdatadeletion` scopes. Adport requests `duration=permanent` and stores the refresh token locally.
 5. Verify discovery with `adport accounts --provider reddit` and reporting with `adport report --provider reddit`.
 

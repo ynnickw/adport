@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { AdportError } from '../errors.js';
 import type { AdProvider, WriteGuard, WriteOperation, WritePreview, WriteResult } from '../provider.js';
-import { AuditLog } from './audit.js';
-import { PendingStore } from './pending.js';
+import { AuditLog, type AuditEntryStore } from './audit.js';
+import { PendingStore, type PendingOperationStore } from './pending.js';
 import type { Policy } from './policy.js';
 
 export interface ValidationOutcome {
@@ -47,8 +47,8 @@ export function hashOperation(op: WriteOperation): string {
 export class PolicyEngine {
   constructor(
     readonly policy: Policy,
-    private readonly pending: PendingStore = new PendingStore(),
-    private readonly audit: AuditLog = new AuditLog(),
+    private readonly pending: PendingOperationStore = new PendingStore(),
+    private readonly audit: AuditEntryStore = new AuditLog(),
   ) {}
 
   guard(): WriteGuard {

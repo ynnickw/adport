@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-    <meta name="description" content="Privacy Policy for adport." />
+    <meta name="description" content="Privacy Policy for Adport and Adport Cloud." />
     <meta name="theme-color" content="#fffaf3" />
     <title>Privacy — adport.dev</title>
     <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" />
@@ -17,51 +17,61 @@
     <main class="legal-content">
       <p class="eyebrow">Legal</p>
       <h1>Privacy Policy</h1>
-      <p class="updated">Effective August 10, 2026</p>
+      <p class="updated">Effective August 17, 2026</p>
 
-      <p>Adport is an open-source, self-hosted tool for managing advertising accounts through a command-line interface and MCP server. This policy describes the limited information handled by the adport.dev website and the Adport software.</p>
+      <p>Adport is a paid-media control plane maintained by Yannick Westermann Labs. It can be used as self-hosted open-source software or through the managed Adport Cloud service. This policy explains both modes and, in particular, how Adport Cloud accesses, uses, stores, protects, retains, and shares Google user data.</p>
 
-      <h2>Website data</h2>
-      <p>Adport.dev does not use analytics, advertising cookies, tracking pixels, or user accounts. Our hosting provider may process standard technical request data, such as IP address, user agent, requested URL, and request time, to deliver and secure the website.</p>
-
-      <h2>Self-hosted software</h2>
-      <p>Adport runs on infrastructure controlled by the user. Credentials, advertising account data, reports, pending operations, findings, and audit records are processed locally or by the advertising platforms the user connects. Adport does not send this information to Yannick Westermann Labs.</p>
+      <h2>Website and Cloud account data</h2>
+      <p>Adport.dev does not use advertising cookies or tracking pixels. Our hosting providers may process standard request data, including IP address, user agent, requested URL, and request time, to deliver and secure the site. If you create an Adport Cloud account, we process your email address, display name, organization membership and role, security settings, connection status, API-key metadata, and service audit events to authenticate you and operate the service. API-key secrets are shown once and stored only as keyed cryptographic digests.</p>
 
       <h2>Google user data</h2>
-      <p>When a user connects Google Ads, Adport requests the <code>https://www.googleapis.com/auth/adwords</code> OAuth scope. This permission allows Adport to access and manage the Google Ads accounts that the user is authorized to use.</p>
+      <p>Adport Cloud requests only the Google Ads OAuth scope <code>https://www.googleapis.com/auth/adwords</code>. Google Ads offers one OAuth scope for its read and management functionality, so there is no narrower Google Ads scope that can provide Adport's user-facing reporting, preview, create, update, and remove features. Adport does not request access to Gmail, Google Drive, Google Calendar, Google Photos, contacts, general Google Account profile data, or other unrelated Google services.</p>
 
-      <h3>Data Adport accesses</h3>
-      <p>Depending on the command requested by the user, Adport may access Google Ads customer and account identifiers; campaigns; campaign budgets; bidding settings; ad groups; ads and ad assets; keywords and other targeting criteria; performance metrics; reporting data; and change history. Adport also receives OAuth access and refresh tokens used to authenticate requests to the Google Ads API. Adport does not request access to Gmail, Google Drive, Google Calendar, contacts, or unrelated Google Account data.</p>
+      <h3>Raw and derived data Adport accesses</h3>
+      <p>Raw Google Ads data may include OAuth access and refresh tokens; accessible customer, manager, and account identifiers; account names, status, currency, and time zone; campaigns and campaign budgets; bidding settings; ad groups; ads, assets, and responsive-ad text; keywords and other targeting criteria; conversion and attribution fields; change history; and performance fields such as impressions, clicks, cost, conversions, conversion value, and return on ad spend.</p>
+      <p>Adport derives only the data needed for its visible features: normalized reports and performance metrics, account and campaign summaries, proposed-change previews, budget deltas, policy findings, short-lived pending-operation records, and audit events. Aggregated metrics remain associated with the applicable advertising account or campaign unless the user exports or directs them elsewhere. Adport does not create or sell an anonymized advertising-data product.</p>
 
       <h3>How Adport uses Google user data</h3>
-      <p>Adport uses Google user data only to provide user-requested advertising-account functionality: connecting and listing accessible accounts; retrieving and normalizing reports; inspecting campaigns and their performance; previewing proposed changes; and, after the user confirms Adport's two-step safety gate, creating or updating Google Ads resources such as campaigns, budgets, ad groups, ads, keywords, targeting criteria, and bidding settings. Adport may also use the data locally to produce findings, pending-operation previews, and audit records for the user.</p>
-      <p>Adport does not use Google user data for advertising, profiling, creditworthiness, surveillance, or any purpose unrelated to the functionality requested by the user. Adport does not sell Google user data and does not use it to train general-purpose artificial-intelligence or machine-learning models. Adport's use of information received from Google APIs complies with the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including its Limited Use requirements.</p>
+      <p>Adport uses raw and derived Google user data only to provide or improve user-facing Adport features requested by the user: connect and list accessible accounts; retrieve, normalize, and display reports; inspect advertising configuration and performance; identify findings for the user's review; preview proposed changes; and, only after Adport's mandatory preview-and-exact-approval step, create, update, pause, enable, or remove Google Ads resources. It also uses connection metadata, pending operations, and audit events to secure the service, enforce tenant policy, troubleshoot user-visible failures, and show the user what Adport did.</p>
+      <p>Adport does not use Google user data for targeted, personalized, interest-based, or retargeted advertising; data brokerage or information resale; lending or creditworthiness; surveillance; unrelated profiling; or automated decisions about individuals. Adport does not sell Google user data.</p>
 
-      <h3>Sharing and disclosure of Google user data</h3>
-      <p>The open-source Adport software does not send Google user data or Google OAuth tokens to Yannick Westermann Labs or to an Adport-operated server. The user's self-hosted installation communicates directly with Google's OAuth and Google Ads API endpoints. Results are returned to the command-line or MCP client selected by the user.</p>
-      <p>If a user connects Adport to an AI agent or another MCP client, data returned by Adport may be processed by that client and by the AI or infrastructure provider the user has chosen. Those services are independent of Adport and are governed by their own terms and privacy policies. Adport otherwise does not share, transfer, or disclose Google user data to third parties except when the user directs it, when required by law, or when necessary to protect against fraud, abuse, or security threats.</p>
+      <h3>AI and machine-learning restrictions</h3>
+      <p>Adport does not use raw, aggregated, anonymized, or derived Google user data to develop, improve, or train general-purpose or shared artificial-intelligence or machine-learning models. Adport does not transfer Google user data to third-party AI providers for their model training. If a user deliberately invokes Adport from an AI or MCP client, the requested result may be sent to that user-selected client solely to answer the user's request; Google OAuth tokens and provider secrets are never included. The user is responsible for choosing a client whose data controls match the user's requirements.</p>
+      <p>Adport's use and transfer of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including its Limited Use requirements.</p>
 
-      <h3>Storage, retention, and deletion of Google user data</h3>
-      <p>OAuth credentials are stored locally on the user's device or infrastructure. Report results are returned to the requesting client and are not centrally stored by Yannick Westermann Labs. Pending operations, findings, and audit records may be stored locally so the user can review and control changes. Because Adport is self-hosted, the user controls how long these local records are retained and can delete them from the Adport configuration directory at any time.</p>
-      <p>A user can stop Adport's Google access by deleting the locally stored Google credentials and by revoking Adport's access in the Google Account permissions page. Revocation prevents Adport from obtaining new access tokens. Deleting local Adport data does not delete advertising records that remain in Google Ads; those records are controlled through Google Ads.</p>
+      <h3>Sharing and transfer of Google user data</h3>
+      <p>Adport Cloud transfers Google user data only as necessary to provide or improve the prominent user-facing features described above, with the user's consent or direction:</p>
+      <ul>
+        <li>to Google OAuth and Google Ads API endpoints to authenticate and perform the user's requested reads or changes;</li>
+        <li>to contracted cloud infrastructure providers, including the managed database and authentication service used by Adport Cloud, solely to host, secure, and operate Adport on our behalf;</li>
+        <li>to the user's selected MCP client, AI client, or other integration when the user asks that client to retrieve or act on Adport data; and</li>
+        <li>when required by law, or when necessary to investigate fraud, abuse, or a security threat.</li>
+      </ul>
+      <p>Adport does not transfer Google user data to advertising networks, data brokers, information resellers, lenders, or unrelated third parties. Service providers may process data only for contracted service operations and are not authorized by Adport to sell it, use it for advertising, or train shared AI models.</p>
 
-      <h2>Other advertising platform data</h2>
-      <p>When a user connects Meta, TikTok, Apple Ads, or Microsoft Advertising, Adport accesses only the data and permissions needed to perform actions requested by that user. The connected platform processes data under its own terms and privacy policy. Adport does not sell advertising data or use it for profiling, unrelated advertising, or automated decisions about individuals.</p>
+      <h3>Storage and protection</h3>
+      <p>Adport Cloud stores Google refresh tokens in a tenant-isolated credential vault encrypted at the application layer with authenticated encryption and tenant/provider-bound additional data. OAuth state uses a one-time, expiring, hashed state value and PKCE. Access tokens are obtained when needed and are not stored as durable database records. Tenant data is protected by organization membership checks, role-based authorization, database row-level security, least-privilege grants, rate limits, short-lived sessions, and audit logging. Provider credentials, OAuth client secrets, database administrative keys, and encryption keys are never sent to the browser or included in API responses. Production traffic must use TLS, and operational access is limited to authorized personnel who need it to operate or secure the service.</p>
 
-      <h2>Credentials and security</h2>
-      <p>Users supply and control their own platform credentials. The open-source application stores credentials locally and uses them only to communicate with the selected advertising platform. Users are responsible for securing their systems, limiting access, and revoking credentials when access is no longer needed.</p>
+      <h3>Retention, revocation, and deletion</h3>
+      <p>Google refresh tokens are retained until the user disconnects Google Ads, deletes the organization, or asks us to delete the data. On Google disconnect, Adport first asks Google to revoke the token and removes the encrypted credential only after revocation succeeds, so a failed revocation can be retried. OAuth transactions expire after 10 minutes and are deleted no later than approximately 24 hours after expiry. Rate-limit records are deleted after approximately one hour.</p>
+      <p>Pending operations, audit events, and related tenant records use a 90-day default retention period. An organization owner or administrator may configure a period from 1 to 3,650 days; a daily database retention job deletes records beyond that period. Live Google Ads report results are returned to the requesting user or client and are not durably stored by Adport Cloud by default.</p>
+      <p>An organization owner can delete the organization's Adport Cloud data from the dashboard. This removes the active tenant record and cascades deletion to memberships, settings, connection metadata, encrypted credentials, API-key digests, pending operations, and audit events. If the user has no remaining organization membership, the Adport Cloud login account is also deleted. Infrastructure backups, if enabled for disaster recovery, are isolated from normal use, expire under the hosting provider's backup schedule, and are not restored except for disaster recovery.</p>
+      <p>Deleting Adport Cloud data does not delete campaigns or records that remain in Google Ads. Users can also revoke access from their Google Account permissions or Google Ads security settings. For help with a deletion or revocation request, contact us at the address below.</p>
 
-      <h2>Retention and deletion</h2>
-      <p>Because the software is self-hosted, users control retention and deletion of local data. Platform data may also remain with the connected advertising provider according to that provider’s policies. Standard website request logs, if retained by the hosting provider, are kept according to its security and retention practices.</p>
+      <h2>Self-hosted Adport</h2>
+      <p>In self-hosted mode, credentials, advertising data, reports, pending operations, findings, and audit records remain on infrastructure controlled by the user. The installation communicates directly with the selected advertising platform and does not send this information to Adport Cloud unless the user separately configures a remote destination. The user controls local security, retention, backups, and deletion.</p>
+
+      <h2>Other advertising platforms</h2>
+      <p>When a user connects Meta, TikTok, Apple Ads, Microsoft Advertising, or Reddit Ads, Adport accesses only the data and permissions needed to perform the user's requested reporting and account-management features. Adport does not sell that data or use it for unrelated advertising, profiling, lending, surveillance, or shared model training. For manually supplied cloud credentials, removing the encrypted Adport copy does not necessarily revoke the credential at the provider; the dashboard tells the user when separate provider-side revocation is required.</p>
 
       <h2>International processing</h2>
-      <p>Website infrastructure and connected advertising platforms may process information in countries other than the user’s country. The applicable provider’s terms describe its safeguards for international transfers.</p>
+      <p>Adport's cloud infrastructure and connected advertising platforms may process information in countries other than the user's country. Applicable provider terms and contractual safeguards govern those transfers.</p>
 
       <h2>Changes</h2>
-      <p>We may update this policy as Adport develops. The effective date above identifies the current version.</p>
+      <p>We may update this policy as Adport develops or its data practices change. We will keep this page current and will request renewed consent when required before using Google user data for a materially different purpose.</p>
 
       <h2>Contact</h2>
-      <p>Questions about privacy can be sent to <a href="mailto:ynnickw20@gmail.com">ynnickw20@gmail.com</a>.</p>
+      <p>Questions, privacy requests, and deletion requests can be sent to <a href="mailto:ynnickw20@gmail.com">ynnickw20@gmail.com</a>.</p>
     </main>
     <footer class="legal-footer">
       <a href="/">Home</a><span aria-hidden="true">·</span><a href="/terms">Terms</a>

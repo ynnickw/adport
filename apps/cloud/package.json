@@ -1,0 +1,42 @@
+{
+  "name": "@adport/cloud",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "build:standalone": "next build && node scripts/prepare-standalone.mjs",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf .next coverage"
+  },
+  "dependencies": {
+    "@adport/core": "workspace:*",
+    "@adport/mcp": "workspace:*",
+    "@adport/provider-apple": "workspace:*",
+    "@adport/provider-google": "workspace:*",
+    "@adport/provider-meta": "workspace:*",
+    "@adport/provider-microsoft": "workspace:*",
+    "@adport/provider-reddit": "workspace:*",
+    "@adport/provider-tiktok": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@supabase/ssr": "0.12.4",
+    "@supabase/supabase-js": "2.112.3",
+    "@swc/helpers": "0.5.23",
+    "next": "16.3.1",
+    "postgres": "3.4.9",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "server-only": "0.0.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "dotenv": "17.4.2",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  }
+}

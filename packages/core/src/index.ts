@@ -44,8 +44,8 @@ export { AuditRunner, type AuditRunOptions, type AuditRunResult } from './audit/
 export { auditTools } from './audit/tools.js';
 export { CredentialStore, type CredentialRecord, type CredentialSource } from './credentials/store.js';
 export { policySchema, loadPolicy, DEFAULT_POLICY, type Policy, type LoadedPolicy } from './policy/policy.js';
-export { PendingStore, type PendingOperation } from './policy/pending.js';
-export { AuditLog, type AuditEntry } from './policy/audit.js';
+export { PendingStore, type PendingOperation, type PendingOperationStore } from './policy/pending.js';
+export { AuditLog, type AuditEntry, type AuditEntryStore } from './policy/audit.js';
 export { PolicyEngine, hashOperation, type ApplyOutcome, type ValidationOutcome } from './policy/engine.js';
 export {
   ToolRegistry,
