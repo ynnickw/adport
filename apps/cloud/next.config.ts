@@ -2,7 +2,7 @@ import type { NextConfig } from 'next';
 import path from 'node:path';
 
 const config: NextConfig = {
-  output: 'standalone',
+  output: process.env.VERCEL ? undefined : 'standalone',
   outputFileTracingRoot: path.join(import.meta.dirname, '../..'),
   outputFileTracingIncludes: {
     '/*': ['../../node_modules/.pnpm/@swc+helpers@0.5.23/node_modules/@swc/helpers/**/*'],
