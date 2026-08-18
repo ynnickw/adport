@@ -1,8 +1,13 @@
 import 'server-only';
 import { createHash, randomBytes } from 'node:crypto';
-import { googleEnv } from '@/lib/env';
+import { env, googleEnv } from '@/lib/env';
 
 export const GOOGLE_ADS_SCOPE = 'https://www.googleapis.com/auth/adwords';
+
+export function googleConfigured(): boolean {
+  const value = env();
+  return Boolean(value.GOOGLE_ADS_CLIENT_ID && value.GOOGLE_ADS_CLIENT_SECRET && value.GOOGLE_ADS_DEVELOPER_TOKEN);
+}
 
 export function createPkce(): { verifier: string; challenge: string } {
   const verifier = randomBytes(32).toString('base64url');

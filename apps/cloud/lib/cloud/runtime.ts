@@ -7,6 +7,7 @@ import { MicrosoftAdsClient, MicrosoftAdsProvider, microsoftTools } from '@adpor
 import { RedditAdsClient, RedditAdsProvider, redditTools } from '@adport/provider-reddit';
 import { TikTokAdsProvider, TikTokClient, tiktokTools } from '@adport/provider-tiktok';
 import { googleEnv } from '@/lib/env';
+import { hydrateMeta, hydrateMicrosoft, hydrateReddit, hydrateTikTok } from './provider-oauth';
 import {
   getOrganizationPolicy,
   loadProviderCredentials,
@@ -16,6 +17,11 @@ import {
 } from './repository';
 import type { ProviderCredentialMap, TenantPrincipal } from './types';
 
+/**
+ * Build the tenant runtime. Tenant grants come from the encrypted vault; the
+ * Adport-owned application identity for each OAuth provider is injected from
+ * server secrets, so no tenant ever holds an application secret.
+ */
 export async function createTenantRuntime(principal: TenantPrincipal): Promise<AdportRuntime> {
   const [policy, credentials] = await Promise.all([
     getOrganizationPolicy(principal.organizationId),
@@ -35,12 +41,12 @@ export async function createTenantRuntime(principal: TenantPrincipal): Promise<A
     modules.push({ provider, tools: googleTools(provider) });
   }
   if (credentials.meta) {
-    const provider = new MetaAdsProvider(new MetaGraphClient(credentials.meta));
+    const provider = new MetaAdsProvider(new MetaGraphClient(hydrateMeta(credentials.meta)));
     modules.push({ provider, tools: metaTools(provider) });
   }
   if (credentials.tiktok) {
-    const stored = credentials.tiktok;
-    const provider = new TikTokAdsProvider(new TikTokClient(stored), { appId: stored.appId, secret: stored.secret });
+    const resolved = hydrateTikTok(credentials.tiktok);
+    const provider = new TikTokAdsProvider(new TikTokClient(resolved), { appId: resolved.appId, secret: resolved.secret });
     modules.push({ provider, tools: tiktokTools(provider) });
   }
   if (credentials.apple) {
@@ -49,7 +55,7 @@ export async function createTenantRuntime(principal: TenantPrincipal): Promise<A
   }
   if (credentials.microsoft) {
     const stored = credentials.microsoft;
-    const client = new MicrosoftAdsClient(stored, async (refreshToken) => {
+    const client = new MicrosoftAdsClient(hydrateMicrosoft(stored), async (refreshToken) => {
       const rotated: ProviderCredentialMap['microsoft'] = { ...stored, refreshToken };
       await updateProviderCredential(principal.organizationId, 'microsoft', rotated);
     });
@@ -59,7 +65,7 @@ export async function createTenantRuntime(principal: TenantPrincipal): Promise<A
   if (credentials.reddit) {
     const stored = credentials.reddit;
     const client = new RedditAdsClient({
-      ...stored,
+      ...hydrateReddit(stored),
       onRefreshToken: async (refreshToken) => {
         const rotated: ProviderCredentialMap['reddit'] = { ...stored, refreshToken };
         await updateProviderCredential(principal.organizationId, 'reddit', rotated);

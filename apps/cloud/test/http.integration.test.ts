@@ -83,3 +83,29 @@ describeHttp('running cloud server', () => {
     expect(body.result?.serverInfo?.name).toBe('adport-cloud');
   });
 });
+
+describeHttp('hosted OAuth broker over HTTP', () => {
+  it('serves the sign-in screen at the root and gates the dashboard', async () => {
+    const root = await fetch(`${baseUrl}/`, { redirect: 'manual' });
+    expect(root.status).toBe(200);
+    const html = await root.text();
+    expect(html).toContain('auth-card');
+    expect(html).toContain('name="password"');
+    const dashboard = await fetch(`${baseUrl}/dashboard/connections`, { redirect: 'manual' });
+    expect([302, 307]).toContain(dashboard.status);
+    expect(new URL(dashboard.headers.get('location')!, baseUrl).pathname).toBe('/');
+  });
+
+  it('requires a session before starting any provider OAuth flow and rejects credential posts for OAuth providers', async () => {
+    for (const provider of ['google', 'meta', 'tiktok', 'microsoft', 'reddit']) {
+      const start = await fetch(`${baseUrl}/api/oauth/${provider}/start`, { redirect: 'manual' });
+      expect(start.status).toBe(401);
+    }
+    const unknown = await fetch(`${baseUrl}/api/oauth/nope/start`, { redirect: 'manual' });
+    expect(unknown.status).toBe(404);
+    const post = await fetch(`${baseUrl}/api/connections/meta`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accessToken: 'x'.repeat(30) }),
+    });
+    expect(post.status).toBe(405);
+  });
+});

@@ -2,7 +2,7 @@
 
 Adport stores credentials locally in `${ADPORT_HOME:-~/.config/adport}/credentials.json` with file mode `0600`. Do not paste credentials into issues, commit them to Git, or place them in shell history. Run `adport doctor` after connecting a provider.
 
-The CLI connection commands below are bring-your-own (BYO): you own the provider-side application and Adport communicates directly from your machine to that provider. The hosted Adport Cloud broker is not used by these commands. The locally runnable cloud application is documented separately in [cloud-local-development.md](./cloud-local-development.md): Google uses its hosted OAuth broker, while the other providers currently accept encrypted BYO credentials in the tenant vault.
+The CLI connection commands below are bring-your-own (BYO): you own the provider-side application and Adport communicates directly from your machine to that provider. The hosted Adport Cloud broker is not used by these commands. The locally runnable cloud application is documented separately in [cloud-local-development.md](./cloud-local-development.md): Google, Meta, TikTok, Microsoft, and Reddit connect only through Adport's hosted OAuth broker, and Apple Ads (no OAuth grant) accepts an encrypted tenant API-user key.
 
 For a source checkout, replace `adport` below with `node packages/cli/dist/index.js` after `pnpm build`.
 
@@ -85,7 +85,7 @@ Microsoft requires an Entra application and a Microsoft Advertising developer to
 
 Adport persists rotated Microsoft refresh tokens after use. Public-client refresh tokens can expire after extended inactivity, in which case run the connect command again.
 
-Microsoft may show an unverified-publisher notice or require administrator consent based on your Entra application and tenant policy. For the CLI and current encrypted cloud BYO flow, that identity belongs to your application; a future Adport-owned delegated flow requires its own publisher verification.
+Microsoft may show an unverified-publisher notice or require administrator consent based on your Entra application and tenant policy. For the CLI, that identity belongs to your application; the Adport Cloud broker uses an Adport-owned Entra application with its own publisher verification.
 
 ## Reddit Ads
 

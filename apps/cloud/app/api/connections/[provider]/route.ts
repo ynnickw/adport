@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { sessionPrincipal } from '@/lib/cloud/auth';
+import { oauthAdapter, revokeGrant } from '@/lib/cloud/provider-oauth';
 import {
   loadProviderCredential,
   recordAudit,
@@ -8,42 +9,22 @@ import {
   upsertProviderConnection,
 } from '@/lib/cloud/repository';
 import { createTenantRuntime } from '@/lib/cloud/runtime';
-import type { CloudProvider, ProviderCredentialMap } from '@/lib/cloud/types';
+import { isCloudProvider, isOAuthProvider, type KeyProvider, type ProviderCredentialMap } from '@/lib/cloud/types';
 import { apiError, noStoreJson } from '@/lib/http';
 
-const providerSchema = z.enum(['meta', 'tiktok', 'apple', 'microsoft', 'reddit']);
-const schemas = {
-  meta: z.object({
-    accessToken: z.string().min(20).max(4096),
-    appId: z.string().min(1).max(255).optional(),
-    appSecret: z.string().min(1).max(4096).optional(),
-  }),
-  tiktok: z.object({
-    accessToken: z.string().min(20).max(4096),
-    appId: z.string().min(1).max(255),
-    secret: z.string().min(8).max(4096),
-    sandbox: z.boolean().optional(),
-  }),
+/**
+ * Only providers without a third-party OAuth grant accept tenant-supplied
+ * credentials. Everything else is connected through /api/oauth/[provider].
+ */
+const keyProviderSchema = z.enum(['apple']);
+const keySchemas = {
   apple: z.object({
     clientId: z.string().min(1).max(255),
     teamId: z.string().min(1).max(255),
     keyId: z.string().min(1).max(255),
     privateKeyPem: z.string().regex(/^-----BEGIN (?:EC )?PRIVATE KEY-----/).max(16_384),
   }),
-  microsoft: z.object({
-    developerToken: z.string().min(8).max(4096),
-    clientId: z.string().min(8).max(255),
-    refreshToken: z.string().min(20).max(8192),
-    clientSecret: z.string().min(1).max(4096).optional(),
-    sandbox: z.boolean().optional(),
-  }),
-  reddit: z.object({
-    clientId: z.string().min(1).max(255),
-    clientSecret: z.string().min(8).max(4096),
-    refreshToken: z.string().min(20).max(8192),
-    userAgent: z.string().min(5).max(512),
-  }),
-} satisfies { [P in Exclude<CloudProvider, 'google'>]: z.ZodType<ProviderCredentialMap[P]> };
+} satisfies { [P in KeyProvider]: z.ZodType<ProviderCredentialMap[P]> };
 
 function safeProviderError(error: unknown): string {
   const message = error instanceof Error ? error.message : 'Provider verification failed.';
@@ -51,16 +32,17 @@ function safeProviderError(error: unknown): string {
 }
 
 export async function POST(request: Request, { params }: RouteContext<'/api/connections/[provider]'>) {
-  let organizationId: string | undefined;
-  let provider: Exclude<CloudProvider, 'google'> | undefined;
   try {
     const route = await params;
-    provider = providerSchema.parse(route.provider);
+    if (isOAuthProvider(route.provider)) {
+      return apiError(new Error(`${route.provider} connects through the hosted OAuth flow; credentials are not accepted.`), 405);
+    }
+    const provider = keyProviderSchema.parse(route.provider);
     const input = await request.json() as { organizationId?: string };
-    organizationId = z.string().uuid().parse(input.organizationId);
+    const organizationId = z.string().uuid().parse(input.organizationId);
     const principal = await sessionPrincipal(organizationId);
     if (!['owner', 'admin'].includes(principal.role ?? '')) throw new Error('Owner or admin access is required.');
-    const credential = schemas[provider].parse(input) as ProviderCredentialMap[typeof provider];
+    const credential = keySchemas[provider].parse(input) as ProviderCredentialMap[typeof provider];
     await upsertProviderConnection({
       organizationId: principal.organizationId,
       userId: principal.userId!,
@@ -97,21 +79,37 @@ export async function POST(request: Request, { params }: RouteContext<'/api/conn
   }
 }
 
+/**
+ * Disconnect a provider. OAuth grants are revoked at the provider first; when
+ * the provider confirms revocation the encrypted credential is deleted. When
+ * revocation fails transiently the credential is kept so the tenant can retry.
+ */
 export async function DELETE(request: Request, { params }: RouteContext<'/api/connections/[provider]'>) {
   try {
-    const provider = providerSchema.parse((await params).provider);
+    const { provider } = await params;
+    if (!isCloudProvider(provider)) return apiError(new Error('Unknown provider.'), 404);
     const organizationId = z.string().uuid().parse(new URL(request.url).searchParams.get('organization_id'));
     const principal = await sessionPrincipal(organizationId);
     if (!['owner', 'admin'].includes(principal.role ?? '')) throw new Error('Owner or admin access is required.');
     const stored = await loadProviderCredential(principal.organizationId, provider);
     if (!stored) return noStoreJson({ disconnected: false });
+
+    let revokedAtProvider = false;
+    if (isOAuthProvider(provider)) {
+      if (oauthAdapter(provider).configured()) {
+        // Throws on transient failure and keeps the encrypted credential for a retry.
+        revokedAtProvider = await revokeGrant(provider, stored);
+      }
+    }
     const removed = await removeProviderConnection(principal.organizationId, provider, stored.connectionId);
-    if (!removed) throw new Error('The connection changed while it was being removed. Please retry.');
+    if (!removed) throw new Error('The connection changed while it was being disconnected. Please retry.');
     await recordAudit(principal, {
-      event: 'revoked', provider, tool: 'credential_disconnect', accountId: '*',
-      summary: `Removed encrypted ${provider} credentials; provider-side revocation remains required`,
+      event: 'revoked', provider, tool: isOAuthProvider(provider) ? 'oauth_disconnect' : 'credential_disconnect', accountId: '*',
+      summary: revokedAtProvider
+        ? `Revoked and removed ${provider} connection`
+        : `Removed encrypted ${provider} credentials; provider-side revocation remains required`,
     });
-    return noStoreJson({ disconnected: true, providerRevocationRequired: true });
+    return noStoreJson({ disconnected: true, providerRevocationRequired: !revokedAtProvider });
   } catch (error) {
     return apiError(error, 403);
   }

@@ -18,10 +18,12 @@ The authorization URL is generated server-side with that exact scope, offline ac
 
 ## Implementation evidence
 
-- Google OAuth: `apps/cloud/lib/cloud/google-oauth.ts`
+- Google OAuth (scope, PKCE, exchange, revoke): `apps/cloud/lib/cloud/google-oauth.ts`
+- Hosted OAuth broker (Google adapter alongside Meta/TikTok/Microsoft/Reddit): `apps/cloud/lib/cloud/provider-oauth.ts`
 - One-time OAuth transaction and encrypted token vault: `apps/cloud/lib/cloud/repository.ts`
-- Callback and connection verification: `apps/cloud/app/api/oauth/google/callback/route.ts`
-- Revocation-before-deletion: `apps/cloud/app/api/connections/google/route.ts`
+- Start and callback with connection verification: `apps/cloud/app/api/oauth/[provider]/start/route.ts`, `apps/cloud/app/api/oauth/[provider]/callback/route.ts` (the Google URL is `/api/oauth/google/callback`)
+- Revocation-before-deletion: `apps/cloud/app/api/connections/[provider]/route.ts`
+- In-product data-access explanation and Connect button: `apps/cloud/app/dashboard/connections/page.tsx`
 - Shared preview/apply policy path: `packages/core/src/policy/engine.ts`
 - Tenant REST/MCP runtime: `apps/cloud/lib/cloud/runtime.ts`
 - Tenant schema, RLS, restricted backend role, retention: `supabase/migrations/20260817171039_cloud_initial_schema.sql`
@@ -46,7 +48,7 @@ Provide Google privately by reply or in the verification submission:
 
 - production/staging login URL;
 - one dedicated reviewer email/password with no phone, payment, CAPTCHA, or MFA blocker;
-- exact navigation: sign in → Dashboard → Google Ads → Connect Google Ads;
+- exact navigation: sign in at the app root → Connections (sidebar) → Google Ads → Connect Google Ads;
 - a Google test identity that can consent and access a non-sensitive test Google Ads account, if Google asks you to supply it;
 - any manager/customer relationship needed to see the test account; and
 - a short note that the first write call only previews and the second exact call applies.
@@ -58,14 +60,14 @@ Never put reviewer credentials, OAuth secrets, developer tokens, customer IDs, o
 Upload the video as public or unlisted YouTube content and keep the consent-screen language set to English.
 
 1. Show the production Adport homepage, product description, privacy link, domain, and app branding.
-2. Sign in with the reviewer flow and navigate visibly to **Dashboard → Google Ads**.
+2. Sign in with the reviewer flow (the app root is the sign-in screen) and navigate visibly to **Connections → Google Ads** in the sidebar.
 3. Show the in-product explanation of what Google Ads data is accessed and why.
 4. Click **Connect Google Ads**. Show the complete Google consent flow, expand **Show all services** if present, and keep the full `adwords` permission readable.
 5. Return to Adport and show accessible accounts plus a live campaign report. Explain that raw reports are fetched on request and not durably stored by default.
 6. Demonstrate a safe write on the test account: submit the change once, show the preview/pending ID and coercions/budget delta, then submit the identical approved operation.
 7. Open Google Ads and show that exact change reflected in the source account. If demonstrating remove/delete, show the source resource impact too.
 8. Return to Adport and show the audit event.
-9. Show Google disconnect/revocation and the organization deletion control. Explain default 90-day retention and configurable scheduled deletion.
+9. Show Google disconnect/revocation on the Connections card and the organization deletion control under Team. Explain default 90-day retention and configurable scheduled deletion.
 
 Do not edit the video after submitting unless you also update the review response with the new URL.
 
@@ -90,7 +92,7 @@ Do not edit the video after submitting unless you also update the review respons
 >
 > Reviewer login URL: [URL]
 >
-> Navigation: sign in → Dashboard → Google Ads → Connect Google Ads. Reviewer credentials and test-account details are provided below/private in this submission: [CREDENTIALS — DO NOT PLACE IN A PUBLIC LINK]
+> Navigation: sign in → Connections → Google Ads → Connect Google Ads. Reviewer credentials and test-account details are provided below/private in this submission: [CREDENTIALS — DO NOT PLACE IN A PUBLIC LINK]
 >
 > The video shows the complete expanded English consent screen, exact scope, account/report functionality, the two-step preview and apply flow, the resulting change in the Google Ads source account, audit history, and disconnect/revocation.
 >
