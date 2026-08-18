@@ -404,7 +404,7 @@ select { min-width: 11rem; border: 1px solid var(--line); border-radius: 999px; 
   .user-name, .user-role { display: none; }
 }
 
-/* ── Forms (cloud sign-in, settings, Apple key entry) ────────────────── */
+/* ── Forms (cloud sign-in and settings) ─────────────────────────── */
 .form { display: grid; gap: 0.85rem; }
 .form.compact { gap: 0.65rem; }
 .field { display: grid; gap: 0.38rem; }

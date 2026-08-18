@@ -7,7 +7,7 @@ import { MicrosoftAdsClient, MicrosoftAdsProvider, microsoftTools } from '@adpor
 import { RedditAdsClient, RedditAdsProvider, redditTools } from '@adport/provider-reddit';
 import { TikTokAdsProvider, TikTokClient, tiktokTools } from '@adport/provider-tiktok';
 import { googleEnv } from '@/lib/env';
-import { hydrateMeta, hydrateMicrosoft, hydrateReddit, hydrateTikTok } from './provider-oauth';
+import { hydrateApple, hydrateMeta, hydrateMicrosoft, hydrateReddit, hydrateTikTok } from './provider-oauth';
 import {
   getOrganizationPolicy,
   loadProviderCredentials,
@@ -50,7 +50,7 @@ export async function createTenantRuntime(principal: TenantPrincipal): Promise<A
     modules.push({ provider, tools: tiktokTools(provider) });
   }
   if (credentials.apple) {
-    const provider = new AppleAdsProvider(new AppleAdsClient(credentials.apple));
+    const provider = new AppleAdsProvider(new AppleAdsClient(hydrateApple(credentials.apple)));
     modules.push({ provider, tools: appleTools(provider) });
   }
   if (credentials.microsoft) {

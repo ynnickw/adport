@@ -26,7 +26,7 @@ openssl rand -base64 32
 
 Use one for `ADPORT_CLOUD_ENCRYPTION_KEY` and the other for `ADPORT_API_KEY_PEPPER`.
 
-Provider connections are OAuth-only wherever the platform offers a third-party grant. The app never asks a tenant for application secrets: each provider block in `.env.example` (`GOOGLE_ADS_*`, `META_*`, `TIKTOK_*`, `MICROSOFT_ADS_*`, `REDDIT_*`) holds the Adport-owned application, and the matching Connections card stays disabled ("Awaiting app approval") until that block is fully set. Apple Ads is the single exception: it has no OAuth grant, so tenants paste an API-user key that is encrypted per organization. Leaving every provider block empty is fine for builds and non-provider tests.
+All six providers use browser-based OAuth grants. The app never asks a tenant for application secrets: each provider block in `.env.example` (`GOOGLE_ADS_*`, `META_*`, `TIKTOK_*`, `MICROSOFT_ADS_*`, `REDDIT_*`, `APPLE_ADS_*`) holds the Adport-owned application, and the matching Connections card stays disabled ("Awaiting app approval") until that block is fully set. Apple's block belongs to the approved Adport service-provider registration; its ES256 private key stays server-side while tenant refresh tokens are encrypted per organization. Leaving every provider block empty is fine for builds and non-provider tests.
 
 ## Run
 

@@ -2,7 +2,7 @@
 
 Adport stores credentials locally in `${ADPORT_HOME:-~/.config/adport}/credentials.json` with file mode `0600`. Do not paste credentials into issues, commit them to Git, or place them in shell history. Run `adport doctor` after connecting a provider.
 
-The CLI connection commands below are bring-your-own (BYO): you own the provider-side application and Adport communicates directly from your machine to that provider. The hosted Adport Cloud broker is not used by these commands. The locally runnable cloud application is documented separately in [cloud-local-development.md](./cloud-local-development.md): Google, Meta, TikTok, Microsoft, and Reddit connect only through Adport's hosted OAuth broker, and Apple Ads (no OAuth grant) accepts an encrypted tenant API-user key.
+The CLI connection commands below are bring-your-own (BYO): you own the provider-side application and Adport communicates directly from your machine to that provider. The hosted Adport Cloud broker is not used by these commands. The locally runnable cloud application is documented separately in [cloud-local-development.md](./cloud-local-development.md): all six providers connect through Adport-owned hosted OAuth applications, including Apple's approved service-provider authorization-code flow.
 
 For a source checkout, replace `adport` below with `node packages/cli/dist/index.js` after `pnpm build`.
 
@@ -58,7 +58,7 @@ Keep the environment consistent: sandbox credentials cannot be used against prod
 
 ## Apple Ads
 
-Apple Ads uses an API-user key flow rather than an interactive end-user OAuth flow.
+For local CLI use, Apple Ads uses the OAuth 2.0 client-credentials flow with API-user key material. Adport Cloud instead uses Adport's Apple-approved service-provider authorization-code flow, so cloud tenants authorize in the browser and never provide private keys.
 
 1. In Apple Ads Account Settings, create or invite an API user with the required role.
 2. Generate an EC `prime256v1` private key locally and derive its public key:
@@ -71,7 +71,7 @@ Apple Ads uses an API-user key flow rather than an interactive end-user OAuth fl
 3. Upload only `public-key.pem` in Apple Ads and record the displayed client ID, team ID, and key ID.
 4. Run `adport connect apple` and provide the identifiers plus the local path to `private-key.pem`.
 
-Never upload or commit the private key. Adport mints short-lived ES256 client assertions locally. Campaign Management API v5 sunsets on 2027-01-26; the provider isolates the version boundary for migration to Apple's successor API.
+Never upload or commit the private key. Adport mints short-lived ES256 client assertions locally and exchanges them for Apple OAuth bearer tokens with the `searchadsorg` scope. Campaign Management API v5 sunsets on 2027-01-26; the provider isolates the version boundary for migration to Apple's successor API.
 
 ## Microsoft Advertising
 

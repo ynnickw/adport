@@ -73,6 +73,19 @@ describe('AppleAdsClient', () => {
     expect(body.get('client_secret')).toMatch(/^[\w-]+\.[\w-]+\.[\w-]+$/);
   });
 
+  it('refreshes delegated service-provider access without requesting the organization scope', async () => {
+    const { impl, calls } = fakeFetch([
+      tokenRoute,
+      { match: (url) => url.includes('/v1/acls'), reply: { result: { acls: [] }, error: null } },
+    ]);
+    const client = new AppleAdsClient({ ...CREDS, refreshToken: 'tenant-refresh-token' }, impl);
+    await client.request('GET', 'acls');
+    const body = new URLSearchParams(String(calls[0]!.init.body));
+    expect(body.get('grant_type')).toBe('refresh_token');
+    expect(body.get('refresh_token')).toBe('tenant-refresh-token');
+    expect(body.has('scope')).toBe(false);
+  });
+
   it('sends X-AP-Context adAccountId on account-scoped calls but not on /acls', async () => {
     const { impl, calls } = fakeFetch([
       tokenRoute,

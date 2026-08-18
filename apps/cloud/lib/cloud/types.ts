@@ -48,12 +48,9 @@ export interface StoredRedditCredential {
   userAgent?: string;
 }
 
-/** Apple Ads has no third-party OAuth grant; the tenant supplies an API-user key. */
+/** Apple Ads service-provider authorization stores only the tenant grant. */
 export interface StoredAppleCredential {
-  clientId: string;
-  teamId: string;
-  keyId: string;
-  privateKeyPem: string;
+  refreshToken: string;
 }
 
 export interface ProviderCredentialMap {
@@ -70,11 +67,8 @@ export type StoredProviderCredential = ProviderCredentialMap[CloudProvider];
 
 export const CLOUD_PROVIDERS = ['google', 'meta', 'tiktok', 'microsoft', 'reddit', 'apple'] as const satisfies readonly CloudProvider[];
 /** Providers whose connection is established through the Adport-owned OAuth application. */
-export const OAUTH_PROVIDERS = ['google', 'meta', 'tiktok', 'microsoft', 'reddit'] as const satisfies readonly CloudProvider[];
+export const OAUTH_PROVIDERS = ['google', 'meta', 'tiktok', 'microsoft', 'reddit', 'apple'] as const satisfies readonly CloudProvider[];
 export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
-/** Providers that require tenant-supplied API credentials because no OAuth grant exists. */
-export const KEY_PROVIDERS = ['apple'] as const satisfies readonly CloudProvider[];
-export type KeyProvider = (typeof KEY_PROVIDERS)[number];
 
 export function isOAuthProvider(value: string): value is OAuthProvider {
   return (OAUTH_PROVIDERS as readonly string[]).includes(value);

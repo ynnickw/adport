@@ -7,6 +7,8 @@ export interface AppleCredentials {
   keyId: string;
   /** PEM contents of the .p8 EC private key. */
   privateKeyPem: string;
+  /** Delegated service-provider grant. Omit for a self-managed API user. */
+  refreshToken?: string;
 }
 
 const TOKEN_URL = 'https://appleid.apple.com/auth/oauth2/token';
@@ -36,23 +38,31 @@ export class AppleAdsClient {
     if (this.accessToken && this.accessToken.expiresAt > Date.now()) {
       return this.accessToken.token;
     }
-    // Mint a fresh short-lived client secret per request — no 180-day rotation to manage.
+    // Mint a fresh short-lived client secret per request — no stored client-secret rotation.
     const clientSecret = createClientSecret(this.credentials);
+    const tokenParams = new URLSearchParams(this.credentials.refreshToken
+      ? {
+          grant_type: 'refresh_token',
+          client_id: this.credentials.clientId,
+          client_secret: clientSecret,
+          refresh_token: this.credentials.refreshToken,
+        }
+      : {
+          grant_type: 'client_credentials',
+          client_id: this.credentials.clientId,
+          client_secret: clientSecret,
+          scope: 'searchadsorg',
+        });
     const response = await this.fetchImpl(TOKEN_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'client_credentials',
-        client_id: this.credentials.clientId,
-        client_secret: clientSecret,
-        scope: 'searchadsorg',
-      }),
+      body: tokenParams,
     });
     const raw = await response.text();
     if (!response.ok) {
       throw new AdportError(
         'PROVIDER_ERROR',
-        `Apple Ads OAuth failed (${response.status}). Check clientId/teamId/keyId and that the public key is uploaded in Account Settings > API.`,
+        `Apple Ads OAuth failed (${response.status}). Check the client identity, uploaded public key, and delegated account access.`,
         safeJson(raw),
       );
     }

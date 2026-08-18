@@ -1,4 +1,5 @@
 import 'server-only';
+import { createClientSecret, type AppleCredentials } from '@adport/provider-apple';
 import { DEFAULT_GRAPH_VERSION } from '@adport/provider-meta';
 import { TIKTOK_API_VERSION } from '@adport/provider-tiktok';
 import { env } from '@/lib/env';
@@ -187,6 +188,67 @@ const tiktok: OAuthAdapter<'tiktok'> = {
   },
 };
 
+// ── Apple Ads (approved service-provider authorization) ──────────────────
+
+const APPLE_AUTHORIZE = 'https://appleid.apple.com/auth/oauth2/v2/authorize';
+const APPLE_TOKEN = 'https://appleid.apple.com/auth/oauth2/token';
+const APPLE_SCOPE = 'searchads';
+
+function appleApp(): AppleCredentials {
+  const value = env();
+  if (!value.APPLE_ADS_CLIENT_ID || !value.APPLE_ADS_TEAM_ID || !value.APPLE_ADS_KEY_ID || !value.APPLE_ADS_PRIVATE_KEY) {
+    throw new Error('Apple Ads OAuth is not configured. Set APPLE_ADS_CLIENT_ID, APPLE_ADS_TEAM_ID, APPLE_ADS_KEY_ID, and APPLE_ADS_PRIVATE_KEY.');
+  }
+  return {
+    clientId: value.APPLE_ADS_CLIENT_ID,
+    teamId: value.APPLE_ADS_TEAM_ID,
+    keyId: value.APPLE_ADS_KEY_ID,
+    privateKeyPem: value.APPLE_ADS_PRIVATE_KEY.replace(/\\n/g, '\n'),
+  };
+}
+
+const apple: OAuthAdapter<'apple'> = {
+  provider: 'apple',
+  flowLabel: 'Apple Ads service-provider authorization',
+  scopes: [APPLE_SCOPE],
+  pkce: false,
+  codeParam: 'code',
+  manualRevocationUrl: 'https://ui.ads.apple.com/',
+  configured: () => Boolean(env().APPLE_ADS_CLIENT_ID && env().APPLE_ADS_TEAM_ID && env().APPLE_ADS_KEY_ID && env().APPLE_ADS_PRIVATE_KEY),
+  authorizationUrl({ state }) {
+    const application = appleApp();
+    const url = new URL(APPLE_AUTHORIZE);
+    url.search = new URLSearchParams({
+      response_type: 'code',
+      client_id: application.clientId,
+      redirect_uri: oauthRedirectUri('apple'),
+      scope: APPLE_SCOPE,
+      state,
+    }).toString();
+    return url.toString();
+  },
+  async exchange({ code }) {
+    const application = appleApp();
+    const response = await fetch(APPLE_TOKEN, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: application.clientId,
+        client_secret: createClientSecret(application),
+        redirect_uri: oauthRedirectUri('apple'),
+        code,
+      }),
+      cache: 'no-store',
+    });
+    const body = (await response.json().catch(() => ({}))) as { refresh_token?: string; error?: string };
+    if (!response.ok || !body.refresh_token) throw providerMessage('Apple Ads', 'token exchange', body.error);
+    return { refreshToken: body.refresh_token };
+  },
+  // Apple requires the user to remove the service provider in Apple Ads API settings.
+  async revoke() { return false; },
+};
+
 // ── Microsoft Advertising (Microsoft identity platform) ───────────────────
 
 const MS_AUTHORIZE = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize';
@@ -307,7 +369,7 @@ const reddit: OAuthAdapter<'reddit'> = {
   },
 };
 
-const adapters = { google, meta, tiktok, microsoft, reddit } satisfies { [P in OAuthProvider]: OAuthAdapter<P> };
+const adapters = { google, meta, tiktok, microsoft, reddit, apple } satisfies { [P in OAuthProvider]: OAuthAdapter<P> };
 
 export function oauthAdapter<P extends OAuthProvider>(provider: P): OAuthAdapter<P> {
   return adapters[provider] as unknown as OAuthAdapter<P>;
@@ -325,6 +387,7 @@ export function oauthAvailability(): Record<OAuthProvider, boolean> {
     tiktok: tiktok.configured(),
     microsoft: microsoft.configured(),
     reddit: reddit.configured(),
+    apple: apple.configured(),
   };
 }
 
@@ -364,4 +427,8 @@ export function hydrateReddit(stored: ProviderCredentialMap['reddit']): { client
   const userAgent = stored.userAgent ?? value.REDDIT_USER_AGENT;
   if (!clientId || !clientSecret || !userAgent) throw new Error('Reddit application credentials are not configured for this deployment.');
   return { clientId, clientSecret, refreshToken: stored.refreshToken, userAgent };
+}
+
+export function hydrateApple(stored: ProviderCredentialMap['apple']): AppleCredentials {
+  return { ...appleApp(), refreshToken: stored.refreshToken };
 }

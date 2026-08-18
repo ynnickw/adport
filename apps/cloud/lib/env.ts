@@ -32,6 +32,11 @@ const schema = z.object({
   REDDIT_CLIENT_ID: z.string().min(5).optional(),
   REDDIT_CLIENT_SECRET: z.string().min(8).optional(),
   REDDIT_USER_AGENT: z.string().min(5).optional(),
+  // Adport-owned Apple Ads service-provider OAuth client.
+  APPLE_ADS_CLIENT_ID: z.string().regex(/^SEARCHADS\.[0-9a-f-]+$/i).optional(),
+  APPLE_ADS_TEAM_ID: z.string().regex(/^SEARCHADS\.[0-9a-f-]+$/i).optional(),
+  APPLE_ADS_KEY_ID: z.string().uuid().optional(),
+  APPLE_ADS_PRIVATE_KEY: z.string().min(100).optional(),
 });
 
 export type CloudEnv = z.infer<typeof schema>;
