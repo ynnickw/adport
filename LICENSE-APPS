@@ -1,0 +1,10 @@
+Adport application code under apps/ is licensed under the GNU Affero General
+Public License, version 3.0 only (AGPL-3.0-only).
+
+SPDX-License-Identifier: AGPL-3.0-only
+
+The complete license text is available at:
+https://www.gnu.org/licenses/agpl-3.0.txt
+
+This application license does not change the Apache-2.0 license that applies
+to the reusable packages under packages/.

@@ -1,7 +1,10 @@
 import { auditTools } from './audit/tools.js';
-import { CredentialStore } from './credentials/store.js';
+import { FindingsStore, type FindingsRepository } from './audit/store.js';
+import { AuditLog, type AuditRepository } from './policy/audit.js';
+import { CredentialStore, type CredentialRepository } from './credentials/store.js';
 import { PolicyEngine } from './policy/engine.js';
-import { loadPolicy } from './policy/policy.js';
+import { loadPolicy, type Policy } from './policy/policy.js';
+import { PendingStore, type PendingRepository } from './policy/pending.js';
 import { ProviderRegistry, type AdProvider } from './provider.js';
 import { builtinTools } from './tools/builtin.js';
 import { ToolRegistry, type AnyToolDefinition, type ToolContext } from './tools/registry.js';
@@ -14,6 +17,11 @@ export interface ProviderModule {
 
 export interface CreateContextOptions {
   policyPath?: string;
+  policy?: Policy;
+  credentials?: CredentialRepository;
+  pending?: PendingRepository;
+  audit?: AuditRepository;
+  findings?: FindingsRepository;
   /** Extra providers with their tools (e.g. the Google provider from @adport/provider-google). */
   providerModules?: ProviderModule[];
   /**
@@ -34,9 +42,10 @@ export async function createContext(options: CreateContextOptions = {}): Promise
   const includeMock = options.includeMock ?? false;
 
   const providers = new ProviderRegistry();
-  const { policy, source } = await loadPolicy(options.policyPath);
-  const engine = new PolicyEngine(policy);
-  const credentials = new CredentialStore();
+  const loaded = options.policy ? { policy: options.policy, source: 'injected' } : await loadPolicy(options.policyPath);
+  const engine = new PolicyEngine(loaded.policy, options.pending ?? new PendingStore(), options.audit ?? new AuditLog());
+  const credentials = options.credentials ?? new CredentialStore();
+  const findings = options.findings ?? new FindingsStore();
 
   const registry = new ToolRegistry();
   registry.register(builtinTools());
@@ -51,7 +60,7 @@ export async function createContext(options: CreateContextOptions = {}): Promise
     registry.register(mockTools());
   }
 
-  const ctx: ToolContext = { providers, engine, credentials };
+  const ctx: ToolContext = { providers, engine, credentials, findings };
   ctx.registry = registry;
-  return { ctx, registry, policySource: source };
+  return { ctx, registry, policySource: loaded.source };
 }

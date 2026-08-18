@@ -39,13 +39,13 @@ export {
   type RulePack,
 } from './audit/types.js';
 export { corePerformancePack } from './audit/packs/core-performance.js';
-export { FindingsStore } from './audit/store.js';
+export { FindingsStore, type FindingsRepository } from './audit/store.js';
 export { AuditRunner, type AuditRunOptions, type AuditRunResult } from './audit/runner.js';
 export { auditTools } from './audit/tools.js';
-export { CredentialStore, type CredentialRecord, type CredentialSource } from './credentials/store.js';
+export { CredentialStore, type CredentialRecord, type CredentialRepository, type CredentialSource } from './credentials/store.js';
 export { policySchema, loadPolicy, DEFAULT_POLICY, type Policy, type LoadedPolicy } from './policy/policy.js';
-export { PendingStore, type PendingOperation } from './policy/pending.js';
-export { AuditLog, type AuditEntry } from './policy/audit.js';
+export { PendingStore, type PendingOperation, type PendingRepository } from './policy/pending.js';
+export { AuditLog, type AuditEntry, type AuditRepository } from './policy/audit.js';
 export { PolicyEngine, hashOperation, type ApplyOutcome, type ValidationOutcome } from './policy/engine.js';
 export {
   ToolRegistry,

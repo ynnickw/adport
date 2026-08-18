@@ -3,12 +3,19 @@ import path from 'node:path';
 import { adportHome } from '../paths.js';
 import type { AuditFinding, FindingStatus } from './types.js';
 
+export interface FindingsRepository {
+  list(filter?: { status?: FindingStatus; provider?: string }): Promise<AuditFinding[]>;
+  get(id: string): Promise<AuditFinding | undefined>;
+  save(finding: AuditFinding): Promise<void>;
+  setStatus(id: string, status: FindingStatus): Promise<AuditFinding>;
+}
+
 /**
  * Findings persist on disk with their approval lifecycle — the durable side of
  * the recommendation harness: a recommendation can wait for a human decision
  * across restarts, indefinitely, at zero cost.
  */
-export class FindingsStore {
+export class FindingsStore implements FindingsRepository {
   constructor(private readonly dir: string = path.join(adportHome(), 'findings')) {}
 
   private file(id: string): string {

@@ -1,4 +1,4 @@
-import type { CredentialStore, ProviderModule } from '@adport/core';
+import type { CredentialRepository, ProviderModule } from '@adport/core';
 import { MicrosoftAdsClient, type MicrosoftCredentials } from './client.js';
 import { MicrosoftAdsProvider } from './provider.js';
 import { microsoftTools } from './tools.js';
@@ -15,7 +15,7 @@ export { MicrosoftAdsProvider, UNITS_TO_MICROS } from './provider.js';
 export { microsoftTools } from './tools.js';
 export { parseCsv } from './csv.js';
 
-export async function resolveMicrosoftCredentials(store: CredentialStore): Promise<MicrosoftCredentials | undefined> {
+export async function resolveMicrosoftCredentials(store: CredentialRepository): Promise<MicrosoftCredentials | undefined> {
   const record = await store.get('microsoft');
   if (record?.data.developer_token && record.data.client_id && record.data.refresh_token) {
     return {
@@ -39,7 +39,7 @@ export async function resolveMicrosoftCredentials(store: CredentialStore): Promi
   return undefined;
 }
 
-export async function createMicrosoftModule(store: CredentialStore): Promise<ProviderModule | undefined> {
+export async function createMicrosoftModule(store: CredentialRepository): Promise<ProviderModule | undefined> {
   const credentials = await resolveMicrosoftCredentials(store);
   if (!credentials) return undefined;
   const client = new MicrosoftAdsClient(credentials, async (rotated) => {

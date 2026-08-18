@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { CredentialStore } from '../credentials/store.js';
+import type { CredentialRepository } from '../credentials/store.js';
+import type { FindingsRepository } from '../audit/store.js';
 import { AdportError } from '../errors.js';
 import type { PolicyEngine } from '../policy/engine.js';
 import type { ProviderRegistry } from '../provider.js';
@@ -12,7 +13,8 @@ export interface ToolAnnotations {
 export interface ToolContext {
   providers: ProviderRegistry;
   engine: PolicyEngine;
-  credentials: CredentialStore;
+  credentials: CredentialRepository;
+  findings: FindingsRepository;
   /** Set by createContext; lets tools invoke other tools (e.g. recommendation_apply). */
   registry?: ToolRegistry;
 }

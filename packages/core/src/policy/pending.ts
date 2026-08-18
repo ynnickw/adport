@@ -13,11 +13,18 @@ export interface PendingOperation {
   expiresAt: string;
 }
 
+export interface PendingRepository {
+  put(op: PendingOperation): Promise<void>;
+  get(id: string): Promise<PendingOperation | undefined>;
+  delete(id: string): Promise<void>;
+  sweep(now?: Date): Promise<void>;
+}
+
 /**
  * File-backed store so validate and apply can happen in different processes
  * (CLI invocations, MCP server restarts).
  */
-export class PendingStore {
+export class PendingStore implements PendingRepository {
   constructor(private readonly dir: string = path.join(adportHome(), 'pending')) {}
 
   private file(id: string): string {

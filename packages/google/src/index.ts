@@ -1,4 +1,4 @@
-import type { CredentialStore, ProviderModule } from '@adport/core';
+import type { CredentialRepository, ProviderModule } from '@adport/core';
 import { GoogleAdsRestClient, type GoogleCredentials } from './client.js';
 import { GoogleAdsProvider } from './provider.js';
 import { googleTools } from './tools.js';
@@ -11,7 +11,7 @@ export { googleTools } from './tools.js';
  * Resolve Google credentials: adport credential store first, then the
  * google-ads.yaml-style GOOGLE_ADS_* environment variables.
  */
-export async function resolveGoogleCredentials(store: CredentialStore): Promise<GoogleCredentials | undefined> {
+export async function resolveGoogleCredentials(store: CredentialRepository): Promise<GoogleCredentials | undefined> {
   const record = await store.get('google');
   if (record) {
     const { developer_token, client_id, client_secret, refresh_token, login_customer_id } = record.data;
@@ -39,7 +39,7 @@ export async function resolveGoogleCredentials(store: CredentialStore): Promise<
 }
 
 /** Provider module for createContext(); undefined when Google isn't connected. */
-export async function createGoogleModule(store: CredentialStore): Promise<ProviderModule | undefined> {
+export async function createGoogleModule(store: CredentialRepository): Promise<ProviderModule | undefined> {
   const credentials = await resolveGoogleCredentials(store);
   if (!credentials) return undefined;
   const provider = new GoogleAdsProvider(new GoogleAdsRestClient(credentials));

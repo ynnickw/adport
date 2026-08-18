@@ -1,4 +1,4 @@
-import type { CredentialStore, ProviderModule } from '@adport/core';
+import type { CredentialRepository, ProviderModule } from '@adport/core';
 import { RedditAdsClient, type RedditCredentials } from './client.js';
 import { RedditAdsProvider } from './provider.js';
 import { redditTools } from './tools.js';
@@ -7,7 +7,7 @@ export { RedditAdsClient, REDDIT_API_BASE, REDDIT_API_VERSION, REDDIT_TOKEN_URL,
 export { RedditAdsProvider, REDDIT_MICROS, type RedditCampaign } from './provider.js';
 export { redditTools } from './tools.js';
 
-export async function resolveRedditCredentials(store: CredentialStore): Promise<RedditCredentials | undefined> {
+export async function resolveRedditCredentials(store: CredentialRepository): Promise<RedditCredentials | undefined> {
   const record = await store.get('reddit');
   const data = record?.data;
   if (data?.client_id && data.client_secret && data.refresh_token && data.user_agent) {
@@ -33,7 +33,7 @@ export async function resolveRedditCredentials(store: CredentialStore): Promise<
   return undefined;
 }
 
-export async function createRedditModule(store: CredentialStore): Promise<ProviderModule | undefined> {
+export async function createRedditModule(store: CredentialRepository): Promise<ProviderModule | undefined> {
   const credentials = await resolveRedditCredentials(store);
   if (!credentials) return undefined;
   const provider = new RedditAdsProvider(new RedditAdsClient(credentials));

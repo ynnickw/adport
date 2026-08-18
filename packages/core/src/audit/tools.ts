@@ -3,7 +3,6 @@ import { AdportError } from '../errors.js';
 import { DATE_PRESETS } from '../model.js';
 import { defineTool, type AnyToolDefinition } from '../tools/registry.js';
 import { AuditRunner } from './runner.js';
-import { FindingsStore } from './store.js';
 
 const dateRangeSchema = z.union([
   z.enum(DATE_PRESETS),
@@ -29,7 +28,7 @@ export function auditTools(): AnyToolDefinition[] {
       }),
       annotations: { readOnly: true },
       async handler(input, ctx) {
-        const runner = new AuditRunner(ctx.providers);
+        const runner = new AuditRunner(ctx.providers, ctx.findings);
         const result = await runner.run({
           provider: input.provider,
           accountIds: input.account_ids,
@@ -47,8 +46,8 @@ export function auditTools(): AnyToolDefinition[] {
         provider: z.string().optional(),
       }),
       annotations: { readOnly: true },
-      async handler(input) {
-        const findings = await new FindingsStore().list(input);
+      async handler(input, ctx) {
+        const findings = await ctx.findings.list(input);
         return { findings, count: findings.length };
       },
     }),
@@ -58,8 +57,8 @@ export function auditTools(): AnyToolDefinition[] {
       description: 'Dismiss a finding (it will not be re-opened by future audit runs).',
       input: z.object({ finding_id: z.string() }),
       annotations: { readOnly: false },
-      async handler(input) {
-        const finding = await new FindingsStore().setStatus(input.finding_id, 'dismissed');
+      async handler(input, ctx) {
+        const finding = await ctx.findings.setStatus(input.finding_id, 'dismissed');
         return { finding };
       },
     }),
@@ -78,7 +77,7 @@ export function auditTools(): AnyToolDefinition[] {
         if (!ctx.registry) {
           throw new AdportError('PROVIDER_ERROR', 'recommendation_apply requires a tool registry in context');
         }
-        const store = new FindingsStore();
+        const store = ctx.findings;
         const finding = await store.get(input.finding_id);
         if (!finding) throw new AdportError('INVALID_INPUT', `Finding not found: ${input.finding_id}`);
         if (finding.status !== 'open') {

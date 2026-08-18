@@ -1,4 +1,4 @@
-import type { CredentialStore, ProviderModule } from '@adport/core';
+import type { CredentialRepository, ProviderModule } from '@adport/core';
 import { AppleAdsClient, type AppleCredentials } from './client.js';
 import { AppleAdsProvider } from './provider.js';
 import { appleTools } from './tools.js';
@@ -8,7 +8,7 @@ export { createClientSecret, type ClientSecretInput } from './jwt.js';
 export { AppleAdsProvider, UNITS_TO_MICROS } from './provider.js';
 export { appleTools } from './tools.js';
 
-export async function resolveAppleCredentials(store: CredentialStore): Promise<AppleCredentials | undefined> {
+export async function resolveAppleCredentials(store: CredentialRepository): Promise<AppleCredentials | undefined> {
   const record = await store.get('apple');
   if (record?.data.client_id && record.data.team_id && record.data.key_id && record.data.private_key) {
     return {
@@ -30,7 +30,7 @@ export async function resolveAppleCredentials(store: CredentialStore): Promise<A
   return undefined;
 }
 
-export async function createAppleModule(store: CredentialStore): Promise<ProviderModule | undefined> {
+export async function createAppleModule(store: CredentialRepository): Promise<ProviderModule | undefined> {
   const credentials = await resolveAppleCredentials(store);
   if (!credentials) return undefined;
   const provider = new AppleAdsProvider(new AppleAdsClient(credentials));

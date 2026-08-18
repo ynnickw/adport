@@ -18,13 +18,20 @@ interface CredentialFile {
   credentials: Record<string, CredentialRecord>;
 }
 
+export interface CredentialRepository {
+  get(provider: string): Promise<CredentialRecord | undefined>;
+  list(): Promise<CredentialRecord[]>;
+  set(record: Omit<CredentialRecord, 'createdAt' | 'updatedAt'>): Promise<CredentialRecord>;
+  delete(provider: string): Promise<boolean>;
+}
+
 const EMPTY: CredentialFile = { version: 1, credentials: {} };
 
 /**
  * File-backed credential store: ${ADPORT_HOME}/credentials.json, chmod 600.
  * OS keychain support may come later; the interface is deliberately async.
  */
-export class CredentialStore {
+export class CredentialStore implements CredentialRepository {
   constructor(private readonly dir: string = adportHome()) {}
 
   private file(): string {

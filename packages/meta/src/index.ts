@@ -1,4 +1,4 @@
-import type { CredentialStore, ProviderModule } from '@adport/core';
+import type { CredentialRepository, ProviderModule } from '@adport/core';
 import { MetaGraphClient, type MetaCredentials } from './client.js';
 import { MetaAdsProvider } from './provider.js';
 import { metaTools } from './tools.js';
@@ -15,7 +15,7 @@ export { MetaAdsProvider, CENTS_TO_MICROS } from './provider.js';
 export { metaTools } from './tools.js';
 
 /** Credential store record first, then META_ACCESS_TOKEN env fallback. */
-export async function resolveMetaCredentials(store: CredentialStore): Promise<MetaCredentials | undefined> {
+export async function resolveMetaCredentials(store: CredentialRepository): Promise<MetaCredentials | undefined> {
   const record = await store.get('meta');
   if (record?.data.access_token) {
     return {
@@ -35,7 +35,7 @@ export async function resolveMetaCredentials(store: CredentialStore): Promise<Me
 }
 
 /** Provider module for createContext(); undefined when Meta isn't connected. */
-export async function createMetaModule(store: CredentialStore): Promise<ProviderModule | undefined> {
+export async function createMetaModule(store: CredentialRepository): Promise<ProviderModule | undefined> {
   const credentials = await resolveMetaCredentials(store);
   if (!credentials) return undefined;
   const provider = new MetaAdsProvider(new MetaGraphClient(credentials));

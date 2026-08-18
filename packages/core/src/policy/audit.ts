@@ -14,8 +14,13 @@ export interface AuditEntry {
   details?: unknown;
 }
 
+export interface AuditRepository {
+  append(entry: Omit<AuditEntry, 'ts'>): Promise<void>;
+  read(limit?: number): Promise<AuditEntry[]>;
+}
+
 /** Append-only JSONL, one file per month: ${ADPORT_HOME}/audit/audit-YYYY-MM.jsonl */
-export class AuditLog {
+export class AuditLog implements AuditRepository {
   constructor(private readonly dir: string = path.join(adportHome(), 'audit')) {}
 
   private file(now = new Date()): string {

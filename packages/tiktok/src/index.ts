@@ -1,4 +1,4 @@
-import type { CredentialStore, ProviderModule } from '@adport/core';
+import type { CredentialRepository, ProviderModule } from '@adport/core';
 import { TikTokClient, type TikTokCredentials } from './client.js';
 import { TikTokAdsProvider } from './provider.js';
 import { tiktokTools } from './tools.js';
@@ -8,7 +8,7 @@ export { TikTokAdsProvider, UNITS_TO_MICROS } from './provider.js';
 export { tiktokTools } from './tools.js';
 
 export async function resolveTikTokCredentials(
-  store: CredentialStore,
+  store: CredentialRepository,
 ): Promise<(TikTokCredentials & { appId: string; secret: string }) | undefined> {
   const record = await store.get('tiktok');
   if (record?.data.access_token && record.data.app_id && record.data.secret) {
@@ -31,7 +31,7 @@ export async function resolveTikTokCredentials(
   return undefined;
 }
 
-export async function createTikTokModule(store: CredentialStore): Promise<ProviderModule | undefined> {
+export async function createTikTokModule(store: CredentialRepository): Promise<ProviderModule | undefined> {
   const credentials = await resolveTikTokCredentials(store);
   if (!credentials) return undefined;
   const provider = new TikTokAdsProvider(new TikTokClient(credentials), {
