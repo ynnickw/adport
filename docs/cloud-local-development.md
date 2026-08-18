@@ -24,7 +24,9 @@ openssl rand -base64 32
 openssl rand -base64 32
 ```
 
-Use one for `ADPORT_CLOUD_ENCRYPTION_KEY` and the other for `ADPORT_API_KEY_PEPPER`. Local placeholder Google application values are sufficient for builds and non-Google tests; a real Google OAuth flow requires a web OAuth client, developer token, and exact callback URI.
+Use one for `ADPORT_CLOUD_ENCRYPTION_KEY` and the other for `ADPORT_API_KEY_PEPPER`.
+
+Provider connections are OAuth-only wherever the platform offers a third-party grant. The app never asks a tenant for application secrets: each provider block in `.env.example` (`GOOGLE_ADS_*`, `META_*`, `TIKTOK_*`, `MICROSOFT_ADS_*`, `REDDIT_*`) holds the Adport-owned application, and the matching Connections card stays disabled ("Awaiting app approval") until that block is fully set. Apple Ads is the single exception: it has no OAuth grant, so tenants paste an API-user key that is encrypted per organization. Leaving every provider block empty is fine for builds and non-provider tests.
 
 ## Run
 
@@ -32,7 +34,9 @@ Use one for `ADPORT_CLOUD_ENCRYPTION_KEY` and the other for `ADPORT_API_KEY_PEPP
 pnpm --filter @adport/cloud dev
 ```
 
-The default callback is `http://localhost:3000/api/oauth/google/callback`. If another process owns port 3000, set `ADPORT_CLOUD_BASE_URL` to the actual port and register the same redirect in the development Google Cloud project.
+The app root `/` is the sign-in screen (signed-in users are redirected to `/dashboard`); there is no marketing landing page in the cloud app — that lives on adport.dev. The dashboard is a sidebar shell with Overview, Connections, Accounts, Reports, Approvals, Audit log, Policies, Team, and Agent access.
+
+Hosted OAuth callbacks are `${ADPORT_CLOUD_BASE_URL}/api/oauth/<provider>/callback` for `google`, `meta`, `tiktok`, `microsoft`, and `reddit`; the shared start route is `/api/oauth/<provider>/start`. If another process owns port 3000, set `ADPORT_CLOUD_BASE_URL` to the actual port and register the same redirect in each development provider app.
 
 For a production-mode local check:
 
@@ -57,6 +61,8 @@ The database suite verifies:
 
 - Auth-triggered personal tenants and RLS isolation;
 - encrypted credentials for all six providers with no plaintext in Postgres;
+- hosted OAuth broker consent URLs, PKCE where supported, and application-identity injection for every OAuth provider;
+- browser-safe provider error mapping (no echoed tokens or CLI instructions);
 - API-key digest authentication and revocation;
 - durable preview/apply pending operations and audit events;
 - tenant member and safety-setting transactions;
@@ -73,7 +79,8 @@ The database suite verifies:
 
 ## Secret-handling rules
 
-- Never expose `SUPABASE_SECRET_KEY`, the database URL, provider credentials, OAuth client secrets, encryption keys, or API-key peppers through `NEXT_PUBLIC_*`.
+- Never expose `SUPABASE_SECRET_KEY`, the database URL, provider credentials, OAuth client/app secrets, developer tokens, encryption keys, or API-key peppers through `NEXT_PUBLIC_*`.
+- Application identity (client/app id, secret, developer token, user agent) stays in server env; only the tenant grant is written to the encrypted vault, and the runtime injects the application identity when building provider clients.
 - Never log request bodies for connection, OAuth, API-key creation, or MCP bearer authentication routes.
 - API keys are shown once. Provider credentials are accepted server-side, encrypted, and never returned.
 - Use the local stack only with test advertising credentials. Production credentials belong in the deployed secret/KMS and database environment.

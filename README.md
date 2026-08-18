@@ -56,7 +56,7 @@ adport connect reddit
 
 These are deliberately **local/BYO** connections. You create and own each provider app, developer token, or API key; the CLI talks directly to the provider and writes secrets only to `${ADPORT_HOME:-~/.config/adport}/credentials.json` with mode `0600`. Adport Cloud and its hosted OAuth broker are not involved. Provider review, consent warnings, and tenant policies therefore belong to your provider app. Remove a stored connection with `adport disconnect <provider>`; revoke the credential separately at the provider when necessary.
 
-The cloud application in `apps/cloud` is a separate flow. Google uses a hosted OAuth broker with the single Google Ads scope; all six providers share an encrypted tenant vault and remote REST/MCP runtime. Non-Google providers currently use encrypted BYO credentials until their reviewed hosted applications and delegated flows are production-ready.
+The cloud application in `apps/cloud` is a separate flow. Every OAuth-capable provider (Google, Meta, TikTok, Microsoft, Reddit) is connected through a hosted OAuth broker backed by Adport-owned, reviewed applications; tenants never paste application secrets, and each provider card activates once its application is approved and configured. Apple Ads, which has no third-party OAuth grant, accepts a tenant API-user key. All six providers share an encrypted tenant vault and the remote REST/MCP runtime.
 
 The complete credential and authorization checklist is in [docs/providers.md](./docs/providers.md). Never commit provider tokens, app secrets, refresh tokens, or private keys.
 
@@ -159,7 +159,7 @@ The policy contract and audit event schema are documented in [docs/write-safety.
 
 The CLI and stdio MCP server remain local and BYO. They do not contact Adport Cloud.
 
-The repository now also contains a Next.js/Supabase cloud control center with tenant authentication and roles, RLS, encrypted multi-provider credentials, Google OAuth with PKCE/state, scoped API keys, a remote MCP endpoint, persistent pending approvals/audit events, retention, revocation, and organization deletion. It reuses the same provider modules, tool registry, and policy engine; it does not create a second write path. The implementation is local-first and still has explicit production gates. See [docs/deployment-model.md](./docs/deployment-model.md) and [docs/cloud-local-development.md](./docs/cloud-local-development.md).
+The repository now also contains a Next.js/Supabase cloud control center with tenant authentication and roles, RLS, encrypted multi-provider credentials, a hosted OAuth broker for Google, Meta, TikTok, Microsoft, and Reddit (PKCE/one-time state, revocation on disconnect), scoped API keys, a remote MCP endpoint, persistent pending approvals/audit events, retention, revocation, and organization deletion. It reuses the same provider modules, tool registry, and policy engine; it does not create a second write path. The implementation is local-first and still has explicit production gates. See [docs/deployment-model.md](./docs/deployment-model.md) and [docs/cloud-local-development.md](./docs/cloud-local-development.md).
 
 ## Development
 

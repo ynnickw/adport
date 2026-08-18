@@ -42,6 +42,7 @@ const config: NextConfig = {
         ],
       },
       { source: '/dashboard', headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }] },
+      { source: '/dashboard/:path*', headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }] },
       { source: '/api/:path*', headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }] },
       { source: '/mcp', headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }] },
     ];

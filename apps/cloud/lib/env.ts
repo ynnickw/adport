@@ -10,12 +10,28 @@ const schema = z.object({
   ADPORT_CLOUD_BASE_URL: z.string().url(),
   ADPORT_CLOUD_ENCRYPTION_KEY: z.string().min(40),
   ADPORT_API_KEY_PEPPER: z.string().min(32),
+  // Adport-owned Google Ads OAuth application (verified project).
   GOOGLE_ADS_CLIENT_ID: z.string().min(10).optional(),
   GOOGLE_ADS_CLIENT_SECRET: z.string().min(8).optional(),
   GOOGLE_ADS_DEVELOPER_TOKEN: z.string().min(8).optional(),
   GOOGLE_ADS_LOGIN_CUSTOMER_ID: z.string().regex(/^\d{10}$/).optional(),
   GOOGLE_OAUTH_TOKEN_URL: z.string().url().default('https://oauth2.googleapis.com/token'),
   GOOGLE_OAUTH_REVOKE_URL: z.string().url().default('https://oauth2.googleapis.com/revoke'),
+  // Adport-owned Meta Marketing API app (Facebook Login for Business).
+  META_APP_ID: z.string().min(5).optional(),
+  META_APP_SECRET: z.string().min(8).optional(),
+  META_API_VERSION: z.string().regex(/^v\d+\.\d+$/).optional(),
+  // Adport-owned TikTok for Business Marketing API app.
+  TIKTOK_APP_ID: z.string().min(5).optional(),
+  TIKTOK_APP_SECRET: z.string().min(8).optional(),
+  // Adport-owned Microsoft Entra application + Microsoft Advertising developer token.
+  MICROSOFT_ADS_CLIENT_ID: z.string().min(8).optional(),
+  MICROSOFT_ADS_CLIENT_SECRET: z.string().min(8).optional(),
+  MICROSOFT_ADS_DEVELOPER_TOKEN: z.string().min(8).optional(),
+  // Adport-owned Reddit Ads API web app.
+  REDDIT_CLIENT_ID: z.string().min(5).optional(),
+  REDDIT_CLIENT_SECRET: z.string().min(8).optional(),
+  REDDIT_USER_AGENT: z.string().min(5).optional(),
 });
 
 export type CloudEnv = z.infer<typeof schema>;

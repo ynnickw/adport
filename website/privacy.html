@@ -17,7 +17,7 @@
     <main class="legal-content">
       <p class="eyebrow">Legal</p>
       <h1>Privacy Policy</h1>
-      <p class="updated">Effective August 17, 2026</p>
+      <p class="updated">Effective August 18, 2026</p>
 
       <p>Adport is a paid-media control plane maintained by Yannick Westermann Labs. It can be used as self-hosted open-source software or through the managed Adport Cloud service. This policy explains both modes and, in particular, how Adport Cloud accesses, uses, stores, protects, retains, and shares Google user data.</p>
 
@@ -62,7 +62,7 @@
       <p>In self-hosted mode, credentials, advertising data, reports, pending operations, findings, and audit records remain on infrastructure controlled by the user. The installation communicates directly with the selected advertising platform and does not send this information to Adport Cloud unless the user separately configures a remote destination. The user controls local security, retention, backups, and deletion.</p>
 
       <h2>Other advertising platforms</h2>
-      <p>When a user connects Meta, TikTok, Apple Ads, Microsoft Advertising, or Reddit Ads, Adport accesses only the data and permissions needed to perform the user's requested reporting and account-management features. Adport does not sell that data or use it for unrelated advertising, profiling, lending, surveillance, or shared model training. For manually supplied cloud credentials, removing the encrypted Adport copy does not necessarily revoke the credential at the provider; the dashboard tells the user when separate provider-side revocation is required.</p>
+      <p>When a user connects Meta, TikTok, Microsoft Advertising, or Reddit Ads, the connection is made through that platform's own OAuth consent screen using an application owned by Adport; the user never provides Adport with platform passwords or application secrets, and Adport stores only the resulting encrypted grant for the user's organization. Apple Ads offers no third-party OAuth grant, so a user connects it by entering an Apple Ads API-user key that Adport encrypts for the organization and never returns. For every provider Adport accesses only the data and permissions needed to perform the user's requested reporting and account-management features, and does not sell that data or use it for unrelated advertising, profiling, lending, surveillance, or shared model training. On disconnect Adport revokes the grant at the platform where the platform provides a revocation API (Google, Meta, Reddit, TikTok) and deletes the encrypted copy; for Microsoft Advertising and Apple Ads the dashboard tells the user that Adport's access must additionally be removed in that platform's own settings.</p>
 
       <h2>International processing</h2>
       <p>Adport's cloud infrastructure and connected advertising platforms may process information in countries other than the user's country. Applicable provider terms and contractual safeguards govern those transfers.</p>

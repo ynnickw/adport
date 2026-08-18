@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { decryptSecret, digestApiKey, digestState, encryptSecret } from '@/lib/crypto';
 import type {
   CloudProvider,
+  OAuthProvider,
   ProviderCredentialMap,
   StoredGoogleCredential,
   StoredProviderCredential,
@@ -48,21 +49,22 @@ export async function getOrganizationPolicy(organizationId: string): Promise<Pol
 export async function createOAuthTransaction(input: {
   organizationId: string;
   userId: string;
+  provider: OAuthProvider;
   state: string;
   verifier: string;
   returnPath?: string;
 }): Promise<void> {
-  const aad = `oauth:${input.organizationId}:${input.userId}:google`;
+  const aad = `oauth:${input.organizationId}:${input.userId}:${input.provider}`;
   await db()`
     insert into private.oauth_transactions
       (organization_id, user_id, provider, state_hash, verifier_ciphertext, return_path, expires_at)
     values
-      (${input.organizationId}, ${input.userId}, 'google', ${digestState(input.state)},
-       ${encryptSecret({ verifier: input.verifier }, aad)}, ${input.returnPath ?? '/dashboard'}, now() + interval '10 minutes')
+      (${input.organizationId}, ${input.userId}, ${input.provider}, ${digestState(input.state)},
+       ${encryptSecret({ verifier: input.verifier }, aad)}, ${input.returnPath ?? '/dashboard/connections'}, now() + interval '10 minutes')
   `;
 }
 
-export async function consumeOAuthTransaction(state: string, userId: string): Promise<{
+export async function consumeOAuthTransaction(provider: OAuthProvider, state: string, userId: string): Promise<{
   organizationId: string;
   verifier: string;
   returnPath: string;
@@ -79,7 +81,7 @@ export async function consumeOAuthTransaction(state: string, userId: string): Pr
     }>>`
       select id, organization_id, user_id, verifier_ciphertext, return_path, expires_at, consumed_at
       from private.oauth_transactions
-      where state_hash = ${digestState(state)} and provider = 'google'
+      where state_hash = ${digestState(state)} and provider = ${provider}
       for update
     `;
     const transaction = rows[0];
@@ -87,7 +89,7 @@ export async function consumeOAuthTransaction(state: string, userId: string): Pr
       throw new Error('OAuth state is invalid, expired, or already used.');
     }
     await sql`update private.oauth_transactions set consumed_at = now() where id = ${transaction.id}`;
-    const aad = `oauth:${transaction.organizationId}:${userId}:google`;
+    const aad = `oauth:${transaction.organizationId}:${userId}:${provider}`;
     const secret = decryptSecret<{ verifier: string }>(transaction.verifierCiphertext, aad);
     return { organizationId: transaction.organizationId, verifier: secret.verifier, returnPath: transaction.returnPath };
   });
@@ -407,4 +409,76 @@ export class PostgresAuditStore {
   async append(entry: Omit<AuditEntry, 'ts'>): Promise<void> {
     await recordAudit(this.principal, entry);
   }
+}
+
+export interface ConnectionSummary {
+  id: string;
+  provider: CloudProvider;
+  status: 'connected' | 'error' | 'revoked';
+  externalLabel: string | null;
+  lastError: string | null;
+  scopes: string[];
+  connectedAt: Date;
+  lastVerifiedAt: Date | null;
+}
+
+export async function listConnections(organizationId: string): Promise<ConnectionSummary[]> {
+  return db()<ConnectionSummary[]>`
+    select id, provider, status, external_label, last_error, scopes, connected_at, last_verified_at
+    from public.connections
+    where organization_id = ${organizationId}
+    order by connected_at asc
+  `;
+}
+
+export interface PendingOperationRow {
+  id: string;
+  provider: string;
+  operationHash: string;
+  operation: PendingOperation['op'];
+  preview: PendingOperation['preview'];
+  createdBy: string | null;
+  createdAt: Date;
+  expiresAt: Date;
+  consumedAt: Date | null;
+}
+
+export async function listPendingOperations(organizationId: string, limit = 50): Promise<PendingOperationRow[]> {
+  return db()<PendingOperationRow[]>`
+    select id, provider, operation_hash, operation, preview, created_by, created_at, expires_at, consumed_at
+    from public.pending_operations
+    where organization_id = ${organizationId} and consumed_at is null and expires_at > now()
+    order by created_at desc
+    limit ${limit}
+  `;
+}
+
+export interface AuditEventRow {
+  id: string;
+  event: string;
+  provider: string;
+  tool: string;
+  accountId: string;
+  pendingId: string | null;
+  summary: string;
+  actorUserId: string | null;
+  apiKeyId: string | null;
+  createdAt: Date;
+}
+
+export async function listAuditEvents(organizationId: string, limit = 100): Promise<AuditEventRow[]> {
+  return db()<AuditEventRow[]>`
+    select id, event, provider, tool, account_id, pending_id, summary, actor_user_id, api_key_id, created_at
+    from public.audit_events
+    where organization_id = ${organizationId}
+    order by created_at desc
+    limit ${limit}
+  `;
+}
+
+export async function countAuditEvents(organizationId: string): Promise<number> {
+  const rows = await db()<Array<{ count: number }>>`
+    select count(*)::int as count from public.audit_events where organization_id = ${organizationId}
+  `;
+  return rows[0]?.count ?? 0;
 }

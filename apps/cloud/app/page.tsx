@@ -1,19 +1,13 @@
-import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { AuthScreen } from '@/components/auth-screen';
 import { createClient } from '@/lib/supabase/server';
 
-export default async function HomePage() {
+export const dynamic = 'force-dynamic';
+
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ mode?: string; error?: string; message?: string }> }) {
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
-  return (
-    <main className="shell hero">
-      <div>
-        <p>Adport Cloud</p>
-        <h1>Your paid media control plane.</h1>
-        <p>Connect Google, Meta, TikTok, Apple, Microsoft, and Reddit Ads, inspect performance from your dashboard or AI client, and keep every write behind a reviewable two-step approval.</p>
-        <Link className="button" href={data.user ? '/dashboard' : '/login'}>
-          {data.user ? 'Open dashboard' : 'Create an account'}
-        </Link>
-      </div>
-    </main>
-  );
+  if (data.user) redirect('/dashboard');
+  const { mode, error, message } = await searchParams;
+  return <AuthScreen mode={mode === 'signup' ? 'signup' : 'signin'} error={error} message={message} />;
 }

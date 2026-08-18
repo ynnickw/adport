@@ -1,0 +1,77 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { formatDate } from '@/components/ui';
+
+interface KeySummary { id: string; name: string; keyPrefix: string; createdAt: string; lastUsedAt: string | null; }
+
+export function ApiKeyManager({ organizationId, canManage }: { organizationId: string; canManage: boolean }) {
+  const [keys, setKeys] = useState<KeySummary[]>();
+  const [createdKey, setCreatedKey] = useState<string>();
+  const [name, setName] = useState('');
+  const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
+    const response = await fetch(`/api/api-keys?organization_id=${organizationId}`, { cache: 'no-store' });
+    const data = await response.json().catch(() => ({})) as { keys?: KeySummary[]; error?: string };
+    if (!response.ok) setError(data.error ?? 'Unable to load API keys.');
+    else setKeys(data.keys ?? []);
+  }
+
+  useEffect(() => { void load(); }, [organizationId]);
+
+  async function create() {
+    setBusy(true);
+    setError(undefined);
+    const response = await fetch('/api/api-keys', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ organization_id: organizationId, name: name.trim() || 'Agent key', scopes: ['tools:read', 'tools:write'] }),
+    });
+    const data = await response.json().catch(() => ({})) as { key?: string; error?: string };
+    if (!response.ok || !data.key) setError(data.error ?? 'Unable to create API key.');
+    else { setCreatedKey(data.key); setName(''); await load(); }
+    setBusy(false);
+  }
+
+  async function revoke(id: string) {
+    if (!window.confirm('Revoke this API key? Connected agents lose access immediately.')) return;
+    const response = await fetch(`/api/api-keys/${id}?organization_id=${organizationId}`, { method: 'DELETE' });
+    if (!response.ok) setError('Unable to revoke API key.');
+    else await load();
+  }
+
+  return (
+    <>
+      {createdKey ? (
+        <div className="card-body" style={{ paddingBottom: 0 }}>
+          <div className="callout success">Copy this key now — it is shown only once and stored as a hash.</div>
+          <div className="code secret-reveal">{createdKey}</div>
+        </div>
+      ) : null}
+      {error ? <div className="card-body" style={{ paddingBottom: 0 }}><div className="error-callout" style={{ marginBottom: 0 }}>{error}</div></div> : null}
+      <div className="row-list">
+        {keys === undefined ? <div className="row-item"><span className="inline-note">Loading keys…</span></div> : null}
+        {keys?.length === 0 ? <div className="row-item"><span className="inline-note">No API keys yet. Create one to connect an AI client.</span></div> : null}
+        {keys?.map((key) => (
+          <div className="row-item" key={key.id}>
+            <div>
+              <strong>{key.name}</strong>
+              <div className="cell-sub">{key.keyPrefix}… · created {formatDate(key.createdAt)} · {key.lastUsedAt ? `last used ${formatDate(key.lastUsedAt)}` : 'never used'}</div>
+            </div>
+            {canManage ? <button className="button danger small" onClick={() => void revoke(key.id)}>Revoke</button> : null}
+          </div>
+        ))}
+      </div>
+      {canManage ? (
+        <div className="card-body" style={{ borderTop: '1px solid var(--line-soft)' }}>
+          <div className="form-row">
+            <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Key name, e.g. Claude Desktop" aria-label="Key name" style={{ flex: 1, minWidth: '14rem' }} />
+            <button className="button" disabled={busy} onClick={() => void create()}>{busy ? 'Creating…' : 'Create key'}</button>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}

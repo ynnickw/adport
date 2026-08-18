@@ -23,7 +23,7 @@ The cloud application is a Next.js 16 service backed by Supabase Auth and Postgr
 7. REST and remote MCP call the same `ToolRegistry` and `PolicyEngine` as the CLI. There is no cloud-only mutation path.
 8. Pending approvals and audit events are persisted in Postgres. The exact operation hash, tenant, provider, expiry, and policy are checked again before apply.
 
-The cloud runtime supports Google, Meta, TikTok, Apple, Microsoft, and Reddit providers. Google uses a hosted OAuth web flow requesting only `https://www.googleapis.com/auth/adwords`. The other providers can use encrypted BYO credentials while their reviewed hosted applications and delegated authorization flows are prepared. Microsoft and Reddit refresh-token rotations are persisted immediately.
+The cloud runtime supports Google, Meta, TikTok, Apple, Microsoft, and Reddit providers. Google, Meta, TikTok, Microsoft, and Reddit are connected only through the hosted OAuth broker (`/api/oauth/<provider>/start` → provider consent → `/api/oauth/<provider>/callback`) using Adport-owned applications configured in server environment; Google requests only `https://www.googleapis.com/auth/adwords`. Tenants never enter application secrets, and each provider card is disabled until its application is approved and configured. Apple Ads has no third-party OAuth grant and accepts an encrypted tenant API-user key. Microsoft and Reddit refresh-token rotations are persisted immediately; disconnect revokes the grant at the provider where an API exists before deleting the encrypted copy.
 
 ## Tenant and service controls
 
