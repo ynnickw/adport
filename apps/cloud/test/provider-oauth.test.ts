@@ -1,7 +1,10 @@
+import { generateKeyPairSync } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { hydrateMicrosoft, hydrateReddit, hydrateTikTok, oauthAdapter, oauthAvailability, oauthRedirectUri } from '@/lib/cloud/provider-oauth';
+import { hydrateApple, hydrateMicrosoft, hydrateReddit, hydrateTikTok, oauthAdapter, oauthAvailability, oauthRedirectUri } from '@/lib/cloud/provider-oauth';
 import { resetEnvForTests } from '@/lib/env';
 import { OAUTH_PROVIDERS } from '@/lib/cloud/types';
+
+const { privateKey: applePrivateKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
 
 const APP_ENV: Record<string, string> = {
   GOOGLE_ADS_CLIENT_ID: 'test-client-id.apps.googleusercontent.com',
@@ -17,6 +20,10 @@ const APP_ENV: Record<string, string> = {
   REDDIT_CLIENT_ID: 'reddit-client',
   REDDIT_CLIENT_SECRET: 'reddit-client-secret',
   REDDIT_USER_AGENT: 'web:cloud.adport:v1 (by /u/adport)',
+  APPLE_ADS_CLIENT_ID: 'SEARCHADS.11111111-2222-3333-4444-555555555555',
+  APPLE_ADS_TEAM_ID: 'SEARCHADS.aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+  APPLE_ADS_KEY_ID: '12345678-90ab-4cde-8f01-234567890abc',
+  APPLE_ADS_PRIVATE_KEY: applePrivateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
 };
 
 const BASE = (process.env.ADPORT_CLOUD_BASE_URL ?? 'https://app.adport.test').replace(/\/$/, '');
@@ -32,10 +39,10 @@ describe('hosted provider OAuth broker', () => {
   });
 
   it('reports every provider as unavailable until its Adport-owned application is configured', () => {
-    expect(oauthAvailability()).toEqual({ google: false, meta: false, tiktok: false, microsoft: false, reddit: false });
+    expect(oauthAvailability()).toEqual({ google: false, meta: false, tiktok: false, microsoft: false, reddit: false, apple: false });
     Object.assign(process.env, APP_ENV);
     resetEnvForTests();
-    expect(oauthAvailability()).toEqual({ google: true, meta: true, tiktok: true, microsoft: true, reddit: true });
+    expect(oauthAvailability()).toEqual({ google: true, meta: true, tiktok: true, microsoft: true, reddit: true, apple: true });
   });
 
   it('routes every provider callback through the hosted broker path', () => {
@@ -79,6 +86,15 @@ describe('hosted provider OAuth broker', () => {
     const google = new URL(oauthAdapter('google').authorizationUrl(input));
     expect(google.searchParams.get('scope')).toBe('https://www.googleapis.com/auth/adwords');
     expect(google.searchParams.get('code_challenge')).toBe('challenge-value');
+
+    const apple = new URL(oauthAdapter('apple').authorizationUrl(input));
+    expect(apple.origin + apple.pathname).toBe('https://appleid.apple.com/auth/oauth2/v2/authorize');
+    expect(apple.searchParams.get('response_type')).toBe('code');
+    expect(apple.searchParams.get('client_id')).toBe(APP_ENV.APPLE_ADS_CLIENT_ID);
+    expect(apple.searchParams.get('redirect_uri')).toBe(`${BASE}/api/oauth/apple/callback`);
+    expect(apple.searchParams.get('scope')).toBe('searchads');
+    expect(apple.searchParams.get('state')).toBe('state-value');
+    expect(apple.searchParams.has('client_secret')).toBe(false);
   });
 
   it('refuses to build a consent URL when the application is not configured', () => {
@@ -92,8 +108,32 @@ describe('hosted provider OAuth broker', () => {
     expect(hydrateTikTok({ accessToken: 'grant' })).toEqual({ accessToken: 'grant', appId: '7000000000', secret: 'tiktok-app-secret', sandbox: undefined });
     expect(hydrateMicrosoft({ refreshToken: 'grant' })).toMatchObject({ refreshToken: 'grant', clientId: 'ms-client-id-0000', clientSecret: 'ms-client-secret', developerToken: 'ms-developer-token' });
     expect(hydrateReddit({ refreshToken: 'grant' })).toEqual({ refreshToken: 'grant', clientId: 'reddit-client', clientSecret: 'reddit-client-secret', userAgent: 'web:cloud.adport:v1 (by /u/adport)' });
+    expect(hydrateApple({ refreshToken: 'apple-grant' })).toMatchObject({
+      clientId: APP_ENV.APPLE_ADS_CLIENT_ID,
+      teamId: APP_ENV.APPLE_ADS_TEAM_ID,
+      keyId: APP_ENV.APPLE_ADS_KEY_ID,
+      refreshToken: 'apple-grant',
+    });
     // Legacy tenant-supplied application fields keep precedence.
     expect(hydrateReddit({ refreshToken: 'grant', clientId: 'own', clientSecret: 'own-secret', userAgent: 'own-agent' })).toEqual({ refreshToken: 'grant', clientId: 'own', clientSecret: 'own-secret', userAgent: 'own-agent' });
+  });
+
+  it('exchanges an Apple authorization code for a tenant refresh token', async () => {
+    Object.assign(process.env, APP_ENV);
+    resetEnvForTests();
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      access_token: 'apple-access', refresh_token: 'apple-refresh', token_type: 'Bearer', expires_in: 3600,
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(oauthAdapter('apple').exchange({ code: 'apple-code', verifier: 'unused' })).resolves.toEqual({ refreshToken: 'apple-refresh' });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = new URLSearchParams(String(init.body));
+    expect(body.get('grant_type')).toBe('authorization_code');
+    expect(body.get('client_id')).toBe(APP_ENV.APPLE_ADS_CLIENT_ID);
+    expect(body.get('redirect_uri')).toBe(`${BASE}/api/oauth/apple/callback`);
+    expect(body.get('code')).toBe('apple-code');
+    expect(body.get('client_secret')).toMatch(/^[\w-]+\.[\w-]+\.[\w-]+$/);
   });
 
   it('keeps the TikTok grant when provider-side revocation fails', async () => {

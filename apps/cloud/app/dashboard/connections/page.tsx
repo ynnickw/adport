@@ -14,6 +14,7 @@ const COPY: Record<OAuthProviderView['id'], string> = {
   tiktok: 'Authorize your TikTok for Business advertiser accounts through TikTok’s authorization page. The advertiser access token is encrypted per organization.',
   microsoft: 'Consent through the Microsoft identity platform with the Microsoft Advertising management scope. Adport supplies its own developer token; your refresh token is encrypted per organization.',
   reddit: 'Authorize through Reddit with the Ads read, edit, and data-deletion scopes. Adport stores an encrypted permanent refresh token for this organization.',
+  apple: 'Authorize Apple Ads through Adport’s Apple-approved service-provider flow. Apple returns a delegated refresh token for the accounts you approve; tenants never provide API keys or private keys.',
 };
 
 export default async function ConnectionsPage({ searchParams }: { searchParams: Promise<{ connected?: string; error?: string }> }) {

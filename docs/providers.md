@@ -2,7 +2,7 @@
 
 Adport stores credentials locally in `${ADPORT_HOME:-~/.config/adport}/credentials.json` with file mode `0600`. Do not paste credentials into issues, commit them to Git, or place them in shell history. Run `adport doctor` after connecting a provider.
 
-The CLI connection commands below are bring-your-own (BYO): you own the provider-side application and Adport communicates directly from your machine to that provider. The hosted Adport Cloud broker is not used by these commands. The locally runnable cloud application is documented separately in [cloud-local-development.md](./cloud-local-development.md): Google, Meta, TikTok, Microsoft, and Reddit connect through Adport's browser-based OAuth broker, while Apple Ads uses OAuth 2.0 client credentials with encrypted tenant API-user key material.
+The CLI connection commands below are bring-your-own (BYO): you own the provider-side application and Adport communicates directly from your machine to that provider. The hosted Adport Cloud broker is not used by these commands. The locally runnable cloud application is documented separately in [cloud-local-development.md](./cloud-local-development.md): all six providers connect through Adport-owned hosted OAuth applications, including Apple's approved service-provider authorization-code flow.
 
 For a source checkout, replace `adport` below with `node packages/cli/dist/index.js` after `pnpm build`.
 
@@ -58,7 +58,7 @@ Keep the environment consistent: sandbox credentials cannot be used against prod
 
 ## Apple Ads
 
-Apple Ads uses the OAuth 2.0 client-credentials flow with API-user key material rather than an interactive end-user consent flow.
+For local CLI use, Apple Ads uses the OAuth 2.0 client-credentials flow with API-user key material. Adport Cloud instead uses Adport's Apple-approved service-provider authorization-code flow, so cloud tenants authorize in the browser and never provide private keys.
 
 1. In Apple Ads Account Settings, create or invite an API user with the required role.
 2. Generate an EC `prime256v1` private key locally and derive its public key:

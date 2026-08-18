@@ -114,13 +114,16 @@ describeDatabase('Supabase tenant boundary', () => {
     process.env.GOOGLE_ADS_CLIENT_ID = 'test-client-id.apps.googleusercontent.com';
     process.env.GOOGLE_ADS_CLIENT_SECRET = 'test-client-secret';
     process.env.GOOGLE_ADS_DEVELOPER_TOKEN = 'test-developer-token';
+    process.env.APPLE_ADS_CLIENT_ID = 'SEARCHADS.11111111-2222-3333-4444-555555555555';
+    process.env.APPLE_ADS_TEAM_ID = 'SEARCHADS.11111111-2222-3333-4444-555555555555';
+    process.env.APPLE_ADS_KEY_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+    process.env.APPLE_ADS_PRIVATE_KEY = ['-----BEGIN ', `PRIVATE KEY-----\n${'test'.repeat(30)}\n-----END `, 'PRIVATE KEY-----'].join('');
     resetEnvForTests();
     await upsertProviderConnection({ organizationId: firstOrgId, userId: firstUserId, provider: 'meta', credential: { accessToken: 'meta-access-token-secret-value' } });
     await upsertProviderConnection({ organizationId: firstOrgId, userId: firstUserId, provider: 'tiktok', credential: { accessToken: 'tiktok-access-token-secret', appId: 'tiktok-app', secret: 'tiktok-secret' } });
     await upsertProviderConnection({ organizationId: firstOrgId, userId: firstUserId, provider: 'microsoft', credential: { developerToken: 'microsoft-developer-token', clientId: 'microsoft-client', refreshToken: 'microsoft-refresh-token-secret' } });
     await upsertProviderConnection({ organizationId: firstOrgId, userId: firstUserId, provider: 'reddit', credential: { clientId: 'reddit-client', clientSecret: 'reddit-client-secret', refreshToken: 'reddit-refresh-token-secret', userAgent: 'adport-cloud-test/1.0' } });
-    const fakePrivateKey = ['-----BEGIN ', 'PRIVATE KEY-----\ntest\n-----END ', 'PRIVATE KEY-----'].join('');
-    await upsertProviderConnection({ organizationId: firstOrgId, userId: firstUserId, provider: 'apple', credential: { clientId: 'SEARCHADS.test', teamId: 'team', keyId: 'key', privateKeyPem: fakePrivateKey } });
+    await upsertProviderConnection({ organizationId: firstOrgId, userId: firstUserId, provider: 'apple', credential: { refreshToken: 'apple-refresh-token-secret' } });
 
     const decrypted = await loadProviderCredentials(firstOrgId);
     expect(decrypted.meta?.accessToken).toBe('meta-access-token-secret-value');
@@ -130,6 +133,7 @@ describeDatabase('Supabase tenant boundary', () => {
     `;
     expect(raw.map((row) => row.ciphertext).join(' ')).not.toContain('meta-access-token-secret-value');
     expect(raw.map((row) => row.ciphertext).join(' ')).not.toContain('reddit-client-secret');
+    expect(raw.map((row) => row.ciphertext).join(' ')).not.toContain('apple-refresh-token-secret');
 
     const runtime = await createTenantRuntime({ organizationId: firstOrgId, userId: firstUserId, scopes: ['tools:read'] });
     expect(runtime.ctx.providers.list().map((provider) => provider.id).sort()).toEqual(['apple', 'google', 'meta', 'microsoft', 'reddit', 'tiktok']);
