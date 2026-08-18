@@ -48,7 +48,7 @@ export interface StoredRedditCredential {
   userAgent?: string;
 }
 
-/** Apple Ads has no third-party OAuth grant; the tenant supplies an API-user key. */
+/** Apple Ads OAuth uses client credentials; the tenant supplies API-user key material. */
 export interface StoredAppleCredential {
   clientId: string;
   teamId: string;

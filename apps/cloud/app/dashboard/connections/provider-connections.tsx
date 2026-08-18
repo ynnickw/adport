@@ -22,7 +22,7 @@ export interface OAuthProviderView {
   manualRevocationUrl: string;
 }
 
-const APPLE_COPY = 'Apple Ads has no third-party OAuth grant. Create an API user in your Apple Ads account, upload a public key, and paste the resulting identifiers here. The private key is encrypted for this organization and never returned.';
+const APPLE_COPY = 'Apple Ads uses OAuth 2.0 client credentials instead of a browser consent redirect. Create an API user in Apple Ads, upload its public key, and enter the resulting identifiers here. The private key is encrypted for this organization and never returned.';
 
 export function ProviderConnections({ organizationId, canManage, connections, oauthProviders }: {
   organizationId: string;
@@ -125,12 +125,12 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
       <article className={`connection${apple ? '' : ' pending'}`}>
         <div className="connection-top">
           <Provider name="apple" />
-          {apple ? <StatusPill status={apple.status} /> : <span className="status neutral">API key</span>}
+          {apple ? <StatusPill status={apple.status} /> : <span className="status neutral">OAuth 2.0</span>}
         </div>
         {apple ? (
           <dl className="connection-meta">
             <div><dt>Access</dt><dd>{apple.externalLabel ?? '—'}</dd></div>
-            <div><dt>Flow</dt><dd>Apple Ads API user (ES256 key)</dd></div>
+            <div><dt>Flow</dt><dd>OAuth 2.0 client credentials (ES256 API user)</dd></div>
             <div><dt>Verified</dt><dd>{formatDate(apple.lastVerifiedAt ?? apple.connectedAt)}</dd></div>
           </dl>
         ) : (
@@ -156,7 +156,7 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
                 </div>
               </form>
             </details>
-            <p className="inline-note" style={{ marginTop: '0.8rem' }}>Setup: Apple Ads → Account Settings → API → create an API user, generate an EC P-256 key pair, upload the public key. Apple then shows the identifiers above.</p>
+            <p className="inline-note" style={{ marginTop: '0.8rem' }}>Setup: Apple Ads → Account Settings → API → create an API user, generate an EC P-256 key pair, and upload the public key. Adport uses those credentials to request short-lived OAuth access tokens from Apple.</p>
           </>
         ) : (
           <p className="inline-note">Owners and admins manage connections.</p>
