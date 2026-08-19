@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: { default: 'Adport Cloud', template: '%s · Adport Cloud' },
+  title: { default: 'Adport', template: '%s · Adport' },
   description: 'Securely connect, report on, and manage advertising accounts from any AI agent.',
 };
 

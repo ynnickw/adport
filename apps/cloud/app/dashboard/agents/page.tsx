@@ -10,29 +10,21 @@ export default async function AgentsPage() {
   const baseUrl = env().ADPORT_CLOUD_BASE_URL.replace(/\/$/, '');
   return (
     <main className="page">
-      <PageHeader eyebrow="Remote MCP & REST" title="Agent access" description="Bearer keys let AI clients call this organization's tools remotely. Every key inherits the connections, account scope, and write policy shown in this dashboard." />
+      <PageHeader eyebrow="Remote MCP & REST" title="Agent access" description="Bearer keys let AI clients use this organization's connections remotely, under the same write policy." />
       <div className="grid-2">
         <section className="card">
           <div className="card-head"><h2>API keys</h2><span className="card-note">hashed at rest · shown once</span></div>
           <ApiKeyManager organizationId={tenant.organizationId} canManage={canAdminister(tenant)} />
         </section>
-        <aside className="stack">
-          <section className="card">
-            <div className="card-head"><h2>Remote MCP endpoint</h2></div>
-            <div className="card-body stack">
-              <div className="code"><span>URL</span>{baseUrl}/mcp</div>
-              <p className="inline-note">Configure your MCP client with this URL and <code>Authorization: Bearer &lt;key&gt;</code>. Streamable HTTP transport; the server name is <code>adport-cloud</code>.</p>
-            </div>
-          </section>
-          <section className="card">
-            <div className="card-head"><h2>REST</h2></div>
-            <div className="card-body stack">
-              <div className="code"><span>GET</span>{baseUrl}/api/v1/accounts</div>
-              <div className="code"><span>POST</span>{baseUrl}/api/v1/tools/&lt;tool&gt;</div>
-              <p className="inline-note">Guarded writes always require the preview call first and the identical second call to apply.</p>
-            </div>
-          </section>
-        </aside>
+        <section className="card">
+          <div className="card-head"><h2>Endpoints</h2></div>
+          <div className="card-body stack">
+            <div className="code"><span>MCP</span>{baseUrl}/mcp</div>
+            <div className="code"><span>GET</span>{baseUrl}/api/v1/accounts</div>
+            <div className="code"><span>POST</span>{baseUrl}/api/v1/tools/&lt;tool&gt;</div>
+            <p className="inline-note">Send <code>Authorization: Bearer &lt;key&gt;</code>. MCP uses streamable HTTP; guarded writes need the preview call first, then the identical call to apply.</p>
+          </div>
+        </section>
       </div>
     </main>
   );

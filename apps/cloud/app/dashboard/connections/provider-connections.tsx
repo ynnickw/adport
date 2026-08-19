@@ -89,7 +89,7 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
             ) : (
               <p className="inline-note">Owners and admins manage connections.</p>
             )}
-            {!connection && !provider.available ? <p className="inline-note" style={{ marginTop: '0.7rem' }}>Adport&apos;s {shortLabel(provider.id)} application is under review with the platform. This card activates automatically once the app is approved and configured.</p> : null}
+            {!connection && !provider.available ? <p className="inline-note" style={{ marginTop: '0.7rem' }}>Available once Adport&apos;s {shortLabel(provider.id)} app is approved by the platform.</p> : null}
           </article>
         );
       })}

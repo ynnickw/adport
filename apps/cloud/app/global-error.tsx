@@ -8,7 +8,7 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
           <section className="auth-card">
             <div className="auth-bar">
               <div className="traffic" aria-hidden="true"><i /><i /><i /></div>
-              <span>adport cloud — error</span>
+              <span>adport.dev — error</span>
             </div>
             <div className="auth-body">
               <h1>Something went wrong</h1>

@@ -13,7 +13,7 @@ export function AuthScreen({ mode, error, message }: AuthScreenProps) {
   const signup = mode === 'signup';
   return (
     <AuthFrame label={signup ? 'create account' : 'sign in'}>
-      <BrandLockup sub="Control plane" />
+      <BrandLockup size="large" />
       <h1>{signup ? 'Create your workspace.' : 'Operate ads with evidence.'}</h1>
       <p>
         {signup
@@ -42,7 +42,7 @@ export function AuthScreen({ mode, error, message }: AuthScreenProps) {
       <p className="auth-switch">
         {signup
           ? <>Already have an account? <Link href="/">Sign in</Link></>
-          : <>New to Adport Cloud? <Link href="/?mode=signup">Create an account</Link></>}
+          : <>New to Adport? <Link href="/?mode=signup">Create an account</Link></>}
       </p>
       <div className="auth-foot">
         <a href="https://adport.dev">adport.dev</a>
