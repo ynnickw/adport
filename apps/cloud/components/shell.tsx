@@ -6,6 +6,7 @@ import { Nav } from '@/components/nav';
 export interface ShellTenant {
   organizationName: string;
   userName: string;
+  email: string;
   role: string;
 }
 
@@ -13,34 +14,30 @@ export function Shell({ tenant, children }: { tenant: ShellTenant; children: Rea
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <Link className="brand-lockup" href="/dashboard" aria-label="Adport Cloud overview">
-          <BrandLockup sub="Control plane" />
-        </Link>
-        <Nav />
-        <div className="sidebar-foot">
-          <span className="availability"><i aria-hidden="true" /> read-first</span>
-          Every write is previewed, approved, and audited before it runs.
-        </div>
-      </aside>
-      <div className="main">
-        <header className="topbar">
+        <div className="sidebar-head">
+          <Link className="brand-lockup" href="/dashboard" aria-label="Adport overview">
+            <BrandLockup />
+          </Link>
           <div className="workspace">
             <span className="workspace-label">Organization</span>
             <span className="workspace-name">{tenant.organizationName}</span>
           </div>
-          <div className="topbar-meta">
-            <div className="user">
+        </div>
+        <Nav />
+        <div className="sidebar-foot">
+          <div className="user">
+            <span className="avatar" aria-hidden="true">{tenant.userName.slice(0, 1).toUpperCase()}</span>
+            <span className="user-text">
               <span className="user-name">{tenant.userName}</span>
-              <span className="user-role">{tenant.role}</span>
-              <span className="avatar" aria-hidden="true">{tenant.userName.slice(0, 1).toUpperCase()}</span>
-            </div>
-            <form action={signOut}>
-              <button className="link-button" type="submit">Sign out</button>
-            </form>
+              <span className="user-sub">{tenant.role} · {tenant.email}</span>
+            </span>
           </div>
-        </header>
-        {children}
-      </div>
+          <form action={signOut}>
+            <button className="button secondary small full" type="submit">Sign out</button>
+          </form>
+        </div>
+      </aside>
+      <div className="main">{children}</div>
     </div>
   );
 }

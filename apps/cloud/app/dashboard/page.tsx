@@ -46,18 +46,15 @@ export default async function OverviewPage() {
                 ))}
               </div>
             </section>
-            <aside className="stack">
-              <section className="card">
-                <div className="card-head"><h2>Governance</h2><span className="status">Enforced</span></div>
-                <div className="card-body stack">
-                  <div className="callout">All dashboard, REST, and MCP reads use the shared registry. Writes stay preview-first, hash-bound, expiring, and audited.</div>
-                  <dl className="connection-meta" style={{ margin: 0 }}>
-                    <div><dt>Awaiting approval</dt><dd><Link href="/dashboard/approvals">{pending.length}{pending.length === 5 ? '+' : ''} operation{pending.length === 1 ? '' : 's'}</Link></dd></div>
-                    <div><dt>Audit events</dt><dd><Link href="/dashboard/audit">{auditCount}</Link></dd></div>
-                  </dl>
-                </div>
-              </section>
-            </aside>
+            <section className="card">
+              <div className="card-head"><h2>Governance</h2></div>
+              <div className="card-body">
+                <dl className="connection-meta" style={{ margin: 0 }}>
+                  <div><dt>Awaiting approval</dt><dd><Link href="/dashboard/approvals">{pending.length}{pending.length === 5 ? '+' : ''} operation{pending.length === 1 ? '' : 's'}</Link></dd></div>
+                  <div><dt>Audit events</dt><dd><Link href="/dashboard/audit">{auditCount}</Link></dd></div>
+                </dl>
+              </div>
+            </section>
           </div>
         </>
       )}

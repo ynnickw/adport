@@ -33,12 +33,6 @@ export default async function ApprovalsPage() {
           </>
         )}
       </section>
-      <section className="card" style={{ marginTop: '0.9rem' }}>
-        <div className="card-head"><h2>Execution contract</h2><span className="status">Enforced</span></div>
-        <div className="card-body">
-          <div className="callout">Preview first → identical argument hash → explicit approval → single apply → append-only audit. Provider coercions are always visible in the preview.</div>
-        </div>
-      </section>
     </main>
   );
 }

@@ -30,7 +30,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
       <PageHeader
         eyebrow="Provider authority"
         title="Connections"
-        description="Every platform is connected through its official OAuth consent using Adport-owned, reviewed applications. Tenants never paste application secrets; grants are encrypted per organization and revoked on disconnect."
+        description="Connect each platform through its official OAuth consent. Grants are encrypted per organization and revoked on disconnect; you only ever get the ad accounts you can already access."
       />
       <div className="stack" style={{ marginBottom: '0.9rem' }}>
         {params.connected ? <div className="callout success">{providerLabel(params.connected)} is connected and its accessible ad accounts were verified.</div> : null}
@@ -49,13 +49,6 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
         }))}
         oauthProviders={oauthProviders}
       />
-      <section className="card" style={{ marginTop: '0.9rem' }}>
-        <div className="card-head"><h2>How access is scoped</h2><span className="card-note">read-first · encrypted · revocable</span></div>
-        <div className="card-body stack">
-          <p className="subhead">Connecting a platform lists the ad accounts the authorizing user can already access; Adport cannot widen that set. Every read and guarded write in the dashboard, REST API, and remote MCP endpoint runs against those accounts only, with the organization&apos;s write policy enforced server-side.</p>
-          <p className="subhead">Disconnecting revokes the grant at the provider where an API exists (Google, Meta, Reddit, TikTok) and deletes the encrypted token. Microsoft and Apple require removing Adport in the platform&apos;s own settings; the card tells you when that applies. See the <a href="https://adport.dev/privacy">privacy policy</a> for retention and deletion details.</p>
-        </div>
-      </section>
     </main>
   );
 }

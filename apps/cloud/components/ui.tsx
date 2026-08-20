@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { BrandMark, ProviderLogo, providerLabel } from '@/components/logos';
+import { ProviderLogo, providerLabel } from '@/components/logos';
 
 export function PageHeader({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: React.ReactNode }) {
   return (
@@ -27,7 +27,6 @@ export function Metric({ label, value, foot }: { label: string; value: string; f
 export function Empty({ title, copy, href, action }: { title: string; copy: string; href?: string; action?: string }) {
   return (
     <div className="empty">
-      <BrandMark />
       <h2>{title}</h2>
       <p>{copy}</p>
       {href && action ? <Link className="button" href={href}>{action}</Link> : null}
@@ -55,7 +54,7 @@ export function AuthFrame({ label, children }: { label: string; children: React.
       <section className="auth-card">
         <div className="auth-bar">
           <div className="traffic" aria-hidden="true"><i /><i /><i /></div>
-          <span>adport cloud — {label}</span>
+          <span>adport.dev — {label}</span>
         </div>
         <div className="auth-body">{children}</div>
       </section>
