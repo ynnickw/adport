@@ -77,4 +77,46 @@ describe('cloud milestone', () => {
     expect(verifyMetaOAuthState(`${state.slice(0, -1)}x`, 'workspace-1', 'user-1', now)).toBe(false);
     expect(verifyMetaOAuthState(state, 'workspace-1', 'user-1', now + 11 * 60_000)).toBe(false);
   });
+
+  it('builds the hosted Google consent request and binds its state to one workspace', async () => {
+    process.env.ADPORT_CLOUD_BASE_URL = 'https://app.adport.dev';
+    process.env.GOOGLE_ADS_CLIENT_ID = 'client-id.apps.googleusercontent.com';
+    process.env.GOOGLE_ADS_CLIENT_SECRET = 'client-secret';
+    process.env.GOOGLE_ADS_DEVELOPER_TOKEN = 'developer-token';
+    const {
+      createGoogleOAuthState,
+      googleAuthorizationUrl,
+      managedGoogleOAuthConfigured,
+      verifyGoogleOAuthState,
+    } = await import('../src/lib/google-oauth');
+    const now = Date.now();
+    const state = createGoogleOAuthState('workspace-1', 'user-1', now);
+    const url = googleAuthorizationUrl(state);
+    expect(managedGoogleOAuthConfigured()).toBe(true);
+    expect(url.origin + url.pathname).toBe('https://accounts.google.com/o/oauth2/v2/auth');
+    expect(url.searchParams.get('scope')).toBe('https://www.googleapis.com/auth/adwords');
+    expect(url.searchParams.get('access_type')).toBe('offline');
+    expect(url.searchParams.get('prompt')).toBe('consent');
+    expect(url.searchParams.get('redirect_uri')).toBe('https://app.adport.dev/api/oauth/google/callback');
+    expect(verifyGoogleOAuthState(state, 'workspace-1', 'user-1', now)).toBe(true);
+    expect(verifyGoogleOAuthState(state, 'workspace-2', 'user-1', now)).toBe(false);
+    expect(verifyGoogleOAuthState(state, 'workspace-1', 'user-1', now + 11 * 60_000)).toBe(false);
+  });
+
+  it('exchanges a Google authorization code without persisting the access token', async () => {
+    const { exchangeGoogleCode } = await import('../src/lib/google-oauth');
+    const requests: Array<{ url: string; body: string }> = [];
+    const fetchMock = (async (input: string | URL | Request, init?: RequestInit) => {
+      requests.push({ url: String(input), body: String(init?.body) });
+      return new Response(JSON.stringify({ access_token: 'access-token', refresh_token: 'refresh-token', expires_in: 3600 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
+    await expect(exchangeGoogleCode('authorization-code', fetchMock)).resolves.toEqual({ refreshToken: 'refresh-token' });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.url).toBe('https://oauth2.googleapis.com/token');
+    expect(requests[0]?.body).toContain('grant_type=authorization_code');
+    expect(requests[0]?.body).toContain('code=authorization-code');
+  });
 });

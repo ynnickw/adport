@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GoogleAdsRestClient, formatGoogleAdsError, normalizeCustomerId } from '../src/client.js';
+import { resolveGoogleCredentials } from '../src/index.js';
 import { GoogleAdsProvider } from '../src/provider.js';
 
 type FetchCall = { url: string; init: RequestInit };
@@ -28,6 +29,36 @@ const tokenRoute = {
   match: (url: string) => url.includes('oauth2.googleapis.com/token'),
   reply: { access_token: 'access-token', expires_in: 3600 },
 };
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+describe('resolveGoogleCredentials', () => {
+  it('combines a broker refresh token with server-side platform credentials', async () => {
+    vi.stubEnv('GOOGLE_ADS_DEVELOPER_TOKEN', 'platform-developer-token');
+    vi.stubEnv('GOOGLE_ADS_CLIENT_ID', 'platform-client-id');
+    vi.stubEnv('GOOGLE_ADS_CLIENT_SECRET', 'platform-client-secret');
+    const store = {
+      get: async () => ({
+        provider: 'google',
+        source: 'broker' as const,
+        data: { refresh_token: 'workspace-refresh-token' },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }),
+      list: async () => [],
+      set: async () => { throw new Error('not used'); },
+      delete: async () => false,
+    };
+    await expect(resolveGoogleCredentials(store)).resolves.toEqual({
+      developerToken: 'platform-developer-token',
+      clientId: 'platform-client-id',
+      clientSecret: 'platform-client-secret',
+      refreshToken: 'workspace-refresh-token',
+    });
+  });
+});
 
 describe('normalizeCustomerId', () => {
   it('strips dashes and prefixes', () => {

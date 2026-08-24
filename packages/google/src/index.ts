@@ -12,20 +12,23 @@ export { googleTools } from './tools.js';
  * google-ads.yaml-style GOOGLE_ADS_* environment variables.
  */
 export async function resolveGoogleCredentials(store: CredentialRepository): Promise<GoogleCredentials | undefined> {
+  const env = process.env;
   const record = await store.get('google');
   if (record) {
     const { developer_token, client_id, client_secret, refresh_token, login_customer_id } = record.data;
-    if (developer_token && client_id && client_secret && refresh_token) {
+    const developerToken = developer_token || env.GOOGLE_ADS_DEVELOPER_TOKEN;
+    const clientId = client_id || env.GOOGLE_ADS_CLIENT_ID;
+    const clientSecret = client_secret || env.GOOGLE_ADS_CLIENT_SECRET;
+    if (developerToken && clientId && clientSecret && refresh_token) {
       return {
-        developerToken: developer_token,
-        clientId: client_id,
-        clientSecret: client_secret,
+        developerToken,
+        clientId,
+        clientSecret,
         refreshToken: refresh_token,
-        loginCustomerId: login_customer_id || undefined,
+        loginCustomerId: login_customer_id || env.GOOGLE_ADS_LOGIN_CUSTOMER_ID || undefined,
       };
     }
   }
-  const env = process.env;
   if (env.GOOGLE_ADS_DEVELOPER_TOKEN && env.GOOGLE_ADS_CLIENT_ID && env.GOOGLE_ADS_CLIENT_SECRET && env.GOOGLE_ADS_REFRESH_TOKEN) {
     return {
       developerToken: env.GOOGLE_ADS_DEVELOPER_TOKEN,

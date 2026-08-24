@@ -2,6 +2,7 @@ import { CredentialStore } from '@adport/core';
 import { connectDemo, disconnectProvider, importLocalProvider } from '@/app/actions';
 import { PageHeader, Provider } from '@/components/ui';
 import { requireTenant } from '@/lib/auth';
+import { managedGoogleOAuthConfigured } from '@/lib/google-oauth';
 import { managedMetaOAuthConfigured } from '@/lib/meta-oauth';
 import { getCloudStore } from '@/lib/store';
 
@@ -10,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 const availableProviders = ['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit'] as const;
 
-export default async function ConnectionsPage({ searchParams }: { searchParams: Promise<{ oauth?: string }> }) {
+export default async function ConnectionsPage({ searchParams }: { searchParams: Promise<{ oauth?: string; provider?: string }> }) {
   const tenant = await requireTenant();
   const query = await searchParams;
   const connections = getCloudStore().listConnections(tenant.workspaceId);
@@ -21,8 +22,8 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
       <PageHeader eyebrow="Provider authority" title="Connections" description="Credentials are encrypted per workspace. Account discovery becomes the explicit access allowlist." />
       <div className="stack" style={{ marginBottom: '0.9rem' }}>
         <div className="callout">Local import exists only for development verification. Production onboarding uses Adport-owned, reviewed OAuth applications and hosted callbacks.</div>
-        {query.oauth === 'connected' ? <div className="callout success">Meta is connected and its permitted ad accounts were discovered.</div> : null}
-        {query.oauth && query.oauth !== 'connected' ? <div className="error-callout" style={{ marginBottom: 0 }}>Meta connection did not complete ({query.oauth}). No credential was stored.</div> : null}
+        {query.oauth === 'connected' ? <div className="callout success">{query.provider === 'google' ? 'Google Ads' : 'Meta'} is connected and its permitted ad accounts were discovered.</div> : null}
+        {query.oauth && query.oauth !== 'connected' ? <div className="error-callout" style={{ marginBottom: 0 }}>{query.provider === 'google' ? 'Google Ads' : 'Meta'} connection did not complete ({query.oauth}). No credential was stored.</div> : null}
       </div>
       <section className="connection-grid">
         {connections.map((connection) => (
@@ -53,12 +54,19 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
             {managedMetaOAuthConfigured() ? <a className="button" href="/api/oauth/meta/start">Connect Meta</a> : <button className="button" type="button" disabled>Awaiting app configuration</button>}
           </article>
         ) : null}
+        {!connections.some((connection) => connection.provider === 'google') ? (
+          <article className="connection">
+            <div className="connection-top"><Provider name="google" /><span className="status warn">OAuth beta</span></div>
+            <p className="connection-copy">Connect through Adport&apos;s hosted Google app. Google Ads API access is active; public OAuth verification remains under review.</p>
+            {managedGoogleOAuthConfigured() ? <a className="button" href="/api/oauth/google/start">Connect Google</a> : <button className="button" type="button" disabled>Awaiting app configuration</button>}
+          </article>
+        ) : null}
       </section>
       {availableProviders.some((provider) => !connections.some((connection) => connection.provider === provider)) ? (
         <section className="card" style={{ marginTop: '0.9rem' }}>
           <div className="card-head"><h2>Available providers</h2><span className="card-note">connect in a terminal, then import</span></div>
           <div className="provider-roster">
-            {availableProviders.filter((provider) => provider !== 'meta' && !connections.some((connection) => connection.provider === provider)).map((provider) => (
+            {availableProviders.filter((provider) => provider !== 'meta' && provider !== 'google' && !connections.some((connection) => connection.provider === provider)).map((provider) => (
               <div className="roster-item" key={provider}>
                 <Provider name={provider} />
                 <code className="roster-command"><span>$</span> adport connect {provider}</code>
