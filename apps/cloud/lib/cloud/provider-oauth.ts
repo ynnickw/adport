@@ -79,10 +79,12 @@ function metaVersion(): string {
   return env().META_API_VERSION ?? DEFAULT_GRAPH_VERSION;
 }
 
-function metaApp(): { appId: string; appSecret: string } {
+function metaApp(): { appId: string; appSecret: string; configId: string } {
   const value = env();
-  if (!value.META_APP_ID || !value.META_APP_SECRET) throw new Error('Meta OAuth is not configured. Set META_APP_ID and META_APP_SECRET.');
-  return { appId: value.META_APP_ID, appSecret: value.META_APP_SECRET };
+  if (!value.META_APP_ID || !value.META_APP_SECRET || !value.META_LOGIN_CONFIG_ID) {
+    throw new Error('Meta OAuth is not configured. Set META_APP_ID, META_APP_SECRET, and META_LOGIN_CONFIG_ID.');
+  }
+  return { appId: value.META_APP_ID, appSecret: value.META_APP_SECRET, configId: value.META_LOGIN_CONFIG_ID };
 }
 
 interface MetaTokenResponse { access_token?: string; expires_in?: number; error?: { message?: string; code?: number } }
@@ -104,14 +106,15 @@ const meta: OAuthAdapter<'meta'> = {
   pkce: false,
   codeParam: 'code',
   manualRevocationUrl: 'https://www.facebook.com/settings?tab=business_tools',
-  configured: () => Boolean(env().META_APP_ID && env().META_APP_SECRET),
+  configured: () => Boolean(env().META_APP_ID && env().META_APP_SECRET && env().META_LOGIN_CONFIG_ID),
   authorizationUrl({ state }) {
     const url = new URL(`https://www.facebook.com/${metaVersion()}/dialog/oauth`);
     url.search = new URLSearchParams({
       client_id: metaApp().appId,
+      config_id: metaApp().configId,
       redirect_uri: oauthRedirectUri('meta'),
       response_type: 'code',
-      scope: META_SCOPES.join(','),
+      override_default_response_type: 'true',
       state,
     }).toString();
     return url.toString();

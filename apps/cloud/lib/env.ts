@@ -22,6 +22,7 @@ const schema = z.object({
   // Adport-owned Meta Marketing API app (Facebook Login for Business).
   META_APP_ID: z.string().min(5).optional(),
   META_APP_SECRET: z.string().min(8).optional(),
+  META_LOGIN_CONFIG_ID: z.string().min(5).optional(),
   META_API_VERSION: z.string().regex(/^v\d+\.\d+$/).optional(),
   // Adport-owned TikTok for Business Marketing API app.
   TIKTOK_APP_ID: z.string().min(5).optional(),

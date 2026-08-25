@@ -12,6 +12,7 @@ const APP_ENV: Record<string, string> = {
   GOOGLE_ADS_DEVELOPER_TOKEN: 'test-developer-token',
   META_APP_ID: '1234567890',
   META_APP_SECRET: 'meta-app-secret',
+  META_LOGIN_CONFIG_ID: '9876543210',
   TIKTOK_APP_ID: '7000000000',
   TIKTOK_APP_SECRET: 'tiktok-app-secret',
   MICROSOFT_ADS_CLIENT_ID: 'ms-client-id-0000',
@@ -60,7 +61,9 @@ describe('hosted provider OAuth broker', () => {
     expect(meta.hostname).toBe('www.facebook.com');
     expect(meta.pathname.endsWith('/dialog/oauth')).toBe(true);
     expect(meta.searchParams.get('client_id')).toBe('1234567890');
-    expect(meta.searchParams.get('scope')).toBe('ads_read,ads_management');
+    expect(meta.searchParams.get('config_id')).toBe('9876543210');
+    expect(meta.searchParams.get('override_default_response_type')).toBe('true');
+    expect(meta.searchParams.has('scope')).toBe(false);
     expect(meta.searchParams.get('redirect_uri')).toBe(`${BASE}/api/oauth/meta/callback`);
     expect(meta.searchParams.get('state')).toBe('state-value');
     expect(meta.searchParams.has('client_secret')).toBe(false);
