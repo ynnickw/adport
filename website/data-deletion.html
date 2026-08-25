@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="description" content="Instructions for deleting Adport Cloud data and revoking advertising-provider access." />
+    <meta name="theme-color" content="#fffaf3" />
+    <title>User Data Deletion — adport.dev</title>
+    <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/viewport-lock.js" defer></script>
+  </head>
+  <body class="legal-page">
+    <header class="legal-header">
+      <a class="wordmark" href="/">adport<span>.dev</span></a>
+    </header>
+    <main class="legal-content">
+      <p class="eyebrow">Legal</p>
+      <h1>User Data Deletion</h1>
+      <p class="updated">Effective August 26, 2026</p>
+
+      <h2>Disconnect an advertising provider</h2>
+      <ol>
+        <li>Sign in to <a href="https://app.adport.dev/dashboard/connections">Adport Cloud Connections</a>.</li>
+        <li>Find the connected provider and select <strong>Disconnect</strong>.</li>
+        <li>Where the provider requires it, also revoke Adport in that provider's account or business settings.</li>
+      </ol>
+      <p>Disconnecting removes the organization's stored provider grant and prevents Adport from requesting new provider access tokens. It does not delete campaigns or other records held by the advertising provider.</p>
+
+      <h2>Delete an Adport Cloud organization</h2>
+      <ol>
+        <li>Sign in to Adport Cloud as the organization owner.</li>
+        <li>Open <strong>Team</strong> from the dashboard navigation.</li>
+        <li>In <strong>Delete organization</strong>, enter the displayed confirmation word and select <strong>Delete organization</strong>.</li>
+      </ol>
+      <p>This permanently removes the organization, its memberships, settings, encrypted provider credentials, accessible-account inventory, API-key digests, policies, pending operations, findings, and audit records. If the owner has no other organization memberships, the associated Adport Cloud user account is also deleted.</p>
+
+      <h2>Request assistance</h2>
+      <p>If you cannot access the dashboard, email <a href="mailto:yannick@adport.dev?subject=Adport%20data%20deletion%20request">yannick@adport.dev</a> with the subject “Adport data deletion request” and identify the Adport Cloud organization or sign-in email. We may ask you to verify ownership before deleting data.</p>
+
+      <h2>Self-hosted installations</h2>
+      <p>Self-hosted Adport data remains under the user's control. Remove stored credentials and local Adport data from the installation, and revoke Adport in the connected provider's account settings.</p>
+    </main>
+    <footer class="legal-footer">
+      <a href="/">Home</a><span aria-hidden="true">·</span><a href="/privacy">Privacy</a><span aria-hidden="true">·</span><a href="/terms">Terms</a>
+    </footer>
+  </body>
+</html>
