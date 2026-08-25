@@ -2,6 +2,8 @@ import { createMcpServer } from '@adport/mcp';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { apiPrincipal } from '@/lib/cloud/auth';
 import { createTenantRuntime } from '@/lib/cloud/runtime';
+import { HttpError } from '@/lib/http';
+import { protectedResourceMetadataUrl } from '@/lib/mcp-oauth';
 
 async function handle(request: Request): Promise<Response> {
   try {
@@ -12,14 +14,19 @@ async function handle(request: Request): Promise<Response> {
     await server.connect(transport);
     return await transport.handleRequest(request, {
       authInfo: {
-        token: principal.apiKeyId!,
-        clientId: principal.apiKeyId!,
+        token: principal.apiKeyId ?? principal.oauthTokenId!,
+        clientId: principal.clientId ?? principal.apiKeyId!,
         scopes: principal.scopes,
       },
     });
   } catch (error) {
+    const status = error instanceof HttpError ? error.status : 401;
     const message = error instanceof Error ? error.message : 'Unauthorized';
-    return Response.json({ error: message }, { status: 401 });
+    const headers = new Headers({ 'cache-control': 'no-store' });
+    if (status === 401) {
+      headers.set('www-authenticate', `Bearer resource_metadata="${protectedResourceMetadataUrl()}", scope="tools:read tools:write"`);
+    }
+    return Response.json({ error: message }, { status, headers });
   }
 }
 

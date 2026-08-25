@@ -29,7 +29,7 @@ The cloud runtime supports Google, Meta, TikTok, Apple, Microsoft, and Reddit pr
 
 - Personal organizations are created by an Auth trigger; memberships use owner, admin, member, and viewer roles.
 - Owners and admins can invite members. Only owners can grant admin access, and the final owner cannot be removed or demoted.
-- API keys are random bearer secrets shown once; only a keyed digest and prefix are stored. MCP tool discovery is filtered by the key's read/write scopes.
+- Hosted MCP uses OAuth 2.1 discovery, dynamic client registration, S256 PKCE, explicit workspace consent, audience-bound one-hour access tokens, and rotating refresh tokens. Manual API keys remain available for REST and legacy MCP clients; only a keyed digest and prefix are stored. Tool discovery is filtered by the grant's read/write scopes.
 - Requests are rate-limited by a keyed subject hash.
 - Provider secrets, encryption keys, Supabase administrative keys, and OAuth client secrets are server-only.
 - Google disconnect revokes at Google before deleting the local encrypted refresh token. If revocation fails, the token remains available for retry.

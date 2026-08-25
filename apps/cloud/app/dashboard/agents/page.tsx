@@ -10,20 +10,27 @@ export default async function AgentsPage() {
   const baseUrl = env().ADPORT_CLOUD_BASE_URL.replace(/\/$/, '');
   return (
     <main className="page">
-      <PageHeader eyebrow="Remote MCP & REST" title="Agent access" description="Bearer keys let AI clients use this organization's connections remotely, under the same write policy." />
+      <PageHeader eyebrow="Remote MCP & REST" title="Agent access" description="Connect an MCP client with Adport OAuth. Grants are scoped to this workspace and every write still passes the same policy gate." />
       <div className="grid-2">
         <section className="card">
-          <div className="card-head"><h2>API keys</h2><span className="card-note">hashed at rest · shown once</span></div>
-          <ApiKeyManager organizationId={tenant.organizationId} canManage={canAdminister(tenant)} />
+          <div className="card-head"><h2>MCP OAuth</h2><span className="status">recommended</span></div>
+          <div className="card-body stack">
+            <p className="subhead">Add the endpoint below to any OAuth-capable MCP client. The client opens Adport sign-in and asks you to approve read and write scopes for this workspace.</p>
+            <div className="code"><span>MCP</span>{baseUrl}/mcp</div>
+            <p className="inline-note">No API key to copy. Access tokens are short-lived, audience-bound, and refreshed by the MCP client.</p>
+          </div>
         </section>
         <section className="card">
           <div className="card-head"><h2>Endpoints</h2></div>
           <div className="card-body stack">
-            <div className="code"><span>MCP</span>{baseUrl}/mcp</div>
             <div className="code"><span>GET</span>{baseUrl}/api/v1/accounts</div>
             <div className="code"><span>POST</span>{baseUrl}/api/v1/tools/&lt;tool&gt;</div>
-            <p className="inline-note">Send <code>Authorization: Bearer &lt;key&gt;</code>. MCP uses streamable HTTP; guarded writes need the preview call first, then the identical call to apply.</p>
+            <p className="inline-note">REST callers use a manual bearer key. MCP uses streamable HTTP with OAuth discovery; guarded writes need the preview call first, then the identical call to apply.</p>
           </div>
+        </section>
+        <section className="card" style={{ gridColumn: '1 / -1' }}>
+          <div className="card-head"><h2>Manual API keys</h2><span className="card-note">optional · hashed at rest · shown once</span></div>
+          <ApiKeyManager organizationId={tenant.organizationId} canManage={canAdminister(tenant)} />
         </section>
       </div>
     </main>

@@ -53,7 +53,7 @@ export function ApiKeyManager({ organizationId, canManage }: { organizationId: s
       {error ? <div className="card-body" style={{ paddingBottom: 0 }}><div className="error-callout" style={{ marginBottom: 0 }}>{error}</div></div> : null}
       <div className="row-list">
         {keys === undefined ? <div className="row-item"><span className="inline-note">Loading keys…</span></div> : null}
-        {keys?.length === 0 ? <div className="row-item"><span className="inline-note">No API keys yet. Create one to connect an AI client.</span></div> : null}
+        {keys?.length === 0 ? <div className="row-item"><span className="inline-note">No manual API keys. OAuth-capable MCP clients do not need one.</span></div> : null}
         {keys?.map((key) => (
           <div className="row-item" key={key.id}>
             <div>
