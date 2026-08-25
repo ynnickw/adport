@@ -1,4 +1,5 @@
 import { Empty, PageHeader, Provider } from '@/components/ui';
+import { accountStatusPresentation } from '@/lib/cloud/account-status';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { readAccounts } from '@/lib/cloud/reads';
 
@@ -26,15 +27,18 @@ export default async function AccountsPage() {
             <div className="table-wrap"><table>
               <thead><tr><th>Account</th><th>Provider</th><th>ID</th><th>Currency</th><th>Status</th></tr></thead>
               <tbody>
-                {accounts.map((account) => (
-                  <tr key={`${account.provider}:${account.id}`}>
-                    <td><strong>{account.name || account.id}</strong></td>
-                    <td><Provider name={account.provider} /></td>
-                    <td><span className="cell-sub" style={{ marginTop: 0 }}>{account.id}</span></td>
-                    <td>{account.currency ?? '—'}</td>
-                    <td><span className={`status ${account.status && /paused|disabled|removed|inactive/i.test(account.status) ? 'neutral' : ''}`}>{account.status ?? 'Available'}</span></td>
-                  </tr>
-                ))}
+                {accounts.map((account) => {
+                  const status = accountStatusPresentation(account.status);
+                  return (
+                    <tr key={`${account.provider}:${account.id}`}>
+                      <td><strong>{account.name || account.id}</strong></td>
+                      <td><Provider name={account.provider} /></td>
+                      <td><span className="cell-sub" style={{ marginTop: 0 }}>{account.id}</span></td>
+                      <td>{account.currency ?? '—'}</td>
+                      <td><span className={`status ${status.tone}`}>{status.label}</span></td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table></div>
           </>
