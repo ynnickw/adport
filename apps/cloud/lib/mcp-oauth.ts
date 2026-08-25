@@ -176,6 +176,7 @@ export function verifyAccessTokenSignature(token: string): AccessTokenClaims {
   if (!headerRaw || !payloadRaw || !signatureRaw || extra) throw new Error('Malformed access token.');
   const expected = createHmac('sha256', signingKey()).update(`${headerRaw}.${payloadRaw}`).digest();
   const actual = Buffer.from(signatureRaw, 'base64url');
+  if (actual.toString('base64url') !== signatureRaw) throw new Error('Invalid access token signature.');
   if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) throw new Error('Invalid access token signature.');
   let header: unknown;
   let payload: unknown;
