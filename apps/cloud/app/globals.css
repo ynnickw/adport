@@ -410,6 +410,9 @@ input:disabled, textarea:disabled { background: rgba(245, 245, 247, 0.8); color:
 .auth-foot { display: flex; flex-wrap: wrap; gap: 0.35rem 1rem; border-top: 1px solid var(--line-soft); margin-top: 1.4rem; padding-top: 1rem; color: var(--faint); font: 600 0.62rem var(--font-mono); letter-spacing: 0.04em; }
 .auth-foot a:hover { color: var(--orange-dark); }
 .auth-body .callout, .auth-body .error-callout { margin-bottom: 1.1rem; }
+.oauth-consent-scopes { margin: 0 0 1.1rem; }
+.oauth-consent-scopes dt { margin-top: 0.7rem; }
+.oauth-consent-scopes dd { margin: 0.2rem 0 0; color: var(--muted); font-size: 0.76rem; line-height: 1.6; }
 
 /* ── Code block ──────────────────────────────────────────────────────── */
 .code {

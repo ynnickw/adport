@@ -82,5 +82,5 @@ The database suite verifies:
 - Never expose `SUPABASE_SECRET_KEY`, the database URL, provider credentials, OAuth client/app secrets, developer tokens, encryption keys, or API-key peppers through `NEXT_PUBLIC_*`.
 - Application identity (client/app id, secret, developer token, user agent) stays in server env; only the tenant grant is written to the encrypted vault, and the runtime injects the application identity when building provider clients.
 - Never log request bodies for connection, OAuth, API-key creation, or MCP bearer authentication routes.
-- API keys are shown once. Provider credentials are accepted server-side, encrypted, and never returned.
+- OAuth-capable MCP clients connect directly to `/mcp`; Adport publishes protected-resource and authorization-server metadata, requires S256 PKCE and workspace consent, and rotates refresh tokens. Manual API keys are shown once for REST and legacy clients. Provider credentials are accepted server-side, encrypted, and never returned.
 - Use the local stack only with test advertising credentials. Production credentials belong in the deployed secret/KMS and database environment.

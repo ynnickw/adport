@@ -7,9 +7,10 @@ export interface AuthScreenProps {
   mode: 'signin' | 'signup';
   error?: string;
   message?: string;
+  returnTo?: string;
 }
 
-export function AuthScreen({ mode, error, message }: AuthScreenProps) {
+export function AuthScreen({ mode, error, message, returnTo }: AuthScreenProps) {
   const signup = mode === 'signup';
   return (
     <AuthFrame label={signup ? 'create account' : 'sign in'}>
@@ -23,6 +24,7 @@ export function AuthScreen({ mode, error, message }: AuthScreenProps) {
       {error ? <div className="error-callout" role="alert">{error}</div> : null}
       {message ? <div className="callout success" role="status">{message}</div> : null}
       <form className="form" action={signup ? signUp : signIn}>
+        {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
         {signup ? (
           <label className="field">
             <span>Name</span>
@@ -41,8 +43,8 @@ export function AuthScreen({ mode, error, message }: AuthScreenProps) {
       </form>
       <p className="auth-switch">
         {signup
-          ? <>Already have an account? <Link href="/">Sign in</Link></>
-          : <>New to Adport? <Link href="/?mode=signup">Create an account</Link></>}
+          ? <>Already have an account? <Link href={returnTo ? `/login?return_to=${encodeURIComponent(returnTo)}` : '/'}>Sign in</Link></>
+          : <>New to Adport? <Link href={returnTo ? `/login?mode=signup&return_to=${encodeURIComponent(returnTo)}` : '/?mode=signup'}>Create an account</Link></>}
       </p>
       <div className="auth-foot">
         <a href="https://adport.dev">adport.dev</a>

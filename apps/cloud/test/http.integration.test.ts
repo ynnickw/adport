@@ -1,11 +1,54 @@
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { UnauthorizedError, type OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import type {
+  OAuthClientInformationMixed,
+  OAuthClientMetadata,
+  OAuthTokens,
+} from '@modelcontextprotocol/sdk/shared/auth.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApiKey, resolveMembership } from '@/lib/cloud/repository';
+import {
+  createMcpAuthorizationCode,
+  getMcpOAuthClient,
+} from '@/lib/cloud/mcp-oauth-repository';
 import { closeDbForTests, db } from '@/lib/db';
+import {
+  mcpResourceUrl,
+  pkceChallenge,
+  validateAuthorizationRequest,
+} from '@/lib/mcp-oauth';
 
 const baseUrl = process.env.ADPORT_HTTP_TEST_BASE_URL;
 const describeHttp = baseUrl ? describe : describe.skip;
+
+class TestOAuthProvider implements OAuthClientProvider {
+  readonly redirectUrl = 'http://127.0.0.1:45893/callback';
+  readonly clientMetadata: OAuthClientMetadata = {
+    client_name: 'Adport SDK OAuth integration test',
+    redirect_uris: [this.redirectUrl],
+    grant_types: ['authorization_code', 'refresh_token'],
+    response_types: ['code'],
+    token_endpoint_auth_method: 'none',
+  };
+  authorizationUrl?: URL;
+  private information?: OAuthClientInformationMixed;
+  private grant?: OAuthTokens;
+  private verifier?: string;
+
+  clientInformation() { return this.information; }
+  saveClientInformation(information: OAuthClientInformationMixed) { this.information = information; }
+  tokens() { return this.grant; }
+  saveTokens(tokens: OAuthTokens) { this.grant = tokens; }
+  redirectToAuthorization(url: URL) { this.authorizationUrl = url; }
+  saveCodeVerifier(verifier: string) { this.verifier = verifier; }
+  codeVerifier() {
+    if (!this.verifier) throw new Error('Missing PKCE verifier');
+    return this.verifier;
+  }
+}
 
 describeHttp('running cloud server', () => {
   const admin = createClient(
@@ -17,6 +60,7 @@ describeHttp('running cloud server', () => {
   let organizationId: string;
   let apiKey: string;
   let apiKeyId: string;
+  const oauthClientIds = new Set<string>();
 
   beforeAll(async () => {
     const email = `http-${randomUUID()}@example.test`;
@@ -40,6 +84,9 @@ describeHttp('running cloud server', () => {
 
   afterAll(async () => {
     if (organizationId) await db()`delete from public.organizations where id = ${organizationId}`;
+    for (const clientId of oauthClientIds) {
+      await db()`delete from private.mcp_oauth_clients where client_id = ${clientId}`;
+    }
     if (userId) await admin.auth.admin.deleteUser(userId);
     await closeDbForTests();
   });
@@ -81,6 +128,112 @@ describeHttp('running cloud server', () => {
     expect(response.status).toBe(200);
     const body = await response.json() as { result?: { serverInfo?: { name?: string } } };
     expect(body.result?.serverInfo?.name).toBe('adport-cloud');
+  });
+
+  it('discovers OAuth, dynamically registers a public client, exchanges PKCE code, and initializes MCP', async () => {
+    const protectedResource = await fetch(`${baseUrl}/.well-known/oauth-protected-resource/mcp`);
+    expect(protectedResource.status).toBe(200);
+    expect(await protectedResource.json()).toMatchObject({
+      resource: `${baseUrl}/mcp`,
+      authorization_servers: [baseUrl],
+      scopes_supported: ['tools:read', 'tools:write'],
+    });
+    const metadata = await fetch(`${baseUrl}/.well-known/oauth-authorization-server`);
+    expect(await metadata.json()).toMatchObject({
+      issuer: baseUrl,
+      registration_endpoint: `${baseUrl}/oauth/register`,
+      code_challenge_methods_supported: ['S256'],
+    });
+    const challenge = await fetch(`${baseUrl}/mcp`, { method: 'POST' });
+    expect(challenge.status).toBe(401);
+    expect(challenge.headers.get('www-authenticate')).toContain('/.well-known/oauth-protected-resource/mcp');
+
+    const registration = await fetch(`${baseUrl}/oauth/register`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        client_name: 'Adport HTTP OAuth test',
+        redirect_uris: ['http://127.0.0.1:45892/callback'],
+        grant_types: ['authorization_code', 'refresh_token'],
+        response_types: ['code'],
+        token_endpoint_auth_method: 'none',
+      }),
+    });
+    expect(registration.status).toBe(201);
+    const registered = await registration.json() as { client_id: string };
+    oauthClientIds.add(registered.client_id);
+
+    const verifier = 'h'.repeat(64);
+    const code = await createMcpAuthorizationCode({ organizationId, userId, scopes: [] }, {
+      clientId: registered.client_id,
+      clientName: 'Adport HTTP OAuth test',
+      redirectUri: 'http://127.0.0.1:45892/callback',
+      scopes: ['tools:read'],
+      codeChallenge: pkceChallenge(verifier),
+      resource: mcpResourceUrl(),
+    });
+    const token = await fetch(`${baseUrl}/oauth/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: registered.client_id,
+        code,
+        code_verifier: verifier,
+        redirect_uri: 'http://127.0.0.1:45892/callback',
+        resource: `${baseUrl}/mcp`,
+      }),
+    });
+    expect(token.status).toBe(200);
+    const grant = await token.json() as { access_token: string; refresh_token: string; scope: string };
+    expect(grant.scope).toBe('tools:read');
+
+    const initialized = await fetch(`${baseUrl}/mcp`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${grant.access_token}`,
+        accept: 'application/json, text/event-stream',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-11-25',
+          capabilities: {},
+          clientInfo: { name: 'adport-oauth-http-integration', version: '1.0.0' },
+        },
+      }),
+    });
+    expect(initialized.status).toBe(200);
+    expect(await initialized.json()).toMatchObject({ result: { serverInfo: { name: 'adport-cloud' } } });
+  });
+
+  it('authenticates through the official MCP SDK transport and lists tools', async () => {
+    const provider = new TestOAuthProvider();
+    const firstTransport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), { authProvider: provider });
+    const firstClient = new Client({ name: 'adport-sdk-oauth-test', version: '1.0.0' });
+    await expect(firstClient.connect(firstTransport)).rejects.toBeInstanceOf(UnauthorizedError);
+
+    const authorizationUrl = provider.authorizationUrl;
+    const information = await provider.clientInformation();
+    expect(authorizationUrl).toBeInstanceOf(URL);
+    expect(information?.client_id).toMatch(/^adp_client_/);
+    oauthClientIds.add(information!.client_id);
+    const registered = await getMcpOAuthClient(information!.client_id);
+    expect(registered).toBeDefined();
+    const authorization = validateAuthorizationRequest(authorizationUrl!.searchParams, registered!);
+    const code = await createMcpAuthorizationCode({ organizationId, userId, scopes: [] }, authorization);
+    await firstTransport.finishAuth(code);
+
+    const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), { authProvider: provider });
+    const client = new Client({ name: 'adport-sdk-oauth-test', version: '1.0.0' });
+    await client.connect(transport);
+    const tools = await client.listTools();
+    expect(tools.tools.length).toBeGreaterThan(0);
+    expect(tools.tools.some((tool) => tool.name === 'accounts_list')).toBe(true);
+    await client.close();
   });
 });
 

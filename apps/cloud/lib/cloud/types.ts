@@ -2,6 +2,8 @@ export interface TenantPrincipal {
   organizationId: string;
   userId?: string;
   apiKeyId?: string;
+  oauthTokenId?: string;
+  clientId?: string;
   role?: 'owner' | 'admin' | 'member' | 'viewer';
   scopes: string[];
 }
