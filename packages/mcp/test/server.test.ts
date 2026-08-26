@@ -32,6 +32,12 @@ afterEach(async () => {
 });
 
 describe('adport MCP server', () => {
+  it('uses the orange dot for local MCP connections by default', () => {
+    expect(client.getServerVersion()?.icons).toEqual([
+      { src: 'https://app.adport.dev/icon.svg?brand=orange-dot-v2', mimeType: 'image/svg+xml', sizes: ['any'] },
+    ]);
+  });
+
   it('advertises configured brand icons to MCP clients', async () => {
     const runtime = await createContext({ includeMock: true });
     const brandedServer = createMcpServer({
