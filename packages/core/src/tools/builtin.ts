@@ -19,15 +19,22 @@ export function builtinTools(): AnyToolDefinition[] {
       description: 'List connected ad accounts across all providers (or one provider).',
       input: z.object({
         provider: z.string().optional().describe('Limit to one provider id, e.g. "google".'),
+        continue_on_error: z.boolean().default(false).describe('Return successful providers plus per-provider errors instead of failing the whole read.'),
       }),
       annotations: { readOnly: true },
       async handler(input, ctx) {
         const providers = selectConnectedProviders(ctx.providers, input.provider);
         const accounts: Account[] = [];
+        const errors: Array<{ provider: string; message: string }> = [];
         for (const provider of providers) {
-          accounts.push(...(await provider.listAccounts()));
+          try {
+            accounts.push(...(await provider.listAccounts()));
+          } catch (error) {
+            if (!input.continue_on_error) throw error;
+            errors.push({ provider: provider.id, message: error instanceof Error ? error.message : String(error) });
+          }
         }
-        return { accounts };
+        return { accounts, errors };
       },
     }),
     defineTool({
@@ -43,6 +50,7 @@ export function builtinTools(): AnyToolDefinition[] {
         metrics: z.array(z.enum(METRICS)).min(1).default(['spend', 'impressions', 'clicks', 'conversions']),
         date_range: dateRangeSchema.default('last_7_days'),
         limit: z.number().int().positive().max(1000).default(100),
+        continue_on_error: z.boolean().default(false).describe('Return successful providers plus per-provider errors instead of failing the whole read.'),
       }),
       annotations: { readOnly: true },
       async handler(input, ctx) {
@@ -55,12 +63,18 @@ export function builtinTools(): AnyToolDefinition[] {
           limit: input.limit,
         };
         const rows: ReportRow[] = [];
+        const errors: Array<{ provider: string; message: string }> = [];
         for (const provider of providers) {
-          const report = await provider.report(query);
-          rows.push(...report.rows);
+          try {
+            const report = await provider.report(query);
+            rows.push(...report.rows);
+          } catch (error) {
+            if (!input.continue_on_error) throw error;
+            errors.push({ provider: provider.id, message: error instanceof Error ? error.message : String(error) });
+          }
         }
         const truncated = rows.length > input.limit;
-        return { rows: rows.slice(0, input.limit), truncated };
+        return { rows: rows.slice(0, input.limit), truncated, errors };
       },
     }),
   ];

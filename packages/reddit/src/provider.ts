@@ -49,7 +49,8 @@ interface WritePlan {
   execute: () => Promise<string[]>;
 }
 
-const BREAKDOWN = { account: undefined, campaign: 'campaign_id', ad_group: 'ad_group_id', ad: 'ad_id' } as const;
+// Reddit v3 request enums are uppercase even though response object keys are lowercase.
+const BREAKDOWN = { account: undefined, campaign: 'CAMPAIGN_ID', ad_group: 'AD_GROUP_ID', ad: 'AD_ID' } as const;
 
 export class RedditAdsProvider implements AdProvider {
   readonly id = 'reddit';
@@ -99,20 +100,22 @@ export class RedditAdsProvider implements AdProvider {
         data: {
           ...(breakdown ? { breakdowns: [breakdown] } : {}),
           fields: [
-            'spend',
-            'impressions',
-            'clicks',
-            'conversion_purchase_clicks',
-            'conversion_purchase_views',
-            'conversion_purchase_total_value',
+            'SPEND',
+            'IMPRESSIONS',
+            'CLICKS',
+            'CONVERSION_PURCHASE_CLICKS',
+            'CONVERSION_PURCHASE_VIEWS',
+            'CONVERSION_PURCHASE_TOTAL_VALUE',
           ],
           starts_at: `${range.start}T00:00:00Z`,
-          ends_at: `${range.end}T23:59:59Z`,
+          // The v3 schema accepts hourly granularity only. Midnight on the
+          // following day keeps an inclusive Adport date range intact.
+          ends_at: `${nextDay(range.end)}T00:00:00Z`,
           time_zone_id: 'UTC',
         },
       };
       const metrics = await this.fetchReportPages(accountId, body, query.limit ?? 1000);
-      for (const metric of metrics) rows.push(this.toReportRow(metric, accountId, query, breakdown));
+      for (const metric of metrics) rows.push(this.toReportRow(metric, accountId, query, breakdown?.toLowerCase()));
     }
     return { rows };
   }
@@ -402,6 +405,12 @@ export class RedditAdsProvider implements AdProvider {
       throw new AdportError('INVALID_INPUT', `reddit: /${path} does not prove ownership by selected account ${accountId}`);
     }
   }
+}
+
+function nextDay(date: string): string {
+  const value = new Date(`${date}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + 1);
+  return value.toISOString().slice(0, 10);
 }
 
 function validateRedditPath(path: string): string {

@@ -24,6 +24,55 @@ export interface McpOAuthTokenPair {
   scopes: McpOAuthScope[];
 }
 
+export interface McpOAuthGrantSummary {
+  clientId: string;
+  userId: string;
+  clientName: string;
+  clientUri: string | null;
+  scopes: McpOAuthScope[];
+  resource: string;
+  createdAt: Date;
+  expiresAt: Date;
+  lastUsedAt: Date | null;
+}
+
+/**
+ * List active MCP OAuth grants as credential metadata. Raw access and refresh
+ * tokens are deliberately never recoverable or returned to the dashboard.
+ */
+export async function listMcpOAuthGrants(organizationId: string): Promise<McpOAuthGrantSummary[]> {
+  return db()<McpOAuthGrantSummary[]>`
+    select distinct on (refresh.client_id, refresh.user_id, refresh.resource)
+      refresh.client_id,
+      refresh.user_id,
+      client.client_name,
+      client.client_uri,
+      refresh.scopes,
+      refresh.resource,
+      refresh.created_at,
+      refresh.expires_at,
+      access.last_used_at
+    from private.mcp_oauth_refresh_tokens refresh
+    join private.mcp_oauth_clients client on client.client_id = refresh.client_id
+    left join lateral (
+      select token.last_used_at
+      from private.mcp_oauth_access_tokens token
+      where token.organization_id = refresh.organization_id
+        and token.user_id = refresh.user_id
+        and token.client_id = refresh.client_id
+        and token.resource = refresh.resource
+        and token.revoked_at is null
+      order by token.created_at desc
+      limit 1
+    ) access on true
+    where refresh.organization_id = ${organizationId}
+      and refresh.consumed_at is null
+      and refresh.revoked_at is null
+      and refresh.expires_at > now()
+    order by refresh.client_id, refresh.user_id, refresh.resource, refresh.created_at desc
+  `;
+}
+
 export async function registerMcpOAuthClient(input: {
   clientName: string;
   clientUri?: string;

@@ -29,7 +29,7 @@ export default async function AgentsPage() {
           </div>
         </section>
         <section className="card" style={{ gridColumn: '1 / -1' }}>
-          <div className="card-head"><h2>Manual API keys</h2><span className="card-note">optional · hashed at rest · shown once</span></div>
+        <div className="card-head"><h2>Agent credentials</h2><span className="card-note">OAuth grants and manual keys · secrets never displayed</span></div>
           <ApiKeyManager organizationId={tenant.organizationId} canManage={canAdminister(tenant)} />
         </section>
       </div>

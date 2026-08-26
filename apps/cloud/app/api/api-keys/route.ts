@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { sessionPrincipal } from '@/lib/cloud/auth';
 import { createApiKey } from '@/lib/cloud/repository';
+import { listMcpOAuthGrants } from '@/lib/cloud/mcp-oauth-repository';
 import { db } from '@/lib/db';
 import { apiError, noStoreJson } from '@/lib/http';
 
@@ -15,13 +16,16 @@ export async function GET(request: Request) {
     const organizationId = new URL(request.url).searchParams.get('organization_id') ?? undefined;
     const principal = await sessionPrincipal(organizationId);
     if (!['owner', 'admin'].includes(principal.role ?? '')) throw new Error('Owner or admin access is required.');
-    const keys = await db()<Array<{ id: string; name: string; keyPrefix: string; createdAt: Date; lastUsedAt: Date | null }>>`
-      select id, name, key_prefix, created_at, last_used_at
-      from public.api_keys
-      where organization_id = ${principal.organizationId} and revoked_at is null
-      order by created_at desc
-    `;
-    return noStoreJson({ keys });
+    const [keys, oauthGrants] = await Promise.all([
+      db()<Array<{ id: string; name: string; keyPrefix: string; createdAt: Date; lastUsedAt: Date | null }>>`
+        select id, name, key_prefix, created_at, last_used_at
+        from public.api_keys
+        where organization_id = ${principal.organizationId} and revoked_at is null
+        order by created_at desc
+      `,
+      listMcpOAuthGrants(principal.organizationId),
+    ]);
+    return noStoreJson({ keys, oauthGrants });
   } catch (error) {
     return apiError(error, 403);
   }
