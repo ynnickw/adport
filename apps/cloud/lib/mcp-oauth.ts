@@ -26,8 +26,9 @@ export const clientRegistrationSchema = z.object({
   grant_types: z.array(z.enum(['authorization_code', 'refresh_token'])).default(['authorization_code', 'refresh_token']),
   response_types: z.array(z.literal('code')).default(['code']),
   token_endpoint_auth_method: z.literal('none').default('none'),
+  application_type: z.enum(['native', 'web']).optional(),
   scope: z.string().trim().optional(),
-}).strict().superRefine((client, context) => {
+}).strip().superRefine((client, context) => {
   if (!client.grant_types.includes('authorization_code')) {
     context.addIssue({
       code: 'custom',
