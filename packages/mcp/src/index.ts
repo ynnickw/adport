@@ -11,6 +11,12 @@ import packageJson from '../package.json';
 
 export const PROVIDER_IDS = ['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit'] as const;
 
+const DEFAULT_MCP_ICONS = [{
+  src: 'https://app.adport.dev/icon.svg?brand=orange-dot-v2',
+  mimeType: 'image/svg+xml',
+  sizes: ['any'],
+}];
+
 /**
  * Standard runtime assembly: real providers whose credentials exist. Mock data
  * is opt-in so a live runtime never silently substitutes synthetic accounts.
@@ -46,7 +52,7 @@ export interface CreateServerOptions {
  * Thin adapter: every tool in the shared registry becomes an MCP tool.
  * No tool logic lives here — see the "one tool-definition layer" principle.
  */
-export function createMcpServer({ runtime, name = 'adport', version = packageJson.version, icons, scopes }: CreateServerOptions): McpServer {
+export function createMcpServer({ runtime, name = 'adport', version = packageJson.version, icons = DEFAULT_MCP_ICONS, scopes }: CreateServerOptions): McpServer {
   const server = new McpServer({ name, version, ...(icons ? { icons } : {}) });
   for (const tool of runtime.registry.list()) {
     const requiredScope = tool.annotations.readOnly ? 'tools:read' : 'tools:write';
