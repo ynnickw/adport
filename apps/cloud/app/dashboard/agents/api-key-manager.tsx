@@ -4,9 +4,21 @@ import { useEffect, useState } from 'react';
 import { formatDate } from '@/components/ui';
 
 interface KeySummary { id: string; name: string; keyPrefix: string; createdAt: string; lastUsedAt: string | null; }
+interface OAuthGrantSummary {
+  clientId: string;
+  userId: string;
+  clientName: string;
+  clientUri: string | null;
+  scopes: string[];
+  resource: string;
+  createdAt: string;
+  expiresAt: string;
+  lastUsedAt: string | null;
+}
 
 export function ApiKeyManager({ organizationId, canManage }: { organizationId: string; canManage: boolean }) {
   const [keys, setKeys] = useState<KeySummary[]>();
+  const [oauthGrants, setOauthGrants] = useState<OAuthGrantSummary[]>();
   const [createdKey, setCreatedKey] = useState<string>();
   const [name, setName] = useState('');
   const [error, setError] = useState<string>();
@@ -14,9 +26,12 @@ export function ApiKeyManager({ organizationId, canManage }: { organizationId: s
 
   async function load() {
     const response = await fetch(`/api/api-keys?organization_id=${organizationId}`, { cache: 'no-store' });
-    const data = await response.json().catch(() => ({})) as { keys?: KeySummary[]; error?: string };
+    const data = await response.json().catch(() => ({})) as { keys?: KeySummary[]; oauthGrants?: OAuthGrantSummary[]; error?: string };
     if (!response.ok) setError(data.error ?? 'Unable to load API keys.');
-    else setKeys(data.keys ?? []);
+    else {
+      setKeys(data.keys ?? []);
+      setOauthGrants(data.oauthGrants ?? []);
+    }
   }
 
   useEffect(() => { void load(); }, [organizationId]);
@@ -52,8 +67,18 @@ export function ApiKeyManager({ organizationId, canManage }: { organizationId: s
       ) : null}
       {error ? <div className="card-body" style={{ paddingBottom: 0 }}><div className="error-callout" style={{ marginBottom: 0 }}>{error}</div></div> : null}
       <div className="row-list">
-        {keys === undefined ? <div className="row-item"><span className="inline-note">Loading keys…</span></div> : null}
-        {keys?.length === 0 ? <div className="row-item"><span className="inline-note">No manual API keys. OAuth-capable MCP clients do not need one.</span></div> : null}
+        {keys === undefined || oauthGrants === undefined ? <div className="row-item"><span className="inline-note">Loading credentials…</span></div> : null}
+        {oauthGrants?.map((grant) => (
+          <div className="row-item" key={`${grant.clientId}:${grant.userId}:${grant.resource}`}>
+            <div>
+              <strong>{grant.clientName}</strong> <span className="status">MCP OAuth</span>
+              <div className="cell-sub">
+                {grant.scopes.join(', ')} · authorized {formatDate(grant.createdAt)} · {grant.lastUsedAt ? `last used ${formatDate(grant.lastUsedAt)}` : 'not used yet'} · refresh grant expires {formatDate(grant.expiresAt)}
+              </div>
+            </div>
+          </div>
+        ))}
+        {keys?.length === 0 && oauthGrants?.length === 0 ? <div className="row-item"><span className="inline-note">No agent credentials yet. OAuth-capable MCP clients create a grant during authorization; manual REST clients can use a key below.</span></div> : null}
         {keys?.map((key) => (
           <div className="row-item" key={key.id}>
             <div>

@@ -112,9 +112,9 @@ describe('RedditAdsProvider reads', () => {
     const apiCall = calls.find((call) => call.url.includes('/reports'))!;
     const body = JSON.parse(String(apiCall.init.body));
     expect(body.data).toMatchObject({
-      breakdowns: ['campaign_id'], starts_at: '2026-08-01T00:00:00Z', ends_at: '2026-08-07T23:59:59Z', time_zone_id: 'UTC',
+      breakdowns: ['CAMPAIGN_ID'], starts_at: '2026-08-01T00:00:00Z', ends_at: '2026-08-08T00:00:00Z', time_zone_id: 'UTC',
     });
-    expect(body.data.fields).toContain('spend');
+    expect(body.data.fields).toContain('SPEND');
   });
 });
 

@@ -70,6 +70,29 @@ describe('createContext + ToolRegistry', () => {
     expect(report.rows[0]?.metrics.spend).toBeTypeOf('number');
   });
 
+  it('can preserve successful reads when another provider fails', async () => {
+    const { ctx, registry } = await createContext({ includeMock: true });
+    ctx.providers.register({
+      id: 'broken',
+      capabilities: () => ({ serverDryRun: false }),
+      listAccounts: async () => { throw new Error('broken account read'); },
+      report: async () => { throw new Error('broken report read'); },
+      previewWrite: async () => { throw new Error('unused'); },
+      applyWrite: async () => { throw new Error('unused'); },
+    });
+    const accounts = await registry.call('accounts_list', { continue_on_error: true }, ctx) as {
+      accounts: unknown[]; errors: Array<{ provider: string; message: string }>;
+    };
+    expect(accounts.accounts).toHaveLength(2);
+    expect(accounts.errors).toEqual([{ provider: 'broken', message: 'broken account read' }]);
+
+    const report = await registry.call('report', {
+      metrics: ['spend'], continue_on_error: true,
+    }, ctx) as { rows: unknown[]; errors: Array<{ provider: string; message: string }> };
+    expect(report.rows.length).toBeGreaterThan(0);
+    expect(report.errors).toEqual([{ provider: 'broken', message: 'broken report read' }]);
+  });
+
   it('rejects invalid tool input with INVALID_INPUT', async () => {
     const { ctx, registry } = await createContext({ includeMock: true });
     await expect(registry.call('report', { metrics: ['nope'] }, ctx)).rejects.toMatchObject({

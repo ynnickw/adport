@@ -7,6 +7,7 @@ interface Summary {
   accounts: Array<{ id: string; name: string; status?: string }>;
   rows: Array<{ provider: string; accountId: string; entity: { id: string; name: string; status?: string }; metrics: Record<string, number> }>;
   truncated?: boolean;
+  warnings?: Array<{ provider: string; message: string }>;
 }
 
 /**
@@ -41,6 +42,9 @@ export function LiveData({ organizationId, connected }: { organizationId: string
   return (
     <>
       {error ? <div className="error-callout">Provider read failed: {error}</div> : null}
+      {summary?.warnings?.map((warning) => (
+        <div className="error-callout" key={`${warning.provider}:${warning.message}`}>Partial provider read: {warning.message}</div>
+      ))}
       <section className="metrics" aria-label="Performance summary" aria-busy={loading}>
         <Metric label="Spend" value={loading ? '…' : formatNumber(totals.spend)} foot="Last 7 days · account currencies" />
         <Metric label="Clicks" value={loading ? '…' : formatNumber(totals.clicks)} foot={loading ? 'Loading' : `${formatNumber(totals.impressions)} impressions`} />
