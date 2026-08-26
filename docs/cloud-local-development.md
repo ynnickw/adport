@@ -36,6 +36,17 @@ pnpm --filter @adport/cloud dev
 
 The app root `/` is the sign-in screen (signed-in users are redirected to `/dashboard`); there is no marketing landing page in the cloud app — that lives on adport.dev. The dashboard is a sidebar shell with Overview, Connections, Accounts, Reports, Approvals, Audit log, Policies, Team, and Agent access.
 
+### Google and GitHub sign-in
+
+The sign-in screen supports email/password plus Google and GitHub through Supabase Auth. Social sign-ins use the same `/auth/callback` PKCE exchange and the same new-user database trigger as email sign-up, so a first-time social user receives a personal organization and owner membership.
+
+To enable either provider, create its OAuth application and configure it under **Supabase Dashboard → Authentication → Sign In / Providers**. Use the Supabase project callback shown on that page (`https://<project-ref>.supabase.co/auth/v1/callback`) as the authorized callback URL in Google or GitHub. In Supabase's redirect allow list, include the Adport application callback for each deployed environment, for example:
+
+- `http://localhost:3000/auth/callback`
+- `https://app.adport.dev/auth/callback`
+
+The Google and GitHub client secrets belong in Supabase Auth, not in the Adport repository or Vercel environment. Google only needs the basic identity scopes supplied by Supabase; it does not reuse the separate Google Ads OAuth application.
+
 Hosted OAuth callbacks are `${ADPORT_CLOUD_BASE_URL}/api/oauth/<provider>/callback` for `google`, `meta`, `tiktok`, `microsoft`, and `reddit`; the shared start route is `/api/oauth/<provider>/start`. If another process owns port 3000, set `ADPORT_CLOUD_BASE_URL` to the actual port and register the same redirect in each development provider app.
 
 For a production-mode local check:
