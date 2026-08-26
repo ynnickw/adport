@@ -141,6 +141,7 @@ a { color: inherit; }
 .platforms .google-logo path:nth-child(3) { fill: #fbbc04; }
 .platforms .meta-logo { color: #0866ff; }
 .platforms .apple-logo { color: #111; }
+.platforms .reddit-logo { color: #ff4500; }
 .platforms .microsoft-logo path:nth-child(1) { fill: #f25022; }
 .platforms .microsoft-logo path:nth-child(2) { fill: #7fba00; }
 .platforms .microsoft-logo path:nth-child(3) { fill: #00a4ef; }
@@ -193,7 +194,6 @@ a { color: inherit; }
   .connected { display: none; }
   .platforms { gap: 1rem; padding-block: 1.25rem; }
   .platforms ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.9rem 1.4rem; }
-  .platforms li:last-child { grid-column: 1 / -1; }
   .site-footer { align-items: flex-start; flex-direction: column; gap: 0.8rem; padding-block: 1.25rem; }
   .legal-header { padding-bottom: 3.5rem; }
 }
