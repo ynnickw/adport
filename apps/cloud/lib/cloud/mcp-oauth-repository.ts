@@ -34,14 +34,19 @@ export interface McpOAuthGrantSummary {
   createdAt: Date;
   expiresAt: Date;
   lastUsedAt: Date | null;
+  status: 'active' | 'rotated' | 'revoked' | 'expired';
 }
 
 /**
- * List active MCP OAuth grants as credential metadata. Raw access and refresh
- * tokens are deliberately never recoverable or returned to the dashboard.
+ * List the latest MCP OAuth grant per client, user, and resource as credential
+ * metadata. Historical grants remain visible after rotation, expiry, or
+ * revocation; raw access and refresh tokens are never recoverable or returned.
  */
 export async function listMcpOAuthGrants(organizationId: string): Promise<McpOAuthGrantSummary[]> {
-  return db()<McpOAuthGrantSummary[]>`
+  const grants = await db()<Array<Omit<McpOAuthGrantSummary, 'status'> & {
+    consumedAt: Date | null;
+    revokedAt: Date | null;
+  }>>`
     select distinct on (refresh.client_id, refresh.user_id, refresh.resource)
       refresh.client_id,
       refresh.user_id,
@@ -51,6 +56,8 @@ export async function listMcpOAuthGrants(organizationId: string): Promise<McpOAu
       refresh.resource,
       refresh.created_at,
       refresh.expires_at,
+      refresh.consumed_at,
+      refresh.revoked_at,
       access.last_used_at
     from private.mcp_oauth_refresh_tokens refresh
     join private.mcp_oauth_clients client on client.client_id = refresh.client_id
@@ -66,11 +73,12 @@ export async function listMcpOAuthGrants(organizationId: string): Promise<McpOAu
       limit 1
     ) access on true
     where refresh.organization_id = ${organizationId}
-      and refresh.consumed_at is null
-      and refresh.revoked_at is null
-      and refresh.expires_at > now()
     order by refresh.client_id, refresh.user_id, refresh.resource, refresh.created_at desc
   `;
+  return grants.map(({ consumedAt, revokedAt, ...grant }) => ({
+    ...grant,
+    status: revokedAt ? 'revoked' : grant.expiresAt.getTime() <= Date.now() ? 'expired' : consumedAt ? 'rotated' : 'active',
+  }));
 }
 
 export async function registerMcpOAuthClient(input: {
