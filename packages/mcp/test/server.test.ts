@@ -32,6 +32,24 @@ afterEach(async () => {
 });
 
 describe('adport MCP server', () => {
+  it('advertises configured brand icons to MCP clients', async () => {
+    const runtime = await createContext({ includeMock: true });
+    const brandedServer = createMcpServer({
+      runtime,
+      icons: [{ src: 'https://app.adport.dev/icon.svg?brand=orange-dot-v2', mimeType: 'image/svg+xml', sizes: ['any'] }],
+    });
+    const [brandedClientTransport, brandedServerTransport] = InMemoryTransport.createLinkedPair();
+    const brandedClient = new Client({ name: 'branded-client', version: '0.0.0' });
+    await Promise.all([brandedServer.connect(brandedServerTransport), brandedClient.connect(brandedClientTransport)]);
+    try {
+      expect(brandedClient.getServerVersion()?.icons).toEqual([
+        { src: 'https://app.adport.dev/icon.svg?brand=orange-dot-v2', mimeType: 'image/svg+xml', sizes: ['any'] },
+      ]);
+    } finally {
+      await brandedClient.close();
+    }
+  });
+
   it('exposes registry tools with annotations', async () => {
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name);

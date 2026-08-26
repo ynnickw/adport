@@ -51,10 +51,11 @@ button, select { font: inherit; }
 button { cursor: pointer; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 
-/* ── Brand: the adport.dev domain wordmark, exactly as on the landing page ── */
-.brand-lockup { display: inline-flex; align-items: center; gap: 0.72rem; }
+/* ── Brand: the orange dot and adport.dev domain wordmark ─────────────── */
+.brand-lockup { display: inline-flex; align-items: center; gap: 0.55rem; }
+.brand-mark { display: inline-block; width: 0.72rem; height: 0.72rem; flex: 0 0 auto; border-radius: 50%; background: var(--orange); }
 .domain-wordmark { color: var(--ink); font-size: 1.15rem; font-weight: 720; letter-spacing: -0.04em; }
-.domain-wordmark span { color: var(--orange); }
+.brand-lockup-large .brand-mark { width: 0.9rem; height: 0.9rem; }
 .brand-lockup-large .domain-wordmark { font-size: 1.4rem; }
 
 /* ── Application shell ───────────────────────────────────────────────── */
