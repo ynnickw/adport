@@ -14,6 +14,7 @@ interface OAuthGrantSummary {
   createdAt: string;
   expiresAt: string;
   lastUsedAt: string | null;
+  status: 'active' | 'rotated' | 'revoked' | 'expired';
 }
 
 export function ApiKeyManager({ organizationId, canManage }: { organizationId: string; canManage: boolean }) {
@@ -71,7 +72,7 @@ export function ApiKeyManager({ organizationId, canManage }: { organizationId: s
         {oauthGrants?.map((grant) => (
           <div className="row-item" key={`${grant.clientId}:${grant.userId}:${grant.resource}`}>
             <div>
-              <strong>{grant.clientName}</strong> <span className="status">MCP OAuth</span>
+              <strong>{grant.clientName}</strong> <span className="status">MCP OAuth · {grant.status}</span>
               <div className="cell-sub">
                 {grant.scopes.join(', ')} · authorized {formatDate(grant.createdAt)} · {grant.lastUsedAt ? `last used ${formatDate(grant.lastUsedAt)}` : 'not used yet'} · refresh grant expires {formatDate(grant.expiresAt)}
               </div>
