@@ -36,6 +36,8 @@ export interface CreateServerOptions {
   runtime: AdportRuntime;
   name?: string;
   version?: string;
+  /** Brand icons advertised to MCP clients during initialization. */
+  icons?: Array<{ src: string; mimeType?: string; sizes?: string[] }>;
   /** When set by a remote transport, only register tools authorized by this key. */
   scopes?: readonly string[];
 }
@@ -44,8 +46,8 @@ export interface CreateServerOptions {
  * Thin adapter: every tool in the shared registry becomes an MCP tool.
  * No tool logic lives here — see the "one tool-definition layer" principle.
  */
-export function createMcpServer({ runtime, name = 'adport', version = packageJson.version, scopes }: CreateServerOptions): McpServer {
-  const server = new McpServer({ name, version });
+export function createMcpServer({ runtime, name = 'adport', version = packageJson.version, icons, scopes }: CreateServerOptions): McpServer {
+  const server = new McpServer({ name, version, ...(icons ? { icons } : {}) });
   for (const tool of runtime.registry.list()) {
     const requiredScope = tool.annotations.readOnly ? 'tools:read' : 'tools:write';
     if (scopes && !scopes.includes(requiredScope)) continue;
