@@ -30,6 +30,7 @@ export async function POST(request: Request) {
       grant_types: client.grantTypes,
       response_types: client.responseTypes,
       token_endpoint_auth_method: client.tokenEndpointAuthMethod,
+      ...(input.application_type ? { application_type: input.application_type } : {}),
       ...(input.scope ? { scope: input.scope } : {}),
     }, { status: 201, headers: { 'cache-control': 'no-store' } });
   } catch (error) {

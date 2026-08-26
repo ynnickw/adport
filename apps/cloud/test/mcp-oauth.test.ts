@@ -65,6 +65,26 @@ describe('MCP OAuth protocol helpers', () => {
     })).toThrow(/unsupported/);
   });
 
+  it('accepts Claude client metadata without weakening validated OAuth fields', () => {
+    const parsed = clientRegistrationSchema.parse({
+      client_name: 'Claude',
+      application_type: 'native',
+      redirect_uris: ['http://127.0.0.1:45892/callback'],
+      grant_types: ['authorization_code', 'refresh_token'],
+      response_types: ['code'],
+      token_endpoint_auth_method: 'none',
+      software_version: '1.0.0',
+    });
+
+    expect(parsed.application_type).toBe('native');
+    expect(parsed).not.toHaveProperty('software_version');
+    expect(() => clientRegistrationSchema.parse({
+      client_name: 'Claude',
+      application_type: 'desktop',
+      redirect_uris: ['http://127.0.0.1:45892/callback'],
+    })).toThrow(/application_type/);
+  });
+
   it('requires an exact registered redirect, S256 PKCE, resource, and supported scopes', () => {
     const params = new URLSearchParams({
       response_type: 'code',
