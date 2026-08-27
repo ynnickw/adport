@@ -10,7 +10,7 @@ export default async function ReportsPage() {
   const rows = result.ok ? result.data.rows : [];
   return (
     <main className="page">
-      <PageHeader eyebrow="Normalized evidence" title="Campaign report" description="Thirty days, queried through the same cross-platform report tool the REST API and remote MCP endpoint use. Currencies stay provider-specific." />
+      <PageHeader title="Campaign report" description="Thirty days, queried through the same cross-platform report tool the REST API and remote MCP endpoint use. Currencies stay provider-specific." />
       {!result.ok ? <div className="error-callout">Provider read failed: {result.error}</div> : null}
       {result.warnings.map((warning) => <div className="error-callout" key={`${warning.provider}:${warning.message}`}>Partial provider read: {warning.message}</div>)}
       <section className="card">

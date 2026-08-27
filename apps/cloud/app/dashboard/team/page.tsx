@@ -11,7 +11,7 @@ export default async function TeamPage() {
   const members = await listOrganizationMembers(tenant.organizationId);
   return (
     <main className="page">
-      <PageHeader eyebrow="Organization" title="Team" description="Owners and admins manage connections, policy, keys, and members; members can read, preview, and apply; viewers read only." />
+      <PageHeader title="Team" description="Owners and admins manage connections, policy, keys, and members; members can read, preview, and apply; viewers read only." />
       <div className="stack" style={{ maxWidth: '46rem' }}>
         <section className="card">
           <div className="card-head"><h2>Members</h2><span className="card-note">{members.length} {members.length === 1 ? 'member' : 'members'}</span></div>

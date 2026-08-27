@@ -19,7 +19,6 @@ export function Shell({ tenant, children }: { tenant: ShellTenant; children: Rea
             <BrandLockup />
           </Link>
           <div className="workspace">
-            <span className="workspace-label">Organization</span>
             <span className="workspace-name">{tenant.organizationName}</span>
           </div>
         </div>

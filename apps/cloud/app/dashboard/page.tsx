@@ -17,7 +17,6 @@ export default async function OverviewPage() {
   return (
     <main className="page">
       <PageHeader
-        eyebrow="Workspace pulse"
         title="Overview"
         description="A normalized read across the ad accounts this organization has connected."
         action={<Link className="button secondary" href="/dashboard/reports">Open full report</Link>}

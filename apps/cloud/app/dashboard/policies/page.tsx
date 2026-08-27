@@ -15,7 +15,7 @@ export default async function PoliciesPage() {
   const dataRetentionDays = settings[0]?.dataRetentionDays ?? 90;
   return (
     <main className="page">
-      <PageHeader eyebrow="Structural safety" title="Policies" description="Every write from the dashboard, REST, or MCP must satisfy this policy. It is enforced server-side." />
+      <PageHeader title="Policies" description="Every write from the dashboard, REST, or MCP must satisfy this policy. It is enforced server-side." />
       <section className="card" style={{ maxWidth: '46rem' }}>
         <div className="card-head"><h2>Write policy</h2><span className="status">Enforced</span></div>
         <div className="card-body">

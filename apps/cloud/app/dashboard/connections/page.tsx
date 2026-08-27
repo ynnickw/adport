@@ -28,7 +28,6 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   return (
     <main className="page">
       <PageHeader
-        eyebrow="Provider authority"
         title="Connections"
         description="Connect each platform through its official OAuth consent. Grants are encrypted per organization and revoked on disconnect; you only ever get the ad accounts you can already access."
       />

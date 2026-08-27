@@ -18,7 +18,7 @@ export default async function AccountsPage() {
   const emptyConnections = connections.filter((connection) => connection.status === 'connected' && !accountProviders.has(connection.provider));
   return (
     <main className="page">
-      <PageHeader eyebrow="Scoped inventory" title="Accounts" description="The ad accounts each connected grant can reach. Only these accounts can be queried or changed by this organization's runtime." />
+      <PageHeader title="Accounts" description="The ad accounts each connected grant can reach. Only these accounts can be queried or changed by this organization's runtime." />
       {!result.ok ? <div className="error-callout">Provider read failed: {result.error}</div> : null}
       {result.warnings.map((warning) => <div className="error-callout" key={`${warning.provider}:${warning.message}`}>Partial provider read: {warning.message}</div>)}
       <section className="card">
