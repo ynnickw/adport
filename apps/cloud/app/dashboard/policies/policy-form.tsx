@@ -20,6 +20,7 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
     setMessage({});
     const data = Object.fromEntries(new FormData(event.currentTarget).entries());
     const numberOrNull = (value: FormDataEntryValue | undefined) => value === undefined || value === '' ? null : Number(value);
+    const maxDailyBudget = numberOrNull(data.maxDailyBudget);
     const response = await fetch('/api/settings', {
       method: 'PATCH', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -29,7 +30,7 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
           require_validation: true,
           paused_creation: data.pausedCreation === 'on',
           max_budget_delta_pct: numberOrNull(data.maxBudgetDeltaPct),
-          max_daily_budget_micros: numberOrNull(data.maxDailyBudgetMicros),
+          max_daily_budget_micros: maxDailyBudget === null ? null : Math.round(maxDailyBudget * 1_000_000),
           protected_accounts: String(data.protectedAccounts ?? '').split(',').map((item) => item.trim()).filter(Boolean),
           pending_ttl_minutes: Number(data.pendingTtlMinutes),
         },
@@ -46,13 +47,32 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
       {message.error ? <div className="error-callout" style={{ marginBottom: 0 }}>{message.error}</div> : null}
       {message.success ? <div className="callout success">{message.success}</div> : null}
       <fieldset className="form" disabled={!canAdminister} style={{ border: 0, margin: 0, padding: 0 }}>
-        <label className="check locked"><input type="checkbox" checked readOnly /> Preview and exact approval required for every write</label>
+        <div>
+          <label className="check locked"><input type="checkbox" checked readOnly /> Preview and exact approval required for every write</label>
+          <p className="field-hint" style={{ margin: '0.3rem 0 0 1.55rem' }}>Structural and always on. Every write is previewed first and applied only after an exact approval.</p>
+        </div>
         <label className="check"><input name="pausedCreation" type="checkbox" defaultChecked={policy.paused_creation} /> Force newly created objects to paused</label>
         <div className="field-grid">
-          <label className="field"><span>Max budget change (%)</span><input name="maxBudgetDeltaPct" type="number" min="0.01" step="0.01" defaultValue={policy.max_budget_delta_pct ?? ''} placeholder="No limit" /></label>
-          <label className="field"><span>Max daily budget (micros)</span><input name="maxDailyBudgetMicros" type="number" min="1" step="1" defaultValue={policy.max_daily_budget_micros ?? ''} placeholder="No limit" /></label>
-          <label className="field"><span>Approval lifetime (minutes)</span><input name="pendingTtlMinutes" type="number" min="1" step="1" defaultValue={policy.pending_ttl_minutes} required /></label>
-          <label className="field"><span>Data retention (days)</span><input name="dataRetentionDays" type="number" min="1" max="3650" step="1" defaultValue={dataRetentionDays} required /></label>
+          <label className="field">
+            <span>Max budget change (%)</span>
+            <input name="maxBudgetDeltaPct" type="number" min="0.01" step="0.01" defaultValue={policy.max_budget_delta_pct ?? ''} placeholder="No limit" />
+            <span className="field-hint">The largest change a single write may make to any budget.</span>
+          </label>
+          <label className="field">
+            <span>Max daily budget</span>
+            <input name="maxDailyBudget" type="number" min="0.01" step="0.01" defaultValue={policy.max_daily_budget_micros === null || policy.max_daily_budget_micros === undefined ? '' : policy.max_daily_budget_micros / 1_000_000} placeholder="No limit" />
+            <span className="field-hint">In the ad account&apos;s currency. Writes above this ceiling are refused.</span>
+          </label>
+          <label className="field">
+            <span>Approval lifetime (minutes)</span>
+            <input name="pendingTtlMinutes" type="number" min="1" step="1" defaultValue={policy.pending_ttl_minutes} required />
+            <span className="field-hint">A previewed write expires if it is not applied within this window.</span>
+          </label>
+          <label className="field">
+            <span>Data retention (days)</span>
+            <input name="dataRetentionDays" type="number" min="1" max="3650" step="1" defaultValue={dataRetentionDays} required />
+            <span className="field-hint">Audit events older than this are deleted automatically.</span>
+          </label>
         </div>
         <label className="field">
           <span>Protected account IDs</span>

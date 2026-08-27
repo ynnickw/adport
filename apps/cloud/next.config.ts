@@ -1,7 +1,7 @@
 import type { NextConfig } from 'next';
 import path from 'node:path';
 
-export function buildContentSecurityPolicy(supabaseOrigin: string, allowOAuthRedirects = false): string {
+export function buildContentSecurityPolicy(supabaseOrigin: string, allowOAuthRedirects = false, development = false): string {
   const formAction = allowOAuthRedirects
     ? "form-action 'self' https: http://localhost:* http://127.0.0.1:* http://[::1]:*"
     : "form-action 'self'";
@@ -13,8 +13,10 @@ export function buildContentSecurityPolicy(supabaseOrigin: string, allowOAuthRed
     "img-src 'self' data:",
     "font-src 'self' data:",
     "style-src 'self' 'unsafe-inline'",
-    "script-src 'self' 'unsafe-inline'",
-    `connect-src 'self' ${supabaseOrigin}`,
+    // React development mode needs eval for source-mapped stacks; never allowed in production.
+    development ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'" : "script-src 'self' 'unsafe-inline'",
+    // The Next.js dev server streams HMR updates over a local websocket.
+    development ? `connect-src 'self' ${supabaseOrigin} ws:` : `connect-src 'self' ${supabaseOrigin}`,
     formAction,
   ].join('; ');
 }
@@ -35,8 +37,9 @@ const config: NextConfig = {
     const supabaseOrigin = process.env.NEXT_PUBLIC_SUPABASE_URL
       ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).origin
       : 'http://127.0.0.1:55321';
-    const contentSecurityPolicy = buildContentSecurityPolicy(supabaseOrigin);
-    const oauthConsentContentSecurityPolicy = buildContentSecurityPolicy(supabaseOrigin, true);
+    const development = process.env.NODE_ENV === 'development';
+    const contentSecurityPolicy = buildContentSecurityPolicy(supabaseOrigin, false, development);
+    const oauthConsentContentSecurityPolicy = buildContentSecurityPolicy(supabaseOrigin, true, development);
     return [
       {
         source: '/(.*)',
