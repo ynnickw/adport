@@ -68,7 +68,13 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
         summary: `Connected ${accounts.length} accessible ${label} account(s) through hosted OAuth`,
         details: { accountCount: accounts.length },
       });
-    } catch {
+    } catch (error) {
+      console.error(JSON.stringify({
+        level: 'error',
+        message: 'Provider credential verification failed',
+        provider,
+        error: error instanceof Error ? error.message : 'unknown error',
+      }));
       await setConnectionVerification(transaction.organizationId, provider, {
         ok: false,
         error: `${label} credential verification failed. Reconnect to retry, or disconnect to revoke access.`,
