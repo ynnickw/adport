@@ -39,7 +39,7 @@ export {
   type RulePack,
 } from './audit/types.js';
 export { corePerformancePack } from './audit/packs/core-performance.js';
-export { FindingsStore } from './audit/store.js';
+export { FindingsStore, type FindingsRepository } from './audit/store.js';
 export { AuditRunner, type AuditRunOptions, type AuditRunResult } from './audit/runner.js';
 export { auditTools } from './audit/tools.js';
 export { CredentialStore, type CredentialRecord, type CredentialSource } from './credentials/store.js';

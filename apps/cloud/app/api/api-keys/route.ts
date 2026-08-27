@@ -36,11 +36,13 @@ export async function POST(request: Request) {
     const input = inputSchema.parse(await request.json());
     const principal = await sessionPrincipal(input.organization_id);
     if (!['owner', 'admin'].includes(principal.role ?? '')) throw new Error('Owner or admin access is required.');
+    const scopes = input.scopes.filter((scope) => principal.scopes.includes(scope));
+    if (!scopes.length) throw new Error('Your current plan does not grant any of the requested API-key scopes.');
     const created = await createApiKey({
       organizationId: principal.organizationId,
       userId: principal.userId!,
       name: input.name,
-      scopes: input.scopes,
+      scopes,
     });
     return noStoreJson(created, 201);
   } catch (error) {

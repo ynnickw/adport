@@ -64,8 +64,14 @@ describe('adport MCP server', () => {
     expect(names).toContain('mock_set_budget');
     const remove = tools.find((t) => t.name === 'mock_remove_campaign');
     expect(remove?.annotations?.destructiveHint).toBe(true);
+    expect(remove?.annotations?.openWorldHint).toBe(false);
     const list = tools.find((t) => t.name === 'accounts_list');
     expect(list?.annotations?.readOnlyHint).toBe(true);
+    expect(list?.annotations?.openWorldHint).toBe(true);
+    const persistedFindings = tools.find((t) => t.name === 'recommendations_list');
+    expect(persistedFindings?.annotations?.openWorldHint).toBe(false);
+    const applyFinding = tools.find((t) => t.name === 'recommendation_apply');
+    expect(applyFinding?.annotations?.openWorldHint).toBe(true);
   });
 
   it('answers accounts_list', async () => {

@@ -4,18 +4,19 @@ import { authenticateApiKey, enforceRateLimit, resolveMembership } from './repos
 import { authenticateMcpOAuthAccessToken } from './mcp-oauth-repository';
 import { HttpError } from '@/lib/http';
 import type { TenantPrincipal } from './types';
+import { applyPlanToPrincipal } from './plans';
 
 export async function sessionPrincipal(requestedOrganizationId?: string): Promise<TenantPrincipal> {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) throw new Error('Authentication required.');
   const membership = await resolveMembership(data.user.id, requestedOrganizationId);
-  return {
+  return applyPlanToPrincipal({
     organizationId: membership.organizationId,
     userId: data.user.id,
     role: membership.role,
     scopes: ['tools:read', 'tools:write', 'connections:manage', 'keys:manage'],
-  };
+  });
 }
 
 export async function apiPrincipal(request: Request): Promise<TenantPrincipal> {
@@ -26,12 +27,13 @@ export async function apiPrincipal(request: Request): Promise<TenantPrincipal> {
     ? await authenticateApiKey(token)
     : await authenticateMcpOAuthAccessToken(token);
   if (!principal) throw new HttpError('Invalid or expired access token or API key.', 401);
+  const entitledPrincipal = await applyPlanToPrincipal(principal);
   // Do not key limits with client-controlled forwarding headers. Edge-level IP
   // limits are separate; this durable limit follows the authenticated key.
-  if (!(await enforceRateLimit(principal.apiKeyId ?? principal.oauthTokenId!))) {
+  if (!(await enforceRateLimit(entitledPrincipal.apiKeyId ?? entitledPrincipal.oauthTokenId!))) {
     throw new HttpError('Rate limit exceeded.', 429);
   }
-  return principal;
+  return entitledPrincipal;
 }
 
 export function requireScope(principal: TenantPrincipal, scope: string): void {

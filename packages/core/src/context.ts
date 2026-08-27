@@ -6,6 +6,7 @@ import { ProviderRegistry, type AdProvider } from './provider.js';
 import { builtinTools } from './tools/builtin.js';
 import { ToolRegistry, type AnyToolDefinition, type ToolContext } from './tools/registry.js';
 import { MockProvider, mockTools } from './testing/mock-provider.js';
+import type { FindingsRepository } from './audit/store.js';
 
 export interface ProviderModule {
   provider: AdProvider;
@@ -23,6 +24,10 @@ export interface CreateContextOptions {
   includeMock?: boolean;
   /** Hosted runtimes inject a tenant-scoped engine with durable database stores. */
   engine?: PolicyEngine;
+  /** Optional hosted authorization boundary executed before every tool handler. */
+  authorizeToolCall?: ToolContext['authorizeToolCall'];
+  /** Hosted runtimes inject tenant-scoped finding persistence. */
+  findings?: FindingsRepository;
 }
 
 export interface AdportRuntime {
@@ -53,7 +58,13 @@ export async function createContext(options: CreateContextOptions = {}): Promise
     registry.register(mockTools());
   }
 
-  const ctx: ToolContext = { providers, engine, credentials };
+  const ctx: ToolContext = {
+    providers,
+    engine,
+    credentials,
+    authorizeToolCall: options.authorizeToolCall,
+    findings: options.findings,
+  };
   ctx.registry = registry;
   return { ctx, registry, policySource: source };
 }

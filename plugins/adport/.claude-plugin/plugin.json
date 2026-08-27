@@ -1,0 +1,14 @@
+{
+  "name": "adport",
+  "version": "0.1.0",
+  "description": "Safely analyze and manage paid media across connected advertising platforms.",
+  "author": {
+    "name": "Yannick Westermann Labs",
+    "email": "yannick@adport.dev",
+    "url": "https://adport.dev"
+  },
+  "homepage": "https://adport.dev",
+  "repository": "https://github.com/ynnickw/adport",
+  "license": "Apache-2.0",
+  "keywords": ["advertising", "paid-media", "google-ads", "meta-ads", "mcp"]
+}

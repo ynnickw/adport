@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "adport": {
+      "type": "http",
+      "url": "https://app.adport.dev/mcp"
+    }
+  }
+}

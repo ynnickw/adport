@@ -63,7 +63,7 @@ describeDatabase('MCP OAuth persistence and token lifecycle', () => {
       resource: mcpResourceUrl(),
       state: 'test-state',
     };
-    const code = await createMcpAuthorizationCode({ organizationId, userId, scopes: [] }, authorization);
+    const code = await createMcpAuthorizationCode({ organizationId, userId, role: 'owner', scopes: ['tools:read'] }, authorization);
     await expect(exchangeMcpAuthorizationCode({
       clientId, code, codeVerifier: 'x'.repeat(64), redirectUri, resource: mcpResourceUrl(),
     })).rejects.toThrow(/PKCE/);
@@ -71,12 +71,12 @@ describeDatabase('MCP OAuth persistence and token lifecycle', () => {
     const first = await exchangeMcpAuthorizationCode({
       clientId, code, codeVerifier: verifier, redirectUri, resource: mcpResourceUrl(),
     });
-    expect(first).toMatchObject({ expiresIn: 3600, scopes: ['tools:read', 'tools:write'] });
+    expect(first).toMatchObject({ expiresIn: 3600, scopes: ['tools:read'] });
     await expect(authenticateMcpOAuthAccessToken(first.accessToken)).resolves.toMatchObject({
       organizationId,
       userId,
       clientId,
-      scopes: ['tools:read', 'tools:write'],
+      scopes: ['tools:read'],
     });
     await expect(exchangeMcpAuthorizationCode({
       clientId, code, codeVerifier: verifier, redirectUri, resource: mcpResourceUrl(),

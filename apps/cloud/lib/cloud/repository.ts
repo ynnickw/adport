@@ -1,6 +1,14 @@
 import 'server-only';
 import { randomBytes } from 'node:crypto';
-import type { AuditEntry, PendingOperation, Policy } from '@adport/core';
+import type {
+  Account,
+  AuditEntry,
+  AuditFinding,
+  FindingStatus,
+  FindingsRepository,
+  PendingOperation,
+  Policy,
+} from '@adport/core';
 import { policySchema } from '@adport/core';
 import { db } from '@/lib/db';
 import { decryptSecret, digestApiKey, digestState, encryptSecret } from '@/lib/crypto';
@@ -248,7 +256,8 @@ export async function recordAudit(
   principal: TenantPrincipal,
   entry: {
     event: AuditEntry['event'] | 'connected' | 'revoked' | 'api_key_created' | 'api_key_revoked'
-      | 'member_invited' | 'member_role_updated' | 'member_removed' | 'settings_updated' | 'deletion_requested';
+      | 'member_invited' | 'member_role_updated' | 'member_removed' | 'settings_updated' | 'deletion_requested'
+      | 'subscription_updated' | 'account_access_updated';
     provider: string;
     tool: string;
     accountId: string;
@@ -411,6 +420,70 @@ export class PostgresAuditStore {
   }
 }
 
+export class PostgresFindingsStore implements FindingsRepository {
+  constructor(private readonly organizationId: string) {}
+
+  async list(filter: { status?: FindingStatus; provider?: string } = {}): Promise<AuditFinding[]> {
+    const rows = filter.status && filter.provider
+      ? await db()<Array<{ finding: AuditFinding }>>`
+          select finding from public.findings
+          where organization_id = ${this.organizationId} and status = ${filter.status} and provider = ${filter.provider}
+          order by case severity when 'critical' then 0 when 'warn' then 1 else 2 end, updated_at desc
+        `
+      : filter.status
+        ? await db()<Array<{ finding: AuditFinding }>>`
+            select finding from public.findings
+            where organization_id = ${this.organizationId} and status = ${filter.status}
+            order by case severity when 'critical' then 0 when 'warn' then 1 else 2 end, updated_at desc
+          `
+        : filter.provider
+          ? await db()<Array<{ finding: AuditFinding }>>`
+              select finding from public.findings
+              where organization_id = ${this.organizationId} and provider = ${filter.provider}
+              order by case severity when 'critical' then 0 when 'warn' then 1 else 2 end, updated_at desc
+            `
+          : await db()<Array<{ finding: AuditFinding }>>`
+              select finding from public.findings
+              where organization_id = ${this.organizationId}
+              order by case severity when 'critical' then 0 when 'warn' then 1 else 2 end, updated_at desc
+            `;
+    return rows.map((row) => row.finding);
+  }
+
+  async get(id: string): Promise<AuditFinding | undefined> {
+    const rows = await db()<Array<{ finding: AuditFinding }>>`
+      select finding from public.findings
+      where organization_id = ${this.organizationId} and id = ${id}
+      limit 1
+    `;
+    return rows[0]?.finding;
+  }
+
+  async save(finding: AuditFinding): Promise<void> {
+    await db()`
+      insert into public.findings
+        (organization_id, id, provider, status, severity, finding, created_at, updated_at)
+      values
+        (${this.organizationId}, ${finding.id}, ${finding.provider}, ${finding.status}, ${finding.severity},
+         ${db().json(finding as never)}, ${finding.createdAt}, ${finding.updatedAt})
+      on conflict (organization_id, id) do update set
+        provider = excluded.provider,
+        status = excluded.status,
+        severity = excluded.severity,
+        finding = excluded.finding,
+        updated_at = excluded.updated_at
+    `;
+  }
+
+  async setStatus(id: string, status: FindingStatus): Promise<AuditFinding> {
+    const finding = await this.get(id);
+    if (!finding) throw new Error(`Finding not found: ${id}`);
+    const updated = { ...finding, status, updatedAt: new Date().toISOString() };
+    await this.save(updated);
+    return updated;
+  }
+}
+
 export interface ConnectionSummary {
   id: string;
   provider: CloudProvider;
@@ -429,6 +502,154 @@ export async function listConnections(organizationId: string): Promise<Connectio
     where organization_id = ${organizationId}
     order by connected_at asc
   `;
+}
+
+export interface OrganizationAdAccount {
+  organizationId: string;
+  connectionId: string;
+  provider: CloudProvider;
+  accountId: string;
+  name: string;
+  currency: string | null;
+  status: string | null;
+  enabled: boolean;
+  discoveredAt: Date;
+  lastSeenAt: Date;
+}
+
+/**
+ * Replace a provider's discovered account inventory and preserve as many
+ * existing active selections as the plan allows. This runs only after a
+ * provider grant has been verified with the provider API.
+ */
+export async function syncDiscoveredAccounts(input: {
+  organizationId: string;
+  connectionId: string;
+  provider: CloudProvider;
+  accounts: Account[];
+  maxActiveAccounts: number | null;
+}): Promise<string[]> {
+  return db().begin(async (sql) => {
+    const current = await sql<OrganizationAdAccount[]>`
+      select organization_id, connection_id, provider, account_id, name, currency, status,
+        enabled, discovered_at, last_seen_at
+      from public.organization_ad_accounts
+      where organization_id = ${input.organizationId} and provider = ${input.provider}
+      for update
+    `;
+    const discoveredIds = new Set(input.accounts.map((account) => account.id));
+    for (const row of current) {
+      if (!discoveredIds.has(row.accountId)) {
+        await sql`
+          delete from public.organization_ad_accounts
+          where organization_id = ${input.organizationId} and provider = ${input.provider} and account_id = ${row.accountId}
+        `;
+      }
+    }
+    for (const account of input.accounts) {
+      await sql`
+        insert into public.organization_ad_accounts
+          (organization_id, connection_id, provider, account_id, name, currency, status)
+        values
+          (${input.organizationId}, ${input.connectionId}, ${input.provider}, ${account.id}, ${account.name || account.id},
+           ${account.currency ?? null}, ${account.status ?? null})
+        on conflict (organization_id, provider, account_id) do update set
+          connection_id = excluded.connection_id,
+          name = excluded.name,
+          currency = excluded.currency,
+          status = excluded.status,
+          last_seen_at = now()
+      `;
+    }
+
+    const refreshed = await sql<OrganizationAdAccount[]>`
+      select organization_id, connection_id, provider, account_id, name, currency, status,
+        enabled, discovered_at, last_seen_at
+      from public.organization_ad_accounts
+      where organization_id = ${input.organizationId} and provider = ${input.provider}
+      order by enabled desc, discovered_at asc, account_id asc
+      for update
+    `;
+    const otherRows = await sql<Array<{ count: number }>>`
+      select count(*)::int as count from public.organization_ad_accounts
+      where organization_id = ${input.organizationId} and provider <> ${input.provider} and enabled = true
+    `;
+    const available = input.maxActiveAccounts === null
+      ? refreshed.length
+      : Math.max(0, input.maxActiveAccounts - (otherRows[0]?.count ?? 0));
+    const enabledIds = new Set(refreshed.slice(0, available).map((account) => account.accountId));
+    for (const account of refreshed) {
+      const enabled = enabledIds.has(account.accountId);
+      if (account.enabled !== enabled) {
+        await sql`
+          update public.organization_ad_accounts set enabled = ${enabled}
+          where organization_id = ${input.organizationId} and provider = ${input.provider} and account_id = ${account.accountId}
+        `;
+      }
+    }
+    return [...enabledIds];
+  });
+}
+
+export async function listOrganizationAdAccounts(organizationId: string): Promise<OrganizationAdAccount[]> {
+  return db()<OrganizationAdAccount[]>`
+    select organization_id, connection_id, provider, account_id, name, currency, status,
+      enabled, discovered_at, last_seen_at
+    from public.organization_ad_accounts
+    where organization_id = ${organizationId}
+    order by provider asc, name asc, account_id asc
+  `;
+}
+
+export async function loadEnabledAccountIds(organizationId: string): Promise<Partial<Record<CloudProvider, Set<string>>>> {
+  const rows = await db()<Array<{ provider: CloudProvider; accountId: string }>>`
+    select provider, account_id from public.organization_ad_accounts
+    where organization_id = ${organizationId} and enabled = true
+  `;
+  const result: Partial<Record<CloudProvider, Set<string>>> = {};
+  for (const row of rows) (result[row.provider] ??= new Set()).add(row.accountId);
+  return result;
+}
+
+export async function setOrganizationAdAccountEnabled(input: {
+  principal: TenantPrincipal;
+  provider: CloudProvider;
+  accountId: string;
+  enabled: boolean;
+  maxActiveAccounts: number | null;
+}): Promise<void> {
+  if (!['owner', 'admin'].includes(input.principal.role ?? '')) throw new Error('Owner or admin access is required.');
+  await db().begin(async (sql) => {
+    const rows = await sql<Array<{ enabled: boolean; name: string }>>`
+      select enabled, name from public.organization_ad_accounts
+      where organization_id = ${input.principal.organizationId} and provider = ${input.provider} and account_id = ${input.accountId}
+      for update
+    `;
+    const account = rows[0];
+    if (!account) throw new Error('Ad account was not found in this organization.');
+    if (input.enabled && !account.enabled && input.maxActiveAccounts !== null) {
+      const totals = await sql<Array<{ count: number }>>`
+        select count(*)::int as count from public.organization_ad_accounts
+        where organization_id = ${input.principal.organizationId} and enabled = true
+      `;
+      if ((totals[0]?.count ?? 0) >= input.maxActiveAccounts) {
+        throw new Error(`This plan supports ${input.maxActiveAccounts} active ad account${input.maxActiveAccounts === 1 ? '' : 's'}. Disable another account first.`);
+      }
+    }
+    await sql`
+      update public.organization_ad_accounts set enabled = ${input.enabled}
+      where organization_id = ${input.principal.organizationId} and provider = ${input.provider} and account_id = ${input.accountId}
+    `;
+    await sql`
+      insert into public.audit_events
+        (organization_id, actor_user_id, event, provider, tool, account_id, summary, details)
+      values
+        (${input.principal.organizationId}, ${input.principal.userId ?? null}, 'account_access_updated',
+         ${input.provider}, 'account_access_update', ${input.accountId},
+         ${`${input.enabled ? 'Enabled' : 'Disabled'} ${account.name} for agent access`},
+         ${sql.json({ enabled: input.enabled } as never)})
+    `;
+  });
 }
 
 export interface PendingOperationRow {

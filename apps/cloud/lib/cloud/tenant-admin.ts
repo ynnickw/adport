@@ -3,6 +3,7 @@ import type { Policy } from '@adport/core';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { db } from '@/lib/db';
 import type { TenantPrincipal } from './types';
+import { getOrganizationEntitlement } from './plans';
 
 export type AssignableRole = 'admin' | 'member' | 'viewer';
 
@@ -27,6 +28,16 @@ export async function inviteOrganizationMember(
   role: AssignableRole,
 ): Promise<{ added: boolean; invitationSent: boolean; targetUserId: string }> {
   requireAssignableRole(principal, role);
+  const entitlement = await getOrganizationEntitlement(principal.organizationId);
+  if (entitlement.plan.maxMembers !== null) {
+    const totals = await db()<Array<{ count: number }>>`
+      select count(*)::int as count from public.organization_memberships
+      where organization_id = ${principal.organizationId}
+    `;
+    if ((totals[0]?.count ?? 0) >= entitlement.plan.maxMembers) {
+      throw new Error(`${entitlement.plan.name} supports ${entitlement.plan.maxMembers} workspace member${entitlement.plan.maxMembers === 1 ? '' : 's'}.`);
+    }
+  }
   const normalizedEmail = email.trim().toLowerCase();
   const users = await db()<Array<{ id: string | null }>>`
     select private.find_auth_user_id(${normalizedEmail}) as id
@@ -154,6 +165,10 @@ export async function updateOrganizationSettings(
   dataRetentionDays: number,
 ): Promise<void> {
   requireMemberAdmin(principal);
+  const entitlement = await getOrganizationEntitlement(principal.organizationId);
+  if (dataRetentionDays > entitlement.plan.maxRetentionDays) {
+    throw new Error(`${entitlement.plan.name} supports up to ${entitlement.plan.maxRetentionDays} days of retention.`);
+  }
   await db().begin(async (sql) => {
     await sql`
       update public.organization_settings

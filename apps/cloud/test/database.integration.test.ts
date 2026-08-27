@@ -13,9 +13,14 @@ import {
   upsertGoogleConnection,
   loadGoogleCredential,
   loadProviderCredentials,
+  listOrganizationAdAccounts,
+  PostgresFindingsStore,
+  setOrganizationAdAccountEnabled,
+  syncDiscoveredAccounts,
   upsertProviderConnection,
 } from '@/lib/cloud/repository';
 import { createTenantRuntime } from '@/lib/cloud/runtime';
+import { processStripeEvent } from '@/lib/cloud/billing';
 import { resetEnvForTests } from '@/lib/env';
 import {
   changeOrganizationMemberRole,
@@ -110,6 +115,93 @@ describeDatabase('Supabase tenant boundary', () => {
     expect(await authenticateApiKey(created.key)).toBeUndefined();
   });
 
+  it('persists discovered accounts and enforces the Reader active-account limit', async () => {
+    const connections = await db()<Array<{ id: string }>>`
+      select id from public.connections where organization_id = ${firstOrgId} and provider = 'google'
+    `;
+    await syncDiscoveredAccounts({
+      organizationId: firstOrgId,
+      connectionId: connections[0]!.id,
+      provider: 'google',
+      accounts: [
+        { provider: 'google', id: '1234567890', name: 'First account', currency: 'EUR' },
+        { provider: 'google', id: '9999999999', name: 'Second account', currency: 'EUR' },
+      ],
+      maxActiveAccounts: 1,
+    });
+    const inventory = await listOrganizationAdAccounts(firstOrgId);
+    expect(inventory).toHaveLength(2);
+    expect(inventory.filter((account) => account.enabled)).toHaveLength(1);
+    const inactive = inventory.find((account) => !account.enabled)!;
+    await expect(setOrganizationAdAccountEnabled({
+      principal: { organizationId: firstOrgId, userId: firstUserId, role: 'owner', scopes: [] },
+      provider: 'google', accountId: inactive.accountId, enabled: true, maxActiveAccounts: 1,
+    })).rejects.toThrow(/Disable another account first/);
+  });
+
+  it('persists findings inside the organization boundary', async () => {
+    const store = new PostgresFindingsStore(firstOrgId);
+    const now = new Date().toISOString();
+    await store.save({
+      id: 'test-rule:google:1234567890:c1',
+      ruleId: 'test-rule',
+      severity: 'warn',
+      provider: 'google',
+      accountId: '1234567890',
+      entity: { level: 'campaign', id: 'c1', name: 'Campaign' },
+      title: 'Test finding',
+      detail: 'Evidence',
+      recommendation: 'Review it',
+      metrics: {},
+      dateRange: { start: '2026-08-01', end: '2026-08-27' },
+      status: 'open',
+      createdAt: now,
+      updatedAt: now,
+    });
+    expect(await store.get('test-rule:google:1234567890:c1')).toMatchObject({ status: 'open', provider: 'google' });
+    await store.setStatus('test-rule:google:1234567890:c1', 'dismissed');
+    expect(await store.list({ status: 'dismissed' })).toHaveLength(1);
+    expect(await new PostgresFindingsStore(secondOrgId).list()).toEqual([]);
+  });
+
+  it('downscales active account access when Stripe returns a subscription to Reader', async () => {
+    process.env.STRIPE_OPERATOR_PRICE_ID = 'price_operator_test';
+    process.env.STRIPE_AGENCY_PRICE_ID = 'price_agency_test';
+    resetEnvForTests();
+    await db()`
+      update public.organization_ad_accounts set enabled = true
+      where organization_id = ${firstOrgId}
+    `;
+    const outcome = await processStripeEvent({
+      id: `evt_${randomUUID()}`,
+      type: 'customer.subscription.deleted',
+      data: {
+        object: {
+          id: `sub_${randomUUID()}`,
+          customer: `cus_${randomUUID()}`,
+          metadata: { organizationId: firstOrgId },
+          items: { data: [{ price: { id: 'price_operator_test' }, current_period_end: null }] },
+          status: 'canceled',
+          cancel_at_period_end: false,
+        },
+      },
+    } as unknown as Parameters<typeof processStripeEvent>[0]);
+    expect(outcome).toBe('processed');
+    expect((await listOrganizationAdAccounts(firstOrgId)).filter((account) => account.enabled)).toHaveLength(1);
+    const subscription = await db()<Array<{ plan: string; status: string }>>`
+      select plan, status from public.organization_subscriptions where organization_id = ${firstOrgId}
+    `;
+    expect(subscription[0]).toEqual({ plan: 'operator', status: 'canceled' });
+    const audit = await db()<Array<{ event: string }>>`
+      select event from public.audit_events
+      where organization_id = ${firstOrgId} and event = 'subscription_updated'
+    `;
+    expect(audit).toHaveLength(1);
+    delete process.env.STRIPE_OPERATOR_PRICE_ID;
+    delete process.env.STRIPE_AGENCY_PRICE_ID;
+    resetEnvForTests();
+  });
+
   it('encrypts every provider credential and assembles all provider modules for one tenant', async () => {
     process.env.GOOGLE_ADS_CLIENT_ID = 'test-client-id.apps.googleusercontent.com';
     process.env.GOOGLE_ADS_CLIENT_SECRET = 'test-client-secret';
@@ -164,6 +256,7 @@ describeDatabase('Supabase tenant boundary', () => {
   });
 
   it('administers tenant members and settings atomically with audit events', async () => {
+    await db()`update public.organization_subscriptions set plan = 'operator', status = 'active' where organization_id = ${firstOrgId}`;
     const owner = { organizationId: firstOrgId, userId: firstUserId, role: 'owner' as const, scopes: [] };
     const invited = await inviteOrganizationMember(owner, secondEmail, 'member');
     expect(invited).toMatchObject({ added: true, invitationSent: false, targetUserId: secondUserId });

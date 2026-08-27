@@ -36,6 +36,7 @@ export default async function AuthorizePage({ searchParams }: {
   const { data } = await supabase.auth.getUser();
   if (!data.user) redirect(`/login?return_to=${encodeURIComponent(`/oauth/authorize?${params.toString()}`)}`);
   const principal = await sessionPrincipal();
+  const grantedScopes = authorization.scopes.filter((scope) => principal.scopes.includes(scope));
   const organization = await db()<Array<{ name: string }>>`
     select name from public.organizations where id = ${principal.organizationId} limit 1
   `;
@@ -53,8 +54,11 @@ export default async function AuthorizePage({ searchParams }: {
         Return destination: <strong>{redirectHost}</strong>. Only continue if you started this connection there.
       </div>
       <dl className="connection-meta oauth-consent-scopes">
-        {authorization.scopes.includes('tools:read') ? <><dt>Read</dt><dd>Ad accounts, campaigns, reports, findings, and audit evidence.</dd></> : null}
-        {authorization.scopes.includes('tools:write') ? <><dt>Propose changes</dt><dd>Create previews and apply only operations that pass Adport&apos;s two-step policy gate.</dd></> : null}
+        {grantedScopes.includes('tools:read') ? <><dt>Read</dt><dd>Active ad accounts, campaigns, reports, findings, and audit evidence.</dd></> : null}
+        {grantedScopes.includes('tools:write') ? <><dt>Propose changes</dt><dd>Create previews and apply only operations that pass Adport&apos;s two-step policy gate.</dd></> : null}
+        {authorization.scopes.includes('tools:write') && !grantedScopes.includes('tools:write')
+          ? <><dt>Read-only plan</dt><dd>This workspace will not grant write tools to the MCP client.</dd></>
+          : null}
       </dl>
       <form className="form" method="post" action="/oauth/authorize/consent">
         {Array.from(params.entries()).map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}

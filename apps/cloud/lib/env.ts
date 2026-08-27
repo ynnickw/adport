@@ -12,6 +12,10 @@ const schema = z.object({
   ADPORT_API_KEY_PEPPER: z.string().min(32),
   // Independent HMAC key for short-lived MCP OAuth access tokens.
   ADPORT_MCP_OAUTH_SIGNING_KEY: z.string().min(40),
+  STRIPE_SECRET_KEY: z.string().startsWith('sk_').optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().startsWith('whsec_').optional(),
+  STRIPE_OPERATOR_PRICE_ID: z.string().startsWith('price_').optional(),
+  STRIPE_AGENCY_PRICE_ID: z.string().startsWith('price_').optional(),
   // Adport-owned Google Ads OAuth application (verified project).
   GOOGLE_ADS_CLIENT_ID: z.string().min(10).optional(),
   GOOGLE_ADS_CLIENT_SECRET: z.string().min(8).optional(),

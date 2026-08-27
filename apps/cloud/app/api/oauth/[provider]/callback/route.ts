@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server';
 import { sessionPrincipal } from '@/lib/cloud/auth';
 import { oauthAdapter } from '@/lib/cloud/provider-oauth';
-import { consumeOAuthTransaction, recordAudit, setConnectionVerification, upsertProviderConnection } from '@/lib/cloud/repository';
+import {
+  consumeOAuthTransaction,
+  recordAudit,
+  setConnectionVerification,
+  syncDiscoveredAccounts,
+  upsertProviderConnection,
+} from '@/lib/cloud/repository';
 import { createTenantRuntime } from '@/lib/cloud/runtime';
+import { getOrganizationEntitlement } from '@/lib/cloud/plans';
 import { isOAuthProvider, type OAuthProvider } from '@/lib/cloud/types';
 import { providerLabel } from '@/lib/cloud/providers';
 import { env } from '@/lib/env';
@@ -46,7 +53,7 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
     returnPath = transaction.returnPath;
 
     const credential = await adapter.exchange({ code, verifier: transaction.verifier });
-    await upsertProviderConnection({
+    const connectionId = await upsertProviderConnection({
       organizationId: transaction.organizationId,
       userId: principal.userId!,
       provider,
@@ -56,8 +63,16 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
     });
 
     try {
-      const runtime = await createTenantRuntime(principal);
+      const runtime = await createTenantRuntime(principal, { enforceAccountScope: false });
       const accounts = await runtime.ctx.providers.get(provider).listAccounts();
+      const entitlement = await getOrganizationEntitlement(transaction.organizationId);
+      const enabledAccountIds = await syncDiscoveredAccounts({
+        organizationId: transaction.organizationId,
+        connectionId,
+        provider,
+        accounts,
+        maxActiveAccounts: entitlement.plan.maxActiveAccounts,
+      });
       await setConnectionVerification(transaction.organizationId, provider, {
         ok: true,
         label: `${accounts.length} accessible ${label} account(s)`,
@@ -66,7 +81,7 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
       await recordAudit(principal, {
         event: 'connected', provider, tool: 'oauth_connect', accountId: '*',
         summary: `Connected ${accounts.length} accessible ${label} account(s) through hosted OAuth`,
-        details: { accountCount: accounts.length },
+        details: { accountCount: accounts.length, activeAccountCount: enabledAccountIds.length, plan: entitlement.plan.id },
       });
     } catch (error) {
       console.error(JSON.stringify({

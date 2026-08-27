@@ -27,9 +27,9 @@ export function auditTools(): AnyToolDefinition[] {
         account_ids: z.array(z.string()).optional(),
         date_range: dateRangeSchema.default('last_30_days'),
       }),
-      annotations: { readOnly: true },
+      annotations: { readOnly: true, openWorld: true },
       async handler(input, ctx) {
-        const runner = new AuditRunner(ctx.providers);
+        const runner = new AuditRunner(ctx.providers, ctx.findings ?? new FindingsStore());
         const result = await runner.run({
           provider: input.provider,
           accountIds: input.account_ids,
@@ -47,8 +47,8 @@ export function auditTools(): AnyToolDefinition[] {
         provider: z.string().optional(),
       }),
       annotations: { readOnly: true },
-      async handler(input) {
-        const findings = await new FindingsStore().list(input);
+      async handler(input, ctx) {
+        const findings = await (ctx.findings ?? new FindingsStore()).list(input);
         return { findings, count: findings.length };
       },
     }),
@@ -58,8 +58,8 @@ export function auditTools(): AnyToolDefinition[] {
       description: 'Dismiss a finding (it will not be re-opened by future audit runs).',
       input: z.object({ finding_id: z.string() }),
       annotations: { readOnly: false },
-      async handler(input) {
-        const finding = await new FindingsStore().setStatus(input.finding_id, 'dismissed');
+      async handler(input, ctx) {
+        const finding = await (ctx.findings ?? new FindingsStore()).setStatus(input.finding_id, 'dismissed');
         return { finding };
       },
     }),
@@ -73,12 +73,12 @@ export function auditTools(): AnyToolDefinition[] {
         finding_id: z.string(),
         pending_operation_id: z.string().optional(),
       }),
-      annotations: { readOnly: false },
+      annotations: { readOnly: false, openWorld: true },
       async handler(input, ctx) {
         if (!ctx.registry) {
           throw new AdportError('PROVIDER_ERROR', 'recommendation_apply requires a tool registry in context');
         }
-        const store = new FindingsStore();
+        const store = ctx.findings ?? new FindingsStore();
         const finding = await store.get(input.finding_id);
         if (!finding) throw new AdportError('INVALID_INPUT', `Finding not found: ${input.finding_id}`);
         if (finding.status !== 'open') {

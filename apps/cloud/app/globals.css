@@ -163,6 +163,7 @@ h2 { margin: 0; font-size: 0.92rem; font-weight: 640; letter-spacing: -0.015em; 
 
 /* ── Cards ───────────────────────────────────────────────────────────── */
 .grid-2 { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(17rem, 0.8fr); gap: 1rem; align-items: start; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; align-items: stretch; }
 .stack { display: grid; gap: 1rem; }
 .card {
   overflow: hidden;
@@ -313,7 +314,7 @@ select { min-width: 11rem; border: 1px solid var(--line); border-radius: 999px; 
 /* ── Responsive ──────────────────────────────────────────────────────── */
 @media (max-width: 1080px) {
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .grid-2 { grid-template-columns: 1fr; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
   .connection-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 880px) {

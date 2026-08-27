@@ -1,7 +1,7 @@
 import { resolveDateRange, type DatePreset, type DateRange, type ReportRow } from '../model.js';
 import { selectConnectedProviders, type ProviderRegistry } from '../provider.js';
 import { corePerformancePack } from './packs/core-performance.js';
-import { FindingsStore } from './store.js';
+import { FindingsStore, type FindingsRepository } from './store.js';
 import type { AuditFinding, RulePack } from './types.js';
 
 export interface AuditRunOptions {
@@ -27,7 +27,7 @@ export interface AuditRunResult {
 export class AuditRunner {
   constructor(
     private readonly providers: ProviderRegistry,
-    private readonly store: FindingsStore = new FindingsStore(),
+    private readonly store: FindingsRepository = new FindingsStore(),
   ) {}
 
   async run(options: AuditRunOptions = {}): Promise<AuditRunResult> {

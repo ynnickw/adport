@@ -1,0 +1,4 @@
+interface:
+  display_name: "Adport"
+  short_description: "Manage paid media safely from any agent"
+  default_prompt: "Review my connected ad accounts and recommend the highest-impact safe next action."

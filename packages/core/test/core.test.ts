@@ -100,6 +100,21 @@ describe('createContext + ToolRegistry', () => {
     });
   });
 
+  it('runs the hosted authorization hook after parsing and before the handler', async () => {
+    const calls: Array<{ name: string; input: Record<string, unknown> }> = [];
+    const { ctx, registry } = await createContext({
+      includeMock: true,
+      authorizeToolCall(tool, input) {
+        calls.push({ name: tool.name, input });
+        if (input.account_id === 'mock-2') throw new Error('account outside tenant scope');
+      },
+    });
+    await registry.call('mock_list_campaigns', { account_id: 'mock-1' }, ctx);
+    expect(calls).toEqual([{ name: 'mock_list_campaigns', input: { account_id: 'mock-1' } }]);
+    await expect(registry.call('mock_list_campaigns', { account_id: 'mock-2' }, ctx))
+      .rejects.toThrow('account outside tenant scope');
+  });
+
   it('runs the full two-step write through the guarded tool', async () => {
     const { ctx, registry } = await createContext({ includeMock: true });
     const first = (await registry.call(

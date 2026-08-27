@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { CredentialStore } from '../credentials/store.js';
+import type { FindingsRepository } from '../audit/store.js';
 import { AdportError } from '../errors.js';
 import type { PolicyEngine } from '../policy/engine.js';
 import type { ProviderRegistry } from '../provider.js';
@@ -7,6 +8,7 @@ import type { ProviderRegistry } from '../provider.js';
 export interface ToolAnnotations {
   readOnly?: boolean;
   destructive?: boolean;
+  openWorld?: boolean;
 }
 
 export interface ToolContext {
@@ -15,6 +17,10 @@ export interface ToolContext {
   credentials: CredentialStore;
   /** Set by createContext; lets tools invoke other tools (e.g. recommendation_apply). */
   registry?: ToolRegistry;
+  /** Hosted adapters may enforce tenant/account entitlements before handlers run. */
+  authorizeToolCall?: (tool: AnyToolDefinition, input: Record<string, unknown>) => void | Promise<void>;
+  /** Hosted runtimes inject a tenant-scoped findings repository. */
+  findings?: FindingsRepository;
 }
 
 export interface AnyToolDefinition {
@@ -35,9 +41,14 @@ export function defineTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   annotations?: ToolAnnotations;
   handler: (input: z.infer<S>, ctx: ToolContext) => Promise<unknown>;
 }): AnyToolDefinition {
+  const openWorldByDefault = !['core', 'mock', 'audit'].includes(def.namespace);
   return {
     ...def,
-    annotations: def.annotations ?? { readOnly: false },
+    annotations: {
+      readOnly: def.annotations?.readOnly ?? false,
+      destructive: def.annotations?.destructive ?? false,
+      openWorld: def.annotations?.openWorld ?? openWorldByDefault,
+    },
   } as AnyToolDefinition;
 }
 
@@ -69,6 +80,7 @@ export class ToolRegistry {
     if (!parsed.success) {
       throw new AdportError('INVALID_INPUT', `Invalid input for ${name}`, parsed.error.issues);
     }
+    await ctx.authorizeToolCall?.(tool, parsed.data as Record<string, unknown>);
     return tool.handler(parsed.data as never, ctx);
   }
 }

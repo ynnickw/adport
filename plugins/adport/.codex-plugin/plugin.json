@@ -1,0 +1,33 @@
+{
+  "name": "adport",
+  "version": "0.1.0",
+  "description": "Safely analyze and manage paid media across connected advertising platforms.",
+  "author": {
+    "name": "Yannick Westermann Labs",
+    "email": "yannick@adport.dev",
+    "url": "https://adport.dev"
+  },
+  "homepage": "https://adport.dev",
+  "repository": "https://github.com/ynnickw/adport",
+  "license": "Apache-2.0",
+  "keywords": ["advertising", "paid-media", "google-ads", "meta-ads", "mcp"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Adport",
+    "shortDescription": "Operate paid media with structural safety rails.",
+    "longDescription": "Connect approved ad accounts once, then use normalized reporting, audits, recommendations, and preview-before-apply campaign operations from ChatGPT or Codex.",
+    "developerName": "Yannick Westermann Labs",
+    "category": "Business",
+    "capabilities": ["Interactive", "Write"],
+    "websiteURL": "https://adport.dev",
+    "privacyPolicyURL": "https://adport.dev/privacy",
+    "termsOfServiceURL": "https://adport.dev/terms",
+    "defaultPrompt": [
+      "Review my ad accounts and identify the highest-impact issue.",
+      "Compare campaign performance across my connected platforms.",
+      "Preview a safe fix for the most urgent finding."
+    ],
+    "brandColor": "#F97316"
+  },
+  "mcpServers": "./.mcp.json"
+}

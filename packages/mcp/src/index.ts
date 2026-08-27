@@ -65,6 +65,7 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
         annotations: {
           readOnlyHint: tool.annotations.readOnly ?? false,
           destructiveHint: tool.annotations.destructive ?? false,
+          openWorldHint: tool.annotations.openWorld ?? false,
         },
       },
       async (args: Record<string, unknown>) => {
