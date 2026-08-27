@@ -100,7 +100,10 @@ button { cursor: pointer; }
 .nav-label { margin: 1.7rem 0 0.4rem; padding: 0 0.7rem; color: var(--faint); font: 620 0.56rem var(--font-mono); letter-spacing: 0.14em; text-transform: uppercase; }
 .nav-label:first-child { margin-top: 0; }
 
-.sidebar-foot { display: grid; gap: 0.75rem; margin-top: auto; border-top: 1px solid var(--line-soft); padding: 1rem 0.35rem 0; }
+.sidebar-foot { display: grid; gap: 0.55rem; margin-top: auto; border-top: 1px solid var(--line-soft); padding: 1rem 0.35rem 0; }
+.link-button { justify-self: start; border: 0; background: transparent; color: var(--muted); padding: 0.2rem 0.2rem 0.2rem 0; font-size: 0.74rem; font-weight: 600; transition: color 140ms ease; }
+.link-button:hover { color: var(--ink); }
+.sidebar-foot .link-button { margin-left: 2.65rem; }
 
 .availability { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--muted); font: 600 0.62rem var(--font-mono); letter-spacing: 0.06em; }
 .availability i { width: 0.38rem; height: 0.38rem; border-radius: 50%; background: var(--orange); }
@@ -329,6 +332,7 @@ select { min-width: 11rem; border: 1px solid var(--line); border-radius: 999px; 
   .nav-label { display: none; }
   .sidebar-foot { grid-template-columns: 1fr auto; align-items: center; margin-top: 0.9rem; padding-top: 0.8rem; }
   .sidebar-foot .button { width: auto; }
+  .sidebar-foot .link-button { margin-left: 0; }
   .page { padding: 1.6rem 1.25rem 3rem; }
   .connection-grid { grid-template-columns: 1fr; }
 }
@@ -473,7 +477,6 @@ input:disabled, textarea:disabled { background: rgba(245, 245, 247, 0.8); color:
 
 /* ── Connection card variants ────────────────────────────────────────── */
 .connection-grid { align-items: start; }
-.connection.pending { border-style: dashed; }
 .connection-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .connection .form { margin-top: 0.2rem; }
 details.connection-form summary { cursor: pointer; color: var(--orange-dark); font-size: 0.74rem; font-weight: 640; list-style: none; }

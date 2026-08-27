@@ -32,7 +32,7 @@ export function Shell({ tenant, children }: { tenant: ShellTenant; children: Rea
             </span>
           </div>
           <form action={signOut}>
-            <button className="button secondary small full" type="submit">Sign out</button>
+            <button className="link-button" type="submit">Sign out</button>
           </form>
         </div>
       </aside>

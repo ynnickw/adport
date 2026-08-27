@@ -80,16 +80,17 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
             {message?.error ? <div className="error-callout" style={{ marginBottom: '0.8rem' }}>{message.error}</div> : null}
             {message?.success ? <div className="callout success" style={{ marginBottom: '0.8rem' }}>{message.success}</div> : null}
             {canManage ? (
-              <div className="connection-actions">
-                {!connection && provider.available ? <a className="button" href={startHref}>Connect {shortLabel(provider.id)}</a> : null}
-                {!connection && !provider.available ? <button className="button" type="button" disabled>Awaiting app approval</button> : null}
-                {connection && provider.available ? <a className="button secondary" href={startHref}>{connection.status === 'error' ? 'Reconnect' : 'Re-authorize'}</a> : null}
-                {connection ? <button className="button danger" type="button" disabled={busy === provider.id} onClick={() => void disconnect(provider.id, shortLabel(provider.id))}>{busy === provider.id ? 'Working…' : 'Disconnect'}</button> : null}
-              </div>
+              connection || provider.available ? (
+                <div className="connection-actions">
+                  {!connection && provider.available ? <a className="button" href={startHref}>Connect {shortLabel(provider.id)}</a> : null}
+                  {connection && provider.available ? <a className="button secondary" href={startHref}>{connection.status === 'error' ? 'Reconnect' : 'Re-authorize'}</a> : null}
+                  {connection ? <button className="button danger" type="button" disabled={busy === provider.id} onClick={() => void disconnect(provider.id, shortLabel(provider.id))}>{busy === provider.id ? 'Working…' : 'Disconnect'}</button> : null}
+                </div>
+              ) : null
             ) : (
               <p className="inline-note">Owners and admins manage connections.</p>
             )}
-            {!connection && !provider.available ? <p className="inline-note" style={{ marginTop: '0.7rem' }}>Available once Adport&apos;s {shortLabel(provider.id)} app is approved by the platform.</p> : null}
+            {!connection && !provider.available ? <p className="inline-note">Available once Adport&apos;s {shortLabel(provider.id)} app is approved by the platform.</p> : null}
           </article>
         );
       })}
