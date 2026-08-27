@@ -22,6 +22,8 @@
     "websiteURL": "https://adport.dev",
     "privacyPolicyURL": "https://adport.dev/privacy",
     "termsOfServiceURL": "https://adport.dev/terms",
+    "composerIcon": "./assets/icon.svg",
+    "logo": "./assets/icon.svg",
     "defaultPrompt": [
       "Review my ad accounts and identify the highest-impact issue.",
       "Compare campaign performance across my connected platforms.",

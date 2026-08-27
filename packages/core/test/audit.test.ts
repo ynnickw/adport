@@ -51,6 +51,13 @@ describe('AuditRunner + core-performance pack', () => {
 });
 
 describe('recommendation tools', () => {
+  it('previews audit findings without persisting them', async () => {
+    const { ctx, registry } = await createContext({ includeMock: true });
+    const result = (await registry.call('audit_preview', {}, ctx)) as { findings: Array<{ id: string }> };
+    expect(result.findings.length).toBeGreaterThan(0);
+    expect(await new FindingsStore().get(result.findings[0]!.id)).toBeUndefined();
+  });
+
   it('applies a proposed action through the two-step policy gate and marks the finding applied', async () => {
     const { ctx, registry } = await createContext({ includeMock: true });
     await registry.call('audit_run', {}, ctx);

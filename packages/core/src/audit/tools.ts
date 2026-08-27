@@ -16,18 +16,39 @@ const dateRangeSchema = z.union([
 export function auditTools(): AnyToolDefinition[] {
   return [
     defineTool({
-      name: 'audit_run',
+      name: 'audit_preview',
       namespace: 'audit',
       description:
-        'Run the cross-platform audit rule packs over connected accounts (campaign level). ' +
-        'Returns structured findings with recommendations; some carry a ready-to-apply proposed action. ' +
-        'Reads ad data only — never mutates anything.',
+        'Evaluate the cross-platform audit rule packs over connected accounts and return structured findings ' +
+        'without persisting them. Use this read-only audit in Reader workspaces or for one-off analysis.',
       input: z.object({
         provider: z.string().optional(),
         account_ids: z.array(z.string()).optional(),
         date_range: dateRangeSchema.default('last_30_days'),
       }),
       annotations: { readOnly: true, openWorld: true },
+      async handler(input, ctx) {
+        const runner = new AuditRunner(ctx.providers, ctx.findings ?? new FindingsStore());
+        return runner.run({
+          provider: input.provider,
+          accountIds: input.account_ids,
+          dateRange: input.date_range,
+          persist: false,
+        });
+      },
+    }),
+    defineTool({
+      name: 'audit_run',
+      namespace: 'audit',
+      description:
+        'Run the cross-platform audit rule packs over connected accounts (campaign level). ' +
+        'Persists structured findings for recommendation lifecycle management; some carry a ready-to-apply proposed action.',
+      input: z.object({
+        provider: z.string().optional(),
+        account_ids: z.array(z.string()).optional(),
+        date_range: dateRangeSchema.default('last_30_days'),
+      }),
+      annotations: { readOnly: false, openWorld: false },
       async handler(input, ctx) {
         const runner = new AuditRunner(ctx.providers, ctx.findings ?? new FindingsStore());
         const result = await runner.run({

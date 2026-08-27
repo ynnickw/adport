@@ -12,7 +12,8 @@ Use Adport as the control plane for the user's connected ad accounts. Report pro
 - Start with `accounts_list` when the relevant provider or account is unclear.
 - Use `report` for normalized cross-platform evidence. Preserve provider, currency, date range, level, requested metrics, truncation, and partial-provider errors in the answer.
 - Use provider-specific read tools only when the shared report cannot answer the request.
-- Use the recommendation tools for structured audits. Do not invent a finding when an account has no data.
+- Prefer `audit_preview` for one-off analysis and Reader workspaces. Use `audit_run` only when the user wants findings persisted for later recommendation lifecycle actions.
+- Use the recommendation tools for persisted findings. Do not invent a finding when an account has no data.
 
 ## Write workflows
 

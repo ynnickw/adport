@@ -10,6 +10,8 @@ export interface AuditRunOptions {
   dateRange?: DateRange | DatePreset;
   packs?: RulePack[];
   configOverrides?: Record<string, number>;
+  /** Set false for a read-only preview that evaluates rules without saving findings. */
+  persist?: boolean;
 }
 
 export interface AuditRunResult {
@@ -82,7 +84,7 @@ export class AuditRunner {
                 createdAt: existing?.createdAt ?? now,
                 updatedAt: now,
               };
-              await this.store.save(finding);
+              if (options.persist !== false) await this.store.save(finding);
               findings.push(finding);
             }
           }

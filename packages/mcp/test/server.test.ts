@@ -70,6 +70,12 @@ describe('adport MCP server', () => {
     expect(list?.annotations?.openWorldHint).toBe(true);
     const persistedFindings = tools.find((t) => t.name === 'recommendations_list');
     expect(persistedFindings?.annotations?.openWorldHint).toBe(false);
+    const previewAudit = tools.find((t) => t.name === 'audit_preview');
+    expect(previewAudit?.annotations?.readOnlyHint).toBe(true);
+    expect(previewAudit?.annotations?.openWorldHint).toBe(true);
+    const persistedAudit = tools.find((t) => t.name === 'audit_run');
+    expect(persistedAudit?.annotations?.readOnlyHint).toBe(false);
+    expect(persistedAudit?.annotations?.openWorldHint).toBe(false);
     const applyFinding = tools.find((t) => t.name === 'recommendation_apply');
     expect(applyFinding?.annotations?.openWorldHint).toBe(true);
   });
