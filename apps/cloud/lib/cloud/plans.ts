@@ -23,7 +23,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     maxRetentionDays: 30, writeAccess: false, clientWorkspaces: false,
   },
   operator: {
-    id: 'operator', name: 'Operator', monthlyPriceEur: 49, maxActiveAccounts: 5, maxMembers: 2,
+    id: 'operator', name: 'Operator', monthlyPriceEur: 29, maxActiveAccounts: 5, maxMembers: 2,
     maxRetentionDays: 90, writeAccess: true, clientWorkspaces: false,
   },
   agency: {
