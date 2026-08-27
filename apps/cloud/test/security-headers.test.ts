@@ -10,6 +10,12 @@ describe('content security policy', () => {
     expect(policy).not.toContain('form-action \'self\' https:');
   });
 
+  it('never allows eval outside development mode', () => {
+    expect(buildContentSecurityPolicy(supabaseOrigin)).not.toContain('unsafe-eval');
+    expect(buildContentSecurityPolicy(supabaseOrigin, true)).not.toContain('unsafe-eval');
+    expect(buildContentSecurityPolicy(supabaseOrigin, false, true)).toContain("script-src 'self' 'unsafe-inline' 'unsafe-eval'");
+  });
+
   it('allows registered HTTPS and loopback OAuth callbacks on the consent page', () => {
     const policy = buildContentSecurityPolicy(supabaseOrigin, true);
     expect(policy).toContain(

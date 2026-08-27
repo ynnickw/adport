@@ -17,8 +17,8 @@ const icon = {
   agents: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 9.5 5 12l3.5 2.5" /><path d="m15.5 9.5 3.5 2.5-3.5 2.5" /><path d="m13.2 6.5-2.4 11" /></svg>,
 };
 
-const sections: { label: string; items: NavItem[] }[] = [
-  { label: 'Workspace', items: [
+const sections: { label?: string; items: NavItem[] }[] = [
+  { items: [
     { label: 'Overview', href: '/dashboard', icon: icon.overview, exact: true },
   ] },
   { label: 'Inventory', items: [
@@ -43,9 +43,9 @@ export function Nav() {
   const pathname = usePathname();
   return (
     <nav className="nav" aria-label="Cloud navigation">
-      {sections.map((section) => (
-        <div key={section.label} className="nav-group">
-          <div className="nav-label">{section.label}</div>
+      {sections.map((section, index) => (
+        <div key={section.label ?? index} className="nav-group">
+          {section.label ? <div className="nav-label">{section.label}</div> : null}
           {section.items.map((item) => {
             const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
             return (

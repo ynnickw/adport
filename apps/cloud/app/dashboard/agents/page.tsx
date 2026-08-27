@@ -11,7 +11,7 @@ export default async function AgentsPage() {
   const baseUrl = env().ADPORT_CLOUD_BASE_URL.replace(/\/$/, '');
   return (
     <main className="page">
-      <PageHeader eyebrow="Remote MCP & REST" title="Agent access" description="Connect an MCP client with Adport OAuth. Grants are scoped to this workspace and every write still passes the same policy gate." />
+      <PageHeader title="Agent access" description="Connect an MCP client with Adport OAuth. Grants are scoped to this workspace and every write still passes the same policy gate." />
       <div className="stack agent-access-stack">
         <AgentSetupGuide baseUrl={baseUrl} />
         <div className="grid-2">

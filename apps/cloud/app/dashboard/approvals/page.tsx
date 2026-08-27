@@ -9,7 +9,7 @@ export default async function ApprovalsPage() {
   const pending = await listPendingOperations(tenant.organizationId);
   return (
     <main className="page">
-      <PageHeader eyebrow="Human control" title="Approvals" description="Previewed writes waiting for their exact second call. Each entry is hash-bound to its arguments and expires under the organization policy." />
+      <PageHeader title="Approvals" description="Previewed writes waiting for their exact second call. Each entry is hash-bound to its arguments and expires under the organization policy." />
       <section className="card">
         {pending.length === 0 ? (
           <Empty title="No operations awaiting approval" copy="When an agent previews a guarded write, its exact operation, preview, and expiry appear here until it is applied or expires." />

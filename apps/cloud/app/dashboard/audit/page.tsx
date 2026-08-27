@@ -11,7 +11,7 @@ export default async function AuditPage() {
   const entries = await listAuditEvents(tenant.organizationId, 150);
   return (
     <main className="page">
-      <PageHeader eyebrow="Append-only evidence" title="Audit log" description="Connection, approval, application, rejection, and administration events for this organization. Reads do not create audit noise." />
+      <PageHeader title="Audit log" description="Connection, approval, application, rejection, and administration events for this organization. Reads do not create audit noise." />
       <section className="card">
         {entries.length === 0 ? (
           <Empty title="No audit events yet" copy="Connecting a platform, previewing a guarded write, or changing team settings will appear here." />

@@ -3,7 +3,6 @@ export default function Loading() {
     <main className="page" aria-busy="true" aria-label="Loading workspace">
       <div className="page-head">
         <div style={{ flex: 1 }}>
-          <div className="skeleton-line" style={{ width: '7rem', height: '0.6rem', marginBottom: '0.9rem' }} />
           <div className="skeleton-line" style={{ width: '14rem', height: '1.7rem', marginBottom: '0.8rem' }} />
           <div className="skeleton-line" style={{ width: 'min(26rem, 100%)', height: '0.7rem' }} />
         </div>

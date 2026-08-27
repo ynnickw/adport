@@ -129,6 +129,25 @@ export async function removeOrganizationMember(principal: TenantPrincipal, targe
   });
 }
 
+export async function renameOrganization(principal: TenantPrincipal, name: string): Promise<void> {
+  requireMemberAdmin(principal);
+  const trimmed = name.trim();
+  if (trimmed.length < 1 || trimmed.length > 120) throw new Error('Organization name must be between 1 and 120 characters.');
+  await db().begin(async (sql) => {
+    await sql`
+      update public.organizations
+      set name = ${trimmed}, updated_at = now()
+      where id = ${principal.organizationId}
+    `;
+    await sql`
+      insert into public.audit_events
+        (organization_id, actor_user_id, event, provider, tool, account_id, summary)
+      values (${principal.organizationId}, ${principal.userId ?? null}, 'settings_updated', 'cloud',
+        'organization_rename', '*', ${`Renamed organization to ${trimmed}`})
+    `;
+  });
+}
+
 export async function updateOrganizationSettings(
   principal: TenantPrincipal,
   policy: Policy,

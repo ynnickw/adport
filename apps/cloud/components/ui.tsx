@@ -1,11 +1,10 @@
 import Link from 'next/link';
 import { ProviderLogo, providerLabel } from '@/components/logos';
 
-export function PageHeader({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: React.ReactNode }) {
+export function PageHeader({ title, description, action }: { title: string; description: string; action?: React.ReactNode }) {
   return (
     <div className="page-head">
       <div>
-        <p className="eyebrow">{eyebrow}</p>
         <h1>{title}</h1>
         <p className="subhead">{description}</p>
       </div>
