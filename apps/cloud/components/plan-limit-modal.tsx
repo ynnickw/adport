@@ -46,7 +46,7 @@ export function PlanLimitModal({ limit, onClose }: { limit?: PlanLimitDetails; o
         <div className="upgrade-plan-line"><span>Recommended</span><strong>{planName}</strong></div>
         <ul>{copy.points.map((point) => <li key={point}>{point}</li>)}</ul>
         <div className="modal-actions">
-          <Link className="button" href={`/dashboard/billing?intent=${limit.kind}`}>Compare plans</Link>
+          <Link className="button" href={`/dashboard/billing?intent=${limit.kind}`}>See plans &amp; start free trial</Link>
           <button className="button secondary" type="button" onClick={onClose}>Not now</button>
         </div>
       </section>

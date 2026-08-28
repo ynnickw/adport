@@ -74,7 +74,7 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
       {message.error ? <div className="error-callout" style={{ marginBottom: 0 }}>{message.error}</div> : null}
       {message.success ? <div className="callout success">{message.success}</div> : null}
       <fieldset className="form" disabled={!canAdminister} style={{ border: 0, margin: 0, padding: 0 }}>
-        {!writeAccess ? <div className="policy-plan-note"><div><strong>{planName} is read only</strong><p>Your safeguards are saved now and become active automatically when write access is enabled.</p></div><Link className="button secondary small" href="/dashboard/billing">Compare plans</Link></div> : null}
+        {!writeAccess ? <div className="policy-plan-note"><div><strong>{planName} is read only</strong><p>Your safeguards are saved now and become active automatically when write access is enabled.</p></div><Link className="button secondary small" href="/dashboard/billing">See plans &amp; start free trial</Link></div> : null}
         <section className="policy-section">
           <div className="policy-section-copy"><span className="plan-kicker">Approval guard</span><h3>Control how changes reach providers</h3><p>The validation step cannot be disabled. Adport applies only the exact operation that was previewed.</p></div>
           <div className="policy-controls">

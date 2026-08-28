@@ -121,7 +121,7 @@ export default async function BillingPage({
                 {selected ? <span className="button secondary full disabled">Current plan</span> : null}
                 {!selected && paid && canManage && paidPlanReady && !entitlement.providerSubscriptionId ? (
                   <form action={startSubscription.bind(null, plan.id, interval)}>
-                    <button className="button full" type="submit">Choose {plan.name}</button>
+                    <button className="button full" type="submit">Start 7-day free trial</button>
                   </form>
                 ) : null}
                 {!selected && paid && configured && !paidPlanReady ? <span className="plan-unavailable">Checkout coming soon</span> : null}
