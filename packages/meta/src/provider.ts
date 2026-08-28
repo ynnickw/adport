@@ -46,6 +46,23 @@ interface InsightsRow {
   action_values?: ActionStat[];
 }
 
+interface MetaPageRow {
+  id?: string;
+  name?: string;
+  category?: string;
+  tasks?: string[];
+}
+
+interface MetaPagePostRow {
+  id?: string;
+  message?: string;
+  created_time?: string;
+  permalink_url?: string;
+  shares?: { count?: number };
+  likes?: { summary?: { total_count?: number } };
+  comments?: { summary?: { total_count?: number } };
+}
+
 interface WritePlan {
   summary: string;
   changes: string[];
@@ -87,6 +104,58 @@ export class MetaAdsProvider implements AdProvider {
       currency: row.currency,
       status: row.account_status !== undefined ? (ACCOUNT_STATUS[row.account_status] ?? String(row.account_status)) : undefined,
     }));
+  }
+
+  async listPages(): Promise<Array<{ id: string; name: string; category?: string; tasks: string[] }>> {
+    const rows = await this.client.getPaged<MetaPageRow>(
+      'me/accounts',
+      { fields: 'id,name,category,tasks', limit: '100' },
+      500,
+    );
+    return rows
+      .filter((row): row is MetaPageRow & { id: string } => Boolean(row.id))
+      .map((row) => ({
+        id: row.id,
+        name: row.name ?? `(page ${row.id})`,
+        ...(row.category ? { category: row.category } : {}),
+        tasks: row.tasks ?? [],
+      }));
+  }
+
+  async pageEngagement(input: { page_id: string; post_limit?: number }): Promise<{
+    page: Record<string, unknown>;
+    posts: Array<Record<string, unknown>>;
+  }> {
+    const pages = await this.listPages();
+    if (!pages.some((page) => page.id === input.page_id)) {
+      throw new AdportError('INVALID_INPUT', `Meta Page ${input.page_id} is not accessible to the connected user.`);
+    }
+    const [page, posts] = await Promise.all([
+      this.client.get<Record<string, unknown>>(input.page_id, {
+        fields: 'id,name,category,fan_count,followers_count,talking_about_count',
+      }),
+      this.client.getPaged<MetaPagePostRow>(
+        `${input.page_id}/posts`,
+        {
+          fields:
+            'id,message,created_time,permalink_url,shares,likes.limit(0).summary(true),comments.limit(0).summary(true)',
+          limit: '25',
+        },
+        Math.min(input.post_limit ?? 25, 100),
+      ),
+    ]);
+    return {
+      page,
+      posts: posts.map((post) => ({
+        id: post.id,
+        message: post.message,
+        created_time: post.created_time,
+        permalink_url: post.permalink_url,
+        shares: post.shares?.count ?? 0,
+        likes: post.likes?.summary?.total_count ?? 0,
+        comments: post.comments?.summary?.total_count ?? 0,
+      })),
+    };
   }
 
   async report(query: NormalizedQuery): Promise<Report> {

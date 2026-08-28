@@ -27,6 +27,32 @@ const specialAdCategorySchema = z.enum([
 export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
   return [
     defineTool({
+      name: 'meta_list_pages',
+      namespace: 'meta',
+      description:
+        'List the Facebook Pages the connected user can access, including their Page roles/tasks. Uses pages_show_list and never returns Page access tokens.',
+      input: z.object({}),
+      annotations: { readOnly: true },
+      async handler() {
+        const pages = await provider.listPages();
+        return { pages, page_count: pages.length };
+      },
+    }),
+    defineTool({
+      name: 'meta_page_engagement',
+      namespace: 'meta',
+      description:
+        'Read engagement metadata and recent posts for an accessible Facebook Page. Uses pages_read_engagement after verifying the Page belongs to the connected user.',
+      input: z.object({
+        page_id: z.string().regex(/^\d+$/),
+        post_limit: z.number().int().positive().max(100).default(25),
+      }),
+      annotations: { readOnly: true },
+      async handler(input) {
+        return provider.pageEngagement(input);
+      },
+    }),
+    defineTool({
       name: 'meta_api_read',
       namespace: 'meta',
       description:
