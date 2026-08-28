@@ -3,7 +3,8 @@ import type { Policy } from '@adport/core';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { db } from '@/lib/db';
 import type { TenantPrincipal } from './types';
-import { getOrganizationEntitlement } from './plans';
+import { getOrganizationEntitlement, recommendedUpgradePlan } from './plans';
+import { PlanLimitError } from './plan-limit';
 
 export type AssignableRole = 'admin' | 'member' | 'viewer';
 
@@ -35,7 +36,11 @@ export async function inviteOrganizationMember(
       where organization_id = ${principal.organizationId}
     `;
     if ((totals[0]?.count ?? 0) >= entitlement.plan.maxMembers) {
-      throw new Error(`${entitlement.plan.name} supports ${entitlement.plan.maxMembers} workspace member${entitlement.plan.maxMembers === 1 ? '' : 's'}.`);
+      throw new PlanLimitError({
+        kind: 'members', currentPlan: entitlement.plan.name,
+        recommendedPlan: recommendedUpgradePlan(entitlement.plan.id),
+        message: `${entitlement.plan.name} supports ${entitlement.plan.maxMembers} workspace member${entitlement.plan.maxMembers === 1 ? '' : 's'}. Upgrade to invite more people.`,
+      });
     }
   }
   const normalizedEmail = email.trim().toLowerCase();
@@ -167,7 +172,11 @@ export async function updateOrganizationSettings(
   requireMemberAdmin(principal);
   const entitlement = await getOrganizationEntitlement(principal.organizationId);
   if (dataRetentionDays > entitlement.plan.maxRetentionDays) {
-    throw new Error(`${entitlement.plan.name} supports up to ${entitlement.plan.maxRetentionDays} days of retention.`);
+    throw new PlanLimitError({
+      kind: 'retention', currentPlan: entitlement.plan.name,
+      recommendedPlan: recommendedUpgradePlan(entitlement.plan.id),
+      message: `${entitlement.plan.name} supports up to ${entitlement.plan.maxRetentionDays} days of retention. Upgrade for a longer audit history.`,
+    });
   }
   await db().begin(async (sql) => {
     await sql`

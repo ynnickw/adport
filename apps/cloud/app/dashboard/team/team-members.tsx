@@ -2,6 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
+import { PlanLimitModal } from '@/components/plan-limit-modal';
+import { planLimitFromResponse, type PlanLimitDetails } from '@/lib/cloud/plan-limit';
 
 interface Member { userId: string; email: string; displayName: string; role: string; }
 
@@ -14,6 +16,7 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
   const router = useRouter();
   const [message, setMessage] = useState<{ error?: string; success?: string }>({});
   const [busy, setBusy] = useState(false);
+  const [planLimit, setPlanLimit] = useState<PlanLimitDetails>();
   const canAdminister = currentRole === 'owner' || currentRole === 'admin';
 
   async function call(method: 'POST' | 'PATCH' | 'DELETE', body: Record<string, unknown>, success: string) {
@@ -21,7 +24,9 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
     setMessage({});
     const response = await fetch('/api/members', { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ organizationId, ...body }) });
     const result = await response.json().catch(() => ({})) as { error?: string };
-    if (!response.ok) setMessage({ error: result.error ?? 'The request failed.' });
+    const limit = planLimitFromResponse(result);
+    if (limit) setPlanLimit(limit);
+    else if (!response.ok) setMessage({ error: result.error ?? 'The request failed.' });
     else { setMessage({ success }); router.refresh(); }
     setBusy(false);
     return response.ok;
@@ -36,6 +41,7 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
 
   return (
     <>
+      <PlanLimitModal limit={planLimit} onClose={() => setPlanLimit(undefined)} />
       {message.error ? <div className="card-body" style={{ paddingBottom: 0 }}><div className="error-callout" style={{ marginBottom: 0 }}>{message.error}</div></div> : null}
       {message.success ? <div className="card-body" style={{ paddingBottom: 0 }}><div className="callout success">{message.success}</div></div> : null}
       <div className="row-list">

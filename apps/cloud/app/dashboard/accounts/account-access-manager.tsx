@@ -3,6 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { Provider } from '@/components/ui';
+import { PlanLimitModal } from '@/components/plan-limit-modal';
+import { planLimitFromResponse, type PlanLimitDetails } from '@/lib/cloud/plan-limit';
 
 export interface AccountAccessItem {
   provider: string;
@@ -22,6 +24,7 @@ export function AccountAccessManager({ organizationId, accounts, canManage, maxA
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string>();
+  const [planLimit, setPlanLimit] = useState<PlanLimitDetails>();
   const activeCount = accounts.filter((account) => account.enabled).length;
 
   function setEnabled(account: AccountAccessItem, enabled: boolean) {
@@ -33,13 +36,16 @@ export function AccountAccessManager({ organizationId, accounts, canManage, maxA
         body: JSON.stringify({ organizationId, provider: account.provider, accountId: account.accountId, enabled }),
       });
       const body = await response.json().catch(() => ({})) as { error?: string };
-      if (!response.ok) setError(body.error ?? 'Account access could not be updated.');
+      const limit = planLimitFromResponse(body);
+      if (limit) setPlanLimit(limit);
+      else if (!response.ok) setError(body.error ?? 'Account access could not be updated.');
       else router.refresh();
     });
   }
 
   return (
     <section className="card">
+      <PlanLimitModal limit={planLimit} onClose={() => setPlanLimit(undefined)} />
       <div className="card-head">
         <h2>Agent account access</h2>
         <span className="card-note">{activeCount} / {maxActiveAccounts ?? 'unlimited'} active</span>

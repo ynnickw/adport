@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { Empty, Metric, Provider, formatNumber } from '@/components/ui';
 
 interface Summary {
-  accounts: Array<{ id: string; name: string; status?: string }>;
   rows: Array<{ provider: string; accountId: string; entity: { id: string; name: string; status?: string }; metrics: Record<string, number> }>;
   truncated?: boolean;
   warnings?: Array<{ provider: string; message: string }>;

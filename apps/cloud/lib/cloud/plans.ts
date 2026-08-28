@@ -1,6 +1,7 @@
 import 'server-only';
 import { db } from '@/lib/db';
 import type { TenantPrincipal } from './types';
+import type { UpgradePlanId } from './plan-limit';
 
 export const PLAN_IDS = ['reader', 'operator', 'agency', 'enterprise'] as const;
 export type PlanId = (typeof PLAN_IDS)[number];
@@ -96,4 +97,10 @@ export async function applyPlanToPrincipal(principal: TenantPrincipal): Promise<
 export function formatPlanLimit(value: number | null, unit: string): string {
   if (value === null) return `Unlimited ${unit}`;
   return `${value} ${value === 1 ? unit.replace(/s$/, '') : unit}`;
+}
+
+export function recommendedUpgradePlan(plan: PlanId): UpgradePlanId {
+  if (plan === 'reader') return 'operator';
+  if (plan === 'operator') return 'agency';
+  return 'enterprise';
 }

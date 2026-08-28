@@ -53,7 +53,7 @@ export function Nav() {
           {section.items.map((item) => {
             const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
             return (
-              <Link key={item.href} href={item.href} aria-current={active ? 'page' : undefined}>
+              <Link key={item.href} href={item.href} prefetch={false} aria-current={active ? 'page' : undefined}>
                 {item.icon}
                 {item.label}
               </Link>

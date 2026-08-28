@@ -19,7 +19,7 @@ export default async function OverviewPage() {
       <PageHeader
         title="Overview"
         description="A normalized read across the ad accounts this organization has connected."
-        action={<Link className="button secondary" href="/dashboard/reports">Open full report</Link>}
+        action={<Link className="button secondary" href="/dashboard/reports" prefetch={false}>Open full report</Link>}
       />
       {connections.length === 0 ? (
         <div className="card">

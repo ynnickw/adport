@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { AdportError } from '@adport/core';
+import { PlanLimitError } from './cloud/plan-limit';
 
 export class HttpError extends Error {
   constructor(message: string, readonly status: number) {
@@ -21,12 +22,14 @@ function errorStatus(error: unknown): number {
 }
 
 export function apiError(error: unknown, status?: number): NextResponse {
-  const responseStatus = status ?? errorStatus(error);
+  const responseStatus = error instanceof PlanLimitError ? error.status : status ?? errorStatus(error);
   const message = responseStatus >= 500
     ? 'Internal server error.'
     : error instanceof Error ? error.message : 'Request failed.';
   if (responseStatus >= 500) console.error(error);
-  return NextResponse.json({ error: message }, { status: responseStatus });
+  return NextResponse.json(error instanceof PlanLimitError
+    ? { error: message, code: error.code, planLimit: { ...error.details, message } }
+    : { error: message }, { status: responseStatus });
 }
 
 export function noStoreJson(body: unknown, status = 200): NextResponse {

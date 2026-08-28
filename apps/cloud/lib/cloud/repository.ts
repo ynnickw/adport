@@ -12,6 +12,7 @@ import type {
 import { policySchema } from '@adport/core';
 import { db } from '@/lib/db';
 import { decryptSecret, digestApiKey, digestState, encryptSecret } from '@/lib/crypto';
+import { PlanLimitError } from './plan-limit';
 import type {
   CloudProvider,
   OAuthProvider,
@@ -617,6 +618,8 @@ export async function setOrganizationAdAccountEnabled(input: {
   accountId: string;
   enabled: boolean;
   maxActiveAccounts: number | null;
+  currentPlan: string;
+  recommendedPlan: 'operator' | 'agency' | 'enterprise';
 }): Promise<void> {
   if (!['owner', 'admin'].includes(input.principal.role ?? '')) throw new Error('Owner or admin access is required.');
   await db().begin(async (sql) => {
@@ -633,7 +636,10 @@ export async function setOrganizationAdAccountEnabled(input: {
         where organization_id = ${input.principal.organizationId} and enabled = true
       `;
       if ((totals[0]?.count ?? 0) >= input.maxActiveAccounts) {
-        throw new Error(`This plan supports ${input.maxActiveAccounts} active ad account${input.maxActiveAccounts === 1 ? '' : 's'}. Disable another account first.`);
+        throw new PlanLimitError({
+          kind: 'active_accounts', currentPlan: input.currentPlan, recommendedPlan: input.recommendedPlan,
+          message: `This plan supports ${input.maxActiveAccounts} active ad account${input.maxActiveAccounts === 1 ? '' : 's'}. Disable another account first, or compare plans to activate more.`,
+        });
       }
     }
     await sql`

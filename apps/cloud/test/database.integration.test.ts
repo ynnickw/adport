@@ -136,6 +136,7 @@ describeDatabase('Supabase tenant boundary', () => {
     await expect(setOrganizationAdAccountEnabled({
       principal: { organizationId: firstOrgId, userId: firstUserId, role: 'owner', scopes: [] },
       provider: 'google', accountId: inactive.accountId, enabled: true, maxActiveAccounts: 1,
+      currentPlan: 'Reader', recommendedPlan: 'operator',
     })).rejects.toThrow(/Disable another account first/);
   });
 

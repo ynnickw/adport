@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { sessionPrincipal } from '@/lib/cloud/auth';
-import { getOrganizationEntitlement } from '@/lib/cloud/plans';
+import { getOrganizationEntitlement, recommendedUpgradePlan } from '@/lib/cloud/plans';
 import { setOrganizationAdAccountEnabled } from '@/lib/cloud/repository';
 import { isCloudProvider } from '@/lib/cloud/types';
 import { apiError, noStoreJson } from '@/lib/http';
@@ -24,6 +24,8 @@ export async function POST(request: Request) {
       accountId: input.accountId,
       enabled: input.enabled,
       maxActiveAccounts: entitlement.plan.maxActiveAccounts,
+      currentPlan: entitlement.plan.name,
+      recommendedPlan: recommendedUpgradePlan(entitlement.plan.id),
     });
     return noStoreJson({ updated: true });
   } catch (error) {
