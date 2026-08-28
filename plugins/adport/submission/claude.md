@@ -1,6 +1,6 @@
-# Claude Code official marketplace submission
+# Claude Code community marketplace submission
 
-Public third-party submission target: `claude-plugins-official`, Anthropic's managed directory. Submit through https://clau.de/plugin-directory-submission; approved third-party plugins are listed under `external_plugins` in `anthropics/claude-plugins-official`.
+Public third-party submission target: `claude-community`, Anthropic's reviewed community marketplace. Individual authors submit through https://platform.claude.com/plugins/submit; approved plugins are pinned to a commit in `anthropics/claude-plugins-community`. The separately curated `claude-plugins-official` marketplace has no application process.
 
 ## Listing
 
@@ -17,4 +17,4 @@ Public third-party submission target: `claude-plugins-official`, Anthropic's man
 2. Run `claude plugin validate ./plugins/adport --strict` and resolve every warning.
 3. Confirm the remote OAuth flow returns to Claude Code and grants Reader workspaces read-only tools.
 4. Confirm approved paid workspaces receive write tools and every mutation still uses the two-call policy gate.
-5. Submit through Anthropic's plugin directory submission form and verify the pinned source commit under `external_plugins` in `anthropics/claude-plugins-official` after approval.
+5. Submit through Anthropic's Console form and verify the pinned source commit in `anthropics/claude-plugins-community` after approval and catalog sync.
