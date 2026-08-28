@@ -106,6 +106,64 @@ describe('MetaAdsProvider.listAccounts', () => {
   });
 });
 
+describe('Meta Page reads', () => {
+  it('lists accessible Pages without requesting or returning Page access tokens', async () => {
+    const { impl, calls } = fakeFetch([
+      {
+        match: (url) => url.includes('/me/accounts'),
+        reply: { data: [{ id: '12345', name: 'Adport Test Page', category: 'Software', tasks: ['MANAGE'] }] },
+      },
+    ]);
+    const provider = new MetaAdsProvider(new MetaGraphClient(CREDS, 'v25.0', impl));
+    await expect(provider.listPages()).resolves.toEqual([
+      { id: '12345', name: 'Adport Test Page', category: 'Software', tasks: ['MANAGE'] },
+    ]);
+    const url = decodeURIComponent(calls[0]!.url);
+    expect(url).toContain('/me/accounts');
+    expect(url).toContain('fields=id,name,category,tasks');
+    expect(url).not.toContain('access_token');
+  });
+
+  it('verifies Page access before reading Page metadata and post engagement', async () => {
+    const { impl, calls } = fakeFetch([
+      {
+        match: (url) => url.includes('/me/accounts'),
+        reply: { data: [{ id: '12345', name: 'Adport Test Page', tasks: ['MANAGE'] }] },
+      },
+      {
+        match: (url) => url.includes('/v25.0/12345?'),
+        reply: { id: '12345', name: 'Adport Test Page', fan_count: 2, followers_count: 3 },
+      },
+      {
+        match: (url) => url.includes('/12345/posts'),
+        reply: {
+          data: [{
+            id: '12345_67890',
+            message: 'Verification test',
+            created_time: '2026-08-28T12:00:00+0000',
+            shares: { count: 1 },
+            likes: { summary: { total_count: 2 } },
+            comments: { summary: { total_count: 3 } },
+          }],
+        },
+      },
+    ]);
+    const provider = new MetaAdsProvider(new MetaGraphClient(CREDS, 'v25.0', impl));
+    const result = await provider.pageEngagement({ page_id: '12345', post_limit: 10 });
+    expect(result.page).toMatchObject({ id: '12345', followers_count: 3 });
+    expect(result.posts).toEqual([
+      expect.objectContaining({ id: '12345_67890', likes: 2, comments: 3, shares: 1 }),
+    ]);
+    expect(decodeURIComponent(calls[2]!.url)).toContain('likes.limit(0).summary(true)');
+  });
+
+  it('rejects Page ids outside the connected user grant', async () => {
+    const { impl } = fakeFetch([{ match: (url) => url.includes('/me/accounts'), reply: { data: [] } }]);
+    const provider = new MetaAdsProvider(new MetaGraphClient(CREDS, 'v25.0', impl));
+    await expect(provider.pageEngagement({ page_id: '999' })).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+  });
+});
+
 describe('MetaAdsProvider.report', () => {
   it('queries act_<id>/insights with time_range and normalizes string metrics', async () => {
     const { impl, calls } = fakeFetch([{ match: (url) => url.includes('/insights'), reply: insightsReply }]);
