@@ -63,7 +63,7 @@ const google: OAuthAdapter<'google'> = {
   authorizationUrl: buildGoogleAuthorizationUrl,
   async exchange({ code, verifier }) {
     const tokens = await exchangeGoogleCode(code, verifier);
-    return { refreshToken: tokens.refreshToken, loginCustomerId: env().GOOGLE_ADS_LOGIN_CUSTOMER_ID };
+    return { refreshToken: tokens.refreshToken };
   },
   async revoke(credential) {
     await revokeGoogleToken(credential.refreshToken);

@@ -47,7 +47,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
       clientId: config.GOOGLE_ADS_CLIENT_ID,
       clientSecret: config.GOOGLE_ADS_CLIENT_SECRET,
       refreshToken: credentials.google.refreshToken,
-      loginCustomerId: credentials.google.loginCustomerId ?? config.GOOGLE_ADS_LOGIN_CUSTOMER_ID,
+      loginCustomerIds: credentials.google.loginCustomerIds,
     });
     const provider = new GoogleAdsProvider(client);
     modules.push({ provider: scopeProvider(provider), tools: googleTools(provider) });

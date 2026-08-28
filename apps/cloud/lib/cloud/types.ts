@@ -17,7 +17,10 @@ export interface TenantPrincipal {
  */
 export interface StoredGoogleCredential {
   refreshToken: string;
+  /** Legacy single-manager setting retained for old encrypted records. */
   loginCustomerId?: string;
+  /** Manager customer id keyed by the operating client customer id. */
+  loginCustomerIds?: Record<string, string>;
 }
 
 export interface StoredMetaCredential {

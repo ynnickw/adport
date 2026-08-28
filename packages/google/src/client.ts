@@ -10,11 +10,15 @@ export interface GoogleCredentials {
   refreshToken: string;
   /** Manager (MCC) customer id, digits only. */
   loginCustomerId?: string;
+  /** Per-operating-customer manager ids for multi-manager hosted runtimes. */
+  loginCustomerIds?: Record<string, string>;
 }
 
 export interface SearchOptions {
   /** Stop after this many rows. */
   maxRows?: number;
+  /** Override the manager context for this search; null explicitly omits it. */
+  loginCustomerId?: string | null;
 }
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -44,6 +48,10 @@ export class GoogleAdsRestClient {
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
+  setLoginCustomerId(customerId: string, loginCustomerId: string): void {
+    (this.credentials.loginCustomerIds ??= {})[normalizeCustomerId(customerId)] = normalizeCustomerId(loginCustomerId);
+  }
+
   async getAccessToken(): Promise<string> {
     if (this.accessToken && this.accessToken.expiresAt > Date.now()) {
       return this.accessToken.token;
@@ -71,15 +79,25 @@ export class GoogleAdsRestClient {
     return this.accessToken.token;
   }
 
-  private async request<T>(path: string, init: { method: string; body?: unknown }): Promise<T> {
+  private async request<T>(
+    path: string,
+    init: { method: string; body?: unknown; loginCustomerId?: string | null },
+  ): Promise<T> {
     const token = await this.getAccessToken();
     const headers: Record<string, string> = {
       authorization: `Bearer ${token}`,
       'developer-token': this.credentials.developerToken,
       'content-type': 'application/json',
     };
-    if (this.credentials.loginCustomerId) {
-      headers['login-customer-id'] = normalizeCustomerId(this.credentials.loginCustomerId);
+    const operatingCustomerId = path.match(/^customers\/(\d{10})\//)?.[1];
+    const mappedLoginCustomerId = operatingCustomerId
+      ? this.credentials.loginCustomerIds?.[operatingCustomerId]
+      : undefined;
+    const loginCustomerId = init.loginCustomerId === null
+      ? undefined
+      : init.loginCustomerId ?? mappedLoginCustomerId ?? this.credentials.loginCustomerId;
+    if (loginCustomerId) {
+      headers['login-customer-id'] = normalizeCustomerId(loginCustomerId);
     }
     const response = await this.fetchImpl(`${API_BASE}/${this.version}/${path}`, {
       method: init.method,
@@ -96,6 +114,9 @@ export class GoogleAdsRestClient {
   async listAccessibleCustomers(): Promise<string[]> {
     const data = await this.request<{ resourceNames?: string[] }>('customers:listAccessibleCustomers', {
       method: 'GET',
+      // Google documents that this call is scoped only by the OAuth user; a
+      // manager header has no effect and must not leak between cloud tenants.
+      loginCustomerId: null,
     });
     return (data.resourceNames ?? []).map((name) => name.replace('customers/', ''));
   }
@@ -112,7 +133,7 @@ export class GoogleAdsRestClient {
     do {
       const data = await this.request<{ results?: Array<Record<string, unknown>>; nextPageToken?: string }>(
         `customers/${normalizeCustomerId(customerId)}/googleAds:search`,
-        { method: 'POST', body: { query, pageToken } },
+        { method: 'POST', body: { query, pageToken }, loginCustomerId: options.loginCustomerId },
       );
       rows.push(...(data.results ?? []));
       pageToken = data.nextPageToken;

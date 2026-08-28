@@ -42,6 +42,7 @@ interface WritePlan {
 
 export class GoogleAdsProvider implements AdProvider {
   readonly id = 'google';
+  private readonly discoveredLoginCustomerIds = new Map<string, string>();
 
   constructor(private readonly client: GoogleAdsRestClient) {}
 
@@ -60,13 +61,15 @@ export class GoogleAdsProvider implements AdProvider {
 
   async listAccounts(): Promise<Account[]> {
     const ids = await this.client.listAccessibleCustomers();
-    const accounts: Account[] = [];
+    const directlyAccessible = new Set(ids);
+    const accounts = new Map<string, Account>();
+    const managers: string[] = [];
     for (const id of ids) {
       try {
         const rows = await this.client.search(
           id,
           'SELECT customer.id, customer.descriptive_name, customer.currency_code, customer.status, customer.manager FROM customer LIMIT 1',
-          { maxRows: 1 },
+          { maxRows: 1, loginCustomerId: id },
         );
         const customer = (rows[0]?.customer ?? {}) as {
           descriptiveName?: string;
@@ -74,18 +77,65 @@ export class GoogleAdsProvider implements AdProvider {
           status?: string;
           manager?: boolean;
         };
-        accounts.push({
-          provider: this.id,
-          id,
-          name: customer.descriptiveName ?? `(account ${id})`,
-          currency: customer.currencyCode,
-          status: customer.manager ? `${customer.status ?? 'UNKNOWN'} (manager)` : customer.status,
+        if (customer.manager) managers.push(id);
+        else accounts.set(id, {
+          provider: this.id, id, name: customer.descriptiveName ?? `(account ${id})`,
+          currency: customer.currencyCode, status: customer.status,
         });
       } catch {
-        accounts.push({ provider: this.id, id, name: '(details unavailable)', status: 'UNKNOWN' });
+        accounts.set(id, { provider: this.id, id, name: '(details unavailable)', status: 'UNKNOWN' });
       }
     }
-    return accounts;
+
+    for (const rootManagerId of managers) {
+      const pending = [rootManagerId];
+      const visited = new Set<string>();
+      while (pending.length > 0) {
+        const managerId = pending.shift()!;
+        if (visited.has(managerId)) continue;
+        visited.add(managerId);
+        const rows = await this.client.search(
+          managerId,
+          'SELECT customer_client.client_customer, customer_client.id, customer_client.level, customer_client.manager, customer_client.descriptive_name, customer_client.currency_code, customer_client.status FROM customer_client WHERE customer_client.level <= 1',
+          { maxRows: 10_000, loginCustomerId: rootManagerId },
+        );
+        for (const row of rows) {
+          const customer = (row.customerClient ?? {}) as {
+            clientCustomer?: string;
+            id?: string | number;
+            level?: number | string;
+            manager?: boolean;
+            descriptiveName?: string;
+            currencyCode?: string;
+            status?: string;
+          };
+          if (Number(customer.level ?? 0) === 0) continue;
+          const customerId = customer.clientCustomer?.replace('customers/', '') ?? String(customer.id ?? '');
+          if (!/^\d{10}$/.test(customerId)) continue;
+          if (customer.manager) {
+            pending.push(customerId);
+            continue;
+          }
+          if (!directlyAccessible.has(customerId)) {
+            this.discoveredLoginCustomerIds.set(customerId, rootManagerId);
+            this.client.setLoginCustomerId(customerId, rootManagerId);
+          }
+          if (!accounts.has(customerId)) accounts.set(customerId, {
+            provider: this.id,
+            id: customerId,
+            name: customer.descriptiveName ?? `(account ${customerId})`,
+            currency: customer.currencyCode,
+            status: customer.status,
+          });
+        }
+      }
+    }
+    return [...accounts.values()];
+  }
+
+  /** Manager headers discovered for client accounts during account listing. */
+  loginCustomerIds(): Record<string, string> {
+    return Object.fromEntries(this.discoveredLoginCustomerIds);
   }
 
   async report(query: NormalizedQuery): Promise<Report> {

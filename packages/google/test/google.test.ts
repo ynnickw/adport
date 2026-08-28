@@ -47,10 +47,12 @@ describe('GoogleAdsRestClient', () => {
         match: (url) => url.includes(':listAccessibleCustomers'),
         reply: { resourceNames: ['customers/1234567890', 'customers/9876543210'] },
       },
+      { match: (url) => url.includes('googleAds:search'), reply: { results: [] } },
     ]);
     const client = new GoogleAdsRestClient({ ...CREDS, loginCustomerId: '111-222-3333' }, 'v25', impl);
     expect(await client.listAccessibleCustomers()).toEqual(['1234567890', '9876543210']);
     await client.listAccessibleCustomers();
+    await client.search('1234567890', 'SELECT customer.id FROM customer');
 
     const tokenCalls = calls.filter((c) => c.url.includes('oauth2'));
     expect(tokenCalls).toHaveLength(1); // cached
@@ -58,7 +60,9 @@ describe('GoogleAdsRestClient', () => {
     const headers = apiCall?.init.headers as Record<string, string>;
     expect(headers.authorization).toBe('Bearer access-token');
     expect(headers['developer-token']).toBe('dev-token');
-    expect(headers['login-customer-id']).toBe('1112223333');
+    expect(headers['login-customer-id']).toBeUndefined();
+    const searchHeaders = calls.find((c) => c.url.includes('googleAds:search'))?.init.headers as Record<string, string>;
+    expect(searchHeaders['login-customer-id']).toBe('1112223333');
   });
 
   it('omits partialFailure for customer manager link mutations', async () => {
@@ -97,6 +101,24 @@ describe('GoogleAdsRestClient', () => {
     const client = new GoogleAdsRestClient(CREDS, 'v25', impl);
     const rows = await client.search('1234567890', 'SELECT campaign.id FROM campaign');
     expect(rows).toHaveLength(2);
+  });
+
+  it('selects the manager header per operating customer', async () => {
+    const { impl, calls } = fakeFetch([
+      tokenRoute,
+      { match: (url) => url.includes('googleAds:search'), reply: { results: [] } },
+    ]);
+    const client = new GoogleAdsRestClient({
+      ...CREDS,
+      loginCustomerIds: { '2222222222': '1111111111' },
+    }, 'v25', impl);
+
+    await client.search('2222222222', 'SELECT customer.id FROM customer');
+    await client.search('3333333333', 'SELECT customer.id FROM customer');
+
+    const searches = calls.filter((call) => call.url.includes('googleAds:search'));
+    expect((searches[0]!.init.headers as Record<string, string>)['login-customer-id']).toBe('1111111111');
+    expect((searches[1]!.init.headers as Record<string, string>)['login-customer-id']).toBeUndefined();
   });
 
   it('formats API errors with field paths and request id', () => {
@@ -417,6 +439,41 @@ describe('GoogleAdsProvider bidding tools', () => {
 });
 
 describe('GoogleAdsProvider report', () => {
+  it('discovers manager client accounts and records their request context', async () => {
+    const { impl, calls } = fakeFetch([
+      tokenRoute,
+      {
+        match: (url) => url.includes(':listAccessibleCustomers'),
+        reply: { resourceNames: ['customers/1111111111', 'customers/3333333333'] },
+      },
+      {
+        match: (url, body) => url.includes('customers/1111111111/googleAds:search') && body.includes('FROM customer LIMIT 1'),
+        reply: { results: [{ customer: { id: '1111111111', descriptiveName: 'Agency MCC', manager: true, status: 'ENABLED' } }] },
+      },
+      {
+        match: (url, body) => url.includes('customers/3333333333/googleAds:search') && body.includes('FROM customer LIMIT 1'),
+        reply: { results: [{ customer: { id: '3333333333', descriptiveName: 'Direct', currencyCode: 'EUR', manager: false, status: 'ENABLED' } }] },
+      },
+      {
+        // Shape and level filter follow Google's v25 CustomerClient hierarchy example.
+        match: (url, body) => url.includes('customers/1111111111/googleAds:search') && body.includes('FROM customer_client'),
+        reply: { results: [
+          { customerClient: { clientCustomer: 'customers/1111111111', level: '0', manager: true, descriptiveName: 'Agency MCC' } },
+          { customerClient: { clientCustomer: 'customers/2222222222', level: '1', manager: false, descriptiveName: 'Client', currencyCode: 'EUR', status: 'ENABLED' } },
+        ] },
+      },
+    ]);
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
+
+    await expect(provider.listAccounts()).resolves.toEqual([
+      { provider: 'google', id: '3333333333', name: 'Direct', currency: 'EUR', status: 'ENABLED' },
+      { provider: 'google', id: '2222222222', name: 'Client', currency: 'EUR', status: 'ENABLED' },
+    ]);
+    expect(provider.loginCustomerIds()).toEqual({ '2222222222': '1111111111' });
+    const hierarchyCall = calls.find((call) => String(call.init.body).includes('FROM customer_client'))!;
+    expect((hierarchyCall.init.headers as Record<string, string>)['login-customer-id']).toBe('1111111111');
+  });
+
   it('builds GAQL with date range and maps camelCase metrics', async () => {
     const { impl, calls } = fakeFetch([
       tokenRoute,

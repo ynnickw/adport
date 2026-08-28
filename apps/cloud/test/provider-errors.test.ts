@@ -17,4 +17,14 @@ describe('browser-safe provider errors', () => {
     expect(describeProviderError(new AdportError('PROVIDER_ERROR', 'TikTok API error 50000: internal'), 'tiktok')).toMatch(/TikTok Ads request failed/);
     expect(describeProviderError(new Error('No ad providers are connected.'))).toBe('No ad platform is connected yet.');
   });
+
+  it('does not mislabel Google customer permissions as an expired OAuth grant', () => {
+    const text = describeProviderError(new AdportError(
+      'PROVIDER_ERROR',
+      "Google Ads API error (HTTP 403): The caller does not have permission. User doesn't have permission to access customer; set login-customer-id.",
+    ), 'google');
+    expect(text).toContain('account access failed (HTTP 403)');
+    expect(text).toContain('manager account');
+    expect(text).not.toContain('invalid, expired, or revoked');
+  });
 });

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { GoogleAdsProvider } from '@adport/provider-google';
 import { sessionPrincipal } from '@/lib/cloud/auth';
 import { oauthAdapter } from '@/lib/cloud/provider-oauth';
 import {
@@ -6,6 +7,7 @@ import {
   recordAudit,
   setConnectionVerification,
   syncDiscoveredAccounts,
+  updateProviderCredential,
   upsertProviderConnection,
 } from '@/lib/cloud/repository';
 import { createTenantRuntime } from '@/lib/cloud/runtime';
@@ -64,7 +66,15 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
 
     try {
       const runtime = await createTenantRuntime(principal, { enforceAccountScope: false });
-      const accounts = await runtime.ctx.providers.get(provider).listAccounts();
+      const connectedProvider = runtime.ctx.providers.get(provider);
+      const accounts = await connectedProvider.listAccounts();
+      if (provider === 'google' && connectedProvider instanceof GoogleAdsProvider) {
+        const googleCredential = credential as { refreshToken: string };
+        await updateProviderCredential(transaction.organizationId, 'google', {
+          refreshToken: googleCredential.refreshToken,
+          loginCustomerIds: connectedProvider.loginCustomerIds(),
+        });
+      }
       const entitlement = await getOrganizationEntitlement(transaction.organizationId);
       const enabledAccountIds = await syncDiscoveredAccounts({
         organizationId: transaction.organizationId,
