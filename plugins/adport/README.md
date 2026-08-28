@@ -12,7 +12,7 @@ Load this repository package directly:
 claude --plugin-dir ./plugins/adport
 ```
 
-Then run `claude plugin validate ./plugins/adport` before publishing. Third-party public submissions go through Anthropic's reviewed `claude-community` marketplace.
+Then run `claude plugin validate ./plugins/adport` before publishing. Third-party public submissions use Anthropic's official plugin directory form and, after approval, the `anthropics/claude-plugins-official` marketplace.
 
 ## OpenAI development
 
