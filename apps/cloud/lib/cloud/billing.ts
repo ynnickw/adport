@@ -8,8 +8,13 @@ let client: Stripe | undefined;
 
 export function billingConfigured(): boolean {
   const value = env();
-  return Boolean(value.STRIPE_SECRET_KEY && value.STRIPE_WEBHOOK_SECRET
-    && value.STRIPE_OPERATOR_PRICE_ID && value.STRIPE_AGENCY_PRICE_ID);
+  return Boolean(value.STRIPE_SECRET_KEY && value.STRIPE_WEBHOOK_SECRET);
+}
+
+export function billingPlanConfigured(plan: Extract<PlanId, 'operator' | 'agency'>): boolean {
+  if (!billingConfigured()) return false;
+  const value = env();
+  return Boolean(plan === 'operator' ? value.STRIPE_OPERATOR_PRICE_ID : value.STRIPE_AGENCY_PRICE_ID);
 }
 
 export function stripeClient(): Stripe {

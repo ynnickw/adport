@@ -1,5 +1,5 @@
 import { PageHeader } from '@/components/ui';
-import { billingConfigured } from '@/lib/cloud/billing';
+import { billingConfigured, billingPlanConfigured } from '@/lib/cloud/billing';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { formatPlanLimit, getOrganizationEntitlement, PLANS, type PlanId } from '@/lib/cloud/plans';
 import { openBillingPortal, startSubscription } from './actions';
@@ -31,6 +31,9 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
         {PLAN_ORDER.map((planId) => {
           const plan = PLANS[planId];
           const selected = entitlement.plan.id === planId;
+          const paidPlanReady = plan.id === 'operator' || plan.id === 'agency'
+            ? billingPlanConfigured(plan.id)
+            : false;
           return (
             <section className="card" key={plan.id}>
               <div className="card-head"><h2>{plan.name}</h2>{selected ? <span className="status">current</span> : null}</div>
@@ -40,8 +43,11 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
                 <span className="inline-note">{formatPlanLimit(plan.maxMembers, 'workspace members')}</span>
                 <span className="inline-note">{plan.maxRetentionDays}-day audit retention</span>
                 <span className="inline-note">{plan.writeAccess ? 'Guarded read and write tools' : 'Read-only agent tools'}</span>
-                {!selected && plan.id !== 'reader' && canManage && configured && !entitlement.providerSubscriptionId ? (
+                {!selected && plan.id !== 'reader' && canManage && paidPlanReady && !entitlement.providerSubscriptionId ? (
                   <form action={startSubscription.bind(null, plan.id)}><button className="button" type="submit">Choose {plan.name}</button></form>
+                ) : null}
+                {!selected && plan.id !== 'reader' && configured && !paidPlanReady ? (
+                  <span className="inline-note">Checkout coming soon</span>
                 ) : null}
               </div>
             </section>

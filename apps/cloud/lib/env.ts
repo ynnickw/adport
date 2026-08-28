@@ -12,7 +12,7 @@ const schema = z.object({
   ADPORT_API_KEY_PEPPER: z.string().min(32),
   // Independent HMAC key for short-lived MCP OAuth access tokens.
   ADPORT_MCP_OAUTH_SIGNING_KEY: z.string().min(40),
-  STRIPE_SECRET_KEY: z.string().startsWith('sk_').optional(),
+  STRIPE_SECRET_KEY: z.string().regex(/^(?:sk|rk)_(?:test|live)_/).optional(),
   STRIPE_WEBHOOK_SECRET: z.string().startsWith('whsec_').optional(),
   STRIPE_OPERATOR_PRICE_ID: z.string().startsWith('price_').optional(),
   STRIPE_AGENCY_PRICE_ID: z.string().startsWith('price_').optional(),
