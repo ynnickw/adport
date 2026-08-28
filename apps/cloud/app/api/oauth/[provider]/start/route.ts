@@ -6,6 +6,7 @@ import { oauthAdapter } from '@/lib/cloud/provider-oauth';
 import { createOAuthTransaction } from '@/lib/cloud/repository';
 import { isOAuthProvider } from '@/lib/cloud/types';
 import { apiError } from '@/lib/http';
+import { safeReturnPath } from '@/lib/return-path';
 
 /**
  * Begin the hosted OAuth flow for a provider. The state is single-use, hashed
@@ -29,7 +30,9 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
       provider,
       state,
       verifier: pkce.verifier,
-      returnPath: '/dashboard/connections',
+      returnPath: url.searchParams.has('return_to')
+        ? safeReturnPath(url.searchParams.get('return_to'))
+        : `/dashboard/accounts?select_provider=${provider}`,
     });
     return NextResponse.redirect(adapter.authorizationUrl({ state, challenge: pkce.challenge }));
   } catch (error) {

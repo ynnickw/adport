@@ -14,7 +14,7 @@ type Setup = {
   command: (baseUrl: string) => string;
 };
 
-const SETUPS: Setup[] = [
+export const AGENT_SETUPS: Setup[] = [
   {
     id: 'chatgpt', name: 'ChatGPT', provider: 'openai', label: 'Custom app',
     instructions: 'Enable developer mode, then open Settings → Apps → Create. Choose OAuth and use the endpoint below.',
@@ -84,9 +84,9 @@ function CopyButton({ value, label }: { value: string; label: string }) {
   );
 }
 
-export function AgentSetupGuide({ baseUrl }: { baseUrl: string }) {
-  const [selectedId, setSelectedId] = useState(SETUPS[0]!.id);
-  const selected = SETUPS.find((setup) => setup.id === selectedId) ?? SETUPS[0]!;
+export function AgentSetupGuide({ baseUrl, initialSelectedId, onSelectionChange }: { baseUrl: string; initialSelectedId?: string; onSelectionChange?: (id: string) => void }) {
+  const [selectedId, setSelectedId] = useState(initialSelectedId ?? AGENT_SETUPS[0]!.id);
+  const selected = AGENT_SETUPS.find((setup) => setup.id === selectedId) ?? AGENT_SETUPS[0]!;
   const command = selected.command(baseUrl);
 
   return (
@@ -100,8 +100,8 @@ export function AgentSetupGuide({ baseUrl }: { baseUrl: string }) {
       </div>
 
       <div className="agent-tabs" aria-label="Choose an agent">
-        {SETUPS.map((setup) => (
-          <button className="agent-tab" data-active={setup.id === selected.id} key={setup.id} type="button" onClick={() => setSelectedId(setup.id)} aria-pressed={setup.id === selected.id}>
+        {AGENT_SETUPS.map((setup) => (
+          <button className="agent-tab" data-active={setup.id === selected.id} key={setup.id} type="button" onClick={() => { setSelectedId(setup.id); onSelectionChange?.(setup.id); }} aria-pressed={setup.id === selected.id}>
             <span className={`agent-logo ${setup.provider}`}><AgentLogo provider={setup.provider} /></span>
             <span>{setup.name}</span>
           </button>

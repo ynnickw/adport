@@ -11,7 +11,7 @@ export function billingConfigured(): boolean {
   return Boolean(value.STRIPE_SECRET_KEY && value.STRIPE_WEBHOOK_SECRET);
 }
 
-export function billingPlanConfigured(plan: Extract<PlanId, 'operator' | 'agency'>, interval: BillingInterval): boolean {
+export function billingPlanConfigured(plan: Extract<PlanId, 'operator' | 'premium' | 'agency'>, interval: BillingInterval): boolean {
   if (!billingConfigured()) return false;
   return Boolean(stripePriceIdOrUndefined(plan, interval));
 }
@@ -23,13 +23,14 @@ export function stripeClient(): Stripe {
   return client;
 }
 
-function stripePriceIdOrUndefined(plan: Extract<PlanId, 'operator' | 'agency'>, interval: BillingInterval): string | undefined {
+function stripePriceIdOrUndefined(plan: Extract<PlanId, 'operator' | 'premium' | 'agency'>, interval: BillingInterval): string | undefined {
   const value = env();
   if (plan === 'operator') return interval === 'annual' ? value.STRIPE_OPERATOR_ANNUAL_PRICE_ID : value.STRIPE_OPERATOR_PRICE_ID;
+  if (plan === 'premium') return interval === 'annual' ? value.STRIPE_PREMIUM_ANNUAL_PRICE_ID : value.STRIPE_PREMIUM_PRICE_ID;
   return interval === 'annual' ? value.STRIPE_AGENCY_ANNUAL_PRICE_ID : value.STRIPE_AGENCY_PRICE_ID;
 }
 
-export function stripePriceId(plan: Extract<PlanId, 'operator' | 'agency'>, interval: BillingInterval): string {
+export function stripePriceId(plan: Extract<PlanId, 'operator' | 'premium' | 'agency'>, interval: BillingInterval): string {
   const priceId = stripePriceIdOrUndefined(plan, interval);
   if (!priceId) throw new Error(`${plan} ${interval} Stripe price is not configured.`);
   return priceId;
@@ -39,6 +40,7 @@ function planForPrice(priceId: string | undefined): PlanId | undefined {
   if (!priceId) return undefined;
   const value = env();
   if (priceId === value.STRIPE_OPERATOR_PRICE_ID || priceId === value.STRIPE_OPERATOR_ANNUAL_PRICE_ID) return 'operator';
+  if (priceId === value.STRIPE_PREMIUM_PRICE_ID || priceId === value.STRIPE_PREMIUM_ANNUAL_PRICE_ID) return 'premium';
   if (priceId === value.STRIPE_AGENCY_PRICE_ID || priceId === value.STRIPE_AGENCY_ANNUAL_PRICE_ID) return 'agency';
   return undefined;
 }

@@ -12,7 +12,7 @@ import type {
 import { policySchema } from '@adport/core';
 import { db } from '@/lib/db';
 import { decryptSecret, digestApiKey, digestState, encryptSecret } from '@/lib/crypto';
-import { PlanLimitError } from './plan-limit';
+import { PlanLimitError, type UpgradePlanId } from './plan-limit';
 import type {
   CloudProvider,
   OAuthProvider,
@@ -519,9 +519,9 @@ export interface OrganizationAdAccount {
 }
 
 /**
- * Replace a provider's discovered account inventory and preserve as many
- * existing active selections as the plan allows. This runs only after a
- * provider grant has been verified with the provider API.
+ * Replace a provider's discovered account inventory while preserving explicit
+ * active selections. Newly discovered accounts remain inactive until an owner
+ * or admin selects them; OAuth consent alone never expands agent access.
  */
 export async function syncDiscoveredAccounts(input: {
   organizationId: string;
@@ -578,7 +578,7 @@ export async function syncDiscoveredAccounts(input: {
     const available = input.maxActiveAccounts === null
       ? refreshed.length
       : Math.max(0, input.maxActiveAccounts - (otherRows[0]?.count ?? 0));
-    const enabledIds = new Set(refreshed.slice(0, available).map((account) => account.accountId));
+    const enabledIds = new Set(refreshed.filter((account) => account.enabled).slice(0, available).map((account) => account.accountId));
     for (const account of refreshed) {
       const enabled = enabledIds.has(account.accountId);
       if (account.enabled !== enabled) {
@@ -619,7 +619,7 @@ export async function setOrganizationAdAccountEnabled(input: {
   enabled: boolean;
   maxActiveAccounts: number | null;
   currentPlan: string;
-  recommendedPlan: 'operator' | 'agency' | 'enterprise';
+  recommendedPlan: UpgradePlanId;
 }): Promise<void> {
   if (!['owner', 'admin'].includes(input.principal.role ?? '')) throw new Error('Owner or admin access is required.');
   await db().begin(async (sql) => {

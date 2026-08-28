@@ -11,7 +11,7 @@ function requireOwner(role: string | undefined): void {
 }
 
 export async function startSubscription(plan: PlanId, interval: BillingInterval): Promise<void> {
-  if (plan !== 'operator' && plan !== 'agency') throw new Error('Choose Operator or Agency.');
+  if (plan !== 'operator' && plan !== 'premium' && plan !== 'agency') throw new Error('Choose Operator, Premium, or Agency.');
   if (interval !== 'monthly' && interval !== 'annual') throw new Error('Choose monthly or annual billing.');
   const principal = await sessionPrincipal();
   requireOwner(principal.role);
@@ -26,7 +26,10 @@ export async function startSubscription(plan: PlanId, interval: BillingInterval)
     billing_address_collection: 'required',
     allow_promotion_codes: true,
     metadata: { organizationId: principal.organizationId, plan, interval },
-    subscription_data: { metadata: { organizationId: principal.organizationId, plan, interval } },
+    subscription_data: {
+      metadata: { organizationId: principal.organizationId, plan, interval },
+      trial_period_days: 7,
+    },
     success_url: new URL('/dashboard/billing?checkout=complete', baseUrl).toString(),
     cancel_url: new URL('/dashboard/billing?checkout=canceled', baseUrl).toString(),
   });

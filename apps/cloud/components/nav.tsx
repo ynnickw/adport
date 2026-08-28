@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { SUPPORT_OPEN_EVENT } from './support-widget';
 
 type NavItem = { label: string; href: string; icon: React.ReactNode; exact?: boolean };
 
@@ -17,50 +18,43 @@ const icon = {
   team: <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2" /><path d="M3.5 19.5c.4-3.1 2.7-5 5.5-5s5.1 1.9 5.5 5" /><circle cx="16.5" cy="9.5" r="2.4" /><path d="M15.2 14.6c2.6.1 4.6 1.8 5.1 4.6" /></svg>,
   agents: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 9.5 5 12l3.5 2.5" /><path d="m15.5 9.5 3.5 2.5-3.5 2.5" /><path d="m13.2 6.5-2.4 11" /></svg>,
   billing: <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="2" /><path d="M3.5 9.5h17" /><path d="M7.5 14.5h3" /></svg>,
+  support: <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" /><path d="M8.2 8.2 6 6" /><path d="m15.8 8.2 2.2-2.2" /><path d="m8.2 15.8-2.2 2.2" /><path d="m15.8 15.8 2.2 2.2" /><circle cx="12" cy="12" r="3.4" /></svg>,
 };
 
-const sections: { label?: string; items: NavItem[] }[] = [
-  { items: [
-    { label: 'Overview', href: '/dashboard', icon: icon.overview, exact: true },
-  ] },
-  { label: 'Inventory', items: [
-    { label: 'Connections', href: '/dashboard/connections', icon: icon.connections },
-    { label: 'Accounts', href: '/dashboard/accounts', icon: icon.accounts },
-  ] },
-  { label: 'Evidence', items: [
-    { label: 'Reports', href: '/dashboard/reports', icon: icon.reports },
-    { label: 'Findings', href: '/dashboard/findings', icon: icon.findings },
-  ] },
-  { label: 'Governance', items: [
-    { label: 'Approvals', href: '/dashboard/approvals', icon: icon.approvals },
-    { label: 'Audit log', href: '/dashboard/audit', icon: icon.audit },
-    { label: 'Policies', href: '/dashboard/policies', icon: icon.policies },
-  ] },
-  { label: 'Settings', items: [
-    { label: 'Team', href: '/dashboard/team', icon: icon.team },
-    { label: 'Agent access', href: '/dashboard/agents', icon: icon.agents },
-    { label: 'Plan', href: '/dashboard/billing', icon: icon.billing },
-  ] },
+const PRIMARY_ITEMS: NavItem[] = [
+  { label: 'Overview', href: '/dashboard', icon: icon.overview, exact: true },
+  { label: 'Connections', href: '/dashboard/connections', icon: icon.connections },
+  { label: 'Accounts', href: '/dashboard/accounts', icon: icon.accounts },
+  { label: 'Reports', href: '/dashboard/reports', icon: icon.reports },
+  { label: 'Findings', href: '/dashboard/findings', icon: icon.findings },
+  { label: 'Approvals', href: '/dashboard/approvals', icon: icon.approvals },
+  { label: 'Audit log', href: '/dashboard/audit', icon: icon.audit },
 ];
 
-export function Nav() {
+const UTILITY_ITEMS: NavItem[] = [
+  { label: 'Agent access', href: '/dashboard/agents', icon: icon.agents },
+  { label: 'Policies', href: '/dashboard/policies', icon: icon.policies },
+  { label: 'Team', href: '/dashboard/team', icon: icon.team },
+  { label: 'Plan', href: '/dashboard/billing', icon: icon.billing },
+];
+
+function NavLinks({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
+  return items.map((item) => {
+    const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
+    return <Link key={item.href} href={item.href} prefetch={false} aria-current={active ? 'page' : undefined}>{item.icon}{item.label}</Link>;
+  });
+}
+
+export function Nav() {
+  return <nav className="nav" aria-label="Cloud navigation"><NavLinks items={PRIMARY_ITEMS} /></nav>;
+}
+
+export function UtilityNav() {
   return (
-    <nav className="nav" aria-label="Cloud navigation">
-      {sections.map((section, index) => (
-        <div key={section.label ?? index} className="nav-group">
-          {section.label ? <div className="nav-label">{section.label}</div> : null}
-          {section.items.map((item) => {
-            const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
-            return (
-              <Link key={item.href} href={item.href} prefetch={false} aria-current={active ? 'page' : undefined}>
-                {item.icon}
-                {item.label}
-              </Link>
-            );
-          })}
-        </div>
-      ))}
+    <nav className="nav utility-nav" aria-label="Workspace and help">
+      <button type="button" onClick={() => window.dispatchEvent(new Event(SUPPORT_OPEN_EVENT))}>{icon.support}Support</button>
+      <NavLinks items={UTILITY_ITEMS} />
     </nav>
   );
 }

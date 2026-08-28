@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import type { TenantPrincipal } from './types';
 import type { UpgradePlanId } from './plan-limit';
 
-export const PLAN_IDS = ['reader', 'operator', 'agency', 'enterprise'] as const;
+export const PLAN_IDS = ['reader', 'operator', 'premium', 'agency', 'enterprise'] as const;
 export type PlanId = (typeof PLAN_IDS)[number];
 export type BillingInterval = 'monthly' | 'annual';
 export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled' | 'incomplete' | 'unpaid';
@@ -26,12 +26,16 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     maxRetentionDays: 30, writeAccess: false, clientWorkspaces: false,
   },
   operator: {
-    id: 'operator', name: 'Operator', monthlyPriceEur: 29, annualPriceEur: 290, maxActiveAccounts: 5, maxMembers: 2,
+    id: 'operator', name: 'Operator', monthlyPriceEur: 19, annualPriceEur: 190, maxActiveAccounts: 5, maxMembers: 2,
     maxRetentionDays: 90, writeAccess: true, clientWorkspaces: false,
   },
+  premium: {
+    id: 'premium', name: 'Premium', monthlyPriceEur: 79, annualPriceEur: 790, maxActiveAccounts: 15, maxMembers: 5,
+    maxRetentionDays: 365, writeAccess: true, clientWorkspaces: false,
+  },
   agency: {
-    id: 'agency', name: 'Agency', monthlyPriceEur: 199, annualPriceEur: 1990, maxActiveAccounts: 25, maxMembers: 10,
-    maxRetentionDays: 365, writeAccess: true, clientWorkspaces: true,
+    id: 'agency', name: 'Agency', monthlyPriceEur: 149, annualPriceEur: 1490, maxActiveAccounts: 40, maxMembers: 15,
+    maxRetentionDays: 730, writeAccess: true, clientWorkspaces: true,
   },
   enterprise: {
     id: 'enterprise', name: 'Enterprise', monthlyPriceEur: null, annualPriceEur: null, maxActiveAccounts: null, maxMembers: null,
@@ -101,6 +105,7 @@ export function formatPlanLimit(value: number | null, unit: string): string {
 
 export function recommendedUpgradePlan(plan: PlanId): UpgradePlanId {
   if (plan === 'reader') return 'operator';
-  if (plan === 'operator') return 'agency';
+  if (plan === 'operator') return 'premium';
+  if (plan === 'premium') return 'agency';
   return 'enterprise';
 }

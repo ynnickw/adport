@@ -7,6 +7,8 @@ const STRIPE_ENV_KEYS = [
   'STRIPE_WEBHOOK_SECRET',
   'STRIPE_OPERATOR_PRICE_ID',
   'STRIPE_OPERATOR_ANNUAL_PRICE_ID',
+  'STRIPE_PREMIUM_PRICE_ID',
+  'STRIPE_PREMIUM_ANNUAL_PRICE_ID',
   'STRIPE_AGENCY_PRICE_ID',
   'STRIPE_AGENCY_ANNUAL_PRICE_ID',
 ] as const;
@@ -24,6 +26,8 @@ describe('Stripe billing configuration', () => {
     process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
     process.env.STRIPE_OPERATOR_PRICE_ID = 'price_operator';
     process.env.STRIPE_OPERATOR_ANNUAL_PRICE_ID = 'price_operator_annual';
+    process.env.STRIPE_PREMIUM_PRICE_ID = 'price_premium';
+    process.env.STRIPE_PREMIUM_ANNUAL_PRICE_ID = 'price_premium_annual';
     process.env.STRIPE_AGENCY_PRICE_ID = 'price_agency';
     process.env.STRIPE_AGENCY_ANNUAL_PRICE_ID = 'price_agency_annual';
     resetEnvForTests();
@@ -31,10 +35,14 @@ describe('Stripe billing configuration', () => {
     expect(billingConfigured()).toBe(true);
     expect(billingPlanConfigured('operator', 'monthly')).toBe(true);
     expect(billingPlanConfigured('operator', 'annual')).toBe(true);
+    expect(billingPlanConfigured('premium', 'monthly')).toBe(true);
+    expect(billingPlanConfigured('premium', 'annual')).toBe(true);
     expect(billingPlanConfigured('agency', 'monthly')).toBe(true);
     expect(billingPlanConfigured('agency', 'annual')).toBe(true);
     expect(stripePriceId('operator', 'monthly')).toBe('price_operator');
     expect(stripePriceId('operator', 'annual')).toBe('price_operator_annual');
+    expect(stripePriceId('premium', 'monthly')).toBe('price_premium');
+    expect(stripePriceId('premium', 'annual')).toBe('price_premium_annual');
     expect(stripePriceId('agency', 'monthly')).toBe('price_agency');
     expect(stripePriceId('agency', 'annual')).toBe('price_agency_annual');
   });

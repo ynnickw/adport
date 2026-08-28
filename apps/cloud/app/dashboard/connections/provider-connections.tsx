@@ -22,11 +22,12 @@ export interface OAuthProviderView {
   manualRevocationUrl: string;
 }
 
-export function ProviderConnections({ organizationId, canManage, connections, oauthProviders }: {
+export function ProviderConnections({ organizationId, canManage, connections, oauthProviders, returnTo }: {
   organizationId: string;
   canManage: boolean;
   connections: ConnectionView[];
   oauthProviders: OAuthProviderView[];
+  returnTo?: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string>();
@@ -60,7 +61,7 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
       {oauthProviders.map((provider) => {
         const connection = find(provider.id);
         const message = notice[provider.id];
-        const startHref = `/api/oauth/${provider.id}/start?organization_id=${organizationId}`;
+        const startHref = `/api/oauth/${provider.id}/start?organization_id=${organizationId}${returnTo ? `&return_to=${encodeURIComponent(returnTo)}` : ''}`;
         return (
           <article className={`connection${connection ? '' : ' pending'}`} key={provider.id}>
             <div className="connection-top">

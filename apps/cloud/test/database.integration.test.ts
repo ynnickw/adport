@@ -21,6 +21,8 @@ import {
 } from '@/lib/cloud/repository';
 import { createTenantRuntime } from '@/lib/cloud/runtime';
 import { processStripeEvent } from '@/lib/cloud/billing';
+import { getOnboardingState, updateOnboardingState } from '@/lib/cloud/onboarding';
+import { createFeedbackMessage } from '@/lib/cloud/support';
 import { resetEnvForTests } from '@/lib/env';
 import {
   changeOrganizationMemberRole,
@@ -87,6 +89,24 @@ describeDatabase('Supabase tenant boundary', () => {
     expect(other.data).toEqual([]);
   });
 
+  it('persists first-run progress and tenant-scoped support messages', async () => {
+    const principal = { organizationId: firstOrgId, userId: firstUserId, role: 'owner' as const, scopes: [] };
+    expect(await getOnboardingState(firstOrgId)).toMatchObject({ currentStep: 'welcome', completedAt: null });
+    await updateOnboardingState(principal, { currentStep: 'agent', selectedAgent: 'codex' });
+    expect(await getOnboardingState(firstOrgId)).toMatchObject({ currentStep: 'agent', selectedAgent: 'codex', completedAt: null });
+    const feedback = await createFeedbackMessage({
+      principal, kind: 'feedback', subject: 'Onboarding feedback',
+      message: 'The setup sequence is clear and keeps account selection explicit.', pagePath: '/onboarding',
+    });
+    expect(feedback).toMatchObject({ kind: 'feedback', pagePath: '/onboarding' });
+    const otherTenantRows = await db()<Array<{ count: number }>>`
+      select count(*)::int as count from public.feedback where organization_id = ${secondOrgId} and id = ${feedback.id}
+    `;
+    expect(otherTenantRows[0]?.count).toBe(0);
+    await updateOnboardingState(principal, { currentStep: 'complete', selectedAgent: 'codex', complete: true });
+    expect((await getOnboardingState(firstOrgId)).completedAt).toBeInstanceOf(Date);
+  });
+
   it('encrypts Google refresh tokens and never stores plaintext', async () => {
     await upsertGoogleConnection({
       organizationId: firstOrgId,
@@ -131,8 +151,13 @@ describeDatabase('Supabase tenant boundary', () => {
     });
     const inventory = await listOrganizationAdAccounts(firstOrgId);
     expect(inventory).toHaveLength(2);
-    expect(inventory.filter((account) => account.enabled)).toHaveLength(1);
-    const inactive = inventory.find((account) => !account.enabled)!;
+    expect(inventory.filter((account) => account.enabled)).toHaveLength(0);
+    await setOrganizationAdAccountEnabled({
+      principal: { organizationId: firstOrgId, userId: firstUserId, role: 'owner', scopes: [] },
+      provider: 'google', accountId: inventory[0]!.accountId, enabled: true, maxActiveAccounts: 1,
+      currentPlan: 'Reader', recommendedPlan: 'operator',
+    });
+    const inactive = inventory[1]!;
     await expect(setOrganizationAdAccountEnabled({
       principal: { organizationId: firstOrgId, userId: firstUserId, role: 'owner', scopes: [] },
       provider: 'google', accountId: inactive.accountId, enabled: true, maxActiveAccounts: 1,
@@ -184,6 +209,13 @@ describeDatabase('Supabase tenant boundary', () => {
       ],
       maxActiveAccounts: 4,
     });
+    for (const account of await listOrganizationAdAccounts(firstOrgId)) {
+      await setOrganizationAdAccountEnabled({
+        principal: { organizationId: firstOrgId, userId: firstUserId, role: 'owner', scopes: [] },
+        provider: 'google', accountId: account.accountId, enabled: true, maxActiveAccounts: 4,
+        currentPlan: 'Operator', recommendedPlan: 'premium',
+      });
+    }
     const outcome = await processStripeEvent({
       id: `evt_${randomUUID()}`,
       type: 'customer.subscription.deleted',

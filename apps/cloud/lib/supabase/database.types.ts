@@ -235,6 +235,157 @@ export type Database = {
           },
         ]
       }
+      feedback: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          kind: string
+          message: string
+          notification_error: string | null
+          notification_status: string
+          organization_id: string
+          page_path: string | null
+          resend_email_id: string | null
+          status: string
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          kind?: string
+          message: string
+          notification_error?: string | null
+          notification_status?: string
+          organization_id: string
+          page_path?: string | null
+          resend_email_id?: string | null
+          status?: string
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          kind?: string
+          message?: string
+          notification_error?: string | null
+          notification_status?: string
+          organization_id?: string
+          page_path?: string | null
+          resend_email_id?: string | null
+          status?: string
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedback_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      findings: {
+        Row: {
+          created_at: string
+          finding: Json
+          id: string
+          organization_id: string
+          provider: string
+          severity: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          finding: Json
+          id: string
+          organization_id: string
+          provider: string
+          severity: string
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          finding?: Json
+          id?: string
+          organization_id?: string
+          provider?: string
+          severity?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "findings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_ad_accounts: {
+        Row: {
+          account_id: string
+          connection_id: string
+          currency: string | null
+          discovered_at: string
+          enabled: boolean
+          last_seen_at: string
+          name: string
+          organization_id: string
+          provider: string
+          status: string | null
+        }
+        Insert: {
+          account_id: string
+          connection_id: string
+          currency?: string | null
+          discovered_at?: string
+          enabled?: boolean
+          last_seen_at?: string
+          name: string
+          organization_id: string
+          provider: string
+          status?: string | null
+        }
+        Update: {
+          account_id?: string
+          connection_id?: string
+          currency?: string | null
+          discovered_at?: string
+          enabled?: boolean
+          last_seen_at?: string
+          name?: string
+          organization_id?: string
+          provider?: string
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_ad_accounts_connection_id_organization_id_pro_fkey"
+            columns: ["connection_id", "organization_id", "provider"]
+            isOneToOne: false
+            referencedRelation: "connections"
+            referencedColumns: ["id", "organization_id", "provider"]
+          },
+          {
+            foreignKeyName: "organization_ad_accounts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_memberships: {
         Row: {
           created_at: string
@@ -264,6 +415,41 @@ export type Database = {
           },
         ]
       }
+      organization_onboarding: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          current_step: string
+          organization_id: string
+          selected_agent: string | null
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          current_step?: string
+          organization_id: string
+          selected_agent?: string | null
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          current_step?: string
+          organization_id?: string
+          selected_agent?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_onboarding_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_settings: {
         Row: {
           data_retention_days: number
@@ -286,6 +472,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "organization_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_subscriptions: {
+        Row: {
+          billing_provider: string | null
+          cancel_at_period_end: boolean
+          created_at: string
+          current_period_end: string | null
+          organization_id: string
+          plan: Database["public"]["Enums"]["cloud_plan"]
+          provider_customer_id: string | null
+          provider_subscription_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          billing_provider?: string | null
+          cancel_at_period_end?: boolean
+          created_at?: string
+          current_period_end?: string | null
+          organization_id: string
+          plan?: Database["public"]["Enums"]["cloud_plan"]
+          provider_customer_id?: string | null
+          provider_subscription_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          billing_provider?: string | null
+          cancel_at_period_end?: boolean
+          created_at?: string
+          current_period_end?: string | null
+          organization_id?: string
+          plan?: Database["public"]["Enums"]["cloud_plan"]
+          provider_customer_id?: string | null
+          provider_subscription_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_subscriptions_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: true
             referencedRelation: "organizations"
@@ -396,6 +629,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
+      cloud_plan: "reader" | "operator" | "premium" | "agency" | "enterprise"
       connection_status: "connected" | "error" | "revoked"
       deletion_status: "requested" | "processing" | "completed" | "failed"
       organization_role: "owner" | "admin" | "member" | "viewer"
@@ -529,6 +763,7 @@ export const Constants = {
   },
   public: {
     Enums: {
+      cloud_plan: ["reader", "operator", "premium", "agency", "enterprise"],
       connection_status: ["connected", "error", "revoked"],
       deletion_status: ["requested", "processing", "completed", "failed"],
       organization_role: ["owner", "admin", "member", "viewer"],
