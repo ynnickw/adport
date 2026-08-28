@@ -115,7 +115,7 @@ describeDatabase('Supabase tenant boundary', () => {
     expect(await authenticateApiKey(created.key)).toBeUndefined();
   });
 
-  it('persists discovered accounts and enforces the Reader active-account limit', async () => {
+  it('persists discovered accounts and enforces the configured active-account limit', async () => {
     const connections = await db()<Array<{ id: string }>>`
       select id from public.connections where organization_id = ${firstOrgId} and provider = 'google'
     `;
@@ -164,14 +164,25 @@ describeDatabase('Supabase tenant boundary', () => {
     expect(await new PostgresFindingsStore(secondOrgId).list()).toEqual([]);
   });
 
-  it('downscales active account access when Stripe returns a subscription to Reader', async () => {
+  it('downscales active account access when Stripe returns a subscription to Free', async () => {
     process.env.STRIPE_OPERATOR_PRICE_ID = 'price_operator_test';
     process.env.STRIPE_AGENCY_PRICE_ID = 'price_agency_test';
     resetEnvForTests();
-    await db()`
-      update public.organization_ad_accounts set enabled = true
-      where organization_id = ${firstOrgId}
+    const connections = await db()<Array<{ id: string }>>`
+      select id from public.connections where organization_id = ${firstOrgId} and provider = 'google'
     `;
+    await syncDiscoveredAccounts({
+      organizationId: firstOrgId,
+      connectionId: connections[0]!.id,
+      provider: 'google',
+      accounts: [
+        { provider: 'google', id: '1234567890', name: 'First account', currency: 'EUR' },
+        { provider: 'google', id: '9999999999', name: 'Second account', currency: 'EUR' },
+        { provider: 'google', id: '8888888888', name: 'Third account', currency: 'EUR' },
+        { provider: 'google', id: '7777777777', name: 'Fourth account', currency: 'EUR' },
+      ],
+      maxActiveAccounts: 4,
+    });
     const outcome = await processStripeEvent({
       id: `evt_${randomUUID()}`,
       type: 'customer.subscription.deleted',
@@ -187,7 +198,7 @@ describeDatabase('Supabase tenant boundary', () => {
       },
     } as unknown as Parameters<typeof processStripeEvent>[0]);
     expect(outcome).toBe('processed');
-    expect((await listOrganizationAdAccounts(firstOrgId)).filter((account) => account.enabled)).toHaveLength(1);
+    expect((await listOrganizationAdAccounts(firstOrgId)).filter((account) => account.enabled)).toHaveLength(3);
     const subscription = await db()<Array<{ plan: string; status: string }>>`
       select plan, status from public.organization_subscriptions where organization_id = ${firstOrgId}
     `;

@@ -4,12 +4,14 @@ import type { TenantPrincipal } from './types';
 
 export const PLAN_IDS = ['reader', 'operator', 'agency', 'enterprise'] as const;
 export type PlanId = (typeof PLAN_IDS)[number];
+export type BillingInterval = 'monthly' | 'annual';
 export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled' | 'incomplete' | 'unpaid';
 
 export interface PlanDefinition {
   id: PlanId;
   name: string;
   monthlyPriceEur: number | null;
+  annualPriceEur: number | null;
   maxActiveAccounts: number | null;
   maxMembers: number | null;
   maxRetentionDays: number;
@@ -19,19 +21,19 @@ export interface PlanDefinition {
 
 export const PLANS: Record<PlanId, PlanDefinition> = {
   reader: {
-    id: 'reader', name: 'Reader', monthlyPriceEur: 0, maxActiveAccounts: 1, maxMembers: 1,
+    id: 'reader', name: 'Free', monthlyPriceEur: 0, annualPriceEur: 0, maxActiveAccounts: 3, maxMembers: 1,
     maxRetentionDays: 30, writeAccess: false, clientWorkspaces: false,
   },
   operator: {
-    id: 'operator', name: 'Operator', monthlyPriceEur: 29, maxActiveAccounts: 5, maxMembers: 2,
+    id: 'operator', name: 'Operator', monthlyPriceEur: 29, annualPriceEur: 290, maxActiveAccounts: 5, maxMembers: 2,
     maxRetentionDays: 90, writeAccess: true, clientWorkspaces: false,
   },
   agency: {
-    id: 'agency', name: 'Agency', monthlyPriceEur: 199, maxActiveAccounts: 25, maxMembers: 10,
+    id: 'agency', name: 'Agency', monthlyPriceEur: 199, annualPriceEur: 1990, maxActiveAccounts: 25, maxMembers: 10,
     maxRetentionDays: 365, writeAccess: true, clientWorkspaces: true,
   },
   enterprise: {
-    id: 'enterprise', name: 'Enterprise', monthlyPriceEur: null, maxActiveAccounts: null, maxMembers: null,
+    id: 'enterprise', name: 'Enterprise', monthlyPriceEur: null, annualPriceEur: null, maxActiveAccounts: null, maxMembers: null,
     maxRetentionDays: 3650, writeAccess: true, clientWorkspaces: true,
   },
 };
@@ -92,5 +94,6 @@ export async function applyPlanToPrincipal(principal: TenantPrincipal): Promise<
 }
 
 export function formatPlanLimit(value: number | null, unit: string): string {
-  return value === null ? `Unlimited ${unit}` : `${value} ${unit}`;
+  if (value === null) return `Unlimited ${unit}`;
+  return `${value} ${value === 1 ? unit.replace(/s$/, '') : unit}`;
 }
