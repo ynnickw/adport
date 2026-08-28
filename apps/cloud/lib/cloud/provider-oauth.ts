@@ -73,7 +73,7 @@ const google: OAuthAdapter<'google'> = {
 
 // ── Meta Ads (Facebook Login for Business) ────────────────────────────────
 
-const META_SCOPES = ['ads_read', 'ads_management'];
+const META_SCOPES = ['ads_read', 'ads_management', 'pages_show_list', 'pages_read_engagement'];
 
 function metaVersion(): string {
   return env().META_API_VERSION ?? DEFAULT_GRAPH_VERSION;

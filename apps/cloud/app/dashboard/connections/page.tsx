@@ -10,7 +10,7 @@ export const metadata = { title: 'Connections' };
 
 const COPY: Record<OAuthProviderView['id'], string> = {
   google: 'Authorize the Google Ads accounts you can access through Google’s consent screen. Adport requests only the Google Ads scope and stores an encrypted refresh token for this organization.',
-  meta: 'Sign in with Facebook Login for Business to grant ads_read and ads_management on the ad accounts you choose. The long-lived token is encrypted per organization.',
+  meta: 'Sign in with Facebook Login for Business to grant ads_read, ads_management, pages_show_list, and pages_read_engagement for the advertising assets you choose. The long-lived token is encrypted per organization.',
   tiktok: 'Authorize your TikTok for Business advertiser accounts through TikTok’s authorization page. The advertiser access token is encrypted per organization.',
   microsoft: 'Consent through the Microsoft identity platform with the Microsoft Advertising management scope. Adport supplies its own developer token; your refresh token is encrypted per organization.',
   reddit: 'Authorize through Reddit with the Ads read, edit, and data-deletion scopes. Adport stores an encrypted permanent refresh token for this organization.',
