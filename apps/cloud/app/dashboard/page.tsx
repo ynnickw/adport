@@ -35,7 +35,7 @@ export default async function OverviewPage() {
           <LiveData organizationId={tenant.organizationId} connected={connected.length > 0} />
           <div className="grid-2" style={{ marginTop: '0.9rem' }}>
             <section className="card">
-              <div className="card-head"><h2>Connections</h2><Link className="card-note" href="/dashboard/connections">Manage</Link></div>
+              <div className="card-head"><h2>Connections</h2><Link className="card-note" href="/dashboard/connections" prefetch={false}>Manage</Link></div>
               <div className="card-body stack">
                 {connections.map((connection) => (
                   <div key={connection.provider} className="connection-top">
@@ -49,8 +49,8 @@ export default async function OverviewPage() {
               <div className="card-head"><h2>Governance</h2></div>
               <div className="card-body">
                 <dl className="connection-meta" style={{ margin: 0 }}>
-                  <div><dt>Awaiting approval</dt><dd><Link href="/dashboard/approvals">{pending.length}{pending.length === 5 ? '+' : ''} operation{pending.length === 1 ? '' : 's'}</Link></dd></div>
-                  <div><dt>Audit events</dt><dd><Link href="/dashboard/audit">{auditCount}</Link></dd></div>
+                  <div><dt>Awaiting approval</dt><dd><Link href="/dashboard/approvals" prefetch={false}>{pending.length}{pending.length === 5 ? '+' : ''} operation{pending.length === 1 ? '' : 's'}</Link></dd></div>
+                  <div><dt>Audit events</dt><dd><Link href="/dashboard/audit" prefetch={false}>{auditCount}</Link></dd></div>
                 </dl>
               </div>
             </section>
