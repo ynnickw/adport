@@ -22,7 +22,7 @@ const COPY = {
   },
 } as const;
 
-const PLAN_NAMES = { operator: 'Operator', agency: 'Agency', enterprise: 'Enterprise' } as const;
+const PLAN_NAMES = { operator: 'Operator', premium: 'Premium', agency: 'Agency', enterprise: 'Enterprise' } as const;
 
 export function PlanLimitModal({ limit, onClose }: { limit?: PlanLimitDetails; onClose: () => void }) {
   const closeButton = useRef<HTMLButtonElement>(null);

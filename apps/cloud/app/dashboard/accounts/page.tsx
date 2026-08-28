@@ -3,22 +3,26 @@ import { Empty, PageHeader, Provider } from '@/components/ui';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { getOrganizationEntitlement } from '@/lib/cloud/plans';
 import { listConnections, listOrganizationAdAccounts } from '@/lib/cloud/repository';
+import { providerLabel } from '@/lib/cloud/providers';
 import { AccountAccessManager } from './account-access-manager';
 
 export const metadata = { title: 'Accounts' };
 
-export default async function AccountsPage() {
+export default async function AccountsPage({ searchParams }: { searchParams: Promise<{ connected?: string; error?: string; select_provider?: string }> }) {
   const tenant = await requireDashboardTenant();
-  const [connections, inventory, entitlement] = await Promise.all([
+  const [connections, inventory, entitlement, params] = await Promise.all([
     listConnections(tenant.organizationId),
     listOrganizationAdAccounts(tenant.organizationId),
     getOrganizationEntitlement(tenant.organizationId),
+    searchParams,
   ]);
   const accountProviders = new Set(inventory.map((account) => account.provider));
   const emptyConnections = connections.filter((connection) => connection.status === 'connected' && !accountProviders.has(connection.provider));
   return (
     <main className="page">
       <PageHeader title="Accounts" description="Choose exactly which discovered ad accounts agents may query or change. Disabled accounts remain outside the tenant runtime." />
+      {params.connected ? <div className="callout success" style={{ marginBottom: '1rem' }}>{providerLabel(params.connected)} is connected. Select the specific accounts agents may access below.</div> : null}
+      {params.error ? <div className="error-callout" role="alert">{params.error}</div> : null}
       {inventory.length === 0 ? <section className="card">
         <Empty
           title={connections.length > 0 ? 'No accessible accounts' : 'No accounts yet'}

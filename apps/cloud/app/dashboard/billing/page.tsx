@@ -12,7 +12,7 @@ import { openBillingPortal, startSubscription } from './actions';
 
 export const metadata = { title: 'Plan' };
 
-const PLAN_ORDER: PlanId[] = ['reader', 'operator', 'agency'];
+const PLAN_ORDER: PlanId[] = ['reader', 'operator', 'premium', 'agency'];
 
 const PLAN_COPY: Record<PlanId, { eyebrow: string; description: string }> = {
   reader: {
@@ -22,6 +22,10 @@ const PLAN_COPY: Record<PlanId, { eyebrow: string; description: string }> = {
   operator: {
     eyebrow: 'Operate',
     description: 'For an owner or small team running campaigns with preview-before-apply safety.',
+  },
+  premium: {
+    eyebrow: 'Grow',
+    description: 'For teams coordinating more ad accounts, collaborators, and a full year of audit evidence.',
   },
   agency: {
     eyebrow: 'Scale',
@@ -79,8 +83,8 @@ export default async function BillingPage({
         {PLAN_ORDER.map((planId) => {
           const plan = PLANS[planId];
           const selected = entitlement.plan.id === planId;
-          const paid = plan.id === 'operator' || plan.id === 'agency';
-          const paidPlanReady = plan.id === 'operator' || plan.id === 'agency'
+          const paid = plan.id === 'operator' || plan.id === 'premium' || plan.id === 'agency';
+          const paidPlanReady = plan.id === 'operator' || plan.id === 'premium' || plan.id === 'agency'
             ? billingPlanConfigured(plan.id, interval)
             : false;
           const annual = interval === 'annual' && paid;
@@ -88,10 +92,10 @@ export default async function BillingPage({
           const annualSaving = paid ? (plan.monthlyPriceEur! * 12) - plan.annualPriceEur! : 0;
 
           return (
-            <section className={`plan-card${plan.id === 'operator' ? ' featured' : ''}${selected ? ' selected' : ''}`} key={plan.id}>
+            <section className={`plan-card${plan.id === 'premium' ? ' featured' : ''}${selected ? ' selected' : ''}`} key={plan.id}>
               <div className="plan-card-top">
                 <span className="plan-kicker">{PLAN_COPY[plan.id].eyebrow}</span>
-                {plan.id === 'operator' ? <span className="plan-badge">Most popular</span> : selected ? <span className="plan-badge neutral">Current plan</span> : null}
+                {plan.id === 'premium' ? <span className="plan-badge">Best value</span> : selected ? <span className="plan-badge neutral">Current plan</span> : null}
                 <h2>{plan.name}</h2>
                 <p>{PLAN_COPY[plan.id].description}</p>
               </div>
@@ -102,6 +106,7 @@ export default async function BillingPage({
                   <>
                     <strong>€{displayPrice}</strong><span>/ month</span>
                     {annual ? <small>€{plan.annualPriceEur} billed yearly · save €{annualSaving}</small> : <small>Billed monthly</small>}
+                    <small className="plan-trial">7-day free trial · cancel anytime</small>
                   </>
                 )}
               </div>

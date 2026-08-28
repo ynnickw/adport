@@ -1,5 +1,5 @@
 export type PlanLimitKind = 'active_accounts' | 'members' | 'retention';
-export type UpgradePlanId = 'operator' | 'agency' | 'enterprise';
+export type UpgradePlanId = 'operator' | 'premium' | 'agency' | 'enterprise';
 
 export interface PlanLimitDetails {
   kind: PlanLimitKind;
