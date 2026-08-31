@@ -190,6 +190,9 @@ a { color: inherit; }
 button:active, .primary-action:active { transform: scale(0.98); }
 input:focus-visible, summary:focus-visible, .setup-guide:focus-visible, .setup-steps a:focus-visible { outline: 2px solid var(--orange); outline-offset: 4px; }
 .platforms li { display: flex; min-height: 1.4rem; align-items: center; gap: 0.5rem; color: #515154; font-size: 0.67rem; font-weight: 650; line-height: 1; white-space: nowrap; }
+.platforms li > a { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 2.75rem; text-decoration: none; }
+.platforms li > a:hover { color: var(--ink); }
+.platforms li > a:focus-visible { outline: 2px solid var(--orange); outline-offset: 4px; border-radius: 0.2rem; }
 .platforms svg { display: block; width: 1.15rem; height: 1.15rem; flex: 0 0 auto; align-self: center; fill: currentColor; }
 .platforms .google-logo path:nth-child(1) { fill: #34a853; }
 .platforms .google-logo path:nth-child(2) { fill: #4285f4; }
@@ -237,6 +240,7 @@ input:focus-visible, summary:focus-visible, .setup-guide:focus-visible, .setup-s
   .site-header, .hero, .platforms, .waitlist, .site-footer { width: min(100% - 2rem, 76rem); }
   .site-header { min-height: 5rem; }
   .header-meta { gap: 0.8rem; font-size: 0.72rem; }
+  .header-meta > a[href="#waitlist"] { display: none; }
   .waitlist { grid-template-columns: 1fr; gap: 1.5rem; padding-block: 3rem; }
   .waitlist-fields { flex-direction: column; }
   .waitlist-fields button { justify-content: center; }
