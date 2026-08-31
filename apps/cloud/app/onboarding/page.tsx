@@ -3,7 +3,7 @@ import { BrandLockup } from '@/components/logos';
 import { canAdminister, requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { getOnboardingState } from '@/lib/cloud/onboarding';
 import { getOrganizationEntitlement } from '@/lib/cloud/plans';
-import { oauthAdapter, oauthAvailability } from '@/lib/cloud/provider-oauth';
+import { oauthAvailability } from '@/lib/cloud/provider-oauth';
 import { listConnections, listOrganizationAdAccounts } from '@/lib/cloud/repository';
 import { OAUTH_PROVIDERS } from '@/lib/cloud/types';
 import { env } from '@/lib/env';
@@ -12,20 +12,6 @@ import { OnboardingFlow } from './onboarding-flow';
 
 export const metadata = { title: 'Set up Adport' };
 export const dynamic = 'force-dynamic';
-
-const COPY: Record<OAuthProviderView['id'], string> = {
-  google: 'Connect the Google Ads accounts you can access.',
-  meta: 'Connect Meta ad accounts through Facebook Login for Business.',
-  tiktok: 'Connect TikTok for Business advertiser accounts.',
-  microsoft: 'Connect Microsoft Advertising accounts.',
-  reddit: 'Connect Reddit Ads accounts.',
-  apple: 'Connect Apple Ads accounts through the delegated provider flow.',
-  snapchat: 'Connect Snapchat Marketing accounts available to your approved organization.',
-  spotify: 'Connect Spotify Ads after API allowlisting is enabled.',
-  pinterest: 'Connect eligible Pinterest Ads owner accounts with trial access.',
-  linkedin: 'LinkedIn Advertising API Development Tier is added. Cloud connection testing is enabled separately.',
-  x: 'X Ads has Standard Ads API access. Connect accounts during the enabled cloud rollout.',
-};
 
 export default async function OnboardingPage({ searchParams }: { searchParams: Promise<{ connected?: string; error?: string }> }) {
   const tenant = await requireDashboardTenant();
@@ -38,10 +24,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
   ]);
   if (state.completedAt) redirect('/dashboard');
   const availability = oauthAvailability(tenant.organizationId);
-  const providers: OAuthProviderView[] = OAUTH_PROVIDERS.map((id) => {
-    const adapter = oauthAdapter(id);
-    return { id, available: availability[id], flowLabel: adapter.flowLabel, scopes: adapter.scopes, copy: COPY[id], manualRevocationUrl: adapter.manualRevocationUrl };
-  });
+  const providers: OAuthProviderView[] = OAUTH_PROVIDERS.map((id) => ({ id, available: availability[id] }));
   return (
     <main className="onboarding-page">
       <header className="onboarding-head"><BrandLockup /><span>{tenant.organizationName}</span></header>
