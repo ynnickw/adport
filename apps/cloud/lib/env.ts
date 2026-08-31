@@ -52,6 +52,24 @@ const schema = z.object({
   APPLE_ADS_TEAM_ID: z.string().regex(/^SEARCHADS\.[0-9a-f-]+$/i).optional(),
   APPLE_ADS_KEY_ID: z.string().uuid().optional(),
   APPLE_ADS_PRIVATE_KEY: z.string().min(100).optional(),
+  // Server-owned apps. Explicit rollout switches are separate from credentials:
+  // possessing a client secret does not prove approval for external advertisers.
+  ADPORT_PROVIDER_TEST_ORGANIZATION_IDS: z.string().optional(),
+  SNAPCHAT_CLIENT_ID: z.string().min(1).optional(),
+  SNAPCHAT_CLIENT_SECRET: z.string().min(8).optional(),
+  SNAPCHAT_OAUTH_ENABLED: z.enum(['true', 'false']).default('false'),
+  SPOTIFY_CLIENT_ID: z.string().min(1).optional(),
+  SPOTIFY_CLIENT_SECRET: z.string().min(8).optional(),
+  SPOTIFY_OAUTH_ENABLED: z.enum(['true', 'false']).default('false'),
+  PINTEREST_CLIENT_ID: z.string().min(1).optional(),
+  PINTEREST_CLIENT_SECRET: z.string().min(8).optional(),
+  PINTEREST_OAUTH_ENABLED: z.enum(['true', 'false']).default('false'),
+  LINKEDIN_CLIENT_ID: z.string().min(1).optional(),
+  LINKEDIN_CLIENT_SECRET: z.string().min(8).optional(),
+  LINKEDIN_OAUTH_ENABLED: z.enum(['true', 'false']).default('false'),
+  X_CONSUMER_KEY: z.string().min(1).optional(),
+  X_CONSUMER_SECRET: z.string().min(8).optional(),
+  X_OAUTH_ENABLED: z.enum(['true', 'false']).default('false'),
 });
 
 export type CloudEnv = z.infer<typeof schema>;

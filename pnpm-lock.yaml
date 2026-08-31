@@ -26,18 +26,33 @@ importers:
       '@adport/provider-google':
         specifier: workspace:*
         version: link:../../packages/google
+      '@adport/provider-linkedin':
+        specifier: workspace:*
+        version: link:../../packages/linkedin
       '@adport/provider-meta':
         specifier: workspace:*
         version: link:../../packages/meta
       '@adport/provider-microsoft':
         specifier: workspace:*
         version: link:../../packages/microsoft
+      '@adport/provider-pinterest':
+        specifier: workspace:*
+        version: link:../../packages/pinterest
       '@adport/provider-reddit':
         specifier: workspace:*
         version: link:../../packages/reddit
+      '@adport/provider-snapchat':
+        specifier: workspace:*
+        version: link:../../packages/snapchat
+      '@adport/provider-spotify':
+        specifier: workspace:*
+        version: link:../../packages/spotify
       '@adport/provider-tiktok':
         specifier: workspace:*
         version: link:../../packages/tiktok
+      '@adport/provider-x':
+        specifier: workspace:*
+        version: link:../../packages/x
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
         version: 1.30.0(zod@4.4.3)
@@ -130,18 +145,33 @@ importers:
       '@adport/provider-google':
         specifier: workspace:*
         version: link:../google
+      '@adport/provider-linkedin':
+        specifier: workspace:*
+        version: link:../linkedin
       '@adport/provider-meta':
         specifier: workspace:*
         version: link:../meta
       '@adport/provider-microsoft':
         specifier: workspace:*
         version: link:../microsoft
+      '@adport/provider-pinterest':
+        specifier: workspace:*
+        version: link:../pinterest
       '@adport/provider-reddit':
         specifier: workspace:*
         version: link:../reddit
+      '@adport/provider-snapchat':
+        specifier: workspace:*
+        version: link:../snapchat
+      '@adport/provider-spotify':
+        specifier: workspace:*
+        version: link:../spotify
       '@adport/provider-tiktok':
         specifier: workspace:*
         version: link:../tiktok
+      '@adport/provider-x':
+        specifier: workspace:*
+        version: link:../x
       commander:
         specifier: ^13.0.0
         version: 13.1.0
@@ -209,6 +239,28 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@26.1.2)(vite@7.3.6(@types/node@26.1.2)(yaml@2.9.0))
 
+  packages/linkedin:
+    dependencies:
+      '@adport/core':
+        specifier: workspace:*
+        version: link:../core
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(postcss@8.5.26)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.2)(vite@7.3.6(@types/node@26.1.2)(yaml@2.9.0))
+
   packages/mcp:
     dependencies:
       '@adport/core':
@@ -220,18 +272,33 @@ importers:
       '@adport/provider-google':
         specifier: workspace:*
         version: link:../google
+      '@adport/provider-linkedin':
+        specifier: workspace:*
+        version: link:../linkedin
       '@adport/provider-meta':
         specifier: workspace:*
         version: link:../meta
       '@adport/provider-microsoft':
         specifier: workspace:*
         version: link:../microsoft
+      '@adport/provider-pinterest':
+        specifier: workspace:*
+        version: link:../pinterest
       '@adport/provider-reddit':
         specifier: workspace:*
         version: link:../reddit
+      '@adport/provider-snapchat':
+        specifier: workspace:*
+        version: link:../snapchat
+      '@adport/provider-spotify':
+        specifier: workspace:*
+        version: link:../spotify
       '@adport/provider-tiktok':
         specifier: workspace:*
         version: link:../tiktok
+      '@adport/provider-x':
+        specifier: workspace:*
+        version: link:../x
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.0
         version: 1.30.0(zod@4.4.3)
@@ -299,7 +366,73 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@26.1.2)(vite@7.3.6(@types/node@26.1.2)(yaml@2.9.0))
 
+  packages/pinterest:
+    dependencies:
+      '@adport/core':
+        specifier: workspace:*
+        version: link:../core
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(postcss@8.5.26)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.2)(vite@7.3.6(@types/node@26.1.2)(yaml@2.9.0))
+
   packages/reddit:
+    dependencies:
+      '@adport/core':
+        specifier: workspace:*
+        version: link:../core
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(postcss@8.5.26)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.2)(vite@7.3.6(@types/node@26.1.2)(yaml@2.9.0))
+
+  packages/snapchat:
+    dependencies:
+      '@adport/core':
+        specifier: workspace:*
+        version: link:../core
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(postcss@8.5.26)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.2)(vite@7.3.6(@types/node@26.1.2)(yaml@2.9.0))
+
+  packages/spotify:
     dependencies:
       '@adport/core':
         specifier: workspace:*
@@ -326,6 +459,31 @@ importers:
       '@adport/core':
         specifier: workspace:*
         version: link:../core
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(postcss@8.5.26)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.2)(vite@7.3.6(@types/node@26.1.2)(yaml@2.9.0))
+
+  packages/x:
+    dependencies:
+      '@adport/core':
+        specifier: workspace:*
+        version: link:../core
+      oauth-1.0a:
+        specifier: ^2.2.6
+        version: 2.2.6
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -1566,6 +1724,9 @@ packages:
         optional: true
       sass:
         optional: true
+
+  oauth-1.0a@2.2.6:
+    resolution: {integrity: sha512-6bkxv3N4Gu5lty4viIcIAnq5GbxECviMBeKR3WX/q87SPQ8E8aursPZUtsXDnxCs787af09WPRBLqYrf/lwoYQ==}
 
   object-assign@4.1.1:
     resolution: {integrity: sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg==}
@@ -2943,6 +3104,8 @@ snapshots:
       - '@babel/core'
       - '@types/node'
       - babel-plugin-macros
+
+  oauth-1.0a@2.2.6: {}
 
   object-assign@4.1.1: {}
 

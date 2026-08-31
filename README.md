@@ -1,6 +1,6 @@
 # adport
 
-> The open control plane for paid media. Manage Google, Meta, TikTok, Apple, Microsoft, and Reddit Ads from the terminal or any AI agent—with every write previewed first.
+> The open control plane for paid media. Manage 11 ad providers from the terminal or any AI agent—with every write previewed first.
 
 I built adport because I wanted an agent to help with ad operations, but I did not want a prompt to be the only thing standing between the agent and an expensive change.
 
@@ -52,11 +52,16 @@ adport connect tiktok
 adport connect apple
 adport connect microsoft
 adport connect reddit
+adport connect snapchat
+adport connect spotify
+adport connect pinterest
+adport connect linkedin
+adport connect x
 ```
 
 These are deliberately **local/BYO** connections. You create and own each provider app, developer token, or API key; the CLI talks directly to the provider and writes secrets only to `${ADPORT_HOME:-~/.config/adport}/credentials.json` with mode `0600`. Adport Cloud and its hosted OAuth broker are not involved. Provider review, consent warnings, and tenant policies therefore belong to your provider app. Remove a stored connection with `adport disconnect <provider>`; revoke the credential separately at the provider when necessary.
 
-The cloud application in `apps/cloud` is a separate flow. All six providers connect through a hosted browser-based OAuth broker backed by Adport-owned, reviewed applications; tenants never paste application secrets, and each provider card activates once its application is approved and configured. Apple Ads uses Adport's Apple-approved service-provider authorization-code flow and stores only the tenant's encrypted refresh token. All six providers share an encrypted tenant vault and the remote REST/MCP runtime.
+The cloud application in `apps/cloud` is a separate flow. Its hosted browser-based OAuth broker supports all 11 providers; tenants never paste application secrets. Each provider must be configured and approved for its intended rollout before its connection is enabled. Snapchat, Spotify, Pinterest, LinkedIn and X also support an organization-specific testing allowlist. Apple Ads uses a service-provider authorization-code flow and stores the tenant's encrypted refresh token. Providers share an encrypted tenant vault and the remote REST/MCP runtime. See the [hosted onboarding guide](./docs/providers/cloud-onboarding.md).
 
 The complete credential and authorization checklist is in [docs/providers.md](./docs/providers.md). Never commit provider tokens, app secrets, refresh tokens, or private keys.
 
@@ -112,6 +117,11 @@ Policy lives at `~/.config/adport/policy.yaml`; credentials live at `~/.config/a
 | Apple Ads | campaign reports and normalized reports | campaigns, budgets, status | client-side preview | exercised against a live account |
 | Microsoft Advertising | asynchronous reports and normalized reports | campaigns, budgets, status | client-side preview; sandbox available | exercised against a live account |
 | Reddit Ads | v3 reports and normalized reports | campaigns, CBO budgets, status | client-side preview | wire schemas verified; needs a real-account tester |
+| [Snapchat Ads](./docs/providers/snapchat.md) | discovery and normalized reports | campaigns, budgets, status | client-side preview | contract tests; cloud discovery and empty report verified |
+| [Spotify Ads](./docs/providers/spotify.md) | discovery and normalized reports | unpublished drafts, campaign status, ad-set budget/delivery | client-side preview | contract tests; cloud discovery returned no accounts |
+| [Pinterest Ads](./docs/providers/pinterest.md) | discovery and normalized reports | campaigns, budgets, status | client-side preview | contract tests; cloud discovery returned no accounts |
+| [LinkedIn Ads](./docs/providers/linkedin.md) | discovery and normalized reports | campaigns, budgets, status | client-side preview | contract tests; cloud approval pending |
+| [X Ads](./docs/providers/x.md) | discovery and normalized reports | campaigns, budgets, status | client-side preview | contract tests; Standard Ads API app access approved |
 
 Apple Campaign Management API v5 sunsets in January 2027. Its client is version-isolated so the future Ads Platform API migration does not leak into the shared tool layer.
 
@@ -189,6 +199,11 @@ packages/
   apple/      Apple Ads provider
   microsoft/  Microsoft Advertising provider
   reddit/     Reddit Ads API v3 provider
+  snapchat/   Snapchat Marketing API provider
+  spotify/    Spotify Ads API provider
+  pinterest/  Pinterest Ads API provider
+  linkedin/   LinkedIn Marketing API provider
+  x/          X Ads API provider
   mcp/        stdio MCP adapter over the shared registry
   cli/        npm CLI over the shared registry
 apps/

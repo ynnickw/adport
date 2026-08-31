@@ -11,6 +11,9 @@ import {
   revokeGoogleToken,
 } from './google-oauth';
 import type { OAuthProvider, ProviderCredentialMap, StoredProviderCredential } from './types';
+import { extraOAuthAdapters } from './provider-oauth-extra';
+import { xOAuthAdapter } from './provider-oauth-x';
+import { providerAllowedForOrganization } from './provider-rollout';
 
 /**
  * Hosted OAuth broker. Every OAuth-capable provider is connected through an
@@ -28,15 +31,19 @@ export interface OAuthAdapter<P extends OAuthProvider = OAuthProvider> {
   pkce: boolean;
   /** Query parameter that carries the authorization code on the callback. */
   codeParam: string;
+  /** OAuth 1.0a correlates callbacks with oauth_token rather than state. */
+  stateParam?: string;
+  /** Obtain temporary credentials before saving the one-time transaction. */
+  prepare?(): Promise<{ state: string; verifier: string; authorizationUrl: string }>;
   /** Where the tenant can revoke Adport's access on the provider side. */
   manualRevocationUrl: string;
   configured(): boolean;
   authorizationUrl(input: { state: string; challenge: string }): string;
-  exchange(input: { code: string; verifier: string }): Promise<ProviderCredentialMap[P]>;
+  exchange(input: { code: string; verifier: string; state?: string }): Promise<ProviderCredentialMap[P]>;
   /**
    * Revoke the tenant grant at the provider. Resolves `true` when the provider
-   * confirmed revocation, `false` when the provider offers no revocation API
-   * and the tenant must revoke manually. Throws for transient failures so the
+   * confirmed revocation, `false` when this adapter requires manual revocation.
+   * Throws for transient failures so the
    * caller can keep the encrypted credential and retry.
    */
   revoke(credential: ProviderCredentialMap[P]): Promise<boolean>;
@@ -372,7 +379,7 @@ const reddit: OAuthAdapter<'reddit'> = {
   },
 };
 
-const adapters = { google, meta, tiktok, microsoft, reddit, apple } satisfies { [P in OAuthProvider]: OAuthAdapter<P> };
+const adapters = { google, meta, tiktok, microsoft, reddit, apple, ...extraOAuthAdapters, x: xOAuthAdapter } satisfies { [P in OAuthProvider]: OAuthAdapter<P> };
 
 export function oauthAdapter<P extends OAuthProvider>(provider: P): OAuthAdapter<P> {
   return adapters[provider] as unknown as OAuthAdapter<P>;
@@ -383,15 +390,24 @@ export function revokeGrant(provider: OAuthProvider, credential: StoredProviderC
 }
 
 /** Availability of every hosted OAuth application, for the connections UI. */
-export function oauthAvailability(): Record<OAuthProvider, boolean> {
-  return {
+export function oauthAvailability(organizationId?: string): Record<OAuthProvider, boolean> {
+  const availability: Record<OAuthProvider, boolean> = {
     google: google.configured(),
     meta: meta.configured(),
     tiktok: tiktok.configured(),
     microsoft: microsoft.configured(),
     reddit: reddit.configured(),
     apple: apple.configured(),
+    snapchat: adapters.snapchat.configured(),
+    spotify: adapters.spotify.configured(),
+    pinterest: adapters.pinterest.configured(),
+    linkedin: adapters.linkedin.configured(),
+    x: adapters.x.configured(),
   };
+  for (const provider of Object.keys(availability) as OAuthProvider[]) {
+    availability[provider] &&= providerAllowedForOrganization(provider, organizationId);
+  }
+  return availability;
 }
 
 /**

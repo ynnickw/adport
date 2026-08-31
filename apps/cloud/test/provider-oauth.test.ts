@@ -40,10 +40,10 @@ describe('hosted provider OAuth broker', () => {
   });
 
   it('reports every provider as unavailable until its Adport-owned application is configured', () => {
-    expect(oauthAvailability()).toEqual({ google: false, meta: false, tiktok: false, microsoft: false, reddit: false, apple: false });
+    expect(oauthAvailability()).toEqual({ google: false, meta: false, tiktok: false, microsoft: false, reddit: false, apple: false, snapchat: false, spotify: false, pinterest: false, linkedin: false, x: false });
     Object.assign(process.env, APP_ENV);
     resetEnvForTests();
-    expect(oauthAvailability()).toEqual({ google: true, meta: true, tiktok: true, microsoft: true, reddit: true, apple: true });
+    expect(oauthAvailability()).toEqual({ google: true, meta: true, tiktok: true, microsoft: true, reddit: true, apple: true, snapchat: false, spotify: false, pinterest: false, linkedin: false, x: false });
   });
 
   it('routes every provider callback through the hosted broker path', () => {

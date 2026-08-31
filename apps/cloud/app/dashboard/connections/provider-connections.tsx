@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Provider, StatusPill, formatDate } from '@/components/ui';
+import type { OAuthProvider } from '@/lib/cloud/types';
 
 export interface ConnectionView {
   provider: string;
@@ -14,7 +15,7 @@ export interface ConnectionView {
 }
 
 export interface OAuthProviderView {
-  id: 'google' | 'meta' | 'tiktok' | 'microsoft' | 'reddit' | 'apple';
+  id: OAuthProvider;
   available: boolean;
   flowLabel: string;
   scopes: string[];
@@ -100,5 +101,5 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
 }
 
 function shortLabel(provider: string): string {
-  return { google: 'Google Ads', meta: 'Meta', tiktok: 'TikTok', microsoft: 'Microsoft', reddit: 'Reddit', apple: 'Apple Ads' }[provider] ?? provider;
+  return { google: 'Google Ads', meta: 'Meta', tiktok: 'TikTok', microsoft: 'Microsoft', reddit: 'Reddit', apple: 'Apple Ads', snapchat: 'Snapchat', spotify: 'Spotify', pinterest: 'Pinterest', linkedin: 'LinkedIn', x: 'X Ads' }[provider] ?? provider;
 }

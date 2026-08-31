@@ -7,9 +7,14 @@ import { createTikTokModule } from '@adport/provider-tiktok';
 import { createAppleModule } from '@adport/provider-apple';
 import { createMicrosoftModule } from '@adport/provider-microsoft';
 import { createRedditModule } from '@adport/provider-reddit';
+import { createSnapchatModule } from '@adport/provider-snapchat';
+import { createSpotifyModule } from '@adport/provider-spotify';
+import { createPinterestModule } from '@adport/provider-pinterest';
+import { createLinkedInModule } from '@adport/provider-linkedin';
+import { createXModule } from '@adport/provider-x';
 import packageJson from '../package.json';
 
-export const PROVIDER_IDS = ['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit'] as const;
+export const PROVIDER_IDS = ['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const;
 
 const DEFAULT_MCP_ICONS = [{
   src: 'https://app.adport.dev/icon.svg?brand=orange-dot-v2',
@@ -30,7 +35,7 @@ export async function assembleRuntime(options: AssembleRuntimeOptions = {}): Pro
   const modules: ProviderModule[] = [];
   const includeMock = options.includeMock ?? process.env.ADPORT_DEMO === 'true';
   if (!includeMock) {
-    for (const factory of [createGoogleModule, createMetaModule, createTikTokModule, createAppleModule, createMicrosoftModule, createRedditModule]) {
+    for (const factory of [createGoogleModule, createMetaModule, createTikTokModule, createAppleModule, createMicrosoftModule, createRedditModule, createSnapchatModule, createSpotifyModule, createPinterestModule, createLinkedInModule, createXModule]) {
       const module = await factory(store);
       if (module) modules.push(module);
     }

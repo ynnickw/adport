@@ -2,7 +2,9 @@
 
 Adport stores credentials locally in `${ADPORT_HOME:-~/.config/adport}/credentials.json` with file mode `0600`. Do not paste credentials into issues, commit them to Git, or place them in shell history. Run `adport doctor` after connecting a provider.
 
-The CLI connection commands below are bring-your-own (BYO): you own the provider-side application and Adport communicates directly from your machine to that provider. The hosted Adport Cloud broker is not used by these commands. The locally runnable cloud application is documented separately in [cloud-local-development.md](./cloud-local-development.md): all six providers connect through Adport-owned hosted OAuth applications, including Apple's approved service-provider authorization-code flow.
+The CLI connection commands below are bring-your-own (BYO): you own the provider-side application and Adport communicates directly from your machine to that provider. The hosted Adport Cloud broker is not used by these commands. The cloud application is documented separately in [cloud-local-development.md](./cloud-local-development.md) and [hosted provider onboarding](./providers/cloud-onboarding.md). Hosted availability depends on app configuration, provider approval and rollout gates.
+
+New in v0.6.0: [Snapchat](./providers/snapchat.md), [Spotify](./providers/spotify.md), [Pinterest](./providers/pinterest.md), [LinkedIn](./providers/linkedin.md) and [X Ads](./providers/x.md). Each guide documents its BYO connection command, typed operations, reporting semantics and testing boundaries. These providers expose the documented typed surface, not unrestricted generic API writes.
 
 For a source checkout, replace `adport` below with `node packages/cli/dist/index.js` after `pnpm build`.
 

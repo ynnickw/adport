@@ -16,6 +16,16 @@ export { providerLabel } from '@/lib/cloud/providers';
 
 export function ProviderLogo({ name }: { name: string }) {
   switch (name) {
+    case 'snapchat':
+      return <SiSnapchat className="snapchat-logo" aria-hidden="true" />;
+    case 'spotify':
+      return <SiSpotify className="spotify-logo" aria-hidden="true" />;
+    case 'pinterest':
+      return <SiPinterest className="pinterest-logo" aria-hidden="true" />;
+    case 'linkedin':
+      return <FaLinkedin className="linkedin-logo" aria-hidden="true" />;
+    case 'x':
+      return <SiX className="x-logo" aria-hidden="true" />;
     case 'google':
       return (
         <svg className="google-logo" viewBox="0 0 24 24" aria-hidden="true">
@@ -67,3 +77,5 @@ export function ProviderLogo({ name }: { name: string }) {
       );
   }
 }
+import { FaLinkedin } from 'react-icons/fa';
+import { SiPinterest, SiSnapchat, SiSpotify, SiX } from 'react-icons/si';

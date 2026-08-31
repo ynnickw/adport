@@ -20,6 +20,11 @@ const COPY: Record<OAuthProviderView['id'], string> = {
   microsoft: 'Connect Microsoft Advertising accounts.',
   reddit: 'Connect Reddit Ads accounts.',
   apple: 'Connect Apple Ads accounts through the delegated provider flow.',
+  snapchat: 'Connect Snapchat Marketing accounts available to your approved organization.',
+  spotify: 'Connect Spotify Ads after API allowlisting is enabled.',
+  pinterest: 'Connect eligible Pinterest Ads owner accounts with trial access.',
+  linkedin: 'LinkedIn Marketing API access is pending approval.',
+  x: 'X Ads API access is pending approval and application keys.',
 };
 
 export default async function OnboardingPage({ searchParams }: { searchParams: Promise<{ connected?: string; error?: string }> }) {
@@ -32,7 +37,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
     searchParams,
   ]);
   if (state.completedAt) redirect('/dashboard');
-  const availability = oauthAvailability();
+  const availability = oauthAvailability(tenant.organizationId);
   const providers: OAuthProviderView[] = OAUTH_PROVIDERS.map((id) => {
     const adapter = oauthAdapter(id);
     return { id, available: availability[id], flowLabel: adapter.flowLabel, scopes: adapter.scopes, copy: COPY[id], manualRevocationUrl: adapter.manualRevocationUrl };

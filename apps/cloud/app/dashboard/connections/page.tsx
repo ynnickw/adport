@@ -15,12 +15,17 @@ const COPY: Record<OAuthProviderView['id'], string> = {
   microsoft: 'Consent through the Microsoft identity platform with the Microsoft Advertising management scope. Adport supplies its own developer token; your refresh token is encrypted per organization.',
   reddit: 'Authorize through Reddit with the Ads read, edit, and data-deletion scopes. Adport stores an encrypted permanent refresh token for this organization.',
   apple: 'Authorize Apple Ads through Adport’s Apple-approved service-provider flow. Apple returns a delegated refresh token for the accounts you approve; tenants never provide API keys or private keys.',
+  snapchat: 'Connect Snapchat Marketing through its official consent screen. Testing is limited to the approved organization and the ad accounts you can access.',
+  spotify: 'Connect Spotify Ads through its official consent screen. The developer application must be allowlisted for the Ads API before account verification can succeed.',
+  pinterest: 'Connect Pinterest Ads with read and write permissions. Trial access is limited to eligible owner accounts; external access requires Standard approval.',
+  linkedin: 'Connect LinkedIn Ads once Marketing API access and the cloud callback are approved. Development-tier access is pending.',
+  x: 'Connect X Ads through OAuth 1.0a once app keys and Ads API approval are available. The access application has been submitted.',
 };
 
 export default async function ConnectionsPage({ searchParams }: { searchParams: Promise<{ connected?: string; error?: string }> }) {
   const tenant = await requireDashboardTenant();
   const [connections, params] = await Promise.all([listConnections(tenant.organizationId), searchParams]);
-  const availability = oauthAvailability();
+  const availability = oauthAvailability(tenant.organizationId);
   const oauthProviders: OAuthProviderView[] = OAUTH_PROVIDERS.map((id) => {
     const adapter = oauthAdapter(id);
     return { id, available: availability[id], flowLabel: adapter.flowLabel, scopes: adapter.scopes, copy: COPY[id], manualRevocationUrl: adapter.manualRevocationUrl };

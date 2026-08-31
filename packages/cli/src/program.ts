@@ -256,11 +256,36 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
         await connectReddit({ openBrowser: opts.browser, io });
         return;
       }
+      if (provider === 'snapchat') {
+        const { connectSnapchat } = await import('./connect/snapchat.js');
+        await connectSnapchat({ openBrowser: opts.browser, io });
+        return;
+      }
+      if (provider === 'spotify') {
+        const { connectSpotify } = await import('./connect/spotify.js');
+        await connectSpotify({ openBrowser: opts.browser, io });
+        return;
+      }
+      if (provider === 'pinterest') {
+        const { connectPinterest } = await import('./connect/pinterest.js');
+        await connectPinterest({ openBrowser: opts.browser, io });
+        return;
+      }
+      if (provider === 'linkedin') {
+        const { connectLinkedIn } = await import('./connect/linkedin.js');
+        await connectLinkedIn({ openBrowser: opts.browser, io });
+        return;
+      }
       if (provider === 'mock') {
         io.out('The mock provider is explicit demo mode, not a connection. Try: adport --demo accounts');
         return;
       }
-      io.err(`Provider "${provider}" is not supported. Available: google, meta, tiktok, apple, microsoft, reddit, mock.`);
+      if (provider === 'x') {
+        const { connectX } = await import('./connect/x.js');
+        await connectX({ openBrowser: opts.browser, io });
+        return;
+      }
+      io.err(`Provider "${provider}" is not supported. Available: google, meta, tiktok, apple, microsoft, reddit, snapchat, spotify, pinterest, linkedin, x, mock.`);
       process.exitCode = 1;
     });
 
@@ -268,8 +293,8 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .command('disconnect <provider>')
     .description('Remove a provider connection from this machine')
     .action(async (provider: string) => {
-      if (!['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit'].includes(provider)) {
-        io.err(`Provider "${provider}" is not supported. Available: google, meta, tiktok, apple, microsoft, reddit.`);
+      if (!['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'].includes(provider)) {
+        io.err(`Provider "${provider}" is not supported. Available: google, meta, tiktok, apple, microsoft, reddit, snapchat, spotify, pinterest, linkedin, x.`);
         process.exitCode = 1;
         return;
       }
@@ -344,7 +369,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
       for (const record of records) {
         io.out(`${record.provider}: credentials stored (source: ${record.source}, updated ${record.updatedAt})`);
       }
-      for (const id of ['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit'] as const) {
+      for (const id of ['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const) {
         const provider = rt.ctx.providers.list().find((p) => p.id === id);
         if (!provider) {
           io.out(`${id}: not connected (run \`adport connect ${id}\`)`);

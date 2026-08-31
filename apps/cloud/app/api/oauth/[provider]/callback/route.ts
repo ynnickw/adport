@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { GoogleAdsProvider } from '@adport/provider-google';
 import { sessionPrincipal } from '@/lib/cloud/auth';
 import { oauthAdapter } from '@/lib/cloud/provider-oauth';
+import { providerAllowedForOrganization } from '@/lib/cloud/provider-rollout';
+import { describeProviderError } from '@/lib/cloud/provider-errors';
 import {
   consumeOAuthTransaction,
   recordAudit,
@@ -38,11 +40,13 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
   const url = new URL(request.url);
   let returnPath = '/dashboard/connections';
   try {
-    const code = url.searchParams.get(adapter.codeParam) ?? url.searchParams.get('code');
-    const state = url.searchParams.get('state');
-    const oauthError = url.searchParams.get('error') ?? url.searchParams.get('error_description');
+    const stateParam = adapter.stateParam ?? 'state';
+    const code = url.searchParams.get(adapter.codeParam);
+    const state = url.searchParams.get(stateParam);
+    const oauthError = url.searchParams.get('error') ?? url.searchParams.get('error_description') ?? (provider === 'x' ? url.searchParams.get('denied') : null);
     if (oauthError) throw new Error(`${label} authorization was not completed.`);
     if (!code || !state) throw new Error(`${label} OAuth callback is missing code or state.`);
+    if (url.searchParams.getAll(adapter.codeParam).length !== 1 || url.searchParams.getAll(stateParam).length !== 1) throw new Error('Ambiguous OAuth callback parameters.');
     const initiatingPrincipal = await sessionPrincipal();
     const transaction = await consumeOAuthTransaction(provider, state, initiatingPrincipal.userId!);
     // Membership or role may have changed while the user was on the provider's
@@ -53,8 +57,9 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
       throw new Error('Owner or admin access is required.');
     }
     returnPath = transaction.returnPath;
+    if (!providerAllowedForOrganization(provider, transaction.organizationId)) throw new Error('This provider is not enabled for this organization.');
 
-    const credential = await adapter.exchange({ code, verifier: transaction.verifier });
+    const credential = await adapter.exchange({ code, verifier: transaction.verifier, state });
     const connectionId = await upsertProviderConnection({
       organizationId: transaction.organizationId,
       userId: principal.userId!,
@@ -98,21 +103,21 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
         level: 'error',
         message: 'Provider credential verification failed',
         provider,
-        error: error instanceof Error ? error.message : 'unknown error',
+        error: describeProviderError(error, provider),
       }));
       await setConnectionVerification(transaction.organizationId, provider, {
         ok: false,
-        error: `${label} credential verification failed. Reconnect to retry, or disconnect to revoke access.`,
+        error: describeProviderError(error, provider),
       });
       await recordAudit(principal, {
         event: 'note', provider, tool: 'oauth_verification', accountId: '*',
         summary: `Stored ${label} grant but account verification failed`,
       });
-      return back(request, returnPath, { error: `${label} was authorized, but Adport could not list its ad accounts yet. Reconnect to retry.` });
+      return back(request, returnPath, { error: `${label} was authorized, but account verification failed. ${describeProviderError(error, provider)}` });
     }
     return back(request, returnPath, { connected: provider });
   } catch (error) {
-    console.error(`${provider} OAuth callback failed:`, error instanceof Error ? error.message : 'unknown error');
+    console.error(`${provider} OAuth callback failed:`, describeProviderError(error, provider));
     return back(request, returnPath, { error: `${label} connection failed. Please retry.` });
   }
 }

@@ -34,6 +34,7 @@ jobs:
       - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm check:public-tree
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -45,6 +46,10 @@ jobs:
           NPM_CONFIG_PROVENANCE: "true"
         run: |
           pnpm -r --workspace-concurrency=1 exec sh -c '
+            if [ "$(node -p "require(\"./package.json\").private === true")" = "true" ]; then
+              echo "Skipping private workspace"
+              exit 0
+            fi
             package_name=$(node -p "require(\"./package.json\").name")
             package_version=$(node -p "require(\"./package.json\").version")
             # Query anonymously: a package-restricted publish token can return 404

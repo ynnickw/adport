@@ -7,6 +7,11 @@ export const PROVIDER_LABELS: Record<CloudProvider, string> = {
   apple: 'Apple Ads',
   microsoft: 'Microsoft Advertising',
   reddit: 'Reddit Ads',
+  snapchat: 'Snapchat Ads',
+  spotify: 'Spotify Ads',
+  pinterest: 'Pinterest Ads',
+  linkedin: 'LinkedIn Ads',
+  x: 'X Ads',
 };
 
 export function providerLabel(name: string): string {

@@ -1,7 +1,7 @@
 import { AdportError } from '@adport/core';
 import { providerLabel } from './providers';
 
-const PROVIDER_PATTERN = /\b(google|meta|facebook|tiktok|apple|microsoft|reddit)\b/i;
+const PROVIDER_PATTERN = /\b(google|meta|facebook|tiktok|apple|microsoft|reddit|snapchat|spotify|pinterest|linkedin|x)\b/i;
 const AUTH_PATTERN = /\b(401|invalid_grant|expired|revoked|malformed access token|code 190|40105|40102)\b/i;
 const GOOGLE_ACCOUNT_ACCESS_PATTERN = /\b(user_permission_denied|caller does not have permission|user doesn't have permission|login-customer-id)\b/i;
 const HTTP_PATTERN = /HTTP\s+(\d{3})|\((\d{3})\)/;
@@ -20,6 +20,9 @@ export function describeProviderError(error: unknown, fallbackProvider?: string)
   const code = status?.[1] ?? status?.[2];
   if (provider === 'google' && GOOGLE_ACCOUNT_ACCESS_PATTERN.test(raw)) {
     return `${label} account access failed${code ? ` (HTTP ${code})` : ''}. The selected customer is not reachable through its Google Ads manager account — reconnect to refresh the account hierarchy.`;
+  }
+  if (code === '403') {
+    return `${label} denied this request (HTTP 403). Check API application approval, advertising permissions, and account access. Reauthorization alone may not resolve it.`;
   }
   if (AUTH_PATTERN.test(raw)) {
     return `${label} rejected the stored grant${code ? ` (HTTP ${code})` : ''}. It is invalid, expired, or revoked — open Connections and re-authorize ${label}.`;

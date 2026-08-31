@@ -65,14 +65,19 @@ export interface ProviderCredentialMap {
   microsoft: StoredMicrosoftCredential;
   reddit: StoredRedditCredential;
   apple: StoredAppleCredential;
+  snapchat: { refreshToken: string };
+  spotify: { refreshToken: string };
+  pinterest: { refreshToken: string };
+  linkedin: { accessToken: string; expiresAt?: number; refreshToken?: string; refreshExpiresAt?: number };
+  x: { accessToken: string; accessTokenSecret: string };
 }
 
 export type CloudProvider = keyof ProviderCredentialMap;
 export type StoredProviderCredential = ProviderCredentialMap[CloudProvider];
 
-export const CLOUD_PROVIDERS = ['google', 'meta', 'tiktok', 'microsoft', 'reddit', 'apple'] as const satisfies readonly CloudProvider[];
+export const CLOUD_PROVIDERS = ['google', 'meta', 'tiktok', 'microsoft', 'reddit', 'apple', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const satisfies readonly CloudProvider[];
 /** Providers whose connection is established through the Adport-owned OAuth application. */
-export const OAUTH_PROVIDERS = ['google', 'meta', 'tiktok', 'microsoft', 'reddit', 'apple'] as const satisfies readonly CloudProvider[];
+export const OAUTH_PROVIDERS = CLOUD_PROVIDERS;
 export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
 
 export function isOAuthProvider(value: string): value is OAuthProvider {

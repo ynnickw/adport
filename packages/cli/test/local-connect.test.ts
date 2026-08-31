@@ -8,7 +8,7 @@ afterEach(() => {
 describe('local provider connection messaging', () => {
   it('makes the local/BYO and Cloud boundary explicit for every provider', () => {
     process.env.ADPORT_HOME = '/tmp/adport-local-message-test';
-    for (const provider of ['Google Ads', 'Meta Ads', 'TikTok Ads', 'Apple Ads', 'Microsoft Advertising']) {
+    for (const provider of ['Google Ads', 'Meta Ads', 'TikTok Ads', 'Apple Ads', 'Microsoft Advertising', 'Reddit Ads', 'Snapchat Ads', 'Spotify Ads', 'Pinterest Ads', 'LinkedIn Ads', 'X Ads']) {
       const lines: string[] = [];
       const io = { out: (line: string) => lines.push(line), err: () => undefined };
       printLocalConnectionIntro(io, provider);

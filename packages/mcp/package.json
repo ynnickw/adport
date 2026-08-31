@@ -1,6 +1,6 @@
 {
   "name": "@adport/mcp",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "adport MCP server — the open control plane for paid media",
   "license": "Apache-2.0",
   "type": "module",
@@ -29,6 +29,11 @@
     "@adport/provider-meta": "workspace:*",
     "@adport/provider-microsoft": "workspace:*",
     "@adport/provider-reddit": "workspace:*",
+    "@adport/provider-snapchat": "workspace:*",
+    "@adport/provider-spotify": "workspace:*",
+    "@adport/provider-pinterest": "workspace:*",
+    "@adport/provider-linkedin": "workspace:*",
+    "@adport/provider-x": "workspace:*",
     "@adport/provider-tiktok": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.12.0",
     "zod": "^4.4.3"

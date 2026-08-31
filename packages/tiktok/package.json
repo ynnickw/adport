@@ -1,6 +1,6 @@
 {
   "name": "@adport/provider-tiktok",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "TikTok Ads provider for adport — TikTok Business/Marketing API v1.3 with sandbox support",
   "license": "Apache-2.0",
   "type": "module",
