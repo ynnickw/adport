@@ -107,13 +107,23 @@ describe('X hosted onboarding boundaries', () => {
   it.each([
     'code=oauth2-code&state=oauth2-state',
     'oauth_token=temporary-token',
-    'denied=temporary-token',
     'oauth_token=temporary-token&oauth_token=other&oauth_verifier=v',
     'oauth_token=temporary-token&oauth_verifier=v&oauth_verifier=other',
   ])('rejects incomplete, denied or ambiguous callbacks: %s', async query => {
     const fetchMock = vi.fn(); vi.stubGlobal('fetch', fetchMock);
     await callback(new Request(`https://app.adport.test/api/oauth/x/callback?${query}`), context());
     expect(mocks.consume).not.toHaveBeenCalled(); expect(fetchMock).not.toHaveBeenCalled(); expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+
+  it('returns denied consent to the initiating popup without exchanging credentials', async () => {
+    mocks.consume.mockResolvedValue({ organizationId: 'org', verifier: 'temporary-secret',
+      returnPath: '/oauth/provider-complete?popup_id=11111111-1111-4111-8111-111111111111&next=%2Fonboarding' });
+    const fetchMock = vi.fn(); vi.stubGlobal('fetch', fetchMock);
+    const response = await callback(new Request('https://app.adport.test/api/oauth/x/callback?denied=temporary-token'), context());
+    expect(mocks.consume).toHaveBeenCalledWith('x', 'temporary-token', 'initiator');
+    expect(response.headers.get('location')).toContain('/oauth/provider-complete?');
+    expect(new URL(response.headers.get('location')!).searchParams.get('next')).toMatch(/^\/onboarding\?error=/);
+    expect(fetchMock).not.toHaveBeenCalled(); expect(mocks.upsert).not.toHaveBeenCalled();
   });
 
   it('fails closed if deployment access is disabled while consent is in progress', async () => {

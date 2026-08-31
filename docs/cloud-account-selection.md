@@ -2,6 +2,12 @@
 
 Cloud OAuth authorization and adding accounts to Adport are separate steps for all providers.
 
+Connect, Reconnect and Re-authorize open a centered 540 × 740 popup (clamped to available screen space) from both Connections and onboarding. The provider's real consent page remains a top-level window, not an iframe. Browsers may choose a tab instead. After the server validates consent and discovers accounts, the popup sends only a same-origin navigation destination to the initiating window and closes after acknowledgment. Account selection happens in the main window.
+
+Popup delivery uses a random per-attempt BroadcastChannel identifier stored in the existing single-use OAuth transaction return path. It does not change provider callback URLs, OAuth state/PKCE validation, credentials, or database schema. The popup has no opener, and the existing `Cross-Origin-Opener-Policy: same-origin` remains enabled. Completion messages never contain OAuth codes, access tokens, or refresh tokens. Destinations are restricted to account selection, onboarding, and the two connection/account dashboard pages.
+
+When popups or BroadcastChannel are unavailable, the ordinary link opens authorization in the same tab. While a popup is pending, a visible same-tab fallback remains available; the listener expires after ten minutes. If the main window was closed, the completion page provides a Continue button. Provider-denied consent and verification errors return through the same popup completion flow when a valid transaction can be identified.
+
 1. The owner/admin authorizes the provider.
 2. Adport discovers the accounts once and opens `/account-selection`.
 3. With multiple accounts, the user selects accounts individually, selects all, or continues without any. With exactly one account, Adport shows its details and an explicit **Add account** button, without checkboxes or bulk-selection controls.

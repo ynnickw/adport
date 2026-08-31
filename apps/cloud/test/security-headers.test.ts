@@ -37,4 +37,13 @@ describe('content security policy', () => {
       "form-action 'self' https: http://localhost:* http://127.0.0.1:* http://[::1]:*",
     );
   });
+
+  it('keeps opener isolation enabled and popup completion private', async () => {
+    const configured = await config.headers?.();
+    const general = configured?.find(entry => entry.source === '/(.*)');
+    expect(general?.headers).toContainEqual({ key: 'Cross-Origin-Opener-Policy', value: 'same-origin' });
+    const popup = configured?.find(entry => entry.source === '/oauth/provider-complete');
+    expect(popup?.headers).toContainEqual({ key: 'Cache-Control', value: 'private, no-store, max-age=0' });
+    expect(popup?.headers).toContainEqual({ key: 'Referrer-Policy', value: 'no-referrer' });
+  });
 });

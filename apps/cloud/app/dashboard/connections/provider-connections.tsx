@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Provider, StatusPill, formatDate } from '@/components/ui';
 import { providerLabel } from '@/lib/cloud/providers';
 import type { OAuthProvider } from '@/lib/cloud/types';
+import { OAuthPopupLink } from '@/components/oauth-popup-link';
 
 export interface ConnectionView {
   provider: string;
@@ -84,8 +85,8 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
             {canManage ? (
               connection || provider.available ? (
                 <>
-                  {!connection && provider.available ? <a className="button" aria-label={`Connect ${providerLabel(provider.id)}`} href={startHref}>Connect</a> : null}
-                  {connection && provider.available ? <a className="button secondary" aria-label={`${connection.status !== 'connected' ? 'Reconnect' : 'Re-authorize'} ${providerLabel(provider.id)}`} href={startHref}>{connection.status !== 'connected' ? 'Reconnect' : 'Re-authorize'}</a> : null}
+                  {!connection && provider.available ? <OAuthPopupLink className="button" label={`Connect ${providerLabel(provider.id)}`} href={startHref}>Connect</OAuthPopupLink> : null}
+                  {connection && provider.available ? <OAuthPopupLink className="button secondary" label={`${connection.status !== 'connected' ? 'Reconnect' : 'Re-authorize'} ${providerLabel(provider.id)}`} href={startHref}>{connection.status !== 'connected' ? 'Reconnect' : 'Re-authorize'}</OAuthPopupLink> : null}
                   {connection ? <button className="button danger" aria-label={`Disconnect ${providerLabel(provider.id)}`} type="button" disabled={busy === provider.id} onClick={() => void disconnect(provider.id, shortLabel(provider.id))}>{busy === provider.id ? 'Working…' : 'Disconnect'}</button> : null}
                 </>
               ) : null

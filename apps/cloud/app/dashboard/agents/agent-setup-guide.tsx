@@ -23,9 +23,9 @@ export const AGENT_SETUPS: Setup[] = [
   },
   {
     id: 'codex', name: 'Codex', provider: 'openai', label: 'CLI',
-    instructions: 'Run these commands once. Codex stores the MCP configuration and opens Adport authorization in your browser.',
-    nextStep: 'Confirm the server with “codex mcp list”, then ask Codex to list your ad accounts.',
-    command: (baseUrl) => `codex mcp add adport --url ${baseUrl}/mcp\ncodex mcp login adport`,
+    instructions: 'Run this command once and complete the browser authorization. Codex stores the MCP configuration and starts OAuth automatically.',
+    nextStep: 'Only if authorization did not start or you need to sign in again, run “codex mcp login adport”. Otherwise, check “codex mcp list” and ask Codex to list your ad accounts.',
+    command: (baseUrl) => `codex mcp add adport --url ${baseUrl}/mcp`,
   },
   {
     id: 'claude-code', name: 'Claude Code', provider: 'anthropic', label: 'CLI',

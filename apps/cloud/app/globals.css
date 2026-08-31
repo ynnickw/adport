@@ -687,3 +687,7 @@ details.connection-form[open] summary { margin-bottom: 0.8rem; }
 .account-picker-footer { border-top: 1px solid var(--border, #e5e5e5); padding: 1.25rem; display: grid; gap: 0.9rem; justify-items: start; }
 .account-picker-footer p { margin: 0; }
 .account-selection-content { width: min(68rem, 100%); margin: 2.5rem auto; }
+.oauth-popup-action { display: flex; flex-direction: column; align-items: flex-start; gap: .5rem; }
+.oauth-popup-action .inline-note { max-width: 15rem; font-size: .75rem; }
+.oauth-popup-complete { width: min(28rem, 100%); margin: 3rem auto; padding: 2rem; }
+.oauth-popup-complete p { margin: 1rem 0 1.5rem; }

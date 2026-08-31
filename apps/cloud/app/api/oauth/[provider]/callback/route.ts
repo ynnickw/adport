@@ -17,12 +17,13 @@ import { stageAccountSelection } from '@/lib/cloud/account-selection';
 import { isOAuthProvider, type OAuthProvider } from '@/lib/cloud/types';
 import { providerLabel } from '@/lib/cloud/providers';
 import { env } from '@/lib/env';
+import { popupReturnPath, unwrapPopupReturnPath } from '@/lib/oauth-popup';
 
 /** Redirect within the configured public origin, never the inbound Host header. */
-function back(_request: Request, path: string, query: Record<string, string>): NextResponse {
+function back(_request: Request, path: string, query: Record<string, string>, popupId?: string): NextResponse {
   const url = new URL(path, env().ADPORT_CLOUD_BASE_URL);
   for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
-  return NextResponse.redirect(url);
+  return NextResponse.redirect(popupId ? new URL(popupReturnPath(popupId, `${url.pathname}${url.search}`), env().ADPORT_CLOUD_BASE_URL) : url);
 }
 
 /**
@@ -39,16 +40,17 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
   const label = providerLabel(provider);
   const url = new URL(request.url);
   let returnPath = '/dashboard/connections';
+  let popupId: string | undefined;
   try {
     const stateParam = adapter.stateParam ?? 'state';
     const code = url.searchParams.get(adapter.codeParam);
-    const state = url.searchParams.get(stateParam);
+    const state = url.searchParams.get(stateParam) ?? (provider === 'x' ? url.searchParams.get('denied') : null);
     const oauthError = url.searchParams.get('error') ?? url.searchParams.get('error_description') ?? (provider === 'x' ? url.searchParams.get('denied') : null);
-    if (oauthError) throw new Error(`${label} authorization was not completed.`);
-    if (!code || !state) throw new Error(`${label} OAuth callback is missing code or state.`);
-    if (url.searchParams.getAll(adapter.codeParam).length !== 1 || url.searchParams.getAll(stateParam).length !== 1) throw new Error('Ambiguous OAuth callback parameters.');
+    if ((!code && !oauthError) || !state) throw new Error(`${label} OAuth callback is missing code or state.`);
+    if (url.searchParams.getAll(adapter.codeParam).length > 1 || url.searchParams.getAll(stateParam).length > 1 || url.searchParams.getAll('denied').length > 1) throw new Error('Ambiguous OAuth callback parameters.');
     const initiatingPrincipal = await sessionPrincipal();
     const transaction = await consumeOAuthTransaction(provider, state, initiatingPrincipal.userId!);
+    ({ returnPath, popupId } = unwrapPopupReturnPath(transaction.returnPath));
     // Membership or role may have changed while the user was on the provider's
     // consent screen. Re-authorize against the transaction's organization
     // before storing a grant or constructing its tenant runtime.
@@ -56,10 +58,10 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
     if (!['owner', 'admin'].includes(principal.role ?? '')) {
       throw new Error('Owner or admin access is required.');
     }
-    returnPath = transaction.returnPath;
+    if (oauthError) throw new Error(`${label} authorization was not completed.`);
     if (!providerAllowedForOrganization(provider, transaction.organizationId)) throw new Error('This provider is not enabled for this organization.');
 
-    const credential = await adapter.exchange({ code, verifier: transaction.verifier, state });
+    const credential = await adapter.exchange({ code: code!, verifier: transaction.verifier, state });
     const selectionId = randomUUID();
     const connectionId = await upsertProviderConnection({
       organizationId: transaction.organizationId,
@@ -113,11 +115,11 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
         event: 'note', provider, tool: 'oauth_verification', accountId: '*',
         summary: `Stored ${label} grant but account verification failed`,
       });
-      return back(request, returnPath, { error: `${label} was authorized, but account verification failed. ${describeProviderError(error, provider)}` });
+      return back(request, returnPath, { error: `${label} was authorized, but account verification failed. ${describeProviderError(error, provider)}` }, popupId);
     }
-    return back(request, '/account-selection', { selection_id: selectionId });
+    return back(request, '/account-selection', { selection_id: selectionId }, popupId);
   } catch (error) {
     console.error(`${provider} OAuth callback failed:`, describeProviderError(error, provider));
-    return back(request, returnPath, { error: `${label} connection failed. Please retry.` });
+    return back(request, returnPath, { error: `${label} connection failed. Please retry.` }, popupId);
   }
 }
