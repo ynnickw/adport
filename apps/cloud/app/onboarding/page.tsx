@@ -23,7 +23,7 @@ const COPY: Record<OAuthProviderView['id'], string> = {
   snapchat: 'Connect Snapchat Marketing accounts available to your approved organization.',
   spotify: 'Connect Spotify Ads after API allowlisting is enabled.',
   pinterest: 'Connect eligible Pinterest Ads owner accounts with trial access.',
-  linkedin: 'LinkedIn Marketing API access is pending approval.',
+  linkedin: 'LinkedIn Advertising API Development Tier is added. Cloud connection testing is enabled separately.',
   x: 'X Ads has Standard Ads API access. Connect accounts during the enabled cloud rollout.',
 };
 

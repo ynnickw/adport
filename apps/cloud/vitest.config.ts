@@ -5,6 +5,7 @@ import { defineConfig } from 'vitest/config';
 config({ path: resolve(import.meta.dirname, '.env.local'), quiet: true });
 
 export default defineConfig({
+  esbuild: { jsx: 'automatic' },
   resolve: {
     alias: {
       '@': import.meta.dirname,

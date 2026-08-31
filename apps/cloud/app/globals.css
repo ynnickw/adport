@@ -244,6 +244,7 @@ th.numeric { font: 620 0.58rem var(--font-mono); letter-spacing: 0.11em; }
 .provider { display: inline-flex; align-items: center; gap: 0.55rem; font-size: 0.78rem; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
 .provider-logo { display: grid; width: 1.65rem; height: 1.65rem; flex: 0 0 auto; place-items: center; border: 1px solid var(--line-soft); border-radius: 0.5rem; background: #fff; }
 .provider-logo svg { display: block; width: 0.95rem; height: 0.95rem; }
+.provider-logo:has(.snapchat-logo) { background: #fffc00; border-color: #fffc00; }
 .provider-logo .google-logo path:nth-child(1) { fill: #34a853; }
 .provider-logo .google-logo path:nth-child(2) { fill: #4285f4; }
 .provider-logo .google-logo path:nth-child(3) { fill: #fbbc04; }
