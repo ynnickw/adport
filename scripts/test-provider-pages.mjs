@@ -3,6 +3,7 @@ import { readFile, access } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import test from 'node:test';
+import { runInNewContext } from 'node:vm';
 import { providers } from './website-providers.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -21,7 +22,7 @@ test('Microsoft uses the official four-color symbol on every surface', () => {
   }
 });
 
-test('all provider setup cards reuse the homepage agent logos', () => {
+test('all provider setup tabs reuse the homepage agent logos', () => {
   for (const [file, html] of pages.filter(([file]) => file.startsWith('providers/'))) {
     for (const id of ['claude', 'cursor', 'chatgpt']) {
       const source = home.match(new RegExp(`<span class="agent agent-${id}">[\\s\\S]*?<\\/svg>`))[0];
@@ -31,6 +32,47 @@ test('all provider setup cards reuse the homepage agent logos', () => {
       assert.equal(logo.match(/<path[\s\S]*?<\/svg>/)[0], source.match(/<path[\s\S]*?<\/svg>/)[0], `${file}: ${id} logo differs from the homepage`);
     }
   }
+});
+
+test('provider instruction tabs have matching labels and panels with no-JavaScript content', () => {
+  for (const [file, html] of pages.filter(([file]) => file.startsWith('providers/'))) {
+    assert.equal([...html.matchAll(/role="tab"/g)].length, 3, file);
+    assert.equal([...html.matchAll(/role="tabpanel"/g)].length, 3, file);
+    for (const id of ['claude', 'cursor', 'chatgpt']) {
+      assert(html.includes(`id="agent-tab-${id}" aria-controls="agent-panel-${id}"`), file);
+      assert(html.includes(`id="agent-panel-${id}" role="tabpanel" aria-labelledby="agent-tab-${id}" tabindex="0">`), file);
+    }
+  }
+});
+
+test('tabs switch by click and keyboard, wrap, and keep exactly one active panel', async () => {
+  const tabs = ['claude', 'cursor', 'chatgpt'].map(id => ({
+    handlers: {}, attributes: { 'aria-controls': `agent-panel-${id}` }, tabIndex: -1,
+    setAttribute(name, value) { this.attributes[name] = value; },
+    getAttribute(name) { return this.attributes[name]; },
+    addEventListener(name, handler) { this.handlers[name] = handler; },
+    focus() { focused = this; },
+  }));
+  let focused;
+  const panels = tabs.map(tab => ({ id: tab.getAttribute('aria-controls'), hidden: false }));
+  const tabList = { hidden: true, querySelectorAll: () => tabs };
+  const setup = { querySelector: () => tabList, querySelectorAll: () => panels };
+  const document = { querySelector: () => null, querySelectorAll: selector => selector === '[data-agent-tabs]' ? [setup] : [] };
+  runInNewContext(await readFile(path.join(site, 'landing.js'), 'utf8'), { document });
+  const expectSelected = index => {
+    assert.equal(tabList.hidden, false);
+    tabs.forEach((tab, i) => { assert.equal(tab.attributes['aria-selected'], String(i === index)); assert.equal(tab.tabIndex, i === index ? 0 : -1); });
+    panels.forEach((panel, i) => assert.equal(panel.hidden, i !== index));
+  };
+  const key = (from, key, to) => {
+    let prevented = false;
+    tabs[from].handlers.keydown({ key, preventDefault() { prevented = true; } });
+    assert(prevented); expectSelected(to); assert.equal(focused, tabs[to]);
+  };
+  expectSelected(0);
+  tabs[1].handlers.click(); expectSelected(1);
+  key(1, 'ArrowRight', 2); key(2, 'ArrowRight', 0); key(0, 'ArrowLeft', 2);
+  key(2, 'Home', 0); key(0, 'End', 2);
 });
 
 test('covers all eleven advertising providers exactly once', () => {
