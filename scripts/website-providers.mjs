@@ -2,7 +2,7 @@
 export const providers = [
   {
     id: 'google', slug: 'google-ads', name: 'Google Ads', label: 'Search, without the tab switching.',
-    description: 'Connect Google Ads to Claude Code or Cursor with Adport MCP. Query campaign performance, inspect search terms, and preview budget changes. ChatGPT via Cloud waitlist.',
+    description: 'Connect Google Ads to Claude Code or Cursor with Adport MCP. Query campaign performance, inspect search terms, and preview budget changes. Connect ChatGPT with MCP and OAuth.',
     intro: 'Bring Google Ads reporting and campaign operations into the AI agent you already use. Ask questions across your accounts, investigate search traffic, and review the exact changes before anything is applied.',
     keywords: ['Google Ads MCP', 'Google Ads Claude Code', 'Google Ads Cursor', 'connect Google Ads to ChatGPT'],
     workflows: [
@@ -20,7 +20,7 @@ export const providers = [
   },
   {
     id: 'meta', slug: 'meta-ads', name: 'Meta Ads', label: 'Facebook and Instagram. One conversation.',
-    description: 'Connect Meta and Facebook Ads to Claude Code or Cursor through Adport MCP. Read Insights and preview campaign or ad-set changes. Join the ChatGPT Cloud waitlist.',
+    description: 'Connect Meta and Facebook Ads to Claude Code or Cursor through Adport MCP. Read Insights and preview campaign or ad-set changes. Connect ChatGPT with MCP and OAuth.',
     intro: 'Work with Facebook and Instagram advertising accounts from your AI agent. Pull Meta Insights, compare campaigns and ad sets, and turn a proposed adjustment into a reviewable action.',
     keywords: ['Meta Ads MCP', 'Facebook Ads MCP', 'Instagram Ads Claude', 'connect Meta Ads to ChatGPT'],
     workflows: [
@@ -66,7 +66,7 @@ export const providers = [
     ],
     prompts: ['Summarize Apple Ads campaign spend and acquisition results for the last seven days.', 'List my Apple Ads campaigns and their current daily budgets.', 'Preview a daily budget change for Apple Ads campaign CAMPAIGN_ID. Wait for my approval.'],
     prerequisites: ['An Apple Ads account and an API user with the role required for your use case.', 'An EC key pair generated locally. Upload only the public key to Apple Ads.', 'The client ID, team ID, key ID, and local path to the private-key file. Never paste the private key into your AI conversation.'],
-    connection: 'The local wizard uses API-user credentials and a private-key file on your machine. This differs from the future managed Cloud connection, which uses browser authorization.',
+    connection: 'The local wizard uses API-user credentials and a private-key file on your machine. The workspace connection uses browser authorization instead.',
     nuance: 'Apple Ads is also searched for as Apple Search Ads. This connector manages advertising data, not App Store Connect app submissions, reviews, or subscription analytics.',
     faq: ['Do I need to send Adport my Apple private key?', 'Not for local use. The CLI reads the private-key file on your machine to authenticate as your Apple Ads API user. Upload only the public key to Apple, and keep secrets out of chat and source control.'],
     guide: 'docs/providers.md#apple-ads', reference: 'https://ads.apple.com/app-store/help/campaigns/0022-use-the-campaign-management-api',

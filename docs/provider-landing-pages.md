@@ -20,7 +20,7 @@ Primary intent: connect an existing advertising account to an MCP-compatible AI 
 | `/providers/linkedin-ads` | LinkedIn Ads MCP | B2B advertising, campaign groups, creative reports |
 | `/providers/x-ads` | X Ads MCP | Twitter Ads MCP, OAuth 1.0a, line items and link-click reporting |
 
-Each page includes three provider-specific workflows, three example prompts (clearly labeled as examples), prerequisites, a local connection guide, Claude Code and Cursor setup, ChatGPT/Cloud availability, reporting caveats, FAQs, related integrations, and the shared waitlist form. Cloud remains waitlist-only; no public link points to the private app host.
+Each page includes three provider-specific workflows, three example prompts (clearly labeled as examples), prerequisites, a local connection guide, HTTP/OAuth setup for ChatGPT, Codex, Claude Code, Claude, Cursor, and VS Code, reporting caveats, FAQs, related integrations, and the shared waitlist form. The Cloud waitlist is separate from MCP client setup. The endpoint appears in copyable setup code; no navigation link points to the app host.
 
 ## Evidence and boundaries
 
@@ -30,6 +30,8 @@ Each page includes three provider-specific workflows, three example prompts (cle
 - [Cursor MCP documentation](https://cursor.com/docs/context/mcp) describes command/args configuration.
 - [Google's spam policies](https://developers.google.com/search/docs/essentials/spam-policies#doorway-abuse) and [people-first content guidance](https://developers.google.com/search/docs/fundamentals/creating-helpful-content) informed standalone, useful guides rather than repeated keyword-only signup pages.
 - No invented reviews, customer metrics, search volumes, partnerships, or ranking guarantees. Structured data contains WebPage and BreadcrumbList, not fake review or offer markup.
+
+Agent instructions and HTTP commands match `apps/cloud/app/dashboard/agents/agent-setup-guide.tsx`; parity tests cover all six clients. Local npm/stdio remains an alternative for compatible clients, not the ChatGPT transport.
 
 ## Maintenance
 

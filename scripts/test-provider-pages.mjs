@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { runInNewContext } from 'node:vm';
 import { providers } from './website-providers.mjs';
+import { agentSetups, mcpBaseUrl } from './website-agent-setups.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const site = path.join(root, 'website');
@@ -35,12 +36,39 @@ test('all provider setup tabs reuse the homepage agent logos', () => {
 });
 
 test('provider instruction tabs have matching labels and panels with no-JavaScript content', () => {
-  for (const [file, html] of pages.filter(([file]) => file.startsWith('providers/'))) {
-    assert.equal([...html.matchAll(/role="tab"/g)].length, 3, file);
-    assert.equal([...html.matchAll(/role="tabpanel"/g)].length, 3, file);
-    for (const id of ['claude', 'cursor', 'chatgpt']) {
+  for (const [file, html] of [['index.html', home], ...pages.filter(([file]) => file.startsWith('providers/'))]) {
+    assert.equal([...html.matchAll(/role="tab"/g)].length, 6, file);
+    assert.equal([...html.matchAll(/role="tabpanel"/g)].length, 6, file);
+    for (const { id } of agentSetups) {
       assert(html.includes(`id="agent-tab-${id}" aria-controls="agent-panel-${id}"`), file);
       assert(html.includes(`id="agent-panel-${id}" role="tabpanel" aria-labelledby="agent-tab-${id}" tabindex="0">`), file);
+    }
+  }
+});
+
+test('all six public setup guides match the Cloud app instructions and commands', async () => {
+  const source = await readFile(path.join(root, 'apps/cloud/app/dashboard/agents/agent-setup-guide.tsx'), 'utf8');
+  const definition = source.match(/export const AGENT_SETUPS: Setup\[\] = (\[[\s\S]*?\n\]);/);
+  assert(definition, 'Cloud setup definition changed; review the public guides');
+  const cloudSetups = runInNewContext(`(${definition[1]})`);
+  assert.equal(agentSetups.length, cloudSetups.length);
+  for (const setup of agentSetups) {
+    const cloud = cloudSetups.find(item => item.id === setup.id);
+    assert(cloud, setup.id);
+    for (const key of ['name', 'instructions', 'nextStep']) assert.equal(setup[key], cloud[key], `${setup.id}: ${key} drift`);
+    assert.equal(setup.command(mcpBaseUrl), cloud.command(mcpBaseUrl), `${setup.id}: command drift`);
+  }
+});
+
+test('MCP setup is not described as waitlist-only and the private app has no navigation links', () => {
+  for (const [file, html] of [['index.html', home], ...pages]) {
+    assert(!/hosted MCP is coming|hosted MCP connection is coming|ChatGPT via Cloud waitlist|ChatGPT Cloud waitlist|Hosted access is coming|Hosted MCP for Adport Cloud is on the waitlist/i.test(html), file);
+    assert(!/href="https:\/\/app\.adport\.dev/.test(html), file);
+    if (file !== 'providers.html') {
+      const panel = html.match(/id="agent-panel-chatgpt"[\s\S]*?<\/div>/)?.[0];
+      assert(panel?.includes('Choose OAuth'), file);
+      assert(panel.includes(`${mcpBaseUrl}/mcp`), file);
+      assert(!/waitlist/i.test(panel), file);
     }
   }
 });
@@ -96,14 +124,14 @@ for (const p of providers) {
     assert(html.includes(`<link rel="canonical" href="${url}"`));
     assert(html.includes(`<meta property="og:url" content="${url}"`));
     assert(html.includes('name="twitter:card" content="summary_large_image"'));
-    assert(!/noindex|app\.adport\.dev/.test(html));
+    assert(!/noindex/.test(html));
     assert.equal((sitemap.match(new RegExp(`<loc>${url}</loc>`, 'g')) || []).length, 1);
     assert(home.includes(`href="/providers/${p.slug}"`));
     assert(html.includes(`adport connect ${p.id}`));
     assert(html.includes(`adport accounts --provider ${p.id}`));
     assert(html.includes('claude mcp add --transport stdio adport -- adport mcp'));
     assert(html.includes('Cloud waitlist'));
-    assert(html.includes('not a hosted ChatGPT connector URL'));
+    assert(html.includes('Use the same Adport MCP endpoint and OAuth sign-in'));
     assert(html.includes('Provider access and approval are separate'));
     assert(html.includes('pending-operation token'));
     assert(html.includes('aria-live="polite"'));

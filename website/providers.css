@@ -47,7 +47,7 @@
 .requirements a { display: block; margin: 1rem 0; font-size: 0.78rem; line-height: 1.5; text-underline-offset: 0.2em; }
 .requirements p { font-size: 0.76rem; }
 .agent-setup { max-width: 52rem; }
-.agent-tab-list { display: flex; gap: 0.25rem; padding: 0.3rem; border-radius: 0.9rem; background: #eaeaec; margin-bottom: 1.2rem; width: fit-content; max-width: 100%; }
+.agent-tab-list { display: flex; flex-wrap: wrap; gap: 0.25rem; padding: 0.3rem; border-radius: 0.9rem; background: #eaeaec; margin-bottom: 1.2rem; width: fit-content; max-width: 100%; }
 .agent-tab-list[hidden], .agent-instructions[hidden] { display: none; }
 .agent-tab { display: inline-flex; align-items: center; justify-content: center; gap: 0.6rem; min-height: 2.75rem; padding: 0.6rem 1.1rem; border: 0; border-radius: 0.65rem; background: transparent; color: var(--muted); font: 600 0.85rem/1.25 system-ui, sans-serif; white-space: nowrap; cursor: pointer; }
 .agent-tab[aria-selected="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
@@ -104,7 +104,7 @@
   .provider-page .header-meta > a[href="#waitlist"] { display: none; }
   .provider-directory { grid-template-columns: 1fr; }
   .agent-tab-list { width: 100%; }
-  .agent-tab { flex: 1; gap: 0.4rem; padding-inline: 0.4rem; font-size: 0.75rem; }
+  .agent-tab { flex: 1 1 calc(33.333% - 0.25rem); gap: 0.4rem; padding-inline: 0.4rem; font-size: 0.75rem; }
   .agent-instructions { padding: 1.2rem; }
   .provider-example, .requirements { padding: 1.3rem; }
   .section-heading { display: block; margin-bottom: 1.5rem; }

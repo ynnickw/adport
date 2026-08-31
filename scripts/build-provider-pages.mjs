@@ -2,6 +2,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { providers } from './website-providers.mjs';
+import { agentSetups, mcpBaseUrl } from './website-agent-setups.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const site = path.join(root, 'website');
@@ -26,6 +27,12 @@ const agentLogo = id => {
 const href = provider => `/providers/${provider.slug}`;
 const code = text => `<pre><code>${escape(text)}</code></pre>`;
 const copy = (text, label) => `<button class="text-action" type="button" data-copy-command="${escape(text)}"><span class="copy-label" aria-live="polite">${escape(label)}</span></button>`;
+const setupTabs = (context = 'your ads') => `<div class="agent-setup" data-agent-tabs>
+  <p class="section-intro">Use the same Adport MCP endpoint and OAuth sign-in in each client. First connect your ad accounts in your Adport workspace. No platform secrets belong in chat.</p>
+  <div class="agent-tab-list" role="tablist" aria-label="AI tool setup instructions" hidden>${agentSetups.map((agent, i) => `<button class="agent-tab" type="button" role="tab" id="agent-tab-${agent.id}" aria-controls="agent-panel-${agent.id}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}">${agent.logo ? agentLogo(agent.logo) : ''}<span>${agent.name}</span></button>`).join('')}</div>
+  ${agentSetups.map(agent => `<div class="agent-instructions" id="agent-panel-${agent.id}" role="tabpanel" aria-labelledby="agent-tab-${agent.id}" tabindex="0"><h3>Use ${escape(context)} in ${agent.name}</h3><p>${escape(agent.instructions)}</p>${code(agent.command(mcpBaseUrl))}${copy(agent.command(mcpBaseUrl), `Copy ${agent.name} setup`)}<p>${escape(agent.nextStep)}</p>${agent.id === 'chatgpt' ? '<p>Developer mode and custom apps must be enabled for your ChatGPT account or workspace. In newer layouts, enable Developer mode under Settings → Security and login, then use the + button in Plugins to create your app. ChatGPT connects over HTTP; the local stdio command is for clients that can launch a process.</p><p><a href="https://developers.openai.com/api/docs/guides/developer-mode">ChatGPT developer-mode documentation</a></p>' : ''}</div>`).join('')}
+  <p class="local-option">Use the MCP URL from Agent access if you run your own Adport deployment. Client settings, workspace permissions, and advertising-platform approvals still apply. The Cloud waitlist below is separate from these connection instructions.</p>
+</div>`;
 const card = p => `<a class="provider-directory-card" href="${href(p)}"><span class="provider-mark">${logo(p)}</span><h3>${escape(p.name)} MCP</h3><p>${escape(p.label)}</p><span class="directory-link">Explore integration <span aria-hidden="true">↗</span></span></a>`;
 
 function document({ title, description, pathname, content, name }) {
@@ -79,8 +86,6 @@ function document({ title, description, pathname, content, name }) {
 function providerPage(p) {
   const install = 'npm install -g adport';
   const connect = `adport connect ${p.id}`;
-  const claude = 'claude mcp add --transport stdio adport -- adport mcp';
-  const cursor = JSON.stringify({ mcpServers: { adport: { command: 'adport', args: ['mcp'] } } }, null, 2);
   return document({ title: `${p.name} MCP for Claude, Cursor & ChatGPT | Adport`, description: p.description, pathname: href(p), name: p.name,
     content: `<main class="provider-main" id="main">
     <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/">Adport</a><span aria-hidden="true">/</span><a href="/providers">Integrations</a><span aria-hidden="true">/</span><span aria-current="page">${escape(p.name)}</span></nav>
@@ -109,13 +114,14 @@ function providerPage(p) {
 
     <section class="provider-section" id="connect" aria-labelledby="connect-title">
       <p class="eyebrow">Local setup · Bring your own credentials</p>
-      <h2 id="connect-title">Connect ${escape(p.name)} to Claude Code or Cursor.</h2>
+      <h2 id="connect-title">Prefer local setup for ${escape(p.name)}?</h2>
       <p class="section-intro">The npm CLI and MCP server run on your machine. You need Node.js 22.13 or newer, your own provider credentials, and permission to access the ad account.</p>
       <div class="connection-layout">
         <div class="connection-steps">
           <article><h3><span class="step-number">01</span> Install Adport</h3>${code(install)}${copy(install, 'Copy install command')}</article>
           <article><h3><span class="step-number">02</span> Connect ${escape(p.name)}</h3>${code(connect)}${copy(connect, 'Copy connect command')}<p>${escape(p.connection)}</p></article>
           <article><h3><span class="step-number">03</span> Check your connection</h3>${code(`adport doctor\nadport accounts --provider ${p.id}`)}<p>Check that the intended account appears before asking your agent to report on it. Never paste tokens, client secrets, or private keys into chat.</p></article>
+        <details class="local-setup"><summary>Register a local stdio client</summary><p>For Claude Code:</p>${code('claude mcp add --transport stdio adport -- adport mcp')}<p>For Cursor, merge this entry into your MCP configuration:</p>${code(JSON.stringify({ mcpServers: { adport: { command: 'adport', args: ['mcp'] } } }, null, 2))}<p>ChatGPT uses an HTTP MCP endpoint instead of launching this local process.</p></details>
         </div>
         <aside class="requirements"><h3>Before you connect</h3><ul>${p.prerequisites.map(text => `<li>${escape(text)}</li>`).join('')}</ul><a href="https://github.com/ynnickw/adport/blob/main/${p.guide}">Full ${escape(p.name)} connection guide</a><a href="${p.reference}" rel="noreferrer">Official ${escape(p.name)} API documentation</a><p>Adport is independent and is not endorsed by ${escape(p.name)}. Provider access and approval are separate from installing this package.</p></aside>
       </div>
@@ -124,14 +130,7 @@ function providerPage(p) {
     <section class="provider-section" aria-labelledby="agent-title">
       <p class="eyebrow">Your tools. Your choice.</p>
       <h2 id="agent-title">Use ${escape(p.name)} from your agent.</h2>
-      <div class="agent-setup" data-agent-tabs>
-        <div class="agent-tab-list" role="tablist" aria-label="AI tool setup instructions" hidden>
-          ${[['claude', 'Claude Code'], ['cursor', 'Cursor'], ['chatgpt', 'ChatGPT']].map(([id, name], i) => `<button class="agent-tab" type="button" role="tab" id="agent-tab-${id}" aria-controls="agent-panel-${id}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}">${agentLogo(id)}<span>${name}</span></button>`).join('')}
-        </div>
-        <div class="agent-instructions" id="agent-panel-claude" role="tabpanel" aria-labelledby="agent-tab-claude" tabindex="0"><h3>${escape(p.name)} in Claude Code</h3><p>After connecting locally, register Adport as a stdio MCP server:</p>${code(claude)}${copy(claude, 'Copy Claude Code command')}<p>Start a new session and ask Claude to list your connected ${escape(p.name)} accounts.</p><a href="https://code.claude.com/docs/en/mcp">Claude Code MCP documentation</a></div>
-        <div class="agent-instructions" id="agent-panel-cursor" role="tabpanel" aria-labelledby="agent-tab-cursor" tabindex="0"><h3>${escape(p.name)} in Cursor</h3><p>Add this entry to your Cursor MCP configuration. Merge it with existing servers rather than replacing them:</p>${code(cursor)}${copy(cursor, 'Copy Cursor configuration')}<p>The command must be available on Cursor’s PATH. Enable the server and ask the agent to inspect your account.</p><a href="https://cursor.com/docs/context/mcp">Cursor MCP documentation</a></div>
-        <div class="agent-instructions" id="agent-panel-chatgpt" role="tabpanel" aria-labelledby="agent-tab-chatgpt" tabindex="0"><h3>${escape(p.name)} in ChatGPT</h3><span class="availability-label">Cloud waitlist</span><p>Adport Cloud’s hosted MCP connection is coming. Join the waitlist for early access to a managed connection, without running a local server.</p><p>The local stdio configuration above is not a hosted ChatGPT connector URL. Cloud access and individual provider availability remain subject to rollout and approval.</p><a class="text-action" href="#waitlist">Join the cloud waitlist</a></div>
-      </div>
+      ${setupTabs(p.name)}
     </section>
 
     <section class="provider-section safety-section" aria-labelledby="safety-title">
@@ -150,7 +149,7 @@ function providerPage(p) {
 }
 
 const output = new Map(providers.map(p => [`providers/${p.slug}.html`, providerPage(p)]));
-output.set('providers.html', document({ title: 'Ads MCP integrations for Claude, Cursor & ChatGPT | Adport', description: 'Explore 11 ad platform MCP integrations. Connect your own accounts to Claude Code or Cursor, or join the Adport Cloud waitlist for hosted MCP access.', pathname: '/providers', name: 'Ad integrations', content: `<main class="provider-main" id="main"><nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/">Adport</a><span aria-hidden="true">/</span><span aria-current="page">Integrations</span></nav><section class="directory-hero"><p class="eyebrow">11 providers. One open-source MCP server.</p><h1>Your ad stack.<br /><span>Meet your AI agent.</span></h1><p class="lede">Find the setup, capabilities, and reporting details for your advertising platform. Run locally with your own credentials in Claude Code or Cursor. Hosted MCP for Adport Cloud is on the waitlist.</p></section><section aria-labelledby="directory-title"><h2 id="directory-title" class="sr-only">Advertising integrations</h2><div class="provider-directory all-providers">${providers.map(card).join('')}</div></section><section class="provider-section provider-boundary"><h2>One protocol. Platform-specific details.</h2><p>Each provider has its own account permissions, reporting definitions, API approval process, and supported operations. These guides explain what the connector can do and what you need before connecting. Adport uses the Model Context Protocol (MCP) to expose the same guarded tools to compatible agents.</p><p>Local integrations are included in the npm package. Hosted access is coming with Adport Cloud and does not bypass platform approval.</p></section></main>` }));
+output.set('providers.html', document({ title: 'Ads MCP integrations for Claude, Cursor & ChatGPT | Adport', description: 'Explore 11 ad platform MCP integrations. Connect ad accounts to ChatGPT, Claude, Codex, Cursor, and VS Code with Adport MCP.', pathname: '/providers', name: 'Ad integrations', content: `<main class="provider-main" id="main"><nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/">Adport</a><span aria-hidden="true">/</span><span aria-current="page">Integrations</span></nav><section class="directory-hero"><p class="eyebrow">11 providers. One open-source MCP server.</p><h1>Your ad stack.<br /><span>Meet your AI agent.</span></h1><p class="lede">Find the setup, capabilities, and reporting details for your advertising platform. Connect ChatGPT, Claude, Codex, Cursor, or VS Code with MCP and OAuth. Local npm setup is also available for stdio-compatible clients.</p></section><section aria-labelledby="directory-title"><h2 id="directory-title" class="sr-only">Advertising integrations</h2><div class="provider-directory all-providers">${providers.map(card).join('')}</div></section><section class="provider-section provider-boundary"><h2>One protocol. Platform-specific details.</h2><p>Each provider has its own account permissions, reporting definitions, API approval process, and supported operations. These guides explain what the connector can do and what you need before connecting. Adport uses the Model Context Protocol (MCP) to expose the same guarded tools to compatible agents.</p><p>Local integrations are included in the npm package. HTTP MCP clients use the same workspace-scoped OAuth connection. No connection method bypasses platform approval.</p></section></main>` }));
 
 // Keep existing sitemap entries and add the discoverable provider hierarchy once.
 let sitemap = await readFile(path.join(site, 'sitemap.xml'), 'utf8');
@@ -158,7 +157,7 @@ sitemap = sitemap.replace(/\s*<url><loc>https:\/\/www\.adport\.dev\/providers(?:
 sitemap = sitemap.replace('</urlset>', `  <url><loc>https://www.adport.dev/providers</loc></url>\n${providers.map(p => `  <url><loc>https://www.adport.dev${href(p)}</loc></url>`).join('\n')}\n</urlset>`);
 output.set('sitemap.xml', sitemap);
 
-let linkedHome = home;
+let linkedHome = home.replace(/<!-- agent-setup:start -->[\s\S]*?<!-- agent-setup:end -->/, `<!-- agent-setup:start -->\n<section class="provider-main provider-section" aria-labelledby="agent-title"><p class="eyebrow">Connect your agent</p><h2 id="agent-title">One connection. Your choice of AI.</h2>${setupTabs()}</section>\n<!-- agent-setup:end -->`);
 for (const p of providers) {
   const svg = logo(p);
   const start = linkedHome.indexOf(svg);
