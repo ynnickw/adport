@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Provider, StatusPill, formatDate } from '@/components/ui';
+import { providerLabel } from '@/lib/cloud/providers';
 import type { OAuthProvider } from '@/lib/cloud/types';
 
 export interface ConnectionView {
@@ -17,10 +18,6 @@ export interface ConnectionView {
 export interface OAuthProviderView {
   id: OAuthProvider;
   available: boolean;
-  flowLabel: string;
-  scopes: string[];
-  copy: string;
-  manualRevocationUrl: string;
 }
 
 export function ProviderConnections({ organizationId, canManage, connections, oauthProviders, returnTo }: {
@@ -58,46 +55,56 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
   }
 
   return (
-    <section className="connection-grid">
+    <section aria-label="Provider connections">
+      {!canManage ? <p className="inline-note">Owners and admins manage connections.</p> : null}
+      <div className="connection-list">
+      <div className="connection-list-heading" aria-hidden="true"><span>Platform</span><span>Status</span><span>Accounts</span><span>Actions</span></div>
+      <ul className="connection-rows" role="list">
       {oauthProviders.map((provider) => {
         const connection = find(provider.id);
         const message = notice[provider.id];
         const startHref = `/api/oauth/${provider.id}/start?organization_id=${organizationId}${returnTo ? `&return_to=${encodeURIComponent(returnTo)}` : ''}`;
         return (
-          <article className={`connection${connection ? '' : ' pending'}`} key={provider.id}>
-            <div className="connection-top">
-              <Provider name={provider.id} />
-              {connection ? <StatusPill status={connection.status} /> : <span className={`status ${provider.available ? 'warn' : 'neutral'}`}>{provider.available ? 'OAuth' : 'Not available yet'}</span>}
+          <li className="connection-row" key={provider.id} aria-label={providerLabel(provider.id)}>
+            <Provider name={provider.id} />
+            <div className="connection-status" title={connection ? `Last verified: ${formatDate(connection.lastVerifiedAt ?? connection.connectedAt)}` : undefined}>
+              {connection ? <StatusPill status={connection.status} /> : <span className="status neutral">{provider.available ? 'Not connected' : 'Unavailable'}</span>}
             </div>
-            {connection ? (
-              <dl className="connection-meta">
-                <div><dt>Access</dt><dd>{connection.externalLabel ?? '—'}</dd></div>
-                <div><dt>Flow</dt><dd>{provider.flowLabel}</dd></div>
-                <div><dt>Verified</dt><dd>{formatDate(connection.lastVerifiedAt ?? connection.connectedAt)}</dd></div>
-              </dl>
-            ) : (
-              <p className="connection-copy">{provider.copy}</p>
-            )}
-            {connection?.status === 'error' ? <div className="error-callout" style={{ marginBottom: '0.8rem' }}>{connection.lastError ?? 'Verification failed. Reconnect to retry.'}</div> : null}
-            {message?.error ? <div className="error-callout" style={{ marginBottom: '0.8rem' }}>{message.error}</div> : null}
-            {message?.success ? <div className="callout success" style={{ marginBottom: '0.8rem' }}>{message.success}</div> : null}
+            <div className="connection-accounts">
+              {connection?.status === 'connected' ? (
+                <a href={`/dashboard/accounts?select_provider=${provider.id}`} aria-label={`View ${providerLabel(provider.id)} accounts`}>
+                  {accountSummary(connection.externalLabel)}
+                </a>
+              ) : <span>{connection ? 'Reconnect to verify' : '—'}</span>}
+            </div>
+            <div className="connection-actions">
             {canManage ? (
               connection || provider.available ? (
-                <div className="connection-actions">
-                  {!connection && provider.available ? <a className="button" href={startHref}>Connect {shortLabel(provider.id)}</a> : null}
-                  {connection && provider.available ? <a className="button secondary" href={startHref}>{connection.status === 'error' ? 'Reconnect' : 'Re-authorize'}</a> : null}
-                  {connection ? <button className="button danger" type="button" disabled={busy === provider.id} onClick={() => void disconnect(provider.id, shortLabel(provider.id))}>{busy === provider.id ? 'Working…' : 'Disconnect'}</button> : null}
-                </div>
+                <>
+                  {!connection && provider.available ? <a className="button" aria-label={`Connect ${providerLabel(provider.id)}`} href={startHref}>Connect</a> : null}
+                  {connection && provider.available ? <a className="button secondary" aria-label={`${connection.status !== 'connected' ? 'Reconnect' : 'Re-authorize'} ${providerLabel(provider.id)}`} href={startHref}>{connection.status !== 'connected' ? 'Reconnect' : 'Re-authorize'}</a> : null}
+                  {connection ? <button className="button danger" aria-label={`Disconnect ${providerLabel(provider.id)}`} type="button" disabled={busy === provider.id} onClick={() => void disconnect(provider.id, shortLabel(provider.id))}>{busy === provider.id ? 'Working…' : 'Disconnect'}</button> : null}
+                </>
               ) : null
             ) : (
-              <p className="inline-note">Owners and admins manage connections.</p>
+              <span className="inline-note">View only</span>
             )}
-            {!connection && !provider.available ? <p className="inline-note">Available once provider access is configured and enabled for your organization.</p> : null}
-          </article>
+            </div>
+            {connection?.status === 'error' ? <div className="error-callout connection-feedback" role="alert">{connection.lastError ?? 'Verification failed. Reconnect to retry.'}</div> : null}
+            {message?.error ? <div className="error-callout connection-feedback" role="alert">{message.error}</div> : null}
+            {message?.success ? <div className="callout success connection-feedback" role="status">{message.success}</div> : null}
+          </li>
         );
       })}
+      </ul>
+      </div>
     </section>
   );
+}
+
+function accountSummary(label: string | null): string {
+  const count = label?.match(/^(\d+) accessible .+ account\(s\)$/)?.[1];
+  return count ? `${count} ${count === '1' ? 'account' : 'accounts'}` : label ?? 'View accounts';
 }
 
 function shortLabel(provider: string): string {
