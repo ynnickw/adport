@@ -5,6 +5,8 @@ import { useState, useTransition } from 'react';
 import { Provider } from '@/components/ui';
 import { PlanLimitModal } from '@/components/plan-limit-modal';
 import { planLimitFromResponse, type PlanLimitDetails } from '@/lib/cloud/plan-limit';
+import { providerLabel } from '@/lib/cloud/providers';
+import type { OAuthProvider } from '@/lib/cloud/types';
 
 export interface AccountAccessItem {
   provider: string;
@@ -15,17 +17,19 @@ export interface AccountAccessItem {
   enabled: boolean;
 }
 
-export function AccountAccessManager({ organizationId, accounts, canManage, maxActiveAccounts }: {
+export function AccountAccessManager({ organizationId, accounts, canManage, maxActiveAccounts, providerFilter }: {
   organizationId: string;
   accounts: AccountAccessItem[];
   canManage: boolean;
   maxActiveAccounts: number | null;
+  providerFilter?: OAuthProvider;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string>();
   const [planLimit, setPlanLimit] = useState<PlanLimitDetails>();
   const activeCount = accounts.filter((account) => account.enabled).length;
+  const visibleAccounts = providerFilter ? accounts.filter((account) => account.provider === providerFilter) : accounts;
 
   function setEnabled(account: AccountAccessItem, enabled: boolean) {
     setError(undefined);
@@ -47,14 +51,14 @@ export function AccountAccessManager({ organizationId, accounts, canManage, maxA
     <section className="card">
       <PlanLimitModal limit={planLimit} onClose={() => setPlanLimit(undefined)} />
       <div className="card-head">
-        <h2>Agent account access</h2>
-        <span className="card-note">{activeCount} / {maxActiveAccounts ?? 'unlimited'} active</span>
+        <h2>{providerFilter ? `${providerLabel(providerFilter)} account access` : 'Agent account access'}</h2>
+        <span className="card-note">{activeCount} / {maxActiveAccounts ?? 'unlimited'} active{providerFilter ? ' across workspace' : ''}</span>
       </div>
       {error ? <div className="error-callout" role="alert">{error}</div> : null}
-      <div className="table-wrap"><table>
+      {visibleAccounts.length === 0 ? <div className="empty"><h3>No {providerFilter ? `${providerLabel(providerFilter)} ` : ''}accounts discovered</h3><p>Reconnect this provider and grant access to an ad account to continue.</p></div> : <div className="table-wrap"><table>
         <thead><tr><th>Account</th><th>Provider</th><th>Currency</th><th>Status</th><th>Agent access</th></tr></thead>
         <tbody>
-          {accounts.map((account) => (
+          {visibleAccounts.map((account) => (
             <tr key={`${account.provider}:${account.accountId}`}>
               <td><strong>{account.name}</strong><div className="cell-sub">{account.accountId}</div></td>
               <td><Provider name={account.provider} /></td>
@@ -71,7 +75,7 @@ export function AccountAccessManager({ organizationId, accounts, canManage, maxA
             </tr>
           ))}
         </tbody>
-      </table></div>
+      </table></div>}
     </section>
   );
 }

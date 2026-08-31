@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { isOAuthProvider, type OAuthProvider } from '@/lib/cloud/types';
+import { providerLabel } from '@/lib/cloud/providers';
 import { AccountAccessManager, type AccountAccessItem } from '../dashboard/accounts/account-access-manager';
 import { AgentSetupGuide } from '../dashboard/agents/agent-setup-guide';
 import { ProviderConnections, type ConnectionView, type OAuthProviderView } from '../dashboard/connections/provider-connections';
@@ -31,6 +33,7 @@ export function OnboardingFlow({ organizationId, canManage, initialStep, initial
   const [agent, setAgent] = useState(initialAgent ?? 'chatgpt');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [providerFilter, setProviderFilter] = useState<OAuthProvider | undefined>(connectedProvider && isOAuthProvider(connectedProvider) ? connectedProvider : undefined);
 
   async function advance(next: Step, complete = false) {
     setBusy(true);
@@ -42,7 +45,10 @@ export function OnboardingFlow({ organizationId, canManage, initialStep, initial
     const result = await response.json().catch(() => ({})) as { error?: string };
     if (!response.ok) setError(result.error ?? 'Setup could not be saved.');
     else if (complete) { router.push('/dashboard'); router.refresh(); }
-    else setStep(next);
+    else {
+      if (step === 'accounts' && next !== 'accounts') setProviderFilter(undefined);
+      setStep(next);
+    }
     setBusy(false);
   }
 
@@ -70,8 +76,9 @@ export function OnboardingFlow({ organizationId, canManage, initialStep, initial
       </section> : null}
 
       {step === 'accounts' ? <section className="onboarding-stage">
-        <div className="onboarding-title"><span className="plan-kicker">Step 3</span><h1>Choose the accounts your agents can use</h1><p>Nothing is enabled automatically. Read access and guarded writes only apply to the accounts you activate here.</p></div>
-        {accounts.length ? <AccountAccessManager organizationId={organizationId} accounts={accounts} canManage={canManage} maxActiveAccounts={maxActiveAccounts} /> : <div className="card"><div className="empty"><h2>No accounts discovered yet</h2><p>Connect a provider first, or continue and add one from the dashboard later.</p></div></div>}
+        <div className="onboarding-title"><span className="plan-kicker">Step 3</span><h1>{providerFilter ? `Choose ${providerLabel(providerFilter)} accounts` : 'Choose the accounts your agents can use'}</h1><p>Nothing is enabled automatically. Read access and guarded writes only apply to the accounts you activate here.</p></div>
+        {providerFilter ? <button className="button secondary small" onClick={() => setProviderFilter(undefined)}>View all providers’ accounts</button> : null}
+        {accounts.length || providerFilter ? <AccountAccessManager organizationId={organizationId} accounts={accounts} canManage={canManage} maxActiveAccounts={maxActiveAccounts} providerFilter={providerFilter} /> : <div className="card"><div className="empty"><h2>No accounts discovered yet</h2><p>Connect a provider first, or continue and add one from the dashboard later.</p></div></div>}
         <div className="onboarding-actions"><button className="button" disabled={busy} onClick={() => void advance('agent')}>Connect an agent</button><button className="button secondary" onClick={() => void advance('connect')}>Back</button></div>
       </section> : null}
 
