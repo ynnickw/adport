@@ -24,7 +24,7 @@ const COPY: Record<OAuthProviderView['id'], string> = {
   spotify: 'Connect Spotify Ads after API allowlisting is enabled.',
   pinterest: 'Connect eligible Pinterest Ads owner accounts with trial access.',
   linkedin: 'LinkedIn Marketing API access is pending approval.',
-  x: 'X Ads API access is pending approval and application keys.',
+  x: 'X Ads has Standard Ads API access. Connect accounts during the enabled cloud rollout.',
 };
 
 export default async function OnboardingPage({ searchParams }: { searchParams: Promise<{ connected?: string; error?: string }> }) {

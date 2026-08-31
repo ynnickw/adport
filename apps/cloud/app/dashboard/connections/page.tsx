@@ -19,7 +19,7 @@ const COPY: Record<OAuthProviderView['id'], string> = {
   spotify: 'Connect Spotify Ads through its official consent screen. The developer application must be allowlisted for the Ads API before account verification can succeed.',
   pinterest: 'Connect Pinterest Ads with read and write permissions. Trial access is limited to eligible owner accounts; external access requires Standard approval.',
   linkedin: 'Connect LinkedIn Ads once Marketing API access and the cloud callback are approved. Development-tier access is pending.',
-  x: 'Connect X Ads through OAuth 1.0a once app keys and Ads API approval are available. The access application has been submitted.',
+  x: 'Connect your X ad accounts through OAuth 1.0a. Adport has Standard Ads API access; cloud onboarding is rolling out to enabled organizations.',
 };
 
 export default async function ConnectionsPage({ searchParams }: { searchParams: Promise<{ connected?: string; error?: string }> }) {

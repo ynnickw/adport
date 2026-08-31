@@ -67,7 +67,7 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
           <article className={`connection${connection ? '' : ' pending'}`} key={provider.id}>
             <div className="connection-top">
               <Provider name={provider.id} />
-              {connection ? <StatusPill status={connection.status} /> : <span className={`status ${provider.available ? 'warn' : 'neutral'}`}>{provider.available ? 'OAuth' : 'Pending app'}</span>}
+              {connection ? <StatusPill status={connection.status} /> : <span className={`status ${provider.available ? 'warn' : 'neutral'}`}>{provider.available ? 'OAuth' : 'Not available yet'}</span>}
             </div>
             {connection ? (
               <dl className="connection-meta">
@@ -92,7 +92,7 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
             ) : (
               <p className="inline-note">Owners and admins manage connections.</p>
             )}
-            {!connection && !provider.available ? <p className="inline-note">Available once Adport&apos;s {shortLabel(provider.id)} app is approved by the platform.</p> : null}
+            {!connection && !provider.available ? <p className="inline-note">Available once provider access is configured and enabled for your organization.</p> : null}
           </article>
         );
       })}
