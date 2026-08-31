@@ -29,9 +29,10 @@ if (waitlistForm) {
     if (submitting || !waitlistForm.reportValidity()) return;
     submitting = true;
     button.disabled = true;
-    waitlistForm.setAttribute("aria-busy", "true");
+    button.setAttribute("aria-busy", "true");
+    button.setAttribute("aria-label", "Joining waitlist");
     status.dataset.error = "false";
-    status.textContent = "Joining…";
+    status.textContent = "";
     const fields = new FormData(waitlistForm);
     try {
       const response = await fetch(waitlistForm.action, {
@@ -56,7 +57,8 @@ if (waitlistForm) {
     } finally {
       submitting = false;
       button.disabled = false;
-      waitlistForm.removeAttribute("aria-busy");
+      button.removeAttribute("aria-busy");
+      button.removeAttribute("aria-label");
     }
   });
 }

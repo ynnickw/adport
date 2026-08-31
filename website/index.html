@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="application-name" content="Adport" />
-    <meta name="description" content="Manage ads across 11 platforms from your AI agent. Connect to Adport's hosted MCP or run locally with npm. Join the Adport Cloud waitlist." />
+    <meta name="description" content="Manage ads across 11 platforms from your AI agent. Run locally with npm, or join the Adport Cloud waitlist for hosted MCP access." />
     <meta name="theme-color" content="#f5f5f7" />
     <meta property="og:site_name" content="Adport" />
     <meta property="og:title" content="Adport — The open control plane for paid media" />
@@ -62,10 +62,10 @@
         </h1>
         <p class="lede">Connect your ad accounts once. Then report, audit, and make changes in the AI tool you already use. Every write is previewed before it can run.</p>
         <div class="hero-actions">
-          <a class="primary-action" href="https://app.adport.dev/dashboard/agents">
-            Connect your agent <span aria-hidden="true">↗</span>
+          <a class="primary-action" href="#waitlist">
+            Join the cloud waitlist
           </a>
-          <a class="text-action" href="#waitlist">Join the cloud waitlist <span class="copy-icon" aria-hidden="true">↓</span></a>
+          <a class="text-action" href="https://github.com/ynnickw/adport">View on GitHub</a>
         </div>
         <ul class="proof" aria-label="Product attributes">
           <li><strong>11</strong> ad integrations</li>
@@ -84,14 +84,13 @@
           <div class="setup-heading">
             <div><h2 id="setup-title">One URL. Your AI agent.</h2></div>
           </div>
-          <p class="setup-description">No terminal or local server required.</p>
-          <div class="endpoint"><code>https://app.adport.dev/mcp</code><button class="text-action" type="button" data-copy-command="https://app.adport.dev/mcp"><span class="copy-label" aria-live="polite">Copy URL</span></button></div>
+          <p class="setup-description">Hosted MCP is coming with Adport Cloud. No terminal or local server required.</p>
           <ol class="setup-steps">
-            <li><a href="https://app.adport.dev/dashboard/connections">Connect your ad accounts</a> in Adport.</li>
-            <li>Add the URL as a remote MCP server in your AI app.</li>
+            <li>Connect your ad accounts in Adport.</li>
+            <li>Add your hosted MCP URL in your AI app.</li>
             <li>Sign in and authorize your workspace when prompted.</li>
           </ol>
-          <a class="setup-guide" href="https://app.adport.dev/dashboard/agents">Setup guides for your agent <span aria-hidden="true">↗</span></a>
+          <a class="setup-guide" href="#waitlist">Join the waitlist for early access</a>
           <details class="local-setup">
             <summary>Prefer to run locally?</summary>
             <p>Open source. Bring your own credentials. Node ≥22.13.</p>
@@ -131,7 +130,7 @@ adport mcp</code></pre>
         <label for="waitlist-email">Email address</label>
         <div class="waitlist-fields">
           <input id="waitlist-email" name="email" type="email" placeholder="you@company.com" autocomplete="email" maxlength="254" required aria-describedby="waitlist-notice waitlist-status" />
-          <button class="primary-action" type="submit">Join waitlist <span aria-hidden="true">↗</span></button>
+          <button class="primary-action" type="submit"><span class="waitlist-button-label">Join waitlist</span><span class="waitlist-spinner" aria-hidden="true"></span></button>
         </div>
         <div class="form-trap" aria-hidden="true"><label for="waitlist-website">Leave this empty</label><input id="waitlist-website" name="website" type="text" tabindex="-1" autocomplete="off" /></div>
         <p id="waitlist-notice" class="waitlist-notice">By joining, you agree to receive an early-access email. No newsletter. <a href="/privacy#cloud-waitlist">Privacy</a></p>

@@ -161,13 +161,18 @@ a { color: inherit; }
 .waitlist-form > label { display: block; margin-bottom: 0.6rem; font-size: 0.8rem; font-weight: 600; }
 .waitlist-fields { display: flex; gap: 0.6rem; }
 .waitlist-fields input { width: 100%; min-width: 0; min-height: 3.15rem; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); padding: 0.8rem 1.1rem; color: var(--ink); font: inherit; font-size: 1rem; }
-.waitlist-fields button { flex-shrink: 0; cursor: pointer; }
+.waitlist-fields button { position: relative; flex-shrink: 0; justify-content: center; cursor: pointer; transition: none; }
+.waitlist-fields button:hover, .waitlist-fields button:active { transform: none; box-shadow: none; }
+.waitlist-spinner { display: none; position: absolute; width: 1.1rem; height: 1.1rem; border: 2px solid rgba(255, 255, 255, 0.3); border-top-color: currentColor; border-radius: 50%; animation: waitlist-spin 700ms linear infinite; }
+.waitlist-fields button[aria-busy="true"] .waitlist-button-label { visibility: hidden; }
+.waitlist-fields button[aria-busy="true"] .waitlist-spinner { display: block; }
+@keyframes waitlist-spin { to { transform: rotate(360deg); } }
 .waitlist-notice { color: var(--muted); font-size: 0.7rem; line-height: 1.7; }
 .waitlist-notice a { text-underline-offset: 0.2em; }
 .waitlist-status { min-height: 1.5em; margin-bottom: 0; font-size: 0.8rem; line-height: 1.6; }
 .waitlist-status[data-error="true"] { color: #b42318; }
 .form-trap { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
-.waitlist-fields button:disabled { opacity: 0.6; cursor: wait; }
+.waitlist-fields button:disabled { cursor: wait; background: var(--ink); }
 button:active, .primary-action:active { transform: scale(0.98); }
 input:focus-visible, summary:focus-visible, .setup-guide:focus-visible, .setup-steps a:focus-visible { outline: 2px solid var(--orange); outline-offset: 4px; }
 .platforms li { display: flex; min-height: 1.4rem; align-items: center; gap: 0.5rem; color: #515154; font-size: 0.67rem; font-weight: 650; line-height: 1; white-space: nowrap; }
@@ -242,6 +247,7 @@ input:focus-visible, summary:focus-visible, .setup-guide:focus-visible, .setup-s
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .primary-action { transition: none; }
+  .waitlist-spinner { animation: none; }
   .agent { display: none; animation: none; }
   .agent-chatgpt { display: inline-flex; opacity: 1; transform: translateY(-50%); }
 }
