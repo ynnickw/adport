@@ -200,10 +200,6 @@ input:focus-visible, summary:focus-visible, .setup-guide:focus-visible, .setup-s
 .platforms .meta-logo { color: #0866ff; }
 .platforms .apple-logo { color: #111; }
 .platforms .reddit-logo { color: #ff4500; }
-.platforms .microsoft-logo path:nth-child(1) { fill: #f25022; }
-.platforms .microsoft-logo path:nth-child(2) { fill: #7fba00; }
-.platforms .microsoft-logo path:nth-child(3) { fill: #00a4ef; }
-.platforms .microsoft-logo path:nth-child(4) { fill: #ffb900; }
 .site-footer { display: flex; min-height: 4.5rem; align-items: center; justify-content: space-between; color: #918478; font-size: 0.65rem; }
 .site-footer nav { display: flex; gap: 1.1rem; }
 .site-footer a { text-decoration: none; }

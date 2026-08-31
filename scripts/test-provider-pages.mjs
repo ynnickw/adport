@@ -11,6 +11,16 @@ const home = await readFile(path.join(site, 'index.html'), 'utf8');
 const sitemap = await readFile(path.join(site, 'sitemap.xml'), 'utf8');
 const pages = await Promise.all(['providers.html', ...providers.map(p => `providers/${p.slug}.html`)].map(async file => [file, await readFile(path.join(site, file), 'utf8')]));
 
+test('Microsoft uses the official four-color symbol on every surface', () => {
+  // Microsoft Learn: media/howto-add-branding-in-apps/ms-symbollockup_mssymbol_19.svg
+  for (const [file, html] of [['index.html', home], ...pages]) {
+    const logo = html.match(/<svg class="microsoft-logo"[\s\S]*?<\/svg>/)?.[0];
+    if (!logo) { assert.notEqual(file, 'providers/microsoft-ads.html'); continue; }
+    assert(logo.includes('viewBox="0 0 21 21"'), file);
+    assert.deepEqual([...logo.matchAll(/fill="(#[a-f0-9]+)"/g)].map(match => match[1]), ['#f25022', '#00a4ef', '#7fba00', '#ffb900'], file);
+  }
+});
+
 test('covers all eleven advertising providers exactly once', () => {
   assert.deepEqual(providers.map(p => p.id).sort(), ['apple', 'google', 'linkedin', 'meta', 'microsoft', 'pinterest', 'reddit', 'snapchat', 'spotify', 'tiktok', 'x']);
   assert.equal(new Set(providers.map(p => p.slug)).size, 11);
