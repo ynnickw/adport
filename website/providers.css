@@ -58,6 +58,7 @@
 .agent-instructions:focus-visible { outline: 2px solid var(--orange); outline-offset: 4px; }
 .agent-brand-logo { display: block; width: 1.35rem; height: 1.35rem; flex: 0 0 1.35rem; fill: currentColor; }
 .agent-brand-claude { color: #d97757; }
+.agent-brand-vscode { color: #007acc; }
 .availability-label { color: var(--orange-dark); font-size: 0.68rem; font-weight: 650; letter-spacing: 0.07em; text-transform: uppercase; }
 .safety-section { display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; }
 .safety-section p:first-child { margin-top: 0; }

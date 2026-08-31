@@ -32,7 +32,7 @@ export const agentSetups = [
     command: baseUrl => JSON.stringify({ mcpServers: { adport: { url: `${baseUrl}/mcp` } } }, null, 2),
   },
   {
-    id: 'vscode', name: 'VS Code',
+    id: 'vscode', name: 'VS Code', logo: 'vscode',
     instructions: 'Open the Command Palette and choose “MCP: Open User Configuration”, then add this server.',
     nextStep: 'Start the Adport server from VS Code and complete the browser authorization.',
     command: baseUrl => JSON.stringify({ servers: { adport: { type: 'http', url: `${baseUrl}/mcp` } } }, null, 2),

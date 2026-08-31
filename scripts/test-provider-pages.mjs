@@ -39,6 +39,9 @@ test('provider instruction tabs have matching labels and panels with no-JavaScri
   for (const [file, html] of [['index.html', home], ...pages.filter(([file]) => file.startsWith('providers/'))]) {
     assert.equal([...html.matchAll(/role="tab"/g)].length, 6, file);
     assert.equal([...html.matchAll(/role="tabpanel"/g)].length, 6, file);
+    const vscodeTab = html.match(/<button[^>]*id="agent-tab-vscode"[\s\S]*?<\/button>/)?.[0];
+    assert(vscodeTab?.includes('class="agent-brand-logo agent-brand-vscode"'), `${file}: VS Code logo missing`);
+    assert(vscodeTab.includes('viewBox="0 0 16 16"'), file);
     for (const { id } of agentSetups) {
       assert(html.includes(`id="agent-tab-${id}" aria-controls="agent-panel-${id}"`), file);
       assert(html.includes(`id="agent-panel-${id}" role="tabpanel" aria-labelledby="agent-tab-${id}" tabindex="0">`), file);
