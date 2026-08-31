@@ -18,10 +18,47 @@ document.querySelectorAll("[data-copy-command]").forEach((copyButton) => {
   });
 });
 
-const waitlistForm = document.querySelector(".waitlist-form");
-if (waitlistForm) {
+const heroSignup = document.querySelector(".hero-signup");
+if (heroSignup) {
+  const trigger = heroSignup.querySelector(".hero-signup-trigger");
+  const form = heroSignup.querySelector("form");
+  const close = heroSignup.querySelector(".hero-signup-close");
+  trigger.addEventListener("click", (event) => {
+    event.preventDefault();
+    const initialWidth = trigger.getBoundingClientRect().width;
+    trigger.hidden = true;
+    trigger.setAttribute("aria-expanded", "true");
+    heroSignup.classList.add("is-open");
+    form.hidden = false;
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const surface = form.querySelector(".hero-signup-surface");
+      surface.animate([
+        { transform: `scaleX(${initialWidth / surface.getBoundingClientRect().width})`, backgroundColor: "#1d1d1f" },
+        { transform: "scaleX(1)", backgroundColor: "#fff" },
+      ], { duration: 360, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
+      form.querySelectorAll("input, button, p").forEach((element) => {
+        element.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260 });
+      });
+    }
+    form.querySelector("input[type=email]").focus({ preventScroll: true });
+  });
+  const collapse = () => {
+    if (form.querySelector("button[type=submit]").disabled) return;
+    form.hidden = true;
+    heroSignup.classList.remove("is-open");
+    trigger.hidden = false;
+    trigger.setAttribute("aria-expanded", "false");
+    trigger.focus({ preventScroll: true });
+  };
+  close.addEventListener("click", collapse);
+  form.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") { event.preventDefault(); collapse(); }
+  });
+}
+
+document.querySelectorAll(".waitlist-form").forEach((waitlistForm) => {
   const button = waitlistForm.querySelector("button[type=submit]");
-  const status = document.querySelector("#waitlist-status");
+  const status = waitlistForm.querySelector(".waitlist-status");
   let submitting = false;
 
   waitlistForm.addEventListener("submit", async (event) => {
@@ -61,4 +98,4 @@ if (waitlistForm) {
       button.removeAttribute("aria-label");
     }
   });
-}
+});

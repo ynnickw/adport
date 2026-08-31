@@ -103,7 +103,21 @@ a { color: inherit; }
 }
 .lede { max-width: 36rem; margin: 2rem 0 2.35rem; color: var(--muted); font-size: clamp(1rem, 1.5vw, 1.15rem); line-height: 1.65; }
 
-.hero-actions { display: flex; align-items: center; gap: 1.3rem; }
+.hero-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 1.3rem; }
+.github-link { display: inline-flex; align-items: center; gap: 0.5rem; }
+.github-link svg { width: 1.15rem; height: 1.15rem; flex: 0 0 auto; fill: currentColor; }
+.hero-signup { max-width: 100%; }
+.hero-signup.is-open { width: 100%; }
+.hero-signup [hidden] { display: none; }
+.hero-signup .hero-waitlist-fields { position: relative; flex-direction: row; align-items: center; gap: 0; padding: 0.25rem; }
+.hero-signup-surface { position: absolute; inset: 0; background: #fff; border: 1px solid var(--line); border-radius: 999px; transform-origin: left center; }
+.hero-signup .hero-waitlist-fields input { position: relative; background: transparent; border: 0; padding: 0.6rem 0.75rem; min-height: 2.65rem; }
+.hero-signup .hero-waitlist-fields button { min-height: 2.65rem; padding: 0.65rem 1rem; }
+.hero-signup .waitlist-status:empty { display: none; }
+.hero-signup-meta { display: flex; align-items: center; gap: 1rem; justify-content: space-between; }
+.hero-signup-close { min-height: 2.75rem; flex-shrink: 0; font-size: 0.72rem; }
+.hero-signup .hero-waitlist-fields:focus-within { outline: 2px solid var(--orange); outline-offset: 3px; border-radius: 999px; }
+.hero-signup .hero-waitlist-fields input:focus-visible { outline: none; }
 .primary-action { display: inline-flex; min-height: 3.15rem; align-items: center; gap: 0.68rem; border: 1px solid var(--ink); border-radius: 999px; background: var(--ink); color: #fff; padding: 0.78rem 1.22rem; font-size: 0.86rem; font-weight: 690; text-decoration: none; transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease; }
 .primary-action svg { width: 1.08rem; fill: currentColor; }
 .primary-action:hover { transform: translateY(-2px); background: #332820; box-shadow: 0 14px 32px rgba(74, 45, 24, 0.18); }
