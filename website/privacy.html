@@ -58,6 +58,9 @@
       <p>An organization owner can delete the organization's Adport Cloud data from the dashboard. This removes the active tenant record and cascades deletion to memberships, settings, connection metadata, encrypted credentials, API-key digests, pending operations, and audit events. If the user has no remaining organization membership, the Adport Cloud login account is also deleted. Infrastructure backups, if enabled for disaster recovery, are isolated from normal use, expire under the hosting provider's backup schedule, and are not restored except for disaster recovery.</p>
       <p>Deleting Adport Cloud data does not delete campaigns or records that remain in Google Ads. Users can also revoke access from their Google Account permissions or Google Ads security settings. For help with a deletion or revocation request, contact us at the address below.</p>
 
+      <h2 id="cloud-waitlist">Cloud waitlist</h2>
+      <p>If you join the Adport Cloud waitlist, we store your email address, signup time, and the version of the signup notice you agreed to in a private database table. We use these details only to send the early-access invitation you requested, not a newsletter. Repeated signups do not create duplicate entries. Short-lived, keyed request hashes help limit abuse; your raw IP address is not stored in the waitlist table. You can withdraw your request and ask us to delete your entry at any time by emailing <a href="mailto:yannick@adport.dev">yannick@adport.dev</a>.</p>
+
       <h2>Self-hosted Adport</h2>
       <p>In self-hosted mode, credentials, advertising data, reports, pending operations, findings, and audit records remain on infrastructure controlled by the user. The installation communicates directly with the selected advertising platform and does not send this information to Adport Cloud unless the user separately configures a remote destination. The user controls local security, retention, backups, and deletion.</p>
 

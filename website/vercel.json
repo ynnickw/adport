@@ -1,6 +1,9 @@
 {
   "cleanUrls": true,
   "trailingSlash": false,
+  "rewrites": [
+    { "source": "/api/waitlist", "destination": "https://app.adport.dev/api/waitlist" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
