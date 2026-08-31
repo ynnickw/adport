@@ -9,7 +9,7 @@ import { AccountAccessManager } from './account-access-manager';
 
 export const metadata = { title: 'Accounts' };
 
-export default async function AccountsPage({ searchParams }: { searchParams: Promise<{ connected?: string; error?: string; select_provider?: string }> }) {
+export default async function AccountsPage({ searchParams }: { searchParams: Promise<{ connected?: string; accounts_saved?: string; error?: string; select_provider?: string }> }) {
   const tenant = await requireDashboardTenant();
   const [connections, inventory, entitlement, params] = await Promise.all([
     listConnections(tenant.organizationId),
@@ -19,18 +19,18 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
   ]);
   const requestedProvider = params.select_provider ?? params.connected;
   const providerFilter = requestedProvider && isOAuthProvider(requestedProvider) ? requestedProvider : undefined;
-  const accountProviders = new Set(inventory.map((account) => account.provider));
-  const emptyConnections = connections.filter((connection) => connection.status === 'connected' && !accountProviders.has(connection.provider) && (!providerFilter || connection.provider === providerFilter));
+  const pendingConnections = connections.filter(connection => connection.accountSelectionId && connection.status === 'connected' && (!providerFilter || connection.provider === providerFilter));
   return (
     <main className="page">
-      <PageHeader title={providerFilter ? `Choose ${providerLabel(providerFilter)} accounts` : 'Accounts'} description="Choose exactly which discovered ad accounts agents may query or change. Disabled accounts remain outside the tenant runtime." />
+      <PageHeader title={providerFilter ? `${providerLabel(providerFilter)} accounts` : 'Accounts'} description="Only accounts you added appear here. Enable agent access when ready. To add other accounts, re-authorize their provider in Connections." />
       {providerFilter ? <Link className="button secondary small" href="/dashboard/accounts" style={{ marginBottom: '1rem' }}>View all providers’ accounts</Link> : null}
       {params.connected ? <div className="callout success" style={{ marginBottom: '1rem' }}>{providerLabel(params.connected)} is connected. Select the specific accounts agents may access below.</div> : null}
+      {params.accounts_saved ? <div className="callout success" role="status" style={{ marginBottom: '1rem' }}>Account selection saved. Unselected accounts are no longer listed or available to Adport. Enable newly added accounts below when ready.</div> : null}
       {params.error ? <div className="error-callout" role="alert">{params.error}</div> : null}
       {inventory.length === 0 && !providerFilter ? <section className="card">
         <Empty
-          title={connections.length > 0 ? 'No accessible accounts' : 'No accounts yet'}
-          copy={connections.length > 0 ? 'Reconnect the provider to refresh the ad accounts available under the current Cloud plan.' : 'Connect a platform to discover the ad accounts its grant can access.'}
+          title="No accounts added yet"
+          copy="Connect or re-authorize a provider, then save the accounts you want to add."
           href="/dashboard/connections"
           action="Open connections"
         />
@@ -43,17 +43,17 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
           providerFilter={providerFilter}
         />
       )}
-      {emptyConnections.length > 0 ? (
+      {pendingConnections.length > 0 ? (
         <section className="card" style={{ marginTop: '0.9rem' }}>
-          <div className="card-head"><h2>Connected without account access</h2><span className="card-note">authorization needs attention</span></div>
+          <div className="card-head"><h2>Finish account selection</h2><span className="card-note">agent access paused</span></div>
           <div className="row-list">
-            {emptyConnections.map((connection) => (
+            {pendingConnections.map((connection) => (
               <div className="row-item" key={connection.provider}>
                 <div>
                   <Provider name={connection.provider} />
-                  <div className="cell-sub">{connection.externalLabel ?? 'OAuth connected'} · no advertiser account was returned. Re-authorize and explicitly select an ad account.</div>
+                  <div className="cell-sub">Save your account selection to finish this authorization.</div>
                 </div>
-                <Link className="button secondary small" href="/dashboard/connections">Review connection</Link>
+                <Link className="button secondary small" href={`/account-selection?selection_id=${connection.accountSelectionId}`}>Choose accounts</Link>
               </div>
             ))}
           </div>

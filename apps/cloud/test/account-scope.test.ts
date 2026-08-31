@@ -23,8 +23,12 @@ function provider(): AdProvider {
 describe('AccountScopedProvider', () => {
   it('filters broad reads to active accounts', async () => {
     const raw = provider();
-    const scoped = new AccountScopedProvider(raw, new Set(['1234567890']));
+    const scoped = new AccountScopedProvider(raw, new Set(['1234567890']), [
+      { provider: 'google', id: '1234567890', name: 'Active' },
+      { provider: 'google', id: '9999999999', name: 'Inactive' },
+    ]);
     await expect(scoped.listAccounts()).resolves.toEqual([{ provider: 'google', id: '1234567890', name: 'Active' }]);
+    expect(raw.listAccounts).not.toHaveBeenCalled();
     await scoped.report({ level: 'campaign', metrics: ['spend'], dateRange: 'last_7_days' });
     expect(raw.report).toHaveBeenCalledWith(expect.objectContaining({ accountIds: ['1234567890'] }));
   });

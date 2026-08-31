@@ -13,6 +13,7 @@ export interface ConnectionView {
   lastError: string | null;
   connectedAt: string;
   lastVerifiedAt: string | null;
+  accountSelectionId?: string | null;
 }
 
 export interface OAuthProviderView {
@@ -68,10 +69,12 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
           <li className="connection-row" key={provider.id} aria-label={providerLabel(provider.id)}>
             <Provider name={provider.id} />
             <div className="connection-status" title={connection ? `Last verified: ${formatDate(connection.lastVerifiedAt ?? connection.connectedAt)}` : undefined}>
-              {connection ? <StatusPill status={connection.status} /> : <span className="status neutral">{provider.available ? 'Not connected' : 'Unavailable'}</span>}
+              {connection?.accountSelectionId && connection.status === 'connected' ? <span className="status neutral">Choose accounts</span> : connection ? <StatusPill status={connection.status} /> : <span className="status neutral">{provider.available ? 'Not connected' : 'Unavailable'}</span>}
             </div>
             <div className="connection-accounts">
-              {connection?.status === 'connected' ? (
+              {connection?.accountSelectionId && connection.status === 'connected' ? (
+                canManage ? <a href={`/account-selection?selection_id=${connection.accountSelectionId}`}>Finish selection</a> : <span>Selection pending</span>
+              ) : connection?.status === 'connected' ? (
                 <a href={`/dashboard/accounts?select_provider=${provider.id}`} aria-label={`View ${providerLabel(provider.id)} accounts`}>
                   {accountSummary(connection.externalLabel)}
                 </a>
@@ -103,7 +106,7 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
 }
 
 function accountSummary(label: string | null): string {
-  const count = label?.match(/^(\d+) accessible .+ account\(s\)$/)?.[1];
+  const count = label?.match(/^(\d+) (?:accessible|added) .+ account\(s\)$/)?.[1];
   return count ? `${count} ${count === '1' ? 'account' : 'accounts'}` : label ?? 'View accounts';
 }
 

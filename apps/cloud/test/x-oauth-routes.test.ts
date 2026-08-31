@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   session: vi.fn(), create: vi.fn(), consume: vi.fn(), upsert: vi.fn(), audit: vi.fn(), verify: vi.fn(), sync: vi.fn(), list: vi.fn(),
 }));
 vi.mock('@/lib/cloud/auth', () => ({ sessionPrincipal: mocks.session }));
+vi.mock('@/lib/cloud/account-selection', () => ({ stageAccountSelection: mocks.sync }));
 vi.mock('@/lib/cloud/repository', () => ({ createOAuthTransaction: mocks.create, consumeOAuthTransaction: mocks.consume, upsertProviderConnection: mocks.upsert, recordAudit: mocks.audit, setConnectionVerification: mocks.verify, syncDiscoveredAccounts: mocks.sync }));
 vi.mock('@/lib/cloud/runtime', () => ({ createTenantRuntime: async () => ({ ctx: { providers: { get: () => ({ listAccounts: mocks.list }) } } }) }));
 vi.mock('@/lib/cloud/plans', () => ({ getOrganizationEntitlement: async () => ({ plan: { id: 'reader', maxActiveAccounts: 3 } }) }));
@@ -82,7 +83,8 @@ describe('X hosted onboarding boundaries', () => {
     }));
     expect(mocks.consume.mock.invocationCallOrder[0]).toBeLessThan(fetchMock.mock.invocationCallOrder[0]!);
     expect(mocks.session.mock.invocationCallOrder[1]).toBeLessThan(fetchMock.mock.invocationCallOrder[0]!);
-    expect(response.headers.get('location')).toBe('https://app.adport.test/dashboard/connections?connected=x');
+    expect(response.headers.get('location')).toMatch(/^https:\/\/app.adport.test\/account-selection\?selection_id=/);
+    expect(mocks.sync).toHaveBeenCalledWith(expect.objectContaining({ principal, provider: 'x', accounts: [], returnPath: '/dashboard/connections' }));
     expect(JSON.stringify(mocks.audit.mock.calls)).not.toContain('tenant-secret');
     expect(JSON.stringify(mocks.audit.mock.calls)).not.toContain('tenant-token');
   });

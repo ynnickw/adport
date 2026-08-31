@@ -8,6 +8,7 @@ const ids = ['snapchat', 'spotify', 'pinterest', 'linkedin', 'x'];
 vi.mock('@/lib/cloud/credential-rotation', () => ({ rotateProviderTokens: vi.fn(async () => {}) }));
 vi.mock('@/lib/cloud/repository', () => ({
   getOrganizationPolicy: async () => DEFAULT_POLICY,
+  listOrganizationAdAccounts: async () => ['snapchat', 'spotify', 'pinterest', 'linkedin', 'x'].map(provider => ({ provider, accountId: 'allowed', name: 'Selected', enabled: true })),
   loadEnabledAccountIds: async () => Object.fromEntries(['snapchat', 'spotify', 'pinterest', 'linkedin', 'x'].map(id => [id, new Set(['allowed'])])),
   loadProviderCredentials: async () => Object.fromEntries(['snapchat', 'spotify', 'pinterest', 'linkedin', 'x'].map(provider => [provider, {
     connectionId: `${provider}-connection`,
@@ -42,6 +43,7 @@ describe('expanded cloud runtime on production account controls', () => {
   it('preserves active-account authorization for every new provider and native tool', async () => {
     const runtime = await createTenantRuntime({ organizationId: 'org', scopes: [] });
     for (const provider of runtime.ctx.providers.list()) {
+      await expect(provider.listAccounts()).resolves.toEqual([{ provider: provider.id, id: 'allowed', name: 'Selected', currency: undefined, status: undefined }]);
       await expect(provider.report({ accountIds: ['blocked'], level: 'campaign', metrics: ['spend'], dateRange: 'last_7_days' })).rejects.toMatchObject({ code: 'POLICY_VIOLATION' });
       const operation = { provider: provider.id, accountId: 'blocked', tool: 'test', kind: 'update' as const, payload: {} };
       await expect(provider.previewWrite(operation, { forcePausedCreation: true })).rejects.toMatchObject({ code: 'POLICY_VIOLATION' });

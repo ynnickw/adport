@@ -13,7 +13,7 @@ import { OnboardingFlow } from './onboarding-flow';
 export const metadata = { title: 'Set up Adport' };
 export const dynamic = 'force-dynamic';
 
-export default async function OnboardingPage({ searchParams }: { searchParams: Promise<{ connected?: string; error?: string }> }) {
+export default async function OnboardingPage({ searchParams }: { searchParams: Promise<{ connected?: string; accounts_saved?: string; error?: string }> }) {
   const tenant = await requireDashboardTenant();
   const [state, connections, accounts, entitlement, params] = await Promise.all([
     getOnboardingState(tenant.organizationId),
@@ -34,11 +34,12 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
         initialStep={state.currentStep}
         initialAgent={state.selectedAgent}
         baseUrl={env().ADPORT_CLOUD_BASE_URL.replace(/\/$/, '')}
-        connectedProvider={params.connected}
+        connectedProvider={params.accounts_saved ?? params.connected}
         oauthError={params.error}
         providers={providers}
         connections={connections.map((connection) => ({
           provider: connection.provider, status: connection.status, externalLabel: connection.externalLabel,
+          accountSelectionId: connection.accountSelectionId,
           lastError: connection.lastError, connectedAt: connection.connectedAt.toISOString(),
           lastVerifiedAt: connection.lastVerifiedAt?.toISOString() ?? null,
         }))}

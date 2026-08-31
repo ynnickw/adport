@@ -45,7 +45,7 @@ describe('provider-specific account picker', () => {
     mocks.inventory.mockResolvedValue(accounts.filter((account) => account.provider !== 'tiktok'));
     mocks.connections.mockResolvedValue([{ provider: 'tiktok', status: 'connected' }, { provider: 'google', status: 'connected' }]);
     const html = renderToStaticMarkup(await AccountsPage({ searchParams: Promise.resolve({ select_provider: 'tiktok' }) }));
-    expect(html).toContain('No TikTok Ads accounts discovered');
+    expect(html).toContain('No TikTok Ads accounts added');
     expect(html).not.toContain('google unique account');
     expect(html).not.toContain('Google Ads');
   });

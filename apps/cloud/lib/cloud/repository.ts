@@ -130,15 +130,16 @@ export async function upsertProviderConnection<P extends CloudProvider>(input: {
   externalSubject?: string;
   externalLabel?: string;
   scopes?: string[];
+  selectionId?: string;
 }): Promise<string> {
   return db().begin(async (sql) => {
     const rows = await sql<Array<{ id: string }>>`
       insert into public.connections
-        (organization_id, provider, status, external_subject, external_label, scopes, connected_by, last_verified_at, last_error, revoked_at)
+        (organization_id, provider, status, external_subject, external_label, scopes, connected_by, last_verified_at, last_error, revoked_at, account_selection_id)
       values
         (${input.organizationId}, ${input.provider}, 'connected', ${input.externalSubject ?? null},
          ${input.externalLabel ?? `${input.provider} connection`},
-         ${input.scopes ?? []}, ${input.userId}, now(), null, null)
+         ${input.scopes ?? []}, ${input.userId}, now(), null, null, ${input.selectionId ?? null})
       on conflict (organization_id, provider) do update set
         status = 'connected',
         external_subject = excluded.external_subject,
@@ -148,10 +149,12 @@ export async function upsertProviderConnection<P extends CloudProvider>(input: {
         connected_at = now(),
         last_verified_at = now(),
         last_error = null,
+        account_selection_id = excluded.account_selection_id,
         revoked_at = null
       returning id
     `;
     const connectionId = rows[0]!.id;
+    await sql`delete from private.provider_account_selections where connection_id = ${connectionId}`;
     const aad = `connection:${input.organizationId}:${input.provider}`;
     await sql`
       insert into private.provider_credentials (connection_id, organization_id, provider, ciphertext)
@@ -184,7 +187,7 @@ export async function loadProviderCredential<P extends CloudProvider>(
   };
 }
 
-export async function loadProviderCredentials(organizationId: string): Promise<Partial<{
+export async function loadProviderCredentials(organizationId: string, includePendingSelection = false): Promise<Partial<{
   [P in CloudProvider]: ProviderCredentialMap[P] & { connectionId: string };
 }>> {
   const rows = await db()<Array<{ connectionId: string; provider: CloudProvider; ciphertext: string }>>`
@@ -192,6 +195,7 @@ export async function loadProviderCredentials(organizationId: string): Promise<P
     from private.provider_credentials credential
     join public.connections connection on connection.id = credential.connection_id
     where credential.organization_id = ${organizationId} and connection.status = 'connected'
+      and (${includePendingSelection} or connection.account_selection_id is null)
   `;
   const credentials: Partial<Record<CloudProvider, StoredProviderCredential & { connectionId: string }>> = {};
   for (const row of rows) {
@@ -207,11 +211,16 @@ export async function updateProviderCredential<P extends CloudProvider>(
   organizationId: string,
   provider: P,
   credential: ProviderCredentialMap[P],
+  selectionId?: string,
 ): Promise<void> {
   const rows = await db()<Array<{ connectionId: string }>>`
     update private.provider_credentials
     set ciphertext = ${encryptSecret(credential, `connection:${organizationId}:${provider}`)}, updated_at = now()
     where organization_id = ${organizationId} and provider = ${provider}
+      and (${selectionId ?? null}::uuid is null or exists (
+        select 1 from public.connections connection where connection.id = private.provider_credentials.connection_id
+          and connection.account_selection_id = ${selectionId ?? null}::uuid
+      ))
     returning connection_id
   `;
   if (rows.length !== 1) throw new Error(`No ${provider} connection exists for credential rotation.`);
@@ -221,17 +230,20 @@ export async function setConnectionVerification(
   organizationId: string,
   provider: CloudProvider,
   result: { ok: true; label: string; subject?: string } | { ok: false; error: string },
+  selectionId?: string,
 ): Promise<void> {
   if (result.ok) {
     await db()`
       update public.connections set status = 'connected', external_label = ${result.label},
         external_subject = ${result.subject ?? null}, last_verified_at = now(), last_error = null, revoked_at = null
       where organization_id = ${organizationId} and provider = ${provider}
+        and (${selectionId ?? null}::uuid is null or account_selection_id = ${selectionId ?? null}::uuid)
     `;
   } else {
     await db()`
       update public.connections set status = 'error', last_error = ${result.error}, last_verified_at = now()
       where organization_id = ${organizationId} and provider = ${provider}
+        and (${selectionId ?? null}::uuid is null or account_selection_id = ${selectionId ?? null}::uuid)
     `;
   }
 }
@@ -494,11 +506,12 @@ export interface ConnectionSummary {
   scopes: string[];
   connectedAt: Date;
   lastVerifiedAt: Date | null;
+  accountSelectionId: string | null;
 }
 
 export async function listConnections(organizationId: string): Promise<ConnectionSummary[]> {
   return db()<ConnectionSummary[]>`
-    select id, provider, status, external_label, last_error, scopes, connected_at, last_verified_at
+    select id, provider, status, external_label, last_error, scopes, connected_at, last_verified_at, account_selection_id
     from public.connections
     where organization_id = ${organizationId}
     order by connected_at asc
@@ -604,8 +617,10 @@ export async function listOrganizationAdAccounts(organizationId: string): Promis
 
 export async function loadEnabledAccountIds(organizationId: string): Promise<Partial<Record<CloudProvider, Set<string>>>> {
   const rows = await db()<Array<{ provider: CloudProvider; accountId: string }>>`
-    select provider, account_id from public.organization_ad_accounts
-    where organization_id = ${organizationId} and enabled = true
+    select account.provider, account.account_id from public.organization_ad_accounts account
+    join public.connections connection on connection.id = account.connection_id
+    where account.organization_id = ${organizationId} and account.enabled = true
+      and connection.status = 'connected' and connection.account_selection_id is null
   `;
   const result: Partial<Record<CloudProvider, Set<string>>> = {};
   for (const row of rows) (result[row.provider] ??= new Set()).add(row.accountId);
@@ -623,6 +638,14 @@ export async function setOrganizationAdAccountEnabled(input: {
 }): Promise<void> {
   if (!['owner', 'admin'].includes(input.principal.role ?? '')) throw new Error('Owner or admin access is required.');
   await db().begin(async (sql) => {
+    await sql`select id from public.organizations where id = ${input.principal.organizationId} for update`;
+    const connections = await sql<Array<{ accountSelectionId: string | null; status: string }>>`
+      select account_selection_id, status from public.connections
+      where organization_id = ${input.principal.organizationId} and provider = ${input.provider} for update
+    `;
+    if (input.enabled && (connections[0]?.accountSelectionId || connections[0]?.status !== 'connected')) {
+      throw new Error('Finish account selection or re-authorize this provider before enabling agent access.');
+    }
     const rows = await sql<Array<{ enabled: boolean; name: string }>>`
       select enabled, name from public.organization_ad_accounts
       where organization_id = ${input.principal.organizationId} and provider = ${input.provider} and account_id = ${input.accountId}

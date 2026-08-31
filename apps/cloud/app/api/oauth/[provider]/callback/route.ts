@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { randomUUID } from 'node:crypto';
 import { GoogleAdsProvider } from '@adport/provider-google';
 import { sessionPrincipal } from '@/lib/cloud/auth';
 import { oauthAdapter } from '@/lib/cloud/provider-oauth';
@@ -8,12 +9,11 @@ import {
   consumeOAuthTransaction,
   recordAudit,
   setConnectionVerification,
-  syncDiscoveredAccounts,
   updateProviderCredential,
   upsertProviderConnection,
 } from '@/lib/cloud/repository';
 import { createTenantRuntime } from '@/lib/cloud/runtime';
-import { getOrganizationEntitlement } from '@/lib/cloud/plans';
+import { stageAccountSelection } from '@/lib/cloud/account-selection';
 import { isOAuthProvider, type OAuthProvider } from '@/lib/cloud/types';
 import { providerLabel } from '@/lib/cloud/providers';
 import { env } from '@/lib/env';
@@ -60,6 +60,7 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
     if (!providerAllowedForOrganization(provider, transaction.organizationId)) throw new Error('This provider is not enabled for this organization.');
 
     const credential = await adapter.exchange({ code, verifier: transaction.verifier, state });
+    const selectionId = randomUUID();
     const connectionId = await upsertProviderConnection({
       organizationId: transaction.organizationId,
       userId: principal.userId!,
@@ -67,6 +68,7 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
       credential,
       externalLabel: `${label} grant pending verification`,
       scopes: adapter.scopes,
+      selectionId,
     });
 
     try {
@@ -78,25 +80,23 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
         await updateProviderCredential(transaction.organizationId, 'google', {
           refreshToken: googleCredential.refreshToken,
           loginCustomerIds: connectedProvider.loginCustomerIds(),
-        });
+        }, selectionId);
       }
-      const entitlement = await getOrganizationEntitlement(transaction.organizationId);
-      const enabledAccountIds = await syncDiscoveredAccounts({
-        organizationId: transaction.organizationId,
+      await stageAccountSelection({
+        principal,
+        id: selectionId,
         connectionId,
         provider,
         accounts,
-        maxActiveAccounts: entitlement.plan.maxActiveAccounts,
+        returnPath,
       });
       await setConnectionVerification(transaction.organizationId, provider, {
         ok: true,
-        label: `${accounts.length} accessible ${label} account(s)`,
-        subject: accounts.map((account) => account.id).join(','),
-      });
+        label: 'Choose accounts to finish connecting',
+      }, selectionId);
       await recordAudit(principal, {
         event: 'connected', provider, tool: 'oauth_connect', accountId: '*',
-        summary: `Connected ${accounts.length} accessible ${label} account(s) through hosted OAuth`,
-        details: { accountCount: accounts.length, activeAccountCount: enabledAccountIds.length, plan: entitlement.plan.id },
+        summary: `Authorized ${label}; account selection required`,
       });
     } catch (error) {
       console.error(JSON.stringify({
@@ -108,14 +108,14 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
       await setConnectionVerification(transaction.organizationId, provider, {
         ok: false,
         error: describeProviderError(error, provider),
-      });
+      }, selectionId);
       await recordAudit(principal, {
         event: 'note', provider, tool: 'oauth_verification', accountId: '*',
         summary: `Stored ${label} grant but account verification failed`,
       });
       return back(request, returnPath, { error: `${label} was authorized, but account verification failed. ${describeProviderError(error, provider)}` });
     }
-    return back(request, returnPath, { connected: provider });
+    return back(request, '/account-selection', { selection_id: selectionId });
   } catch (error) {
     console.error(`${provider} OAuth callback failed:`, describeProviderError(error, provider));
     return back(request, returnPath, { error: `${label} connection failed. Please retry.` });

@@ -2,6 +2,7 @@ import 'server-only';
 import {
   AdportError,
   type AdProvider,
+  type Account,
   type AnyToolDefinition,
   type NormalizedQuery,
   type WriteGuard,
@@ -58,14 +59,16 @@ export function createAccountScopeAuthorizer(accountIds: Partial<Record<CloudPro
 export class AccountScopedProvider implements AdProvider {
   readonly id: string;
 
-  constructor(private readonly provider: AdProvider, private readonly allowed: ReadonlySet<string>) {
+  constructor(private readonly provider: AdProvider, private readonly allowed: ReadonlySet<string>, private readonly accounts: readonly Account[] = []) {
     this.id = provider.id;
   }
 
   capabilities() { return this.provider.capabilities(); }
 
   async listAccounts() {
-    return (await this.provider.listAccounts()).filter((account) => this.allowed.has(account.id));
+    // Discovery is an OAuth-only operation. Never enumerate an entire grant
+    // just to service a routine dashboard or MCP account-list request.
+    return this.accounts.filter(account => this.allowed.has(account.id)).map(account => ({ ...account }));
   }
 
   async report(query: NormalizedQuery) {

@@ -55,7 +55,7 @@ export function AccountAccessManager({ organizationId, accounts, canManage, maxA
         <span className="card-note">{activeCount} / {maxActiveAccounts ?? 'unlimited'} active{providerFilter ? ' across workspace' : ''}</span>
       </div>
       {error ? <div className="error-callout" role="alert">{error}</div> : null}
-      {visibleAccounts.length === 0 ? <div className="empty"><h3>No {providerFilter ? `${providerLabel(providerFilter)} ` : ''}accounts discovered</h3><p>Reconnect this provider and grant access to an ad account to continue.</p></div> : <div className="table-wrap"><table>
+      {visibleAccounts.length === 0 ? <div className="empty"><h3>No {providerFilter ? `${providerLabel(providerFilter)} ` : ''}accounts added</h3><p>Re-authorize this provider in Connections to choose which accounts to add.</p></div> : <div className="table-wrap"><table>
         <thead><tr><th>Account</th><th>Provider</th><th>Currency</th><th>Status</th><th>Agent access</th></tr></thead>
         <tbody>
           {visibleAccounts.map((account) => (

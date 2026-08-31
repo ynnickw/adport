@@ -682,3 +682,8 @@ details.connection-form[open] summary { margin-bottom: 0.8rem; }
 @media (max-width: 440px) {
   .social-auth { grid-template-columns: 1fr; }
 }
+.account-picker-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 0.65rem; padding: 1.25rem; }
+.account-picker-search { flex: 1; min-width: min(100%, 15rem); display: grid; gap: 0.4rem; }
+.account-picker-footer { border-top: 1px solid var(--border, #e5e5e5); padding: 1.25rem; display: grid; gap: 0.9rem; justify-items: start; }
+.account-picker-footer p { margin: 0; }
+.account-selection-content { width: min(68rem, 100%); margin: 2.5rem auto; }

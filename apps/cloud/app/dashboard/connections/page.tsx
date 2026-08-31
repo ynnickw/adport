@@ -29,6 +29,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
         connections={connections.map((connection) => ({
           provider: connection.provider,
           status: connection.status,
+          accountSelectionId: connection.accountSelectionId,
           externalLabel: connection.externalLabel,
           lastError: connection.lastError,
           connectedAt: connection.connectedAt.toISOString(),

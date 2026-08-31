@@ -20,6 +20,7 @@ import { hydrateApple, hydrateMeta, hydrateMicrosoft, hydrateReddit, hydrateTikT
 import {
   getOrganizationPolicy,
   loadEnabledAccountIds,
+  listOrganizationAdAccounts,
   loadProviderCredentials,
   PostgresAuditStore,
   PostgresFindingsStore,
@@ -40,14 +41,19 @@ export interface TenantRuntimeOptions {
  */
 export async function createTenantRuntime(principal: TenantPrincipal, options: TenantRuntimeOptions = {}): Promise<AdportRuntime> {
   const enforceAccountScope = options.enforceAccountScope ?? true;
-  const [policy, credentials, enabledAccountIds] = await Promise.all([
+  const [policy, credentials, enabledAccountIds, inventory] = await Promise.all([
     getOrganizationPolicy(principal.organizationId),
-    loadProviderCredentials(principal.organizationId),
+    loadProviderCredentials(principal.organizationId, !enforceAccountScope),
     enforceAccountScope ? loadEnabledAccountIds(principal.organizationId) : Promise.resolve({}),
+    enforceAccountScope ? listOrganizationAdAccounts(principal.organizationId) : Promise.resolve([]),
   ]);
   const modules: ProviderModule[] = [];
   const scopeProvider = <T extends ProviderModule['provider']>(provider: T): ProviderModule['provider'] =>
-    enforceAccountScope ? new AccountScopedProvider(provider, enabledAccountIds[provider.id as keyof typeof enabledAccountIds] ?? new Set()) : provider;
+    enforceAccountScope ? new AccountScopedProvider(provider, enabledAccountIds[provider.id as keyof typeof enabledAccountIds] ?? new Set(),
+      inventory.filter(account => account.provider === provider.id).map(account => ({
+        provider: account.provider, id: account.accountId, name: account.name,
+        currency: account.currency ?? undefined, status: account.status ?? undefined,
+      }))) : provider;
   const persistTokens = (provider: keyof ProviderCredentialMap) => {
     let expected = credentials[provider]!;
     return async (tokens: Parameters<typeof rotateProviderTokens>[0]['tokens']) => {
