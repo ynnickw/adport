@@ -23,6 +23,22 @@ test('Microsoft uses the official four-color symbol on every surface', () => {
   }
 });
 
+test('Snapchat preserves the official white and black Ghost on a yellow badge everywhere', async () => {
+  const source = await readFile(path.join(root, 'apps/cloud/components/snapchat-logo.tsx'), 'utf8');
+  const expectedPaths = [...source.matchAll(/<path fill="([^"]+)" d="([^"]+)"/g)].map(match => [match[1], match[2]]);
+  assert.equal(expectedPaths.length, 2);
+  let count = 0;
+  for (const [file, html] of [['index.html', home], ...pages]) {
+    for (const [logo] of html.matchAll(/<svg class="snapchat-logo"[\s\S]*?<\/svg>/g)) {
+      count++;
+      assert(logo.includes('fill="#fffc00"'), `${file}: yellow background missing`);
+      assert.deepEqual([...logo.matchAll(/<path fill="([^"]+)" d="([^"]+)"/g)].map(match => [match[1], match[2]]), expectedPaths, file);
+    }
+    assert(!/<svg stroke="currentColor"[^>]*class="snapchat-logo"/.test(html), `${file}: obsolete silhouette`);
+  }
+  assert(count >= 3, 'homepage, directory, and Snapchat page must include the badge');
+});
+
 test('all provider setup tabs reuse the homepage agent logos', () => {
   for (const [file, html] of pages.filter(([file]) => file.startsWith('providers/'))) {
     for (const id of ['claude', 'cursor', 'chatgpt']) {

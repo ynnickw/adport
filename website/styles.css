@@ -153,7 +153,7 @@ a { color: inherit; }
 .platforms .spotify-logo { color: #16883e; }
 .platforms .pinterest-logo { color: #e60023; }
 .platforms .linkedin-logo { color: #0a66c2; }
-.platforms .snapchat-logo, .platforms .x-logo { color: #111; }
+.platforms .x-logo { color: #111; }
 .setup-description { color: var(--muted); font-size: 0.85rem; line-height: 1.6; }
 .endpoint { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-block: 1.5rem; padding: 1rem; border-radius: 0.8rem; background: var(--ink); color: #fff; }
 .endpoint code { overflow-wrap: anywhere; }

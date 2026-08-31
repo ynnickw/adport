@@ -9,6 +9,9 @@ on the artwork rather than inheriting surrounding text color.
   Its two path geometries and black/white fills are preserved in
   `snapchat-logo.tsx`; the badge uses Snapchat yellow. No external image request
   is made at runtime. [Ghost guidelines](https://help.snapchat.com/hc/en-us/articles/7012349890452-Snapchat-Ghost-Logo-Usage-Guidelines).
+  The landing page and generated provider pages reuse the same unmodified Ghost
+  paths with an explicit yellow (#FFFC00) background and clear space inside the
+  SVG, so the full-color badge does not depend on surrounding CSS.
 - Spotify: Simple Icons geometry, Spotify green (#1ED760).
   [Branding reference](https://developer.spotify.com/documentation/design).
 - Pinterest: Simple Icons geometry, Pinterest red (#E60023).
