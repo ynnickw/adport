@@ -18,7 +18,7 @@ const COPY: Record<OAuthProviderView['id'], string> = {
   snapchat: 'Connect Snapchat Marketing through its official consent screen. Testing is limited to the approved organization and the ad accounts you can access.',
   spotify: 'Connect Spotify Ads through its official consent screen. The developer application must be allowlisted for the Ads API before account verification can succeed.',
   pinterest: 'Connect Pinterest Ads with read and write permissions. Trial access is limited to eligible owner accounts; external access requires Standard approval.',
-  linkedin: 'Connect LinkedIn Ads once Marketing API access and the cloud callback are approved. Development-tier access is pending.',
+  linkedin: 'LinkedIn Advertising API Development Tier is enabled for Adport. Cloud connection testing must be enabled for your organization; broader access requires Standard Tier approval.',
   x: 'Connect your X ad accounts through OAuth 1.0a. Adport has Standard Ads API access; cloud onboarding is rolling out to enabled organizations.',
 };
 

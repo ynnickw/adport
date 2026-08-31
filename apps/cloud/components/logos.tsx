@@ -1,3 +1,7 @@
+import { FaLinkedin } from 'react-icons/fa';
+import { SiPinterest, SiSpotify, SiX } from 'react-icons/si';
+import { SnapchatLogo } from './snapchat-logo';
+
 export function BrandMark() {
   return <span className="brand-mark" aria-hidden="true" />;
 }
@@ -17,15 +21,15 @@ export { providerLabel } from '@/lib/cloud/providers';
 export function ProviderLogo({ name }: { name: string }) {
   switch (name) {
     case 'snapchat':
-      return <SiSnapchat className="snapchat-logo" aria-hidden="true" />;
+      return <SnapchatLogo />;
     case 'spotify':
-      return <SiSpotify className="spotify-logo" aria-hidden="true" />;
+      return <SiSpotify className="spotify-logo" color="#1ed760" aria-hidden="true" />;
     case 'pinterest':
-      return <SiPinterest className="pinterest-logo" aria-hidden="true" />;
+      return <SiPinterest className="pinterest-logo" color="#e60023" aria-hidden="true" />;
     case 'linkedin':
-      return <FaLinkedin className="linkedin-logo" aria-hidden="true" />;
+      return <FaLinkedin className="linkedin-logo" color="#0a66c2" aria-hidden="true" />;
     case 'x':
-      return <SiX className="x-logo" aria-hidden="true" />;
+      return <SiX className="x-logo" color="#000" aria-hidden="true" />;
     case 'google':
       return (
         <svg className="google-logo" viewBox="0 0 24 24" aria-hidden="true">
@@ -77,5 +81,3 @@ export function ProviderLogo({ name }: { name: string }) {
       );
   }
 }
-import { FaLinkedin } from 'react-icons/fa';
-import { SiPinterest, SiSnapchat, SiSpotify, SiX } from 'react-icons/si';
