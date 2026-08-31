@@ -21,6 +21,18 @@ test('Microsoft uses the official four-color symbol on every surface', () => {
   }
 });
 
+test('all provider setup cards reuse the homepage agent logos', () => {
+  for (const [file, html] of pages.filter(([file]) => file.startsWith('providers/'))) {
+    for (const id of ['claude', 'cursor', 'chatgpt']) {
+      const source = home.match(new RegExp(`<span class="agent agent-${id}">[\\s\\S]*?<\\/svg>`))[0];
+      const logo = html.match(new RegExp(`<svg class="agent-brand-logo agent-brand-${id}"[\\s\\S]*?<\\/svg>`))?.[0];
+      assert(logo, `${file}: missing ${id} logo`);
+      assert(logo.includes('aria-hidden="true"'), `${file}: decorative logo must not repeat the heading`);
+      assert.equal(logo.match(/<path[\s\S]*?<\/svg>/)[0], source.match(/<path[\s\S]*?<\/svg>/)[0], `${file}: ${id} logo differs from the homepage`);
+    }
+  }
+});
+
 test('covers all eleven advertising providers exactly once', () => {
   assert.deepEqual(providers.map(p => p.id).sort(), ['apple', 'google', 'linkedin', 'meta', 'microsoft', 'pinterest', 'reddit', 'snapchat', 'spotify', 'tiktok', 'x']);
   assert.equal(new Set(providers.map(p => p.slug)).size, 11);

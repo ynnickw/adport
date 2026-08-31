@@ -19,6 +19,10 @@ const signup = get(/<div class="hero-signup">[\s\S]*?<\/form>\s*<\/div>/);
 const github = get(/<a class="text-action github-link"[\s\S]*?<\/a>/);
 const waitlist = get(/<section class="waitlist"[\s\S]*?<\/section>/);
 const logo = provider => get(new RegExp(`<svg[^>]*class="${provider.id}-logo"[\\s\\S]*?<\\/svg>`));
+const agentLogo = id => {
+  const markup = get(new RegExp(`<span class="agent agent-${id}">[\\s\\S]*?<\\/svg>`));
+  return markup.slice(markup.indexOf('<svg')).replace('<svg ', `<svg class="agent-brand-logo agent-brand-${id}" aria-hidden="true" focusable="false" `);
+};
 const href = provider => `/providers/${provider.slug}`;
 const code = text => `<pre><code>${escape(text)}</code></pre>`;
 const copy = (text, label) => `<button class="text-action" type="button" data-copy-command="${escape(text)}"><span class="copy-label" aria-live="polite">${escape(label)}</span></button>`;
@@ -121,9 +125,9 @@ function providerPage(p) {
       <p class="eyebrow">Your tools. Your choice.</p>
       <h2 id="agent-title">Use ${escape(p.name)} from your agent.</h2>
       <div class="agent-setup-grid">
-        <article><h3>${escape(p.name)} in Claude Code</h3><p>After connecting locally, register Adport as a stdio MCP server:</p>${code(claude)}${copy(claude, 'Copy Claude Code command')}<p>Start a new session and ask Claude to list your connected ${escape(p.name)} accounts.</p><a href="https://code.claude.com/docs/en/mcp">Claude Code MCP documentation</a></article>
-        <article><h3>${escape(p.name)} in Cursor</h3><p>Add this entry to your Cursor MCP configuration. Merge it with existing servers rather than replacing them:</p>${code(cursor)}${copy(cursor, 'Copy Cursor configuration')}<p>The command must be available on Cursor’s PATH. Enable the server and ask the agent to inspect your account.</p><a href="https://cursor.com/docs/context/mcp">Cursor MCP documentation</a></article>
-        <article class="cloud-agent-card"><span class="availability-label">Cloud waitlist</span><h3>${escape(p.name)} in ChatGPT</h3><p>Adport Cloud’s hosted MCP connection is coming. Join the waitlist for early access to a managed connection, without running a local server.</p><p>The local stdio configuration above is not a hosted ChatGPT connector URL. Cloud access and individual provider availability remain subject to rollout and approval.</p><a class="text-action" href="#waitlist">Join the cloud waitlist</a></article>
+        <article><h3 class="agent-card-title">${agentLogo('claude')}<span>${escape(p.name)} in Claude Code</span></h3><p>After connecting locally, register Adport as a stdio MCP server:</p>${code(claude)}${copy(claude, 'Copy Claude Code command')}<p>Start a new session and ask Claude to list your connected ${escape(p.name)} accounts.</p><a href="https://code.claude.com/docs/en/mcp">Claude Code MCP documentation</a></article>
+        <article><h3 class="agent-card-title">${agentLogo('cursor')}<span>${escape(p.name)} in Cursor</span></h3><p>Add this entry to your Cursor MCP configuration. Merge it with existing servers rather than replacing them:</p>${code(cursor)}${copy(cursor, 'Copy Cursor configuration')}<p>The command must be available on Cursor’s PATH. Enable the server and ask the agent to inspect your account.</p><a href="https://cursor.com/docs/context/mcp">Cursor MCP documentation</a></article>
+        <article class="cloud-agent-card"><h3 class="agent-card-title">${agentLogo('chatgpt')}<span>${escape(p.name)} in ChatGPT</span></h3><span class="availability-label">Cloud waitlist</span><p>Adport Cloud’s hosted MCP connection is coming. Join the waitlist for early access to a managed connection, without running a local server.</p><p>The local stdio configuration above is not a hosted ChatGPT connector URL. Cloud access and individual provider availability remain subject to rollout and approval.</p><a class="text-action" href="#waitlist">Join the cloud waitlist</a></article>
       </div>
     </section>
 
