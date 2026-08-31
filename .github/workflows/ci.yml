@@ -24,6 +24,10 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
+      - name: Verify provider landing pages
+        run: |
+          node scripts/build-provider-pages.mjs --check
+          node --test scripts/test-provider-pages.mjs
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm typecheck
