@@ -135,4 +135,60 @@ describe('adport MCP server', () => {
       await scopedClient.close();
     }
   });
+
+  it('keeps plan-blocked write tools discoverable and returns an upgrade response', async () => {
+    const runtime = await createContext({ includeMock: true });
+    const scopedServer = createMcpServer({
+      runtime,
+      scopes: ['tools:read'],
+      scopeDenials: {
+        'tools:write': {
+          code: 'PLAN_LIMIT',
+          message: 'Free is a read-only plan. Upgrade to operator or higher to use MCP write tools.',
+          data: {
+            planLimit: {
+              kind: 'write_access',
+              currentPlan: 'Free',
+              recommendedPlan: 'operator',
+              message: 'Free is a read-only plan. Upgrade to operator or higher to use MCP write tools.',
+              upgradeUrl: 'https://app.adport.dev/dashboard/billing?intent=write_access',
+            },
+          },
+        },
+      },
+    });
+    const [scopedClientTransport, scopedServerTransport] = InMemoryTransport.createLinkedPair();
+    const scopedClient = new Client({ name: 'free-plan-client', version: '0.0.0' });
+    await Promise.all([scopedServer.connect(scopedServerTransport), scopedClient.connect(scopedClientTransport)]);
+    try {
+      const tools = (await scopedClient.listTools()).tools;
+      expect(tools.map((tool) => tool.name)).toContain('mock_set_budget');
+      expect(tools.find((tool) => tool.name === 'mock_set_budget')?.description).toContain('Unavailable on the current plan');
+
+      const result = await scopedClient.callTool({
+        name: 'mock_set_budget',
+        arguments: { account_id: 'mock-1', campaign_id: 'c1', daily_budget_micros: 11_500_000 },
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result as never)).toEqual({
+        error: 'PLAN_LIMIT',
+        code: 'PLAN_LIMIT',
+        message: 'Free is a read-only plan. Upgrade to operator or higher to use MCP write tools.',
+        planLimit: {
+          kind: 'write_access',
+          currentPlan: 'Free',
+          recommendedPlan: 'operator',
+          message: 'Free is a read-only plan. Upgrade to operator or higher to use MCP write tools.',
+          upgradeUrl: 'https://app.adport.dev/dashboard/billing?intent=write_access',
+        },
+      });
+
+      const campaigns = textOf(
+        (await scopedClient.callTool({ name: 'mock_list_campaigns', arguments: { account_id: 'mock-1' } })) as never,
+      ) as { campaigns: Array<{ id: string; dailyBudgetMicros: number }> };
+      expect(campaigns.campaigns.find((campaign) => campaign.id === 'c1')?.dailyBudgetMicros).toBe(10_000_000);
+    } finally {
+      await scopedClient.close();
+    }
+  });
 });

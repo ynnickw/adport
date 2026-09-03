@@ -36,7 +36,8 @@ export default async function AuthorizePage({ searchParams }: {
   const { data } = await supabase.auth.getUser();
   if (!data.user) redirect(`/login?return_to=${encodeURIComponent(`/oauth/authorize?${params.toString()}`)}`);
   const principal = await sessionPrincipal();
-  const grantedScopes = authorization.scopes.filter((scope) => principal.scopes.includes(scope));
+  const credentialScopes = principal.grantedScopes ?? principal.scopes;
+  const grantedScopes = authorization.scopes.filter((scope) => credentialScopes.includes(scope));
   const organization = await db()<Array<{ name: string }>>`
     select name from public.organizations where id = ${principal.organizationId} limit 1
   `;
@@ -56,8 +57,11 @@ export default async function AuthorizePage({ searchParams }: {
       <dl className="connection-meta oauth-consent-scopes">
         {grantedScopes.includes('tools:read') ? <><dt>Read</dt><dd>Active ad accounts, campaigns, reports, findings, and audit evidence.</dd></> : null}
         {grantedScopes.includes('tools:write') ? <><dt>Propose changes</dt><dd>Create previews and apply only operations that pass Adport&apos;s two-step policy gate.</dd></> : null}
-        {authorization.scopes.includes('tools:write') && !grantedScopes.includes('tools:write')
-          ? <><dt>Read-only plan</dt><dd>This workspace will not grant write tools to the MCP client.</dd></>
+        {authorization.scopes.includes('tools:write') && principal.entitlement && !principal.entitlement.writeAccess
+          ? <><dt>Current plan</dt><dd>Write tools are authorized but remain blocked until this workspace upgrades to Operator or higher.</dd></>
+          : null}
+        {authorization.scopes.includes('tools:write') && principal.role === 'viewer'
+          ? <><dt>Current role</dt><dd>Viewer access cannot use write tools. Ask a workspace admin to change your role.</dd></>
           : null}
       </dl>
       <form className="form" method="post" action="/oauth/authorize/consent">

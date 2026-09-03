@@ -119,7 +119,8 @@ export async function createMcpAuthorizationCode(
   request: AuthorizationRequest,
 ): Promise<string> {
   if (!principal.userId) throw new Error('A user session is required to authorize an MCP client.');
-  const scopes = request.scopes.filter((scope) => principal.scopes.includes(scope));
+  const credentialScopes = principal.grantedScopes ?? principal.scopes;
+  const scopes = request.scopes.filter((scope) => credentialScopes.includes(scope));
   if (scopes.length === 0) throw new Error('This workspace does not grant any of the requested MCP scopes.');
   const code = `adp_code_${randomBytes(32).toString('base64url')}`;
   await db()`

@@ -4,11 +4,30 @@ import { apiPrincipal } from '@/lib/cloud/auth';
 import { createTenantRuntime } from '@/lib/cloud/runtime';
 import { HttpError } from '@/lib/http';
 import { oauthIssuerUrl, protectedResourceMetadataUrl } from '@/lib/mcp-oauth';
+import { recommendedUpgradePlan } from '@/lib/cloud/plans';
 
 async function handle(request: Request): Promise<Response> {
   try {
     const principal = await apiPrincipal(request);
     const runtime = await createTenantRuntime(principal);
+    const writePlanDenial = principal.role !== 'viewer'
+      && principal.grantedScopes?.includes('tools:write')
+      && principal.entitlement
+      && !principal.entitlement.writeAccess
+      ? {
+          code: 'PLAN_LIMIT',
+          message: `${principal.entitlement.planName} is a read-only plan. Upgrade to ${recommendedUpgradePlan(principal.entitlement.planId)} or higher to use MCP write tools.`,
+          data: {
+            planLimit: {
+              kind: 'write_access',
+              currentPlan: principal.entitlement.planName,
+              recommendedPlan: recommendedUpgradePlan(principal.entitlement.planId),
+              message: `${principal.entitlement.planName} is a read-only plan. Upgrade to ${recommendedUpgradePlan(principal.entitlement.planId)} or higher to use MCP write tools.`,
+              upgradeUrl: `${oauthIssuerUrl()}/dashboard/billing?intent=write_access`,
+            },
+          },
+        }
+      : undefined;
     const server = createMcpServer({
       runtime,
       name: 'adport-cloud',
@@ -19,6 +38,7 @@ async function handle(request: Request): Promise<Response> {
         sizes: ['any'],
       }],
       scopes: principal.scopes,
+      scopeDenials: writePlanDenial ? { 'tools:write': writePlanDenial } : undefined,
     });
     const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     await server.connect(transport);

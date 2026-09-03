@@ -5,6 +5,13 @@ export interface TenantPrincipal {
   oauthTokenId?: string;
   clientId?: string;
   role?: 'owner' | 'admin' | 'member' | 'viewer';
+  /** Scopes granted to the credential before dynamic plan and role checks. */
+  grantedScopes?: string[];
+  entitlement?: {
+    planId: 'reader' | 'operator' | 'premium' | 'agency' | 'enterprise';
+    planName: string;
+    writeAccess: boolean;
+  };
   scopes: string[];
 }
 

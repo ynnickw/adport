@@ -94,6 +94,12 @@ export async function applyPlanToPrincipal(principal: TenantPrincipal): Promise<
   return {
     ...principal,
     role,
+    grantedScopes: principal.grantedScopes ?? principal.scopes,
+    entitlement: {
+      planId: entitlement.plan.id,
+      planName: entitlement.plan.name,
+      writeAccess: entitlement.plan.writeAccess,
+    },
     scopes: principal.scopes.filter((scope) => scope !== 'tools:write' || writeAllowed),
   };
 }

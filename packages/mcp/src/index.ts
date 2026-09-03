@@ -51,21 +51,35 @@ export interface CreateServerOptions {
   icons?: Array<{ src: string; mimeType?: string; sizes?: string[] }>;
   /** When set by a remote transport, only register tools authorized by this key. */
   scopes?: readonly string[];
+  /**
+   * Register tools blocked by a dynamic entitlement and return this structured
+   * error when called. Missing credential scopes without a denial stay hidden.
+   */
+  scopeDenials?: Readonly<Record<string, ToolScopeDenial | undefined>>;
+}
+
+export interface ToolScopeDenial {
+  code: string;
+  message: string;
+  data?: Record<string, unknown>;
 }
 
 /**
  * Thin adapter: every tool in the shared registry becomes an MCP tool.
  * No tool logic lives here — see the "one tool-definition layer" principle.
  */
-export function createMcpServer({ runtime, name = 'adport', version = packageJson.version, icons = DEFAULT_MCP_ICONS, scopes }: CreateServerOptions): McpServer {
+export function createMcpServer({ runtime, name = 'adport', version = packageJson.version, icons = DEFAULT_MCP_ICONS, scopes, scopeDenials }: CreateServerOptions): McpServer {
   const server = new McpServer({ name, version, ...(icons ? { icons } : {}) });
   for (const tool of runtime.registry.list()) {
     const requiredScope = tool.annotations.readOnly ? 'tools:read' : 'tools:write';
-    if (scopes && !scopes.includes(requiredScope)) continue;
+    const scopeDenial = scopes && !scopes.includes(requiredScope) ? scopeDenials?.[requiredScope] : undefined;
+    if (scopes && !scopes.includes(requiredScope) && !scopeDenial) continue;
     server.registerTool(
       tool.name,
       {
-        description: tool.description,
+        description: scopeDenial
+          ? `${tool.description}\n\nUnavailable on the current plan: ${scopeDenial.message}`
+          : tool.description,
         inputSchema: tool.input.shape,
         annotations: {
           readOnlyHint: tool.annotations.readOnly ?? false,
@@ -74,6 +88,20 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
         },
       },
       async (args: Record<string, unknown>) => {
+        if (scopeDenial) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                error: scopeDenial.code,
+                code: scopeDenial.code,
+                message: scopeDenial.message,
+                ...scopeDenial.data,
+              }, null, 2),
+            }],
+            isError: true,
+          };
+        }
         try {
           const result = await runtime.registry.call(tool.name, args, runtime.ctx);
           return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
