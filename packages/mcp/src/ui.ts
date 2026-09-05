@@ -21,6 +21,7 @@ const providerNames: Record<string, string> = {
 export function viewForTool(name: string, readOnly: boolean): AdportView | undefined {
   if (name === 'accounts_list') return 'accounts';
   if (name === 'report') return 'report';
+  if (name === 'audit_run' || name === 'recommendation_dismiss') return 'insights';
   if (!readOnly) return 'operation';
   if (name.startsWith('recommendation') || name.startsWith('audit_')) return 'insights';
   return undefined;
@@ -113,7 +114,12 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     .bar-row { display:grid; grid-template-columns:minmax(72px,1fr) minmax(90px,2fr) auto; align-items:center; gap:9px; font-size:11px }
     .bar-name { overflow:hidden; white-space:nowrap; text-overflow:ellipsis }
     .track { height:7px; overflow:hidden; border-radius:99px; background:var(--soft) }
-    .fill { height:100%; min-width:3px; border-radius:99px; background:linear-gradient(90deg,var(--orange),#ff985e) }
+    .fill { height:100%; border-radius:99px; background:linear-gradient(90deg,var(--orange),#ff985e) }
+    .tabs { display:flex; gap:6px; overflow:auto; padding-bottom:12px }
+    .tabs button { flex:0 0 auto; cursor:pointer; padding:8px 12px; border:1px solid var(--line); border-radius:99px; background:var(--paper); color:var(--muted); font-size:12px }
+    .tabs button[aria-pressed="true"] { color:var(--ink); border-color:var(--orange); background:color-mix(in srgb,var(--orange) 8%,var(--paper)) }
+    button:focus-visible { outline:2px solid var(--orange); outline-offset:2px }
+    .notice { padding:10px 12px; margin:0 0 12px; border-radius:10px; background:var(--soft); color:var(--muted); font-size:12px; line-height:1.45 }
     .bar-value { color:var(--muted); font:600 10px/1 var(--mono); white-space:nowrap }
     .list { display:grid; gap:7px }
     .row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 11px; border:1px solid var(--line); border-radius:12px }
@@ -127,6 +133,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     .pill { flex:0 0 auto; padding:5px 8px; border-radius:99px; color:var(--green); background:color-mix(in srgb,var(--green) 10%,transparent); font:700 9px/1 var(--mono); letter-spacing:.08em; text-transform:uppercase }
     .pill.warn { color:var(--amber); background:color-mix(in srgb,var(--amber) 11%,transparent) }
     .pill.danger { color:var(--red); background:color-mix(in srgb,var(--red) 10%,transparent) }
+    .pill.neutral { color:var(--muted); background:var(--soft) }
     .change { display:grid; gap:9px }
     .change-main { padding:14px; border-radius:14px; background:linear-gradient(135deg,color-mix(in srgb,var(--orange) 11%,var(--soft)),var(--soft)) }
     .change-main h2 { margin:0; font-size:17px; letter-spacing:-.025em }.change-main p { margin:6px 0 0; color:var(--muted); font-size:12px; line-height:1.45 }
@@ -140,7 +147,8 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     @keyframes pulse { 50% { opacity:.55 } }
     @media (max-width:620px) { .kpis { grid-template-columns:repeat(2,minmax(0,1fr)) }.grid { grid-template-columns:1fr }.eyebrow { display:none }.top,.hero,.content,.foot { padding-left:14px; padding-right:14px } }
     @media (prefers-reduced-motion:reduce) { * { animation:none!important; transition:none!important } }
-    @media (prefers-color-scheme:dark) { :root { --ink:#f5f5f3;--muted:#aaa9ad;--faint:#77777d;--paper:#171717;--soft:#222220;--line:rgba(255,255,255,.11) }.shell{box-shadow:none} }
+    :root[data-theme="dark"] { --ink:#f5f5f3;--muted:#aaa9ad;--faint:#a09fa5;--paper:#171717;--soft:#222220;--line:rgba(255,255,255,.11) }
+    @media (prefers-color-scheme:dark) { :root:not([data-theme="light"]) { --ink:#f5f5f3;--muted:#aaa9ad;--faint:#a09fa5;--paper:#171717;--soft:#222220;--line:rgba(255,255,255,.11) } }
   </style>
 </head>
 <body>
@@ -152,7 +160,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
   <script>
   (() => {
     const app = document.getElementById('app');
-    const state = { host: {}, result: null };
+    const state = { host: {}, result: null, reportGroup: null };
     const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const arr = (value) => Array.isArray(value) ? value : [];
     const num = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
@@ -160,6 +168,11 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       ? new Intl.NumberFormat(state.host.locale || 'en', { style:'currency', currency, maximumFractionDigits:2 }).format(num(value))
       : new Intl.NumberFormat(state.host.locale || 'en', { maximumFractionDigits:2 }).format(num(value));
     const compact = (value) => new Intl.NumberFormat(state.host.locale || 'en', { notation:'compact', maximumFractionDigits:1 }).format(num(value));
+    const available = (value) => typeof value === 'number' && Number.isFinite(value);
+    const total = (rows, key) => rows.length && rows.every(r => available(r.metrics?.[key])) ? rows.reduce((sum,r) => sum+r.metrics[key],0) : null;
+    const currencyOf = (row) => typeof row.currency === 'string' && /^[A-Z]{3}$/.test(row.currency) ? row.currency : null;
+    const statusOf = (status) => !status || /unknown|unspecified/i.test(status) ? {label:'Status unavailable',tone:'neutral'} : /disabled|removed|inactive|closed|suspended/i.test(status) ? {label:status,tone:'danger'} : /paused|disable$/i.test(status) ? {label:status,tone:'warn'} : /^(enabled|active|approved)$/i.test(status) ? {label:status,tone:''} : {label:status,tone:'neutral'};
+    const notices = (data) => [...arr(data.errors).map(e => (e.provider || 'Provider')+': '+(e.message || 'Read failed')), ...arr(data.warnings).map(e => e.message || 'Some metadata is unavailable'), ...(data.truncated ? ['Partial result: row limit reached. Totals and charts cover returned rows only.'] : [])].map(text => '<p class="notice">'+esc(text)+'</p>').join('');
     const providerName = (id, names) => names?.[id] || String(id || 'Provider');
     const initials = (id) => ({snapchat:'S',spotify:'S',pinterest:'P',linkedin:'in',x:'X'}[id] || String(id || '?').slice(0,2).toUpperCase());
     const providerSvg = {
@@ -175,51 +188,78 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     function renderAccounts(data, meta) {
       const accounts = arr(data.accounts), errors = arr(data.errors), names = meta.providerNames || {};
       const providers = new Set(accounts.map(a => a.provider)).size;
-      const body = accounts.length ? '<div class="kpis"><div class="kpi"><small>Accounts</small><strong>'+accounts.length+'</strong></div><div class="kpi"><small>Providers</small><strong>'+providers+'</strong></div><div class="kpi"><small>Healthy</small><strong>'+accounts.filter(a => !/disabled|removed|inactive/i.test(a.status || '')).length+'</strong></div><div class="kpi"><small>Read errors</small><strong>'+errors.length+'</strong></div></div><div class="list">'+accounts.map(a => '<div class="row"><div class="identity">'+logo(a.provider)+'<div class="identity-copy"><b>'+esc(a.name || 'Ad account')+'</b><span>'+esc(providerName(a.provider,names))+' · '+esc(a.id)+(a.currency ? ' · '+esc(a.currency) : '')+'</span></div></div><span class="pill '+(/disabled|removed|inactive/i.test(a.status || '') ? 'danger' : !a.status || /unknown/i.test(a.status) ? 'warn' : '')+'">'+esc(!a.status || /unknown/i.test(a.status) ? 'Available' : a.status)+'</span></div>').join('')+'</div>' : '<div class="empty">No accessible ad accounts were returned.</div>';
+      const body = notices(data)+(accounts.length ? '<div class="kpis"><div class="kpi"><small>Accounts</small><strong>'+accounts.length+'</strong></div><div class="kpi"><small>Providers</small><strong>'+providers+'</strong></div><div class="kpi"><small>Currencies</small><strong>'+new Set(accounts.map(currencyOf).filter(Boolean)).size+'</strong></div><div class="kpi"><small>Read errors</small><strong>'+errors.length+'</strong></div></div><div class="list">'+accounts.map(a => { const status=statusOf(a.status); return '<div class="row"><div class="identity">'+logo(a.provider)+'<div class="identity-copy"><b>'+esc(a.name || 'Ad account')+'</b><span>'+esc(providerName(a.provider,names))+' · '+esc(a.id)+(a.currency ? ' · '+esc(a.currency) : '')+'</span></div></div><span class="pill '+status.tone+'">'+esc(status.label)+'</span></div>'; }).join('')+'</div>' : '<div class="empty">'+(errors.length ? 'Account inventory could not be fully loaded.' : 'No accessible ad accounts were returned.')+'</div>');
       app.innerHTML = chrome(accounts.length+' ad account'+(accounts.length===1?'':'s')+' within reach', 'Only accounts explicitly available to this workspace can be queried or changed.', body, errors.length ? errors.length+' provider read issue'+(errors.length===1?'':'s') : 'Access inventory');
     }
     function renderReport(data) {
-      const rows = arr(data.rows), totals = rows.reduce((out,row) => { const m=row.metrics||{}; for (const key of ['spend','impressions','clicks','conversions','conversion_value']) out[key]=(out[key]||0)+num(m[key]); return out },{});
-      const roas = totals.spend ? totals.conversion_value / totals.spend : 0;
-      const ranked = [...rows].sort((a,b)=>num(b.metrics?.spend)-num(a.metrics?.spend)).slice(0,6), max = Math.max(1,...ranked.map(r=>num(r.metrics?.spend)));
-      const bars = ranked.length ? ranked.map(r => '<div class="bar-row"><span class="bar-name">'+esc(r.entity?.name || r.entity?.id || 'Campaign')+'</span><span class="track"><span class="fill" style="display:block;width:'+Math.max(2,num(r.metrics?.spend)/max*100).toFixed(1)+'%"></span></span><span class="bar-value">'+money(r.metrics?.spend || 0)+'</span></div>').join('') : '<div class="empty">No campaign activity in this period.</div>';
-      const recent = rows.slice(0,5).map(r => '<div class="row"><div class="identity">'+logo(r.provider)+'<div class="identity-copy"><b>'+esc(r.entity?.name || 'Campaign')+'</b><span>'+esc(r.entity?.status || 'Status unavailable')+' · '+esc(r.accountId)+'</span></div></div><span class="bar-value">'+compact(r.metrics?.clicks || 0)+' clicks</span></div>').join('');
-      const body = '<div class="kpis"><div class="kpi"><small>Spend*</small><strong>'+money(totals.spend)+'</strong></div><div class="kpi"><small>Impressions</small><strong>'+compact(totals.impressions)+'</strong></div><div class="kpi"><small>Conversions</small><strong>'+compact(totals.conversions)+'</strong></div><div class="kpi"><small>ROAS*</small><strong>'+roas.toFixed(2)+'×</strong></div></div><div class="grid"><div class="panel"><div class="panel-head"><b>Spend by campaign</b><span>normalized</span></div><div class="bars">'+bars+'</div></div><div class="panel"><div class="panel-head"><b>Campaign activity</b><span>'+rows.length+' rows</span></div><div class="list">'+(recent || '<div class="empty">Nothing to show yet.</div>')+'</div></div></div>';
-      app.innerHTML = chrome('Performance, made comparable', 'Normalized metrics across the accounts and providers selected for this report.', body, data.truncated ? 'Limited result set · * account currency units' : '* Account currency units; do not combine unlike currencies');
+      const groups = new Map();
+      for (const row of arr(data.rows)) {
+        const currency=currencyOf(row), key=currency || JSON.stringify([row.provider,row.accountId]);
+        if (!groups.has(key)) groups.set(key,{key,currency,label:currency || (row.provider+' · '+row.accountId),rows:[]});
+        groups.get(key).rows.push(row);
+      }
+      const choices=[...groups.values()];
+      const selected=groups.get(state.reportGroup) || choices[0];
+      const rows=selected?.rows || [], currency=selected?.currency;
+      state.reportGroup=selected?.key;
+      const tabs=choices.length>1 ? '<div class="tabs" role="group" aria-label="Report currency or account">'+choices.map((g,i)=>'<button data-group="'+i+'" aria-pressed="'+(g===selected)+'">'+esc(g.label)+'</button>').join('')+'</div>' : '';
+      const spend=total(rows,'spend'), value=total(rows,'conversion_value');
+      const roas=spend>0 && value!==null ? (value/spend).toFixed(2)+'×' : '—';
+      const ranked=[...rows].filter(r=>available(r.metrics?.spend)).sort((a,b)=>b.metrics.spend-a.metrics.spend).slice(0,6), max=Math.max(1,...ranked.map(r=>r.metrics.spend));
+      const bars=ranked.length ? ranked.map(r=>'<div class="bar-row"><span class="bar-name" title="'+esc(r.entity?.name || r.entity?.id)+'">'+esc(r.entity?.name || r.entity?.id || 'Entity')+'</span><span class="track" aria-hidden="true"><span class="fill" style="display:block;width:'+Math.max(0,r.metrics.spend/max*100).toFixed(1)+'%"></span></span><span class="bar-value">'+esc(money(r.metrics.spend,currency))+'</span></div>').join('') : '<div class="empty">No spend values were returned.</div>';
+      const recent=rows.slice(0,5).map(r=>'<div class="row"><div class="identity">'+logo(r.provider)+'<div class="identity-copy"><b>'+esc(r.entity?.name || r.entity?.id || 'Entity')+'</b><span>'+esc(statusOf(r.entity?.status).label)+' · '+esc(r.accountId)+'</span></div></div><span class="bar-value">'+(available(r.metrics?.clicks)?compact(r.metrics.clicks):'—')+' clicks</span></div>').join('');
+      const kpi=(label,value)=>'<div class="kpi"><small>'+esc(label)+'</small><strong>'+esc(value)+'</strong></div>';
+      const period=typeof data.date_range==='string' ? data.date_range.replaceAll('_',' ') : data.date_range ? data.date_range.start+' – '+data.date_range.end : 'Selected period';
+      const body=notices(data)+tabs+(rows.length ? (!currency?'<p class="notice">Currency unavailable. These values belong to this account only; no cross-account money total is calculated.</p>':'')+'<div class="kpis">'+kpi('Spend · '+(currency||'account units'),spend===null?'—':money(spend,currency))+kpi('Clicks',total(rows,'clicks')===null?'—':compact(total(rows,'clicks')))+kpi('Conversions',total(rows,'conversions')===null?'—':compact(total(rows,'conversions')))+kpi('ROAS',roas)+'</div><div class="grid"><div class="panel"><div class="panel-head"><b>Spend by entity</b><span>'+esc(currency||'account units')+'</span></div><div class="bars">'+bars+'</div></div><div class="panel"><div class="panel-head"><b>Activity</b><span>'+rows.length+' rows</span></div><div class="list">'+recent+'</div></div></div>' : '<div class="empty">'+(arr(data.errors).length?'Report unavailable for the requested providers.':'No rows returned for this period.')+'</div>');
+      app.innerHTML=chrome('Performance, in context',period+' · Money is grouped by currency; provider attribution may differ.',body,'Returned rows only · Missing metrics shown as —');
+      app.querySelectorAll('[data-group]').forEach(button=>button.addEventListener('click',()=>{state.reportGroup=choices[Number(button.dataset.group)].key;renderReport(data);}));
     }
     function renderOperation(data, meta) {
+      if (meta.tool === 'recommendation_apply' && data.result) data = data.result;
       const preview = data.preview || {}, pending = data.pending_operation_id, applied = data.status === 'applied' || data.applied === true;
       const changes = arr(preview.changes), coercions = arr(preview.coercions), deltas = arr(preview.budgetDeltas);
       const title = applied ? 'Change applied with an audit trail' : pending ? 'Review this change before it runs' : 'Operation result';
       const checks = [...changes.map(v=>({v,kind:''})),...coercions.map(v=>({v,kind:'coerce'})),...deltas.map(v=>({v:(v.target || 'Budget')+': '+(v.fromMicros == null ? 'new' : money(v.fromMicros/1e6))+' → '+money(num(v.toMicros)/1e6),kind:'coerce'}))];
-      const body = '<div class="change"><div class="change-main"><div class="panel-head"><b>'+(applied?'Applied':'Policy-gated preview')+'</b><span>'+esc(preview.serverValidated ? 'server validated' : 'client validated')+'</span></div><h2>'+esc(preview.summary || (applied ? 'The requested operation completed.' : 'The proposed operation is ready for review.'))+'</h2><p>'+(pending ? 'Nothing has been changed yet. Applying requires the matching pending operation token before it expires.' : applied ? 'The result is recorded in the append-only audit log.' : 'Review the structured result in the conversation for full details.')+'</p></div><div class="checks">'+(checks.length ? checks.map(item=>'<div class="check '+item.kind+'"><i>'+(item.kind?'!':'✓')+'</i><span>'+esc(item.v)+'</span></div>').join('') : '<div class="empty">No additional change details were returned.</div>')+'</div></div>';
+      const validation=preview.serverValidated===true?'server validated':preview.serverValidated===false?'local preview · not server validated':'validation not reported';
+      const body = '<div class="change"><div class="change-main"><div class="panel-head"><b>'+(applied?'Applied':pending?'Policy-gated preview':'Result')+'</b><span>'+esc(validation)+'</span></div><h2>'+esc(preview.summary || (applied ? 'The requested operation completed.' : 'Review the operation result.'))+'</h2><p>'+(pending ? 'Nothing has been changed yet. Applying requires the matching pending operation token before it expires.' : applied ? 'The result is recorded in the append-only audit log.' : 'Review the structured result in the conversation for full details.')+'</p></div><div class="checks">'+(checks.length ? checks.map(item=>'<div class="check '+item.kind+'"><i>'+(item.kind?'!':'✓')+'</i><span>'+esc(item.v)+'</span></div>').join('') : '<div class="empty">No additional change details were returned.</div>')+'</div></div>';
       app.innerHTML = chrome(title, 'Adport separates preview from execution and keeps every mutation behind the same policy gate.', body, meta.tool ? 'Tool · '+meta.tool : 'Guarded operation');
     }
     function renderInsights(data) {
-      const items = arr(data.findings || data.recommendations || data.results || data.entries);
+      const items = data.finding ? [data.finding] : arr(data.findings || data.recommendations || data.results || data.entries);
       const body = items.length ? '<div class="list">'+items.slice(0,8).map((item,i)=>'<div class="row"><div class="identity"><span class="logo" style="background:var(--orange)">'+(i+1)+'</span><div class="identity-copy"><b>'+esc(item.title || item.summary || item.rule || 'Opportunity')+'</b><span>'+esc(item.description || item.status || item.severity || 'Review recommended')+'</span></div></div><span class="pill '+(/high|critical/i.test(item.severity || '')?'danger':'')+'">'+esc(item.severity || item.status || 'open')+'</span></div>').join('')+'</div>' : '<div class="empty">No active recommendations were returned.</div>';
       app.innerHTML = chrome(items.length+' evidence-backed opportunit'+(items.length===1?'y':'ies'), 'Recommendations stay separate from execution until you explicitly apply them.', body, 'Recommendation audit');
     }
     function render(result) {
-      const data = result?.structuredContent || result || {}, meta = data._adport || {};
-      if (!meta.view && window.openai?.toolOutput) return render({structuredContent: window.openai.toolOutput});
+      let data = result?.structuredContent || result || {};
+      if (!data._adport && window.openai?.toolOutput?._adport) data=window.openai.toolOutput;
+      const meta = data._adport || {};
+      if (result?.isError || data.error) {
+        app.innerHTML=chrome('The request could not complete',data.message || 'See the tool response for the error and next steps.','<div class="empty">No successful result is available.</div>','Tool error');
+        return;
+      }
       if (meta.view === 'accounts') return renderAccounts(data,meta);
       if (meta.view === 'report') return renderReport(data,meta);
       if (meta.view === 'operation') return renderOperation(data,meta);
       return renderInsights(data,meta);
     }
     const send = (message) => window.parent.postMessage(message,'*');
+    const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => {
+      send({jsonrpc:'2.0',method:'ui/notifications/size-changed',params:{height:Math.ceil(document.body.getBoundingClientRect().height)}});
+    });
     let id = 1;
     window.addEventListener('message', (event) => {
+      if (event.source !== window.parent) return;
       const message = event.data;
       if (!message || message.jsonrpc !== '2.0') return;
       if (message.id === 1 && message.result) {
         state.host = message.result.hostContext || {};
         document.documentElement.dataset.theme = state.host.theme || '';
         send({jsonrpc:'2.0',method:'ui/notifications/initialized'});
+        resize?.observe(document.body);
+        if (state.result) render(state.result);
       }
       if (message.method === 'ui/notifications/tool-result') { state.result = message.params; render(message.params); }
-      if (message.method === 'ui/notifications/host-context-changed') { state.host = {...state.host,...message.params}; document.documentElement.dataset.theme = state.host.theme || ''; }
+      if (message.method === 'ui/notifications/host-context-changed') { state.host = {...state.host,...message.params}; document.documentElement.dataset.theme = state.host.theme || ''; if(state.result) render(state.result); }
     });
     send({jsonrpc:'2.0',id:id++,method:'ui/initialize',params:{appInfo:{name:'Adport Insight',version:'1.0.0'},appCapabilities:{},protocolVersion:'2026-01-26'}});
     if (window.openai?.toolOutput) render({structuredContent:window.openai.toolOutput});
