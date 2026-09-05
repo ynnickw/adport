@@ -15,6 +15,10 @@ function tokenResponse(pair: Awaited<ReturnType<typeof exchangeMcpAuthorizationC
   }, { headers: { 'cache-control': 'no-store', pragma: 'no-cache' } });
 }
 
+function oauthDiagnostic(event: string, details: Record<string, unknown> = {}) {
+  console.info(JSON.stringify({ area: 'mcp_oauth', event, ...details }));
+}
+
 export async function POST(request: Request) {
   let form: FormData;
   try {
@@ -32,20 +36,28 @@ export async function POST(request: Request) {
       const codeVerifier = String(form.get('code_verifier') ?? '');
       const redirectUri = validateRedirectUri(String(form.get('redirect_uri') ?? ''));
       if (!code || !codeVerifier) throw new Error('code and code_verifier are required.');
-      return tokenResponse(await exchangeMcpAuthorizationCode({ clientId, code, codeVerifier, redirectUri, resource }));
+      const pair = await exchangeMcpAuthorizationCode({ clientId, code, codeVerifier, redirectUri, resource });
+      oauthDiagnostic('authorization_code_exchanged');
+      return tokenResponse(pair);
     }
     if (grantType === 'refresh_token') {
       const refreshToken = String(form.get('refresh_token') ?? '');
       if (!refreshToken) throw new Error('refresh_token is required.');
-      return tokenResponse(await exchangeMcpRefreshToken({
+      const pair = await exchangeMcpRefreshToken({
         clientId,
         refreshToken,
         scopes: form.has('scope') ? String(form.get('scope')) : undefined,
         resource,
-      }));
+      });
+      oauthDiagnostic('refresh_exchanged', { reusedRotatedToken: pair.reusedRotatedToken === true });
+      return tokenResponse(pair);
     }
     return oauthError('unsupported_grant_type', 'Supported grant types are authorization_code and refresh_token.');
   } catch (error) {
+    oauthDiagnostic('token_exchange_rejected', {
+      grantType: String(form.get('grant_type') ?? 'unknown'),
+      reason: error instanceof Error ? error.message : 'The grant is invalid.',
+    });
     return oauthError('invalid_grant', error instanceof Error ? error.message : 'The grant is invalid.');
   }
 }

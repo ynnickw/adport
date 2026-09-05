@@ -10,6 +10,7 @@ import {
   revokeMcpOAuthToken,
 } from '@/lib/cloud/mcp-oauth-repository';
 import { resolveMembership } from '@/lib/cloud/repository';
+import { digestState } from '@/lib/crypto';
 import { closeDbForTests, db } from '@/lib/db';
 import { mcpResourceUrl, pkceChallenge, type AuthorizationRequest } from '@/lib/mcp-oauth';
 
@@ -53,7 +54,7 @@ describeDatabase('MCP OAuth persistence and token lifecycle', () => {
     await closeDbForTests();
   });
 
-  it('enforces PKCE and one-time authorization codes, rotates refresh tokens, and revokes access tokens', async () => {
+  it('enforces PKCE and one-time codes, tolerates concurrent refresh rotation, and revokes access tokens', async () => {
     const authorization: AuthorizationRequest = {
       clientId,
       clientName: 'Database OAuth test',
@@ -82,14 +83,31 @@ describeDatabase('MCP OAuth persistence and token lifecycle', () => {
       clientId, code, codeVerifier: verifier, redirectUri, resource: mcpResourceUrl(),
     })).rejects.toThrow(/already used/);
 
-    const second = await exchangeMcpRefreshToken({
-      clientId,
-      refreshToken: first.refreshToken,
-      scopes: 'tools:read',
-      resource: mcpResourceUrl(),
-    });
+    const [second, concurrent] = await Promise.all([
+      exchangeMcpRefreshToken({
+        clientId,
+        refreshToken: first.refreshToken,
+        scopes: 'tools:read',
+        resource: mcpResourceUrl(),
+      }),
+      exchangeMcpRefreshToken({
+        clientId,
+        refreshToken: first.refreshToken,
+        scopes: 'tools:read',
+        resource: mcpResourceUrl(),
+      }),
+    ]);
     expect(second.scopes).toEqual(['tools:read']);
+    expect(concurrent.scopes).toEqual(['tools:read']);
     expect(second.refreshToken).not.toBe(first.refreshToken);
+    expect([second.reusedRotatedToken, concurrent.reusedRotatedToken].sort()).toEqual([false, true]);
+    expect(concurrent.refreshToken).not.toBe(second.refreshToken);
+
+    await db()`
+      update private.mcp_oauth_refresh_tokens
+      set consumed_at = now() - interval '2 minutes'
+      where token_hash = ${digestState(first.refreshToken)}
+    `;
     await expect(exchangeMcpRefreshToken({
       clientId, refreshToken: first.refreshToken, resource: mcpResourceUrl(),
     })).rejects.toThrow(/already rotated/);

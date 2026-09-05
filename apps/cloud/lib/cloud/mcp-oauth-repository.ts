@@ -16,12 +16,17 @@ import type { TenantPrincipal } from './types';
 
 const ACCESS_TOKEN_SECONDS = 60 * 60;
 const REFRESH_TOKEN_SECONDS = 30 * 24 * 60 * 60;
+// Multiple scheduled clients can observe the same expired access token and
+// refresh concurrently. Keep the consumed token usable briefly so both calls
+// can complete, while retaining rotation and a bounded replay window.
+const REFRESH_TOKEN_REUSE_GRACE_SECONDS = 60;
 
 export interface McpOAuthTokenPair {
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
   scopes: McpOAuthScope[];
+  reusedRotatedToken?: boolean;
 }
 
 export interface McpOAuthGrantSummary {
@@ -231,7 +236,10 @@ export async function exchangeMcpRefreshToken(input: {
       for update
     `;
     const refresh = rows[0];
-    if (!refresh || refresh.consumedAt || refresh.revokedAt || refresh.expiresAt.getTime() <= Date.now()) {
+    const reusedRotatedToken = Boolean(refresh?.consumedAt
+      && refresh.consumedAt.getTime() > Date.now() - REFRESH_TOKEN_REUSE_GRACE_SECONDS * 1000);
+    if (!refresh || (refresh.consumedAt && !reusedRotatedToken)
+      || refresh.revokedAt || refresh.expiresAt.getTime() <= Date.now()) {
       throw new Error('Refresh token is invalid, expired, revoked, or already rotated.');
     }
     if (refresh.clientId !== input.clientId || refresh.resource !== input.resource) {
@@ -239,11 +247,16 @@ export async function exchangeMcpRefreshToken(input: {
     }
     const scopes = input.scopes ? parseScopes(input.scopes, []) : refresh.scopes;
     if (scopes.some((scope) => !refresh.scopes.includes(scope))) throw new Error('Requested scope exceeds the original grant.');
-    await sql`
-      update private.mcp_oauth_refresh_tokens set consumed_at = now()
-      where token_hash = ${refresh.tokenHash} and consumed_at is null
-    `;
-    return issueTokenPair(sql, { ...refresh, scopes });
+    if (!refresh.consumedAt) {
+      await sql`
+        update private.mcp_oauth_refresh_tokens set consumed_at = now()
+        where token_hash = ${refresh.tokenHash} and consumed_at is null
+      `;
+    }
+    return {
+      ...await issueTokenPair(sql, { ...refresh, scopes }),
+      reusedRotatedToken,
+    };
   });
 }
 
