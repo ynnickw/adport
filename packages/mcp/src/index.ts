@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
 import { AdportError, CredentialStore, createContext, type AdportRuntime, type ProviderModule } from '@adport/core';
 import { createGoogleModule } from '@adport/provider-google';
 import { createMetaModule } from '@adport/provider-meta';
@@ -13,6 +14,14 @@ import { createPinterestModule } from '@adport/provider-pinterest';
 import { createLinkedInModule } from '@adport/provider-linkedin';
 import { createXModule } from '@adport/provider-x';
 import packageJson from '../package.json';
+import {
+  ADPORT_UI_HTML,
+  ADPORT_UI_URI,
+  structuredResult,
+  toolInvocationLabels,
+  toolTitle,
+  viewForTool,
+} from './ui.js';
 
 export const PROVIDER_IDS = ['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const;
 
@@ -70,53 +79,86 @@ export interface ToolScopeDenial {
  */
 export function createMcpServer({ runtime, name = 'adport', version = packageJson.version, icons = DEFAULT_MCP_ICONS, scopes, scopeDenials }: CreateServerOptions): McpServer {
   const server = new McpServer({ name, version, ...(icons ? { icons } : {}) });
+  registerAppResource(
+    server,
+    'Adport insight card',
+    ADPORT_UI_URI,
+    {
+      description: 'Responsive Adport accounts, performance, recommendations, and guarded-change view.',
+      _meta: { ui: { prefersBorder: false, csp: { connectDomains: [], resourceDomains: [] } } },
+    },
+    async () => ({
+      contents: [{
+        uri: ADPORT_UI_URI,
+        mimeType: RESOURCE_MIME_TYPE,
+        text: ADPORT_UI_HTML,
+        _meta: { ui: { prefersBorder: false, csp: { connectDomains: [], resourceDomains: [] } } },
+      }],
+    }),
+  );
   for (const tool of runtime.registry.list()) {
     const requiredScope = tool.annotations.readOnly ? 'tools:read' : 'tools:write';
     const scopeDenial = scopes && !scopes.includes(requiredScope) ? scopeDenials?.[requiredScope] : undefined;
     if (scopes && !scopes.includes(requiredScope) && !scopeDenial) continue;
-    server.registerTool(
-      tool.name,
-      {
-        description: scopeDenial
-          ? `${tool.description}\n\nUnavailable on the current plan: ${scopeDenial.message}`
-          : tool.description,
-        inputSchema: tool.input.shape,
-        annotations: {
-          readOnlyHint: tool.annotations.readOnly ?? false,
-          destructiveHint: tool.annotations.destructive ?? false,
-          openWorldHint: tool.annotations.openWorld ?? false,
+    const view = viewForTool(tool.name, tool.annotations.readOnly ?? false);
+    const labels = view ? toolInvocationLabels(view) : undefined;
+    const config = {
+      title: toolTitle(tool.name),
+      description: scopeDenial
+        ? `${tool.description}\n\nUnavailable on the current plan: ${scopeDenial.message}`
+        : tool.description,
+      inputSchema: tool.input.shape,
+      annotations: {
+        readOnlyHint: tool.annotations.readOnly ?? false,
+        destructiveHint: tool.annotations.destructive ?? false,
+        openWorldHint: tool.annotations.openWorld ?? false,
+      },
+    };
+    const callback = async (args: Record<string, unknown>) => {
+      if (scopeDenial) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              error: scopeDenial.code,
+              code: scopeDenial.code,
+              message: scopeDenial.message,
+              ...scopeDenial.data,
+            }, null, 2),
+          }],
+          isError: true,
+        };
+      }
+      try {
+        const result = await runtime.registry.call(tool.name, args, runtime.ctx);
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+          ...(view ? { structuredContent: structuredResult(tool.name, view, result) } : {}),
+        };
+      } catch (err) {
+        const payload =
+          err instanceof AdportError
+            ? err.toJSON()
+            : { error: 'INTERNAL', message: err instanceof Error ? err.message : String(err) };
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(payload, null, 2) }],
+          isError: true,
+        };
+      }
+    };
+    if (view) {
+      registerAppTool(server, tool.name, {
+        ...config,
+        _meta: {
+          ui: { resourceUri: ADPORT_UI_URI },
+          'openai/outputTemplate': ADPORT_UI_URI,
+          'openai/toolInvocation/invoking': labels!.invoking,
+          'openai/toolInvocation/invoked': labels!.invoked,
         },
-      },
-      async (args: Record<string, unknown>) => {
-        if (scopeDenial) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: JSON.stringify({
-                error: scopeDenial.code,
-                code: scopeDenial.code,
-                message: scopeDenial.message,
-                ...scopeDenial.data,
-              }, null, 2),
-            }],
-            isError: true,
-          };
-        }
-        try {
-          const result = await runtime.registry.call(tool.name, args, runtime.ctx);
-          return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
-        } catch (err) {
-          const payload =
-            err instanceof AdportError
-              ? err.toJSON()
-              : { error: 'INTERNAL', message: err instanceof Error ? err.message : String(err) };
-          return {
-            content: [{ type: 'text' as const, text: JSON.stringify(payload, null, 2) }],
-            isError: true,
-          };
-        }
-      },
-    );
+      }, callback);
+    } else {
+      server.registerTool(tool.name, config, callback);
+    }
   }
   return server;
 }

@@ -6,6 +6,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createContext } from '@adport/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createMcpServer } from '../src/index.js';
+import { ADPORT_UI_URI } from '../src/ui.js';
 
 let home: string;
 let client: Client;
@@ -78,22 +79,56 @@ describe('adport MCP server', () => {
     expect(persistedAudit?.annotations?.openWorldHint).toBe(false);
     const applyFinding = tools.find((t) => t.name === 'recommendation_apply');
     expect(applyFinding?.annotations?.openWorldHint).toBe(true);
+    expect(list?.title).toBe('Show connected ad accounts');
+    expect(list?._meta).toMatchObject({
+      ui: { resourceUri: ADPORT_UI_URI },
+      'ui/resourceUri': ADPORT_UI_URI,
+    });
+  });
+
+  it('serves a self-contained MCP App with a narrow CSP', async () => {
+    const resources = await client.listResources();
+    expect(resources.resources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ uri: ADPORT_UI_URI, mimeType: 'text/html;profile=mcp-app' }),
+    ]));
+
+    const resource = await client.readResource({ uri: ADPORT_UI_URI });
+    const content = resource.contents[0] as { text?: string; mimeType?: string; _meta?: Record<string, unknown> };
+    expect(content.mimeType).toBe('text/html;profile=mcp-app');
+    expect(content.text).toContain('ui/initialize');
+    expect(content.text).toContain('ui/notifications/tool-result');
+    expect(content.text).toContain('evidence before action');
+    expect(content.text).not.toMatch(/https?:\/\//);
+    const script = content.text?.match(/<script>([\s\S]+)<\/script>/)?.[1];
+    expect(script).toBeTruthy();
+    expect(() => new Function(script!)).not.toThrow();
+    expect(content._meta).toEqual({
+      ui: { prefersBorder: false, csp: { connectDomains: [], resourceDomains: [] } },
+    });
   });
 
   it('answers accounts_list', async () => {
     const result = await client.callTool({ name: 'accounts_list', arguments: {} });
     const parsed = textOf(result as never) as { accounts: Array<{ id: string }> };
     expect(parsed.accounts.map((a) => a.id)).toEqual(['mock-1', 'mock-2']);
+    expect(result.structuredContent).toMatchObject({
+      accounts: expect.any(Array),
+      _adport: { tool: 'accounts_list', view: 'accounts' },
+    });
   });
 
   it('enforces the two-step write over MCP (M0 exit criterion)', async () => {
     const args = { account_id: 'mock-1', campaign_id: 'c1', daily_budget_micros: 11_500_000 };
 
-    const first = textOf(
-      (await client.callTool({ name: 'mock_set_budget', arguments: args })) as never,
-    ) as { status: string; pending_operation_id: string; preview: { budgetDeltas: unknown[] } };
+    const previewResult = await client.callTool({ name: 'mock_set_budget', arguments: args });
+    const first = textOf(previewResult as never) as { status: string; pending_operation_id: string; preview: { budgetDeltas: unknown[] } };
     expect(first.status).toBe('pending_validation');
     expect(first.preview.budgetDeltas).toHaveLength(1);
+
+    expect(previewResult.structuredContent).toMatchObject({
+      status: 'pending_validation',
+      _adport: { tool: 'mock_set_budget', view: 'operation' },
+    });
 
     const second = textOf(
       (await client.callTool({
