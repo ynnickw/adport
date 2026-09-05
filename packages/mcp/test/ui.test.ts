@@ -1,4 +1,5 @@
 import { runInNewContext } from 'node:vm';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { ADPORT_UI_HTML, structuredResult, viewForTool, type AdportView } from '../src/ui.js';
 
@@ -125,6 +126,18 @@ describe('shipped MCP iframe', () => {
     expect(ui.app.innerHTML).not.toContain('Healthy');
   });
 
+  it('uses the official Snapchat Ghost paths rather than an initials fallback', () => {
+    const ui = widget();
+    ui.render('accounts', { accounts: [{ id: 'demo', name: 'Snapchat demo', provider: 'snapchat', status: 'PENDING' }] });
+    const official = readFileSync(new URL('../../../apps/cloud/components/snapchat-logo.tsx', import.meta.url), 'utf8');
+    const paths = [...official.matchAll(/d="([^"]+)"/g)].map(match => match[1]!);
+    expect(paths).toHaveLength(2);
+    for (const path of paths) expect(ui.app.innerHTML).toContain(path);
+    expect(ui.app.innerHTML).toContain('fill="#fff"');
+    expect(ui.app.innerHTML).toContain('fill="#000"');
+    expect(ui.app.innerHTML).not.toContain('>S</span>');
+  });
+
   it('renders nested recommendation previews and does not invent server validation', () => {
     const ui = widget();
     ui.render('operation', { result: { pending_operation_id: 'test', preview: { summary: 'A real preview', serverValidated: false } } }, 'recommendation_apply');
@@ -133,6 +146,54 @@ describe('shipped MCP iframe', () => {
     expect(ui.app.innerHTML).toContain('not server validated');
     ui.render('operation', {});
     expect(ui.app.innerHTML).toContain('validation not reported');
+  });
+
+  it('shows a concise before/after status comparison with technical details collapsed', () => {
+    const ui = widget();
+    ui.render('operation', { pending_operation_id: 'test', preview: {
+      summary: 'Set campaign "Review demo" status PAUSED → PAUSED',
+      changes: ['~ campaign demo-123 status PAUSED → PAUSED'],
+      serverValidated: true,
+    } }, 'meta_set_campaign_status');
+    const visible = ui.app.innerHTML.split('<details>')[0]!;
+    expect(visible).toContain('Review demo');
+    expect(visible).toContain('>Before</th>');
+    expect(visible).toContain('>After</th>');
+    expect(visible).toContain('<td>PAUSED</td><td class="">PAUSED</td>');
+    expect(visible).not.toContain('demo-123');
+    expect(visible).not.toContain('server validated');
+    expect(visible).not.toContain('Set campaign');
+    expect(visible).not.toContain('<h2');
+    expect(ui.app.innerHTML).toContain('<details><summary>Details</summary>');
+    expect(ui.app.innerHTML).not.toContain('<details open');
+    expect(ui.app.innerHTML).toContain('~ campaign demo-123 status');
+    expect(visible).toContain('Preview · Not applied');
+  });
+
+  it('compares authoritative budget deltas and keeps coercions visible', () => {
+    const ui = widget();
+    ui.render('operation', { pending_operation_id: 'test', preview: {
+      summary: 'Update "Brand Search"',
+      budgetDeltas: [{ target: 'Daily budget', fromMicros: 120000000, toMicros: 132000000 }],
+      coercions: ['Campaign remains paused'],
+    } });
+    const visible = ui.app.innerHTML.split('<details>')[0]!;
+    expect(visible).toContain('<td>120</td><td class="changed">132</td>');
+    expect(visible).toContain('account units');
+    expect(visible).toContain('Campaign remains paused');
+    expect(visible).not.toContain('€');
+    ui.render('operation', { preview: { budgetDeltas: [{ target: 'Daily budget', toMicros: 132000000 }] } });
+    expect(ui.app.innerHTML).toContain('<td>—</td><td class="changed">132</td>');
+  });
+
+  it('never fabricates a previous value from a freeform update', () => {
+    const ui = widget();
+    ui.render('operation', { preview: { summary: '<img src=x>', changes: ['~ demo {"name":"new"}'] } });
+    expect(ui.app.innerHTML).toContain('Before/after values were not provided');
+    expect(ui.app.innerHTML).not.toContain('<table');
+    expect(ui.app.innerHTML).not.toContain('<img');
+    ui.render('operation', { preview: { changes: ['~ ad_group demo status → PAUSED'] } });
+    expect(ui.app.innerHTML).toContain('<td>—</td><td class="changed">PAUSED</td>');
   });
 
   it('routes non-campaign audit mutations to actual findings', () => {

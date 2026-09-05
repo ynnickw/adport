@@ -30,6 +30,7 @@ const providerNames = {
   tiktok: 'TikTok Ads',
   apple: 'Apple Ads',
   microsoft: 'Microsoft Advertising',
+  snapchat: 'Snapchat Ads',
 };
 
 const fixtures = {
@@ -44,6 +45,7 @@ const fixtures = {
         { provider: 'tiktok', id: 'demo-tiktok-growth', name: 'Northwind Growth', currency: 'EUR', status: 'ACTIVE' },
         { provider: 'apple', id: 'demo-apple-search', name: 'Northwind Search Ads', currency: 'EUR', status: 'API CAMPAIGN MANAGER' },
         { provider: 'microsoft', id: 'demo-microsoft-emea', name: 'Northwind EMEA', currency: 'EUR', status: 'ACTIVE' },
+        { provider: 'snapchat', id: 'demo-snapchat', name: 'Northwind Snapchat', currency: 'EUR', status: 'PENDING' },
       ],
       errors: [],
     },
@@ -71,7 +73,7 @@ const fixtures = {
       status: 'pending_validation',
       pending_operation_id: 'pending_demo_review',
       preview: {
-        summary: 'Increase Brand Search daily budget from EUR 120 to EUR 132',
+        summary: 'Increase "Brand Search" daily budget from EUR 120 to EUR 132',
         serverValidated: true,
         changes: [
           'Daily budget increases by 10% for Brand Search',
@@ -79,6 +81,19 @@ const fixtures = {
         ],
         coercions: ['Campaign remains PAUSED until it is explicitly enabled outside this preview'],
         budgetDeltas: [{ target: 'Daily budget', fromMicros: 120000000, toMicros: 132000000 }],
+      },
+    },
+  },
+  status: {
+    viewportHeight: 300,
+    tool: 'meta_set_campaign_status',
+    view: 'operation',
+    result: {
+      status: 'pending_validation', applied: false, pending_operation_id: 'pending_demo_status',
+      preview: {
+        summary: 'Set campaign "Meta review campaign" status PAUSED → PAUSED',
+        changes: ['~ campaign demo-meta-review status PAUSED → PAUSED'],
+        coercions: [], budgetDeltas: [], serverValidated: true,
       },
     },
   },

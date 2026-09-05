@@ -28,6 +28,16 @@ Verification so far: the full `pnpm build && pnpm test && pnpm typecheck` sequen
 
 Additional scanner/fallback checks: MCP 26 tests and typecheck passed. An SDK client now scans the full registered provider tool surface and checks titles, descriptions, object schemas, and annotation parity with the shared registry. A client without MCP Apps capabilities receives complete JSON text matching the structured inventory/report payload. These checks do not claim every provider API operation or directory annotation policy has been approved.
 
+Operation-table follow-up: MCP 30 tests and typecheck passed. The card now uses
+a Change / Before / After table for explicit status/strategy diffs and budget
+deltas, with technical details collapsed. Missing previous values remain absent
+rather than inferred, and policy coercions remain visible. The Snapchat initials
+fallback is replaced with the official Ghost paths shared by the cloud badge.
+The exact-source synthetic iframe was checked in the browser at desktop and
+375px widths: table labels remained readable, Details expanded successfully,
+and the Snapchat Ghost rendered on yellow. These are local checks, not evidence
+that the changed resource has reached ChatGPT production.
+
 ## Access and public endpoint checks
 
 - Production support, privacy, terms, and data-deletion pages returned HTTP 200, redirecting to `www.adport.dev`, with their expected page titles and publisher contact.
