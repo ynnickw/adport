@@ -21,12 +21,12 @@
   },
   "dependencies": {
     "@adport/core": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
-    "@types/node": "^26.1.2",
+    "@types/node": "^26.4.1",
     "tsup": "^8.3.0",
     "typescript": "^5.8.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }
