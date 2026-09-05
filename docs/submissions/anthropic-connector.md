@@ -32,6 +32,16 @@ Adport implements the open MCP Apps extension. Compatible Claude surfaces render
 
 The view never directly calls an advertising provider. It renders the result of an already-authorized Adport tool, so account scoping and the policy engine remain authoritative.
 
+## Submission media
+
+Sanitized visual baselines generated from the exact MCP App resource:
+
+- [Scoped account inventory](./assets/mcp-accounts.png)
+- [Cross-provider performance](./assets/mcp-report.png)
+- [Policy-gated operation preview](./assets/mcp-operation.png)
+
+Regenerate with `pnpm --filter @adport/mcp render:submission-previews`. Replace or supplement these with an in-Claude capture before the final directory submission.
+
 ## Reviewer account
 
 Create one dedicated reviewer login containing synthetic or non-sensitive sample data with:
@@ -65,4 +75,3 @@ Share the login only through Anthropic's private review field. Never include pas
 - [ ] Tool annotations and descriptions match actual behavior.
 - [ ] Support, privacy, terms, and deletion paths are reachable without login.
 - [ ] Yannick gives fresh confirmation immediately before the final directory submission.
-

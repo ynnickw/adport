@@ -28,6 +28,16 @@ This file is the copy-and-checklist source for the OpenAI Apps Management submis
 
 The MCP App resource `ui://adport/insight-card-v1.html` renders account inventory, performance charts, recommendations, and guarded change previews. Every attached tool also returns complete text and structured data when a client does not render MCP Apps.
 
+## Submission media
+
+These sanitized previews are generated from the exact production MCP App HTML, not a separate design mock. Regenerate them with `pnpm --filter @adport/mcp render:submission-previews` whenever the embedded resource changes.
+
+- [Scoped account inventory](./assets/mcp-accounts.png)
+- [Cross-provider performance](./assets/mcp-report.png)
+- [Policy-gated operation preview](./assets/mcp-operation.png)
+
+Use fresh screenshots captured inside ChatGPT for the final portal upload. These deterministic images are the visual baseline for comparison and contain only synthetic reviewer data.
+
 ## Starter prompts
 
 Use these in the listing:
@@ -100,4 +110,3 @@ Run **Scan Tools** again after each production metadata or CSP change. Confirm t
 - [ ] Country availability and language are intentionally selected.
 - [ ] No live campaign is activated or given spend during review.
 - [ ] Yannick gives fresh confirmation immediately before the final **Submit** action.
-

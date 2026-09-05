@@ -18,6 +18,7 @@
   "files": ["dist"],
   "scripts": {
     "build": "tsup src/index.ts src/bin.ts --format esm --dts --sourcemap --clean",
+    "render:submission-previews": "node scripts/render-submission-previews.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
