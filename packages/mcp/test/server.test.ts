@@ -123,6 +123,22 @@ describe('adport MCP server', () => {
     });
   });
 
+  it('keeps complete text fallback for hosts that do not advertise MCP Apps', async () => {
+    // The client in this suite declares no UI extension capability.
+    for (const request of [
+      { name: 'accounts_list', arguments: {} },
+      { name: 'report', arguments: { provider: 'mock', date_range: 'last_7_days', level: 'campaign', metrics: ['spend', 'clicks'] } },
+    ]) {
+      const result = await client.callTool(request);
+      expect(result.isError).not.toBe(true);
+      const structured = result.structuredContent as Record<string, unknown>;
+      const { _adport, ...payload } = structured;
+      expect(_adport).toMatchObject({ tool: request.name });
+      expect(textOf(result as never)).toEqual(payload);
+      if (request.name === 'report') expect(payload.rows).toEqual(expect.arrayContaining([expect.objectContaining({ metrics: expect.any(Object) })]));
+    }
+  });
+
   it('enforces the two-step write over MCP (M0 exit criterion)', async () => {
     const args = { account_id: 'mock-1', campaign_id: 'c1', daily_budget_micros: 11_500_000 };
 

@@ -11,6 +11,9 @@ import { PinterestAdsClient, PinterestAdsProvider, pinterestTools } from '@adpor
 import { LinkedInAdsClient, LinkedInAdsProvider, linkedinTools } from '@adport/provider-linkedin';
 import { XAdsClient, XAdsProvider, xTools } from '@adport/provider-x';
 import { describe, expect, it } from 'vitest';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { createMcpServer } from '../src/index.js';
 
 describe('all-provider shared tool surface', () => {
   it('registers native read/create/update/delete tools once for both CLI and MCP adapters', async () => {
@@ -65,5 +68,30 @@ describe('all-provider shared tool surface', () => {
       'x_list_campaigns', 'x_list_funding_instruments', 'x_list_line_items', 'x_create_campaign', 'x_set_campaign_status', 'x_set_budget',
     ]));
     expect(new Set(names).size).toBe(names.length);
+
+    // Inspect what directory scanners actually receive, not only registry metadata.
+    // No provider requests are made: all credentials above are inert test strings.
+    const client = new Client({ name: 'submission-scanner-test', version: '1.0.0' });
+    const server = createMcpServer({ runtime });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      const scanned = (await client.listTools()).tools;
+      expect(scanned.map(tool => tool.name).sort()).toEqual([...names].sort());
+      for (const tool of scanned) {
+        expect(tool.title, tool.name).toBeTruthy();
+        expect(tool.description, tool.name).toBeTruthy();
+        const source = runtime.registry.list().find(candidate => candidate.name === tool.name)!;
+        expect(tool.annotations, tool.name).toMatchObject({
+          readOnlyHint: source.annotations.readOnly ?? false,
+          destructiveHint: source.annotations.destructive ?? false,
+          openWorldHint: source.annotations.openWorld ?? false,
+        });
+        expect(tool.inputSchema.type, tool.name).toBe('object');
+      }
+    } finally {
+      await client.close();
+      await server.close();
+    }
   });
 });
