@@ -8,7 +8,7 @@ This file is the copy-and-checklist source for the OpenAI Apps Management submis
 - **Short description:** Understand and safely operate every connected ad account from ChatGPT.
 - **Long description:** Adport connects advertising accounts to ChatGPT through one governed workspace. Compare normalized performance across providers, inspect campaigns and recommendations, and preview advertising changes before they can run. Advertising mutations pass Adport's policy engine and are written to an audit trail. Configure the reviewer workspace to require preview followed by matching apply.
 - **Category:** Productivity / Business tools
-- **Company:** Yannick Westermann Labs
+- **Publisher identity:** Select the approved individual developer identity in the portal. The organization label is Yannick Westermann Labs; do not represent that label as an approved business verification.
 - **Website:** `https://adport.dev`
 - **Support:** `https://adport.dev/support`
 - **Privacy:** `https://adport.dev/privacy`
@@ -137,3 +137,10 @@ Run **Scan Tools** again after each production metadata or CSP change. Confirm t
 Public submission is separate from installing the development connector in ChatGPT. Confirm a verified OpenAI Platform publisher identity, Apps Management write access, and domain ownership in the submission portal. Use the Universal MCP URL for this fixed endpoint. Supply reviewer access without interactive MFA or email verification. These requirements and the five-positive/three-negative test count were checked against [OpenAI's submission guide](https://developers.openai.com/plugins/deploy/submission) on September 5, 2026.
 
 Current execution evidence and remaining blockers are recorded in [validation status](./validation-status.md). Do not interpret the completed OAuth test as directory approval.
+
+Portal checked September 5: the selected Yannick Westermann Labs organization
+shows Individual verification **Approved**, while Business verification shows
+**Start**. Its plugin list contains AppLaunchFlow in review and no Adport draft.
+Create the Adport draft under the approved individual identity; verify the exact
+publisher name offered by the form before saving. No verification change or new
+draft was submitted during this read-only check.

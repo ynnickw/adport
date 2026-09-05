@@ -44,6 +44,8 @@ that the changed resource has reached ChatGPT production.
 - Production OAuth discovery advertises authorization code, refresh token, dynamic registration, revocation, `tools:read tools:write`, and S256. Discovery alone does not prove refresh execution.
 - Claude Web opened successfully, but the signed-in Free account already used its single custom connector slot. The add-custom control was disabled. No existing connector was removed and no plan was purchased. Per the user's subsequent direction, browser testing is focused on ChatGPT; Claude compatibility remains unverified, not inferred from the common protocol.
 - PR #50 at `ba7bc41` passed Node 22/24 CI and both Vercel previews, but remained `REVIEW_REQUIRED` and unmerged when checked. The production host still rendered the previous card resource.
+- Follow-up at `a9d90da`: full local build/test/typecheck passed, as did Node 22/24 CI and both Vercel previews. Review approval is still required before merge.
+- The OpenAI Platform portal was inspected in the selected Yannick Westermann Labs organization. Individual verification is Approved; Business verification has not been started. The plugin list shows AppLaunchFlow in review and no Adport draft. Create-plugin options are visible, but draft creation, final publisher-name selection, and submission permissions have not been exercised. No settings or submissions were changed.
 
 ## Remaining before public submission
 
