@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CredentialStore } from '../src/credentials/store.js';
 import { resolveDateRange, rangeDayCount } from '../src/model.js';
 import { createContext } from '../src/context.js';
@@ -98,6 +98,81 @@ describe('createContext + ToolRegistry', () => {
     await expect(registry.call('report', { metrics: ['nope'] }, ctx)).rejects.toMatchObject({
       code: 'INVALID_INPUT',
     });
+  });
+
+  it('adds account currency without mixing provider identities and preserves upstream truncation', async () => {
+    const { ctx, registry } = await createContext();
+    const listAccounts = vi.fn(async () => [
+      { provider: 'google', id: 'same', name: 'EU', currency: 'EUR' },
+      { provider: 'meta', id: 'same', name: 'US', currency: 'USD' },
+    ]);
+    ctx.providers.register({
+      id: 'google', capabilities: () => ({ serverDryRun: true }), listAccounts,
+      report: async () => ({ truncated: true, rows: [{ provider: 'google', accountId: 'same', entity: { level: 'campaign', id: 'c', name: 'Campaign' }, metrics: { spend: 100 } }] }),
+      previewWrite: async () => { throw new Error('unused'); }, applyWrite: async () => { throw new Error('unused'); },
+    });
+    const report = await registry.call('report', { metrics: ['spend'] }, ctx);
+    expect(report).toMatchObject({ rows: [{ currency: 'EUR' }], truncated: true, errors: [], warnings: [], date_range: 'last_7_days' });
+    expect(listAccounts).toHaveBeenCalledOnce();
+  });
+
+  it('preserves report data when currency metadata fails without returning raw errors or guessing currency', async () => {
+    const { ctx, registry } = await createContext();
+    ctx.providers.register({
+      id: 'google', capabilities: () => ({ serverDryRun: true }),
+      listAccounts: async () => { throw new Error('private diagnostic'); },
+      report: async () => ({ rows: [{ provider: 'google', accountId: 'one', entity: { level: 'campaign', id: 'c', name: 'Campaign' }, metrics: { spend: 100 } }] }),
+      previewWrite: async () => { throw new Error('unused'); }, applyWrite: async () => { throw new Error('unused'); },
+    });
+    const report = await registry.call('report', {}, ctx) as { rows: object[]; warnings: unknown[] };
+    expect(report.rows).toHaveLength(1);
+    expect(report.rows[0]).not.toHaveProperty('currency');
+    expect(report.warnings).toHaveLength(1);
+    expect(JSON.stringify(report)).not.toContain('private diagnostic');
+  });
+
+  it('routes mixed account selections only to matching providers, reuses metadata, and skips empty providers', async () => {
+    const { ctx, registry } = await createContext();
+    const reports = new Map<string, ReturnType<typeof vi.fn>>();
+    const inventories = new Map<string, ReturnType<typeof vi.fn>>();
+    for (const [id, accountId] of [['google', '1234567890'], ['meta', '123'], ['snapchat', 'snap-one'], ['reddit', '']]) {
+      const listAccounts = vi.fn(async () => accountId ? [{ provider: id!, id: accountId, name: 'Fixture', currency: 'EUR' }] : []);
+      const report = vi.fn(async () => ({ rows: [] }));
+      reports.set(id!, report); inventories.set(id!, listAccounts);
+      ctx.providers.register({ id: id!, capabilities: () => ({ serverDryRun: false }), listAccounts, report,
+        previewWrite: async () => { throw new Error('unused'); }, applyWrite: async () => { throw new Error('unused'); } });
+    }
+    const result = await registry.call('report', { account_ids: ['123-456-7890', '1234567890', 'act_123', 'snap-one'] }, ctx);
+    expect(result).toMatchObject({ rows: [], errors: [] });
+    expect(reports.get('google')).toHaveBeenCalledWith(expect.objectContaining({ accountIds: ['1234567890'] }));
+    expect(reports.get('meta')).toHaveBeenCalledWith(expect.objectContaining({ accountIds: ['123'] }));
+    expect(reports.get('snapchat')).toHaveBeenCalledWith(expect.objectContaining({ accountIds: ['snap-one'] }));
+    expect(reports.get('reddit')).not.toHaveBeenCalled();
+    for (const lookup of inventories.values()) expect(lookup).toHaveBeenCalledOnce();
+  });
+
+  it('does not broaden empty or unresolved account selections and retains explicit provider authorization', async () => {
+    const { ctx, registry } = await createContext({ includeMock: true });
+    const provider = ctx.providers.get('mock');
+    const report = vi.spyOn(provider, 'report');
+    expect(await registry.call('report', { account_ids: [] }, ctx)).toMatchObject({ rows: [] });
+    await expect(registry.call('report', { account_ids: ['outside'] }, ctx)).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    expect(report).not.toHaveBeenCalled();
+    expect(await registry.call('report', { account_ids: ['mock-1', 'outside'], continue_on_error: true }, ctx)).toMatchObject({ errors: [{ provider: 'core' }] });
+    expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ accountIds: ['mock-1'] }));
+    await registry.call('report', { provider: 'mock', account_ids: ['outside'] }, ctx);
+    expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ accountIds: ['outside'] }));
+  });
+
+  it('never reports unscoped after inventory failure during cross-provider account routing', async () => {
+    const { ctx, registry } = await createContext({ includeMock: true });
+    const report = vi.fn(async () => ({ rows: [] }));
+    ctx.providers.register({ id: 'broken', capabilities: () => ({ serverDryRun: false }), report,
+      listAccounts: async () => { throw new Error('inventory unavailable'); },
+      previewWrite: async () => { throw new Error('unused'); }, applyWrite: async () => { throw new Error('unused'); } });
+    const result = await registry.call('report', { account_ids: ['mock-1'], continue_on_error: true }, ctx);
+    expect(result).toMatchObject({ errors: [{ provider: 'broken', message: 'inventory unavailable' }] });
+    expect(report).not.toHaveBeenCalled();
   });
 
   it('runs the hosted authorization hook after parsing and before the handler', async () => {

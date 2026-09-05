@@ -6,9 +6,9 @@ This file is the copy-and-checklist source for the OpenAI Apps Management submis
 
 - **Name:** Adport
 - **Short description:** Understand and safely operate every connected ad account from ChatGPT.
-- **Long description:** Adport connects advertising accounts to ChatGPT through one governed workspace. Compare normalized performance across providers, inspect campaigns and recommendations, and preview changes before they can run. Every mutation passes Adport's policy engine, uses a separate preview and apply step, and is written to an audit trail.
+- **Long description:** Adport connects advertising accounts to ChatGPT through one governed workspace. Compare normalized performance across providers, inspect campaigns and recommendations, and preview advertising changes before they can run. Advertising mutations pass Adport's policy engine and are written to an audit trail. Configure the reviewer workspace to require preview followed by matching apply.
 - **Category:** Productivity / Business tools
-- **Company:** Yannick Westermann Labs
+- **Publisher identity:** Select the approved individual developer identity in the portal. The organization label is Yannick Westermann Labs; do not represent that label as an approved business verification.
 - **Website:** `https://adport.dev`
 - **Support:** `https://adport.dev/support`
 - **Privacy:** `https://adport.dev/privacy`
@@ -38,6 +38,8 @@ These sanitized previews are generated from the exact production MCP App HTML, n
 
 Use fresh screenshots captured inside ChatGPT for the final portal upload. These deterministic images are the visual baseline for comparison and contain only synthetic reviewer data.
 
+The checked-in PNGs predate the September 5 currency/error corrections and must be regenerated before upload. To inspect the current source in an actual browser without launching headless Chrome, run `node packages/mcp/scripts/render-submission-previews.mjs --prepare-only`, serve `packages/mcp/.submission-previews`, and open `report.html` (or `report.html?mobile=1&theme=dark`). These are explicitly synthetic iframe fixtures, not host execution evidence.
+
 ## Starter prompts
 
 Use these in the listing:
@@ -49,7 +51,7 @@ Use these in the listing:
 
 ## Reviewer test cases
 
-Provide a dedicated reviewer login with synthetic or non-sensitive sample data. The reviewer account must have at least one connected demo provider and both `tools:read` and `tools:write` OAuth scopes.
+Provide a dedicated reviewer login with synthetic or non-sensitive sample data, populated reports, and a paused/non-spending demo resource. Enable preview-required policy and both `tools:read` and `tools:write` OAuth scopes. The following five positive and three negative cases are a test plan, not a record that they all passed. Replace demo references with the private review fixture IDs in the portal.
 
 ### 1. Account inventory
 
@@ -59,9 +61,9 @@ Provide a dedicated reviewer login with synthetic or non-sensitive sample data. 
 
 ### 2. Performance analysis
 
-- **Prompt:** `Show campaign spend, impressions, clicks, conversions, and ROAS for the last 7 days.`
-- **Expected tools:** `report` with `level=campaign`, the five requested metrics, and `date_range=last_7_days`
-- **Expected response:** An inline card shows KPI totals, a spend-by-campaign chart, campaign rows, truncation state, and an account-currency caveat. The assistant must not add unlike currencies without explaining the limitation.
+- **Prompt:** `Show campaign spend, impressions, clicks, conversions, conversion value, and ROAS for the last 7 days.`
+- **Expected tools:** `report` with `level=campaign`, all six requested metrics, and `date_range=last_7_days`
+- **Expected response:** An inline card separates currencies into selectable groups and shows KPI totals and a spend-by-entity chart. Missing metrics are unavailable, not zero. The assistant identifies partial reads and never sums unlike currencies.
 
 ### 3. Safe write preview
 
@@ -75,10 +77,28 @@ Provide a dedicated reviewer login with synthetic or non-sensitive sample data. 
 - **Expected tools:** the same provider tool with identical arguments plus the returned `pending_operation_id`
 - **Expected response:** The operation applies only when the token and arguments match, and the response identifies the audit trail. Reviewer data must not use a live spending campaign.
 
-### 5. Scope and entitlement handling
+### 5. Provider-specific account report
 
-- **Prompt:** `Change a campaign budget.` using a read-only reviewer entitlement
-- **Expected response:** The write tool stays discoverable but returns `PLAN_LIMIT`, the current plan, recommended plan, and upgrade URL. No provider mutation occurs.
+- **Prompt:** `Show the last seven days for only the Meta demo account. Keep the other providers out of this report.`
+- **Expected tools:** `accounts_list` if needed, then `report` with `provider=meta` and only its selected account ID.
+- **Expected response:** Only authorized Meta rows appear. No request is routed to another advertising provider.
+
+### Negative 1. Account outside the workspace
+
+- **Prompt:** `Report on account reviewer-outside-scope, which is not connected to this workspace.`
+- **Expected response:** Actionable account-scope rejection. No foreign account data, credentials, or stack traces are returned. No fallback to an unrestricted report.
+
+### Negative 2. Altered preview
+
+- **Prompt:** `Use the existing pending preview token but double the budget instead.`
+- **Expected response:** Never silently reuse the token for changed arguments. The assistant may offer a new preview; a direct call with mismatched arguments must return `PENDING_MISMATCH` and perform no provider mutation.
+
+### Negative 3. Unrelated request
+
+- **Prompt:** `Translate “Good morning” into German.`
+- **Expected response:** Answer without invoking Adport, requesting OAuth, or accessing ad accounts.
+
+Additional entitlement regression: distinguish missing `tools:write` OAuth scope from a plan limit. Do not promise `PLAN_LIMIT` for a read-only token; the auth layer may reject or omit the write tool before entitlement evaluation.
 
 ## Tool annotation justification
 
@@ -101,12 +121,26 @@ Run **Scan Tools** again after each production metadata or CSP change. Confirm t
 
 ## Final submission checklist
 
-- [ ] Production MCP endpoint initializes and completes OAuth in a fresh ChatGPT session.
+- [x] Production MCP endpoint completed OAuth, tool invocation, and account-card rendering in ChatGPT on September 5, 2026.
+- [ ] Repeat against the final deployed revision and verify token refresh beyond access-token expiry.
 - [ ] Tools scan passes with current schemas, annotations, security schemes, and UI CSP.
 - [ ] Reviewer account and private login instructions are added in the portal, not this file.
-- [ ] All five test cases pass against the reviewer workspace.
+- [ ] All five positive and three negative test cases pass against the reviewer workspace.
 - [ ] Screenshots show the real account, performance, and change-preview cards on desktop and mobile.
 - [ ] Website, support, privacy, terms, business name, and logo match the developer verification.
 - [ ] Country availability and language are intentionally selected.
 - [ ] No live campaign is activated or given spend during review.
 - [ ] Yannick gives fresh confirmation immediately before the final **Submit** action.
+
+## Portal prerequisites and evidence
+
+Public submission is separate from installing the development connector in ChatGPT. Confirm a verified OpenAI Platform publisher identity, Apps Management write access, and domain ownership in the submission portal. Use the Universal MCP URL for this fixed endpoint. Supply reviewer access without interactive MFA or email verification. These requirements and the five-positive/three-negative test count were checked against [OpenAI's submission guide](https://developers.openai.com/plugins/deploy/submission) on September 5, 2026.
+
+Current execution evidence and remaining blockers are recorded in [validation status](./validation-status.md). Do not interpret the completed OAuth test as directory approval.
+
+Portal checked September 5: the selected Yannick Westermann Labs organization
+shows Individual verification **Approved**, while Business verification shows
+**Start**. Its plugin list contains AppLaunchFlow in review and no Adport draft.
+Create the Adport draft under the approved individual identity; verify the exact
+publisher name offered by the form before saving. No verification change or new
+draft was submitted during this read-only check.

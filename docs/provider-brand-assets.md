@@ -12,6 +12,8 @@ on the artwork rather than inheriting surrounding text color.
   The landing page and generated provider pages reuse the same unmodified Ghost
   paths with an explicit yellow (#FFFC00) background and clear space inside the
   SVG, so the full-color badge does not depend on surrounding CSS.
+  The embedded MCP card in `packages/mcp/src/ui.ts` also includes these exact
+  paths; a regression test checks parity with the cloud component.
 - Spotify: Simple Icons geometry, Spotify green (#1ED760).
   [Branding reference](https://developer.spotify.com/documentation/design).
 - Pinterest: Simple Icons geometry, Pinterest red (#E60023).

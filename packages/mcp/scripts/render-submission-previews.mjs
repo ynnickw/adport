@@ -8,13 +8,14 @@ const packageRoot = resolve(here, '..');
 const repositoryRoot = resolve(packageRoot, '../..');
 const outputDirectory = join(repositoryRoot, 'docs/submissions/assets');
 const temporaryDirectory = join(packageRoot, '.submission-previews');
+const prepareOnly = process.argv.includes('--prepare-only');
 const chrome = [
   process.env.CHROME_PATH,
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/usr/bin/google-chrome',
   '/usr/bin/chromium',
 ].find((candidate) => candidate && existsSync(candidate));
-if (!chrome) throw new Error('Chrome is required. Set CHROME_PATH to its executable.');
+if (!chrome && !prepareOnly) throw new Error('Chrome is required. Set CHROME_PATH to its executable.');
 
 const source = readFileSync(join(packageRoot, 'src/ui.ts'), 'utf8');
 const marker = 'export const ADPORT_UI_HTML = String.raw`';
@@ -29,6 +30,7 @@ const providerNames = {
   tiktok: 'TikTok Ads',
   apple: 'Apple Ads',
   microsoft: 'Microsoft Advertising',
+  snapchat: 'Snapchat Ads',
 };
 
 const fixtures = {
@@ -43,6 +45,7 @@ const fixtures = {
         { provider: 'tiktok', id: 'demo-tiktok-growth', name: 'Northwind Growth', currency: 'EUR', status: 'ACTIVE' },
         { provider: 'apple', id: 'demo-apple-search', name: 'Northwind Search Ads', currency: 'EUR', status: 'API CAMPAIGN MANAGER' },
         { provider: 'microsoft', id: 'demo-microsoft-emea', name: 'Northwind EMEA', currency: 'EUR', status: 'ACTIVE' },
+        { provider: 'snapchat', id: 'demo-snapchat', name: 'Northwind Snapchat', currency: 'EUR', status: 'PENDING' },
       ],
       errors: [],
     },
@@ -64,13 +67,13 @@ const fixtures = {
   },
   operation: {
     viewportHeight: 410,
-    tool: 'google_set_campaign_budget',
+    tool: 'google_set_budget',
     view: 'operation',
     result: {
       status: 'pending_validation',
       pending_operation_id: 'pending_demo_review',
       preview: {
-        summary: 'Increase Brand Search daily budget from EUR 120 to EUR 132',
+        summary: 'Increase "Brand Search" daily budget from EUR 120 to EUR 132',
         serverValidated: true,
         changes: [
           'Daily budget increases by 10% for Brand Search',
@@ -81,7 +84,25 @@ const fixtures = {
       },
     },
   },
+  status: {
+    viewportHeight: 300,
+    tool: 'meta_set_campaign_status',
+    view: 'operation',
+    result: {
+      status: 'pending_validation', applied: false, pending_operation_id: 'pending_demo_status',
+      preview: {
+        summary: 'Set campaign "Meta review campaign" status PAUSED → PAUSED',
+        changes: ['~ campaign demo-meta-review status PAUSED → PAUSED'],
+        coercions: [], budgetDeltas: [], serverValidated: true,
+      },
+    },
+  },
 };
+
+// Currency is supplied by the shared report handler, not inferred by the card.
+fixtures.report.result.date_range = 'last_7_days';
+fixtures.report.result.rows.forEach((row) => { row.currency = 'EUR'; });
+fixtures.report.result.rows.push({ ...fixtures.report.result.rows[0], accountId: 'demo-google-us', currency: 'USD', entity: { id: 'g-us', name: 'US Search', status: 'PAUSED' } });
 
 mkdirSync(outputDirectory, { recursive: true });
 mkdirSync(temporaryDirectory, { recursive: true });
@@ -91,13 +112,28 @@ for (const [name, fixture] of Object.entries(fixtures)) {
     ...fixture.result,
     _adport: { tool: fixture.tool, view: fixture.view, providerNames },
   };
-  const bridge = `<script>setTimeout(() => window.postMessage(${JSON.stringify({
+  const notification = JSON.stringify({
     jsonrpc: '2.0',
     method: 'ui/notifications/tool-result',
     params: { structuredContent },
-  })}, '*'), 40);</script>`;
+  });
   const htmlPath = join(temporaryDirectory, `${name}.html`);
-  writeFileSync(htmlPath, appHtml.replace('</body>', `${bridge}</body>`));
+  // Exercise a real parent/iframe boundary. This is a synthetic MCP host, not a
+  // claim that ChatGPT/Claude executed these fixture tools.
+  writeFileSync(join(temporaryDirectory, `${name}-widget.html`), appHtml);
+  writeFileSync(htmlPath, `<!doctype html><html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Adport synthetic ${name} preview</title><body style="margin:0;padding:20px;background:#f6f6f4"><iframe title="Adport ${name}" src="${name}-widget.html" style="width:100%;height:850px;border:0"></iframe><script>
+    const frame=document.querySelector('iframe');
+    const params=new URLSearchParams(location.search);
+    if(params.get('mobile')==='1') frame.style.width='375px';
+    window.addEventListener('message', event=>{
+      if(event.source!==frame.contentWindow) return;
+      if(event.data.method==='ui/initialize') frame.contentWindow.postMessage({jsonrpc:'2.0',id:event.data.id,result:{hostContext:{theme:params.get('theme')==='dark'?'dark':'light',locale:'en-US'}}},'*');
+      if(event.data.method==='ui/notifications/initialized') frame.contentWindow.postMessage(${notification},'*');
+      if(event.data.method==='ui/notifications/size-changed') frame.style.height=event.data.params.height+'px';
+    });
+  </script></body></html>`);
+
+  if (prepareOnly) continue;
 
   execFileSync(chrome, [
     '--headless=new',
@@ -110,5 +146,5 @@ for (const [name, fixture] of Object.entries(fixtures)) {
   ], { stdio: 'inherit' });
 }
 
-rmSync(temporaryDirectory, { recursive: true, force: true });
-console.log(`Rendered ${Object.keys(fixtures).length} previews to ${outputDirectory}`);
+if (!prepareOnly) rmSync(temporaryDirectory, { recursive: true, force: true });
+console.log(prepareOnly ? `Prepared synthetic iframe fixtures in ${temporaryDirectory}` : `Rendered ${Object.keys(fixtures).length} previews to ${outputDirectory}`);

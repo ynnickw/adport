@@ -38,6 +38,8 @@ export interface NormalizedQuery {
 export interface ReportRow {
   provider: string;
   accountId: string;
+  /** Account currency; absent when the provider cannot supply it. Never infer FX. */
+  currency?: string;
   entity: { level: EntityLevel; id: string; name: string; status?: string };
   metrics: Partial<Record<MetricName, number>>;
 }
