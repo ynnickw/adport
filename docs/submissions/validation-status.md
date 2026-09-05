@@ -19,8 +19,9 @@ This is an evidence log, not a public approval claim. No customer identifiers, c
 - Group the embedded report by currency; never add EUR and USD or treat absent conversion value as zero ROAS.
 - Show errors, warnings, and partial-result notices; neutral unknown/pending account states; accurate server/local/unreported validation labels.
 - Handle nested recommendation apply results, audit/dismiss views, host theme changes, and iframe resize notifications.
+- Remove marketing titles, subtitles, slogans, and repetitive footers from every card. Reports lead with selectable metrics and one ranked bar graph; accounts and recommendations lead with their actual rows. Keep dates, currency boundaries, errors, and operation safety information.
 
-Verification so far: the full `pnpm build && pnpm test && pnpm typecheck` sequence passed, including core 29 tests and MCP 23 tests. UI tests execute the shipped JavaScript in a minimal host harness. Browser checks separately rendered the actual HTML behind a parent/iframe boundary: EUR/USD switching worked; the 375px dark layout stacked correctly. Browser fixtures are synthetic, not an in-Claude test or proof of production deployment.
+Verification so far: the full `pnpm build && pnpm test && pnpm typecheck` sequence passed before the compact-card follow-up, including core 29 tests and MCP 23 tests. After that follow-up, MCP 25 tests and typecheck passed. UI tests execute the shipped JavaScript in a minimal host harness. Browser checks separately rendered the actual HTML behind a parent/iframe boundary: metric ranking and EUR/USD switching worked; the 375px dark layout stacked correctly with readable campaign labels. The compact operation card retained its preview and validation details. Browser fixtures are synthetic, not an in-Claude test or proof of production deployment.
 
 ## Remaining before public submission
 

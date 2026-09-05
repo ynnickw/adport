@@ -91,28 +91,27 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     body { padding: 2px; }
     button { font: inherit }
     .shell { overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); box-shadow: 0 10px 32px rgba(20,20,20,.07) }
-    .top { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:17px 19px 13px }
+    .top { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 16px 10px }
     .brand { display:flex; align-items:center; gap:9px; min-width:0 }
     .dot { width:10px; height:10px; border-radius:99px; background:var(--orange); box-shadow:0 0 0 5px color-mix(in srgb,var(--orange) 12%,transparent) }
-    .brand b { font-size:15px; letter-spacing:-.02em }
-    .eyebrow { color:var(--faint); font:600 10px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase; white-space:nowrap }
-    .hero { padding: 2px 19px 17px }
-    h1 { margin:0; max-width:760px; font-size:clamp(21px,4vw,31px); line-height:1.08; letter-spacing:-.045em }
-    .lede { margin:8px 0 0; color:var(--muted); font-size:13px; line-height:1.45 }
-    .rule { height:1px; background:var(--line) }
-    .content { padding:16px 19px 19px }
+    .brand b { font-size:12px; letter-spacing:-.02em }
+    .context { color:var(--muted); font-size:11px; text-align:right }
+    .content { padding:4px 16px 16px }
     .kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-bottom:15px }
     .kpi { min-width:0; padding:12px; border-radius:13px; background:var(--soft); border:1px solid color-mix(in srgb,var(--line) 70%,transparent) }
+    button.kpi { cursor:pointer; color:var(--ink); text-align:left }
+    button.kpi[aria-pressed="true"] { border-color:color-mix(in srgb,var(--orange) 65%,var(--line)) }
     .kpi small { display:block; color:var(--faint); font:600 9px/1.2 var(--mono); letter-spacing:.11em; text-transform:uppercase }
     .kpi strong { display:block; overflow:hidden; margin-top:8px; font-size:clamp(17px,3vw,24px); line-height:1; letter-spacing:-.04em; text-overflow:ellipsis }
-    .grid { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(180px,.8fr); gap:13px }
     .panel { min-width:0; padding:13px; border:1px solid var(--line); border-radius:14px }
     .panel-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px }
     .panel-head b { font-size:12px }
     .panel-head span { color:var(--faint); font:500 9px/1 var(--mono); text-transform:uppercase; letter-spacing:.1em }
     .bars { display:grid; gap:9px }
-    .bar-row { display:grid; grid-template-columns:minmax(72px,1fr) minmax(90px,2fr) auto; align-items:center; gap:9px; font-size:11px }
-    .bar-name { overflow:hidden; white-space:nowrap; text-overflow:ellipsis }
+    .bar-row { display:grid; grid-template-columns:minmax(100px,1fr) minmax(60px,2fr) auto; align-items:center; gap:9px; font-size:11px }
+    .bar-name { display:flex; align-items:center; gap:7px; min-width:0 }
+    .bar-name > span:last-child { overflow:hidden; white-space:nowrap; text-overflow:ellipsis }
+    .bar-name .logo { width:22px; height:22px; padding:4px; border-radius:6px }
     .track { height:7px; overflow:hidden; border-radius:99px; background:var(--soft) }
     .fill { height:100%; border-radius:99px; background:linear-gradient(90deg,var(--orange),#ff985e) }
     .tabs { display:flex; gap:6px; overflow:auto; padding-bottom:12px }
@@ -141,11 +140,9 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     .check { display:flex; gap:9px; align-items:flex-start; font-size:11px; line-height:1.4 }
     .check i { display:grid; place-items:center; flex:0 0 auto; width:17px; height:17px; border-radius:99px; background:color-mix(in srgb,var(--green) 11%,transparent); color:var(--green); font-style:normal; font-size:10px }
     .check.coerce i { color:var(--amber); background:color-mix(in srgb,var(--amber) 12%,transparent) }
-    .foot { display:flex; justify-content:space-between; gap:12px; padding:11px 19px; border-top:1px solid var(--line); color:var(--faint); font:500 9px/1.35 var(--mono) }
     .empty { padding:26px 12px; text-align:center; color:var(--muted); font-size:12px }
-    .skeleton { animation:pulse 1.5s ease-in-out infinite; color:transparent; background:var(--soft); border-radius:9px }
-    @keyframes pulse { 50% { opacity:.55 } }
-    @media (max-width:620px) { .kpis { grid-template-columns:repeat(2,minmax(0,1fr)) }.grid { grid-template-columns:1fr }.eyebrow { display:none }.top,.hero,.content,.foot { padding-left:14px; padding-right:14px } }
+    @media (max-width:620px) { .kpis { grid-template-columns:repeat(2,minmax(0,1fr)) }.top,.content { padding-left:12px; padding-right:12px } }
+    @media (max-width:420px) { .bar-row { grid-template-columns:minmax(0,1fr) auto; gap:5px }.bar-name { grid-column:1/-1 }.bar-name > span:last-child { white-space:normal }.bars { gap:12px } }
     @media (prefers-reduced-motion:reduce) { * { animation:none!important; transition:none!important } }
     :root[data-theme="dark"] { --ink:#f5f5f3;--muted:#aaa9ad;--faint:#a09fa5;--paper:#171717;--soft:#222220;--line:rgba(255,255,255,.11) }
     @media (prefers-color-scheme:dark) { :root:not([data-theme="light"]) { --ink:#f5f5f3;--muted:#aaa9ad;--faint:#a09fa5;--paper:#171717;--soft:#222220;--line:rgba(255,255,255,.11) } }
@@ -153,14 +150,13 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
 </head>
 <body>
   <main id="app" class="shell" aria-live="polite">
-    <header class="top"><div class="brand"><span class="dot"></span><b>adport.dev</b></div><span class="eyebrow">evidence before action</span></header>
-    <section class="hero"><h1 class="skeleton">Advertising intelligence, ready.</h1><p class="lede">Securely reading your connected workspace…</p></section>
-    <div class="rule"></div><section class="content"><div class="empty">Waiting for the tool result.</div></section>
+    <header class="top"><div class="brand"><span class="dot"></span><b>adport.dev</b></div></header>
+    <section class="content"><div class="empty">Loading…</div></section>
   </main>
   <script>
   (() => {
     const app = document.getElementById('app');
-    const state = { host: {}, result: null, reportGroup: null };
+    const state = { host: {}, result: null, reportGroup: null, reportMetric: 'spend' };
     const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const arr = (value) => Array.isArray(value) ? value : [];
     const num = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
@@ -184,12 +180,11 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       reddit:'<svg viewBox="0 0 24 24"><path fill="#ff4500" d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0Zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614.028.169.042.342.042.52 0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .378-.239l2.906.617a1.214 1.214 0 0 1 1.108-.701Z"/></svg>'
     };
     const logo = (id) => '<span class="logo '+esc(id)+'" aria-hidden="true">'+(providerSvg[id] || esc(initials(id)))+'</span>';
-    const chrome = (title, lede, body, footer) => '<header class="top"><div class="brand"><span class="dot"></span><b>adport.dev</b></div><span class="eyebrow">evidence before action</span></header><section class="hero"><h1>'+esc(title)+'</h1><p class="lede">'+esc(lede)+'</p></section><div class="rule"></div><section class="content">'+body+'</section><footer class="foot"><span>'+esc(footer || 'Live workspace data')+'</span><span>Protected by Adport policy</span></footer>';
+    const chrome = (body, context) => '<header class="top"><div class="brand"><span class="dot"></span><b>adport.dev</b></div><span class="context">'+esc(context || '')+'</span></header><section class="content">'+body+'</section>';
     function renderAccounts(data, meta) {
       const accounts = arr(data.accounts), errors = arr(data.errors), names = meta.providerNames || {};
-      const providers = new Set(accounts.map(a => a.provider)).size;
-      const body = notices(data)+(accounts.length ? '<div class="kpis"><div class="kpi"><small>Accounts</small><strong>'+accounts.length+'</strong></div><div class="kpi"><small>Providers</small><strong>'+providers+'</strong></div><div class="kpi"><small>Currencies</small><strong>'+new Set(accounts.map(currencyOf).filter(Boolean)).size+'</strong></div><div class="kpi"><small>Read errors</small><strong>'+errors.length+'</strong></div></div><div class="list">'+accounts.map(a => { const status=statusOf(a.status); return '<div class="row"><div class="identity">'+logo(a.provider)+'<div class="identity-copy"><b>'+esc(a.name || 'Ad account')+'</b><span>'+esc(providerName(a.provider,names))+' · '+esc(a.id)+(a.currency ? ' · '+esc(a.currency) : '')+'</span></div></div><span class="pill '+status.tone+'">'+esc(status.label)+'</span></div>'; }).join('')+'</div>' : '<div class="empty">'+(errors.length ? 'Account inventory could not be fully loaded.' : 'No accessible ad accounts were returned.')+'</div>');
-      app.innerHTML = chrome(accounts.length+' ad account'+(accounts.length===1?'':'s')+' within reach', 'Only accounts explicitly available to this workspace can be queried or changed.', body, errors.length ? errors.length+' provider read issue'+(errors.length===1?'':'s') : 'Access inventory');
+      const body = notices(data)+(accounts.length ? '<div class="list">'+accounts.map(a => { const status=statusOf(a.status); return '<div class="row"><div class="identity">'+logo(a.provider)+'<div class="identity-copy"><b>'+esc(a.name || 'Ad account')+'</b><span>'+esc(providerName(a.provider,names))+' · '+esc(a.id)+(a.currency ? ' · '+esc(a.currency) : '')+'</span></div></div><span class="pill '+status.tone+'">'+esc(status.label)+'</span></div>'; }).join('')+'</div>' : '<div class="empty">'+(errors.length ? 'Account inventory could not be fully loaded.' : 'No accessible ad accounts were returned.')+'</div>');
+      app.innerHTML = chrome(body, accounts.length+' account'+(accounts.length===1?'':'s'));
     }
     function renderReport(data) {
       const groups = new Map();
@@ -205,36 +200,38 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       const tabs=choices.length>1 ? '<div class="tabs" role="group" aria-label="Report currency or account">'+choices.map((g,i)=>'<button data-group="'+i+'" aria-pressed="'+(g===selected)+'">'+esc(g.label)+'</button>').join('')+'</div>' : '';
       const spend=total(rows,'spend'), value=total(rows,'conversion_value');
       const roas=spend>0 && value!==null ? (value/spend).toFixed(2)+'×' : '—';
-      const ranked=[...rows].filter(r=>available(r.metrics?.spend)).sort((a,b)=>b.metrics.spend-a.metrics.spend).slice(0,6), max=Math.max(1,...ranked.map(r=>r.metrics.spend));
-      const bars=ranked.length ? ranked.map(r=>'<div class="bar-row"><span class="bar-name" title="'+esc(r.entity?.name || r.entity?.id)+'">'+esc(r.entity?.name || r.entity?.id || 'Entity')+'</span><span class="track" aria-hidden="true"><span class="fill" style="display:block;width:'+Math.max(0,r.metrics.spend/max*100).toFixed(1)+'%"></span></span><span class="bar-value">'+esc(money(r.metrics.spend,currency))+'</span></div>').join('') : '<div class="empty">No spend values were returned.</div>';
-      const recent=rows.slice(0,5).map(r=>'<div class="row"><div class="identity">'+logo(r.provider)+'<div class="identity-copy"><b>'+esc(r.entity?.name || r.entity?.id || 'Entity')+'</b><span>'+esc(statusOf(r.entity?.status).label)+' · '+esc(r.accountId)+'</span></div></div><span class="bar-value">'+(available(r.metrics?.clicks)?compact(r.metrics.clicks):'—')+' clicks</span></div>').join('');
-      const kpi=(label,value)=>'<div class="kpi"><small>'+esc(label)+'</small><strong>'+esc(value)+'</strong></div>';
+      const metric=state.reportMetric, labels={spend:'Spend',clicks:'Clicks',conversions:'Conversions',roas:'ROAS'};
+      const metricValue=r=>metric==='roas' ? (available(r.metrics?.conversion_value) && r.metrics?.spend>0 ? r.metrics.conversion_value/r.metrics.spend : null) : r.metrics?.[metric];
+      const format=value=>metric==='spend'?money(value,currency):metric==='roas'?value.toFixed(2)+'×':compact(value);
+      const ranked=[...rows].filter(r=>available(metricValue(r))).sort((a,b)=>metricValue(b)-metricValue(a)).slice(0,6), max=Math.max(1,...ranked.map(metricValue));
+      const bars=ranked.length ? ranked.map(r=>'<div class="bar-row"><span class="bar-name" title="'+esc(r.entity?.name || r.entity?.id)+'">'+logo(r.provider)+'<span>'+esc(r.entity?.name || r.entity?.id || 'Entity')+'</span></span><span class="track" aria-hidden="true"><span class="fill" style="display:block;width:'+Math.max(0,metricValue(r)/max*100).toFixed(1)+'%"></span></span><span class="bar-value">'+esc(format(metricValue(r)))+'</span></div>').join('') : '<div class="empty">No '+esc(labels[metric])+' values were returned.</div>';
+      const kpi=(key,label,value)=>'<button class="kpi" data-metric="'+key+'" aria-pressed="'+(metric===key)+'" aria-label="Chart '+esc(label)+'"><small>'+esc(label)+'</small><strong>'+esc(value)+'</strong></button>';
       const period=typeof data.date_range==='string' ? data.date_range.replaceAll('_',' ') : data.date_range ? data.date_range.start+' – '+data.date_range.end : 'Selected period';
-      const body=notices(data)+tabs+(rows.length ? (!currency?'<p class="notice">Currency unavailable. These values belong to this account only; no cross-account money total is calculated.</p>':'')+'<div class="kpis">'+kpi('Spend · '+(currency||'account units'),spend===null?'—':money(spend,currency))+kpi('Clicks',total(rows,'clicks')===null?'—':compact(total(rows,'clicks')))+kpi('Conversions',total(rows,'conversions')===null?'—':compact(total(rows,'conversions')))+kpi('ROAS',roas)+'</div><div class="grid"><div class="panel"><div class="panel-head"><b>Spend by entity</b><span>'+esc(currency||'account units')+'</span></div><div class="bars">'+bars+'</div></div><div class="panel"><div class="panel-head"><b>Activity</b><span>'+rows.length+' rows</span></div><div class="list">'+recent+'</div></div></div>' : '<div class="empty">'+(arr(data.errors).length?'Report unavailable for the requested providers.':'No rows returned for this period.')+'</div>');
-      app.innerHTML=chrome('Performance, in context',period+' · Money is grouped by currency; provider attribution may differ.',body,'Returned rows only · Missing metrics shown as —');
+      const body=notices(data)+tabs+(rows.length ? (!currency?'<p class="notice">Currency unavailable. These values belong to this account only; no cross-account money total is calculated.</p>':'')+'<div class="kpis" role="group" aria-label="Chart metric">'+kpi('spend','Spend',spend===null?'—':money(spend,currency))+kpi('clicks','Clicks',total(rows,'clicks')===null?'—':compact(total(rows,'clicks')))+kpi('conversions','Conversions',total(rows,'conversions')===null?'—':compact(total(rows,'conversions')))+kpi('roas','ROAS',roas)+'</div><div class="panel"><div class="panel-head"><b>'+esc(labels[metric])+'</b><span>Top '+ranked.length+' of '+rows.length+' rows</span></div><div class="bars">'+bars+'</div></div>' : '<div class="empty">'+(arr(data.errors).length?'Report unavailable for the requested providers.':'No rows returned for this period.')+'</div>');
+      app.innerHTML=chrome(body,period+(currency?' · '+currency:''));
       app.querySelectorAll('[data-group]').forEach(button=>button.addEventListener('click',()=>{state.reportGroup=choices[Number(button.dataset.group)].key;renderReport(data);}));
+      app.querySelectorAll('[data-metric]').forEach(button=>button.addEventListener('click',()=>{state.reportMetric=button.dataset.metric;renderReport(data);}));
     }
     function renderOperation(data, meta) {
       if (meta.tool === 'recommendation_apply' && data.result) data = data.result;
       const preview = data.preview || {}, pending = data.pending_operation_id, applied = data.status === 'applied' || data.applied === true;
       const changes = arr(preview.changes), coercions = arr(preview.coercions), deltas = arr(preview.budgetDeltas);
-      const title = applied ? 'Change applied with an audit trail' : pending ? 'Review this change before it runs' : 'Operation result';
       const checks = [...changes.map(v=>({v,kind:''})),...coercions.map(v=>({v,kind:'coerce'})),...deltas.map(v=>({v:(v.target || 'Budget')+': '+(v.fromMicros == null ? 'new' : money(v.fromMicros/1e6))+' → '+money(num(v.toMicros)/1e6),kind:'coerce'}))];
       const validation=preview.serverValidated===true?'server validated':preview.serverValidated===false?'local preview · not server validated':'validation not reported';
       const body = '<div class="change"><div class="change-main"><div class="panel-head"><b>'+(applied?'Applied':pending?'Policy-gated preview':'Result')+'</b><span>'+esc(validation)+'</span></div><h2>'+esc(preview.summary || (applied ? 'The requested operation completed.' : 'Review the operation result.'))+'</h2><p>'+(pending ? 'Nothing has been changed yet. Applying requires the matching pending operation token before it expires.' : applied ? 'The result is recorded in the append-only audit log.' : 'Review the structured result in the conversation for full details.')+'</p></div><div class="checks">'+(checks.length ? checks.map(item=>'<div class="check '+item.kind+'"><i>'+(item.kind?'!':'✓')+'</i><span>'+esc(item.v)+'</span></div>').join('') : '<div class="empty">No additional change details were returned.</div>')+'</div></div>';
-      app.innerHTML = chrome(title, 'Adport separates preview from execution and keeps every mutation behind the same policy gate.', body, meta.tool ? 'Tool · '+meta.tool : 'Guarded operation');
+      app.innerHTML = chrome(body, meta.tool || 'Operation');
     }
     function renderInsights(data) {
       const items = data.finding ? [data.finding] : arr(data.findings || data.recommendations || data.results || data.entries);
       const body = items.length ? '<div class="list">'+items.slice(0,8).map((item,i)=>'<div class="row"><div class="identity"><span class="logo" style="background:var(--orange)">'+(i+1)+'</span><div class="identity-copy"><b>'+esc(item.title || item.summary || item.rule || 'Opportunity')+'</b><span>'+esc(item.description || item.status || item.severity || 'Review recommended')+'</span></div></div><span class="pill '+(/high|critical/i.test(item.severity || '')?'danger':'')+'">'+esc(item.severity || item.status || 'open')+'</span></div>').join('')+'</div>' : '<div class="empty">No active recommendations were returned.</div>';
-      app.innerHTML = chrome(items.length+' evidence-backed opportunit'+(items.length===1?'y':'ies'), 'Recommendations stay separate from execution until you explicitly apply them.', body, 'Recommendation audit');
+      app.innerHTML = chrome(body, items.length+' recommendation'+(items.length===1?'':'s'));
     }
     function render(result) {
       let data = result?.structuredContent || result || {};
       if (!data._adport && window.openai?.toolOutput?._adport) data=window.openai.toolOutput;
       const meta = data._adport || {};
       if (result?.isError || data.error) {
-        app.innerHTML=chrome('The request could not complete',data.message || 'See the tool response for the error and next steps.','<div class="empty">No successful result is available.</div>','Tool error');
+        app.innerHTML=chrome('<p class="notice">'+esc(data.message || 'The request could not complete. See the tool response for details.')+'</p>','Request failed');
         return;
       }
       if (meta.view === 'accounts') return renderAccounts(data,meta);

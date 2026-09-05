@@ -6,9 +6,18 @@ import { ADPORT_UI_HTML, structuredResult, viewForTool, type AdportView } from '
 function widget() {
   let receive: (event: unknown) => void = () => {};
   const buttons: Array<{ dataset: { group: string }; click: () => void }> = [];
+  const metrics: Array<{ dataset: { metric: string }; click: () => void }> = [];
   const app = {
     innerHTML: '',
-    querySelectorAll: () => {
+    querySelectorAll: (selector: string) => {
+      if (selector === '[data-metric]') {
+        metrics.length = 0;
+        return [...app.innerHTML.matchAll(/data-metric="([a-z]+)"/g)].map((match) => {
+          const button = { dataset: { metric: match[1]! }, click: () => {}, addEventListener: (_: string, fn: () => void) => { button.click = fn; } };
+          metrics.push(button);
+          return button;
+        });
+      }
       buttons.length = 0;
       return [...app.innerHTML.matchAll(/data-group="(\d+)"/g)].map((match) => {
         const button = { dataset: { group: match[1]! }, click: () => {}, addEventListener: (_: string, fn: () => void) => { button.click = fn; } };
@@ -26,7 +35,7 @@ function widget() {
   });
   const message = (data: unknown, source: unknown = parent) => receive({ data, source });
   return {
-    app, buttons, root, sent, message,
+    app, buttons, metrics, root, sent, message,
     render: (view: AdportView, data: unknown, tool: string = view) => message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult(tool, view, data) } }),
   };
 }
@@ -38,6 +47,35 @@ const row = (accountId: string, spend: number, currency?: string, conversionValu
 });
 
 describe('shipped MCP iframe', () => {
+  it('keeps every view compact without marketing headings or footers', () => {
+    const ui = widget();
+    for (const view of ['accounts', 'report', 'operation', 'insights'] as const) {
+      ui.render(view, {});
+      expect(ui.app.innerHTML).not.toMatch(/<h1|class="hero"|class="foot"|EVIDENCE BEFORE ACTION|Performance,|Normalized metrics/);
+      expect(ui.app.innerHTML).toContain('adport.dev');
+    }
+  });
+
+  it('switches the single graph between metrics without inventing time-series data', () => {
+    const ui = widget();
+    ui.render('report', { rows: [row('high-spend', 100, 'EUR', 200), { ...row('high-clicks', 10, 'EUR', 40), metrics: { spend: 10, clicks: 50, conversions: 9, conversion_value: 40 } }] });
+    expect(ui.app.innerHTML.match(/class="bars"/g)).toHaveLength(1);
+    expect(ui.app.innerHTML).toContain('<b>Spend</b>');
+    ui.metrics[1]!.click();
+    expect(ui.app.innerHTML).toContain('<b>Clicks</b>');
+    expect(ui.app.innerHTML.indexOf('Campaign high-clicks')).toBeLessThan(ui.app.innerHTML.indexOf('Campaign high-spend'));
+    ui.metrics[2]!.click();
+    expect(ui.app.innerHTML).toContain('<b>Conversions</b>');
+    ui.metrics[3]!.click();
+    expect(ui.app.innerHTML).toContain('<b>ROAS</b>');
+    expect(ui.app.innerHTML).toContain('4.00×');
+    expect(ui.app.innerHTML).not.toContain('Activity</b>');
+    ui.render('report', { rows: [] });
+    expect(ui.app.innerHTML).not.toContain('class="kpi"');
+    expect(ui.app.innerHTML).not.toContain('class="bars"');
+    expect(ui.app.innerHTML).toContain('No rows returned');
+  });
+
   it('separates currencies into working controls, never a mixed money total', () => {
     const ui = widget();
     ui.render('report', { rows: [row('eu', 100, 'EUR', 300), row('us', 900, 'USD', 900)] });

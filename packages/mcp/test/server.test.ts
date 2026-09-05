@@ -97,7 +97,8 @@ describe('adport MCP server', () => {
     expect(content.mimeType).toBe('text/html;profile=mcp-app');
     expect(content.text).toContain('ui/initialize');
     expect(content.text).toContain('ui/notifications/tool-result');
-    expect(content.text).toContain('evidence before action');
+    expect(content.text).toContain('adport.dev');
+    expect(content.text).not.toContain('evidence before action');
     expect(content.text).not.toMatch(/https?:\/\//);
     const script = content.text?.match(/<script>([\s\S]+)<\/script>/)?.[1];
     expect(script).toBeTruthy();
