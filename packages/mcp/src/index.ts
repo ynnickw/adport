@@ -16,6 +16,7 @@ import { createXModule } from '@adport/provider-x';
 import packageJson from '../package.json';
 import {
   ADPORT_UI_HTML,
+  ADPORT_UI_DOMAIN,
   ADPORT_UI_URI,
   structuredResult,
   toolInvocationLabels,
@@ -85,14 +86,20 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
     ADPORT_UI_URI,
     {
       description: 'Responsive Adport accounts, performance, recommendations, and guarded-change view.',
-      _meta: { ui: { prefersBorder: false, csp: { connectDomains: [], resourceDomains: [] } } },
+      _meta: {
+        ui: { domain: ADPORT_UI_DOMAIN, prefersBorder: false, csp: { connectDomains: [], resourceDomains: [] } },
+        'openai/widgetDomain': ADPORT_UI_DOMAIN,
+      },
     },
     async () => ({
       contents: [{
         uri: ADPORT_UI_URI,
         mimeType: RESOURCE_MIME_TYPE,
         text: ADPORT_UI_HTML,
-        _meta: { ui: { prefersBorder: false, csp: { connectDomains: [], resourceDomains: [] } } },
+        _meta: {
+          ui: { domain: ADPORT_UI_DOMAIN, prefersBorder: false, csp: { connectDomains: [], resourceDomains: [] } },
+          'openai/widgetDomain': ADPORT_UI_DOMAIN,
+        },
       }],
     }),
   );
