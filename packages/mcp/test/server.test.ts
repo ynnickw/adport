@@ -6,7 +6,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createContext } from '@adport/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createMcpServer } from '../src/index.js';
-import { ADPORT_UI_URI } from '../src/ui.js';
+import { ADPORT_UI_DOMAIN, ADPORT_UI_URI } from '../src/ui.js';
 
 let home: string;
 let client: Client;
@@ -103,7 +103,12 @@ describe('adport MCP server', () => {
     expect(script).toBeTruthy();
     expect(() => new Function(script!)).not.toThrow();
     expect(content._meta).toEqual({
-      ui: { prefersBorder: false, csp: { connectDomains: [], resourceDomains: [] } },
+      ui: {
+        domain: ADPORT_UI_DOMAIN,
+        prefersBorder: false,
+        csp: { connectDomains: [], resourceDomains: [] },
+      },
+      'openai/widgetDomain': ADPORT_UI_DOMAIN,
     });
   });
 

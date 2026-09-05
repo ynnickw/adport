@@ -1,4 +1,5 @@
 export const ADPORT_UI_URI = 'ui://adport/insight-card-v1.html';
+export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
 
 export type AdportView = 'accounts' | 'report' | 'operation' | 'insights';
 
