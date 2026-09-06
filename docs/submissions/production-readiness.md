@@ -100,5 +100,8 @@ node --test scripts/test-connector-catalog.mjs
 The Adport Chrome profile's existing account page displayed a prior signed-in
 snapshot, but navigating to Connections redirected to sign-in. It is not fresh
 provider evidence. The in-app browser is signed in as the Synthetic Reviewer.
-Reauthenticate the real workspace before collecting production read/test evidence;
-do not convert the isolated reviewer into an owner with real customer access.
+Reauthenticate the real workspace before collecting browser-specific production
+OAuth and host-rendering evidence; do not convert the isolated reviewer into an
+owner with real customer access. A separate existing Codex hosted connection now
+provides verified real Google/Reddit reads (see the validation log), but it is not
+the ChatGPT review grant and does not establish public approval or write coverage.

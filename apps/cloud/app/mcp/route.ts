@@ -41,6 +41,7 @@ async function handle(request: Request): Promise<Response> {
       }],
       scopes: principal.scopes,
       scopeDenials: writePlanDenial ? { 'tools:write': writePlanDenial } : undefined,
+      notConnectedMessage: 'This provider is not connected or available for this Adport Cloud workspace. Open Connections in the Adport dashboard to connect a supported provider, then Accounts to enable agent access. Local CLI credentials and demo mode do not connect this cloud workspace.',
     });
     const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     await server.connect(transport);

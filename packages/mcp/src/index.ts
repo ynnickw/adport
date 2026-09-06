@@ -66,6 +66,8 @@ export interface CreateServerOptions {
    * error when called. Missing credential scopes without a denial stay hidden.
    */
   scopeDenials?: Readonly<Record<string, ToolScopeDenial | undefined>>;
+  /** Hosted transports can replace local CLI setup guidance, without changing the error code. */
+  notConnectedMessage?: string;
 }
 
 export interface ToolScopeDenial {
@@ -78,7 +80,7 @@ export interface ToolScopeDenial {
  * Thin adapter: every tool in the shared registry becomes an MCP tool.
  * No tool logic lives here — see the "one tool-definition layer" principle.
  */
-export function createMcpServer({ runtime, name = 'adport', version = packageJson.version, icons = DEFAULT_MCP_ICONS, scopes, scopeDenials }: CreateServerOptions): McpServer {
+export function createMcpServer({ runtime, name = 'adport', version = packageJson.version, icons = DEFAULT_MCP_ICONS, scopes, scopeDenials, notConnectedMessage }: CreateServerOptions): McpServer {
   const provenance = (value: unknown): unknown => runtime.dataSource === 'synthetic'
     ? { ...(value && typeof value === 'object' && !Array.isArray(value) ? value : { value }), data_source: 'synthetic' }
     : value;
@@ -150,7 +152,7 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
       } catch (err) {
         const payload = provenance(
           err instanceof AdportError
-            ? err.toJSON()
+            ? { ...err.toJSON(), ...(err.code === 'NOT_CONNECTED' && notConnectedMessage ? { message: notConnectedMessage } : {}) }
             : {
               error: 'INTERNAL',
               // Unexpected exceptions can contain credentials or private paths.

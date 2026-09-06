@@ -43,6 +43,13 @@ async function serverOptions(principal = freePrincipal) {
 }
 
 describe('hosted MCP entitlement explanation', () => {
+  it('directs missing-provider recovery to cloud account setup, not a local CLI command', async () => {
+    const options = await serverOptions();
+    expect(options.notConnectedMessage).toContain('Connections in the Adport dashboard');
+    expect(options.notConnectedMessage).toContain('Accounts to enable agent access');
+    expect(options.notConnectedMessage).not.toMatch(/adport connect|--demo/);
+  });
+
   it('identifies the plan limit without promoting or initiating a purchase', async () => {
     const options = await serverOptions();
     const denial = options.scopeDenials['tools:write'];
