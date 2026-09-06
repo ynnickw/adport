@@ -229,7 +229,9 @@ the negative host test or embedded error delivery passed.
 Current external test limits, rechecked in the browser:
 
 - ChatGPT displayed a usage-limit notice: files, images and data analysis are
-  unavailable until its displayed reset time. No upgrade was purchased.
+  unavailable until its displayed reset time. No upgrade was purchased. A
+  subsequent audit/recommendations call still executed and rendered its empty
+  cards, so this notice does not establish a blanket MCP execution block.
 - Claude's signed-in Free account has AppLaunchFlow in its single custom
   connector slot. “Add custom connector” is disabled and explicitly says the
   Free plan permits one connector. No existing connector was removed. A user
@@ -239,3 +241,23 @@ Remaining: fresh mismatch/scope tool-trace evidence, audit/recommendation suite,
 token-expiry refresh evidence, final sanitized host media, actual Claude tests,
 and private submission-portal completion. Initial OAuth and persisted chat
 reloading do not prove token refresh.
+
+### Recommendation fixture gap (same host session)
+
+Actual `audit_run` followed by `recommendations_list` displayed two genuine
+empty recommendation cards. The expanded list response confirmed `count: 0`
+and `data_source: synthetic`. Inspection of the rule pack explains why: active
+campaign rules skip paused campaigns, and the CPA-outlier rule requires three
+converting campaigns in the same account. The original fixture had only two.
+
+The follow-up changes the fictional Discovery campaign from zero conversions
+to one per day. This deliberately produces three converting EUR campaigns and
+a CPA of 16 versus the median 4.33, exercising the existing historical CPA
+rule without changing any campaign status or real-provider behavior. Report
+values change in the new fixture version: EUR conversions become 63, conversion
+value 1512 and ROAS 4.50 over seven days; spend remains 336. Earlier evidence
+above records the original fixture, not these new values. A regression test
+checks persistence, evidence, absence of an automatic proposed action, paused
+statuses and zero network calls. Production host revalidation is still needed.
+The full build/test/typecheck sequence passed again with core 33 tests, MCP 44
+and cloud 234 passed (27 optional database tests skipped).

@@ -58,6 +58,24 @@ it('rejects foreign accounts, cross-account campaigns, activation, stale budgets
   expect(fetch).not.toHaveBeenCalled();
 });
 
+it('produces a persisted evidence-backed CPA finding while all campaigns remain paused', async () => {
+  const { provider } = fixture();
+  const { ctx, registry } = await createContext({ providerModules: [{ provider, tools: syntheticTools(provider) }] });
+  const audit = await registry.call('audit_run', { provider: 'demo', account_ids: ['demo-eur'], date_range: 'last_7_days' }, ctx) as { findings: Array<{ id: string }> };
+  expect(audit.findings).toHaveLength(1);
+  expect(audit.findings[0]).toMatchObject({
+    ruleId: 'cpa-outlier', provider: 'demo', accountId: 'demo-eur', status: 'open',
+    entity: { id: 'demo-discovery', status: 'PAUSED' },
+    metrics: { spend: 112, conversions: 7, cpa: 16 },
+  });
+  expect(audit.findings[0]).toHaveProperty('proposedAction', undefined);
+  const listed = await registry.call('recommendations_list', { provider: 'demo', status: 'open' }, ctx);
+  expect(listed).toMatchObject({ count: 1, findings: [{ id: audit.findings[0]!.id }] });
+  await expect(registry.call('recommendation_apply', { finding_id: audit.findings[0]!.id }, ctx)).rejects.toThrow(/human judgment/);
+  expect((await provider.listCampaigns('demo-eur')).every(c => c.status === 'PAUSED')).toBe(true);
+  expect(fetch).not.toHaveBeenCalled();
+});
+
 it('honors currency, account grouping, metric selection, range and limits', async () => {
   const { provider } = fixture();
   const campaigns = await provider.report({ ...query, metrics: ['spend'], accountIds: ['demo-eur'] });

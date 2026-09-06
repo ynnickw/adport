@@ -65,7 +65,9 @@ export class SyntheticProvider implements AdProvider {
           totals.spend += (10 + seed * 3) * days;
           totals.impressions += (1500 + seed * 850) * days;
           totals.clicks += (45 + seed * 17) * days;
-          const conversions = c.id === 'demo-discovery' ? 0 : (2 + seed) * days;
+          // Three converting EUR campaigns expose a historical CPA outlier
+          // without marking any campaign active or enabling a real write.
+          const conversions = (c.id === 'demo-discovery' ? 1 : 2 + seed) * days;
           totals.conversions += conversions;
           totals.conversion_value += conversions * 24;
         }
