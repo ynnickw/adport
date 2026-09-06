@@ -3,10 +3,10 @@
 This file is the copy-and-checklist source for the OpenAI Apps Management submission. Do not place reviewer credentials, access tokens, or customer data in this repository.
 
 **Submission hold — production only:** The owner requires real, production-ready
-provider workflows. The saved portal draft still contains demo tools, not the
-native production catalog. Follow the [production release gate](./production-readiness.md)
-before submission. Historical synthetic prompts/media below are regression
-evidence only and must not be used as final native-provider acceptance evidence.
+provider workflows. The saved portal draft now contains native tools and no
+demo tools after PR #65 and a real-owner rescan. Follow the
+[production release gate](./production-readiness.md) before submission: that scan
+alone does not establish public provider approval or full tool coverage.
 
 ## Listing
 
@@ -76,40 +76,51 @@ Use these in the listing:
 3. `Find the three biggest performance opportunities and explain the evidence.`
 4. `Preview a 10% budget increase for my best converting campaign. Do not apply it.`
 
-## Historical synthetic test cases — not production acceptance
+## Native acceptance cases
 
-The dedicated **synthetic reviewer workspace** described in [reviewer setup](./synthetic-reviewer.md) uses real Adport OAuth, MCP, policy, and durable audit/pending stores, but a network-free `demo` provider. It does not simulate platform approval or prove real-provider API behavior. Both `tools:read` and `tools:write` OAuth scopes are needed. These historical tests must be replaced by real native-provider review cases for the production submission; do not submit this demo catalog.
+These replace the retired synthetic cases in the portal draft. Review access
+must use a dedicated account with provider-supported isolated test resources,
+the production native tools, and `tools:read tools:write` scopes. Never give
+reviewers the owner's real account or production data. The current portal
+explicitly requires sample-data test access without MFA or emailed codes.
+Provision and run every case before submission; placeholders in private resource
+instructions and unverified expectations are not a completed test.
 
 ### 1. Account inventory
 
 - **Prompt:** `Show the ad accounts connected to this workspace.`
 - **Expected tools:** `accounts_list`
 - **Expected response:** An inline Adport card lists scoped accounts by provider, ID, currency, and available status. The accompanying assistant text explains that only workspace-authorized accounts are shown.
+- **Observed September 7:** Real-owner ChatGPT test rendered three enabled native accounts. Dedicated reviewer access remains open.
 
 ### 2. Performance analysis
 
-- **Prompt:** `Show campaign spend, impressions, clicks, conversions, conversion value, and ROAS for the last 7 days.`
-- **Expected tools:** `report` with `level=campaign`, all six requested metrics, and `date_range=last_7_days`
+- **Prompt:** `Show campaign spend, impressions, clicks, conversions and conversion value for the last 30 days. Keep currencies separate and show the Adport report.`
+- **Expected tools:** `report` with `level=campaign`, the five requested metrics, `date_range=last_30_days` and `continue_on_error=true`
 - **Expected response:** An inline card separates currencies into selectable groups and shows KPI totals and a spend-by-entity chart. Missing metrics are unavailable, not zero. The assistant identifies partial reads and never sums unlike currencies.
+- **Empty result:** Show an honest empty state, not a fabricated graph or totals.
+- **Observed September 7:** The actual frame returned no rows for the owner's enabled accounts. Populated native graph coverage remains open.
 
 ### 3. Safe write preview
 
-- **Prompt:** `Preview a small budget change for the demo campaign. Do not apply it.`
-- **Expected tools:** `demo_list_campaigns` for `demo-eur`, then `demo_set_budget` for `demo-search`, with the observed `expected_daily_budget_micros` and a 5% increase, without `pending_operation_id`
-- **Expected response:** The tool returns `pending_validation`, a short-lived `pending_operation_id`, exact changes, validation mode, policy coercions, and budget deltas. The inline card says that nothing has changed yet.
+- **Prompt:** `Find the designated paused review campaign in the connected Meta test account. Preview setting its status to PAUSED. Do not apply the preview or activate anything.`
+- **Expected tools:** `accounts_list`; `meta_api_read` for campaigns with id/name/status; `meta_set_campaign_status` with `status=PAUSED`, without `pending_operation_id`
+- **Expected response:** Use the account and campaign resolved from the dedicated review resources. The pending preview renders a Change / Before / After table with PAUSED to PAUSED and Preview / Not applied. No activation or budget change occurs.
+- **Observed September 7:** This native preview rendered in ChatGPT using an already-paused owner test campaign. Only the first call ran. A no-op preview is not proof of native apply or of a changed-value preview.
 
 ### 4. Exact apply gate
 
-- **Prompt:** `Apply the exact pending budget preview.`
-- **Expected tools:** the same provider tool with identical arguments plus the returned `pending_operation_id`
-- **Expected response:** The operation applies only when the token and arguments match, and the response identifies the audit trail. Reviewer data must not use a live spending campaign.
+- **Prompt:** `Apply the exact preceding PAUSED-to-PAUSED review preview, then read that campaign again. Do not activate anything or change its budget.`
+- **Expected tools:** `meta_set_campaign_status` with identical arguments plus the returned `pending_operation_id`, then `meta_api_read`
+- **Expected response:** Only the matching, unexpired native test operation applies; a follow-up native read confirms PAUSED. Modified or expired arguments must not execute. Run only on the designated isolated non-spending resource.
+- **Status:** Not yet verified against the dedicated native reviewer workspace. Historical fictional apply results do not cover this case.
 
 ### 5. Provider-specific account report
 
-- **Prompt:** `Show the last seven days for only the synthetic Europe account. Keep the US account out of this report.`
-- **Expected tools:** `accounts_list` if needed, then `report` with `provider=demo` and `account_ids=["demo-eur"]`.
-- **Expected response:** Only EUR rows appear, marked Synthetic demo. No real advertising provider is contacted.
-- **Observed September 6:** The expanded ChatGPT request selected only `demo-eur`; the result contained three rows, no errors/warnings, and was not truncated. The actual frame showed EUR 336 spend, 63 conversions, and 4.50× ROAS. Clicking Conversions changed the bars to 35, 21, and 7.
+- **Prompt:** `Show the last 30 days of campaign performance for only the connected Meta test account. Exclude all other accounts and keep its currency visible.`
+- **Expected tools:** `accounts_list` if needed, then `report` with `provider=meta`, the resolved enabled account ID in `account_ids`, `level=campaign` and `date_range=last_30_days`.
+- **Expected response:** Only the selected account contributes rows, totals and charts. Never substitute another account/provider. Empty results remain empty, not invented values.
+- **Status:** Requires the dedicated native reviewer resources and a recorded result before submission.
 
 ### Negative invocation tests for the portal
 
@@ -178,7 +189,7 @@ Run **Scan Tools** again after each production metadata or CSP change. Confirm t
 - [ ] Website, support, privacy, terms, business name, and logo match the developer verification.
 - [ ] Country availability and language are intentionally selected.
 - [ ] No live campaign is activated or given spend during review.
-- [ ] Yannick gives fresh confirmation immediately before the final **Submit** action.
+- [ ] All required evidence and dedicated reviewer access pass before the authorized **Submit** action.
 
 ## Portal prerequisites and evidence
 
@@ -186,9 +197,10 @@ Public submission is separate from installing the development connector in ChatG
 
 Current execution evidence and remaining blockers are recorded in [validation status](./validation-status.md). Do not interpret the completed OAuth test as directory approval.
 
-Portal checked September 5: the selected Yannick Westermann Labs organization
-shows Individual verification **Approved**, while Business verification shows
-**Start**. Its plugin list contains AppLaunchFlow in review and no Adport draft.
-Create the Adport draft under the approved individual identity; verify the exact
-publisher name offered by the form before saving. No verification change or new
-draft was submitted during this read-only check.
+The Adport draft exists under the approved individual publisher identity.
+September 7: its catalog was replaced with the native owner scan; the five
+positive cases now describe native workflows rather than retired demo tools.
+Three common-tool explanations were corrected to remove fictional-reviewer
+claims. Native annotation justifications, dedicated test credentials, final
+media and complete functional acceptance remain unfinished. No final submission
+has been sent; saved draft changes do not constitute an application submission.

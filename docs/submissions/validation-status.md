@@ -1,6 +1,35 @@
-# Connector validation status — 2026-09-06
+# Connector validation status
 
 This is an evidence log, not a public approval claim. No customer identifiers, credentials, private chat links, or production account screenshots belong here.
+
+## Native owner test and submission correction — September 7, 2026
+
+- PR #65 is merged as `db1922e219f53e402f238c7fddd805abb83cb772` after
+  green Node 22/24 CI. Production deployment
+  `dpl_FWZGWZGzv3k9kJsV3sgu3MbA1VBe` was inspected Ready with `app.adport.dev`.
+  The exact commit's GitHub deployment status identifies that deployment.
+- Real owner Google sign-in succeeded. ChatGPT OAuth was reauthorized to that
+  workspace and the installed connector and portal draft rescanned. Both now
+  show native tools, no demo tools. This supersedes the older login/catalog
+  blockers below; tenant-dependent metadata remains unresolved.
+- Actual ChatGPT inventory rendered three enabled native accounts. Individual
+  native reads returned a paused Meta campaign and empty Microsoft/Snapchat
+  campaign lists. Empty responses do not prove full provider readiness.
+- Actual Meta status preview used PAUSED without a pending operation id. The
+  host's Allow once prompt was inspected before approval. The embedded table
+  displayed PAUSED to PAUSED and Preview / Not applied. No second apply call,
+  activation or budget change was made; this is not apply/readback evidence.
+- The actual last-30-days report frame displayed "No rows returned for this
+  period." No populated native graph has been verified in this ChatGPT grant.
+- Current OpenAI Testing form explicitly forbids real-user production accounts
+  as reviewer credentials. Dedicated native test access is still required.
+  Five obsolete synthetic cases were replaced with native-workflow draft cases;
+  missing review resources and apply/graph coverage remain explicit. The three
+  non-invocation prompts remain unchanged. No final submission was performed.
+- Claude still has a Free-account single-slot restriction, with AppLaunchFlow
+  connected. No connector was removed and no paid plan was purchased.
+
+Earlier entries below are historical evidence, not the current access state.
 
 ## Production-only release audit — September 7, 2026
 
