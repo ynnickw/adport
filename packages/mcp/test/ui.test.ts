@@ -337,6 +337,22 @@ describe('shipped MCP iframe', () => {
     expect(ui.app.innerHTML).toContain('<td>1</td><td class="changed">2</td>');
   });
 
+  it('preserves micros in before/after amounts instead of rounding away the proposed change', () => {
+    const ui = widget();
+    ui.render('operation', { preview: { budgetDeltas: [
+      { target: 'Daily budget', currency: 'EUR', fromMicros: 26250000, toMicros: 27562500 },
+      { target: 'Micro change', currency: 'USD', fromMicros: 1000000, toMicros: 1000001 },
+      { target: 'Unknown currency', fromMicros: 1000001, toMicros: 1000002 },
+      { target: 'Three decimals', currency: 'KWD', fromMicros: 1234000, toMicros: 1235000 },
+    ] } });
+    const visible = ui.app.innerHTML.split('<details>')[0]!;
+    expect(visible).toContain('<td>€26.25</td><td class="changed">€27.5625</td>');
+    expect(visible).toContain('<td>$1.00</td><td class="changed">$1.000001</td>');
+    expect(visible).toContain('<td>1.000001</td><td class="changed">1.000002</td>');
+    expect(visible).toContain('1.234');
+    expect(visible).toContain('1.235');
+  });
+
   it('never fabricates a previous value from a freeform update', () => {
     const ui = widget();
     ui.render('operation', { preview: { summary: '<img src=x>', changes: ['~ demo {"name":"new"}'] } });
