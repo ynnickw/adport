@@ -12,6 +12,8 @@ browser screenshots, not composited or generated cards.
 | `recommendations.png` | Fresh `audit_run` for demo Europe / last seven days, then `recommendations_list` for open demo findings | Both host cards display one persisted fictional CPA warning. |
 | `budget-preview.png` | Read the current synthetic Search budget, then preview EUR 27 without a pending token | Refreshed host template renders EUR 26.25 → EUR 27.00 and Not applied. |
 | `report-eur.png` | Report six campaign metrics for demo Europe only / last seven days | Real populated inline bar chart, EUR-only totals and synthetic label. |
+| `report-conversions-live.png` | Switch the actual four-metric report to Conversions after a 390 CSS-pixel responsive test | Actual 35 / 21 / 7 bars and 4.50x reported ROAS; unmodified desktop capture after restoring viewport. |
+| `budget-preview-precision-before.png` | Fresh current-budget read followed by a 5% preview, no apply | Records the precision defect: 27,562,500 micros rendered as EUR 27.56. Not a final listing asset. |
 
 These full host captures are evidence sources. They are not yet the final
 cropped directory screenshots and do not prove Claude rendering. See

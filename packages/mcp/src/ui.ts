@@ -166,9 +166,9 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const arr = (value) => Array.isArray(value) ? value : [];
     const num = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
-    const money = (value, currency) => currency
-      ? new Intl.NumberFormat(state.host.locale || 'en', { style:'currency', currency, maximumFractionDigits:2 }).format(num(value))
-      : new Intl.NumberFormat(state.host.locale || 'en', { maximumFractionDigits:2 }).format(num(value));
+    const money = (value, currency, maximumFractionDigits=2) => currency
+      ? new Intl.NumberFormat(state.host.locale || 'en', { style:'currency', currency, maximumFractionDigits }).format(num(value))
+      : new Intl.NumberFormat(state.host.locale || 'en', { maximumFractionDigits }).format(num(value));
     const compact = (value) => new Intl.NumberFormat(state.host.locale || 'en', { notation:'compact', maximumFractionDigits:1 }).format(num(value));
     const available = (value) => typeof value === 'number' && Number.isFinite(value);
     const total = (rows, key) => rows.length && rows.every(r => available(r.metrics?.[key])) ? rows.reduce((sum,r) => sum+r.metrics[key],0) : null;
@@ -234,7 +234,8 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       if (meta.tool === 'recommendation_apply' && data.result) data = data.result;
       const preview = data.preview || {}, pending = data.pending_operation_id, applied = data.status === 'applied' || data.applied === true;
       const changes = arr(preview.changes), coercions = arr(preview.coercions), deltas = arr(preview.budgetDeltas);
-      const comparisons=deltas.map(v=>{const currency=currencyOf(v);return {label:(v.target || 'Budget')+(currency?' · '+currency:' (account units)'),before:available(v.fromMicros)?money(v.fromMicros/1e6,currency):'—',after:available(v.toMicros)?money(v.toMicros/1e6,currency):'—'};});
+      // Review amounts must preserve micros; rounded report totals are not suitable for consent.
+      const comparisons=deltas.map(v=>{const currency=currencyOf(v);return {label:(v.target || 'Budget')+(currency?' · '+currency:' (account units)'),before:available(v.fromMicros)?money(v.fromMicros/1e6,currency,6):'—',after:available(v.toMicros)?money(v.toMicros/1e6,currency,6):'—'};});
       // Only split provider diff formats with explicit field/value boundaries.
       // Freeform JSON updates stay in details; do not invent previous values.
       for (const change of changes) {

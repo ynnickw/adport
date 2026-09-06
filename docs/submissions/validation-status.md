@@ -4,6 +4,44 @@ This is an evidence log, not a public approval claim. No customer identifiers, c
 
 ## Submission preparation — September 6, 2026
 
+Latest verification after PR #60:
+
+- PR #60 merged as `dd4ccd4ddd5b554fec3cf68c532af0191ab663bf` with the
+  owner's explicit admin-merge authorization and green Node 22/24 CI. The
+  commit's successful cloud deployment status points to
+  `dpl_DVHz1J3EFnrJbqARTV8n3BQkj5yY`; Vercel inspection confirms that deployment
+  is Ready, targets production, and owns `app.adport.dev`.
+- A fresh portal OAuth consent explicitly named **Adport Synthetic Reviewer**.
+  Its completed scan returned nine tools, now including `audit_run` with
+  `Open World: True`. All 27 annotation justifications were entered and
+  verified nonempty after navigating away and back. Re-scanning cleared prior
+  explanations, so do not assume they survive another scan.
+- The real ChatGPT report was tested at an effective 390 CSS-pixel viewport.
+  Both the host and inner widget measured 390 pixels without horizontal
+  overflow. Clicking the actual Conversions button changed the chart to
+  Retargeting 35, Search 21, Discovery 7; the headline metrics remained
+  EUR 336, 1.7K clicks, 63 conversions, and 4.50x ROAS. The temporary viewport
+  override was reset afterward. This is a responsive browser test, not a
+  native-mobile-app test.
+- `assets/chatgpt/report-conversions-live.png` is an unmodified 1600x900
+  screenshot of that genuine ChatGPT result after returning to the desktop
+  viewport. It is evidence, not a portal-compliant listing image. The browser
+  capture clipping/viewport behavior did not reliably produce listing media;
+  no malformed capture was uploaded or presented as passing media.
+- A fresh natural-language 5% budget-preview test called `demo_list_campaigns`
+  first: Search was PAUSED with 26,250,000 micros. The only subsequent write
+  tool call requested 27,562,500 micros with the matching expected current
+  budget and **no pending token**. Its inspected response was
+  `pending_validation`, `applied=false`, `data_source=synthetic`; no apply
+  call occurred. The real Before/After table rendered but rounded the proposed
+  EUR 27.5625 to EUR 27.56. This identified a presentation precision defect.
+  The follow-up preserves up to six decimals for authoritative budget deltas,
+  while leaving report formatting unchanged. Its production release/retest
+  is not yet proven. `budget-preview-precision-before.png` records the defect,
+  not an approved listing asset.
+
+The dated observations below are historical where superseded by this block.
+
 - Later portal verification confirmed the saved Individual publisher identity,
   both orange-dot icons, and a verified domain. The production challenge endpoint
   returned the exact portal-provided challenge; no authentication secrets are
