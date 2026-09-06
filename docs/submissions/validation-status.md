@@ -136,7 +136,34 @@ with 41 MCP tests. This local correction does not establish that every typed
 provider error is free of sensitive data; it closes the unchecked exception
 path specifically.
 
-1. Retain the unresolved result-delivery limitation in the review notes. Obtain populated, non-spending reviewer report data. The released mixed-provider retest returned a real zero-activity row without errors, but not the non-zero multi-row graph needed for submission media. The user has been asked whether to use a clearly labeled synthetic reviewer workspace or an existing account with historical data; neither option has been assumed authorized.
+### Synthetic reviewer preparation (2026-09-06)
+
+The user selected explicitly synthetic data. PR #55 implements an isolated
+reviewer runtime with two fictional EUR/USD accounts, four paused campaigns,
+populated reports, and a guarded budget preview/apply tool. Real provider
+credentials are not loaded and real provider OAuth is denied for the
+server-allowlisted reviewer organization. All MCP responses and embedded cards
+identify the data as synthetic. This does not prove advertising-provider API
+compatibility or approval.
+
+The migration was applied to the intended AdPort Supabase project after a
+dry-run and transaction-rolled-back privilege test. The private reviewer login
+was created and its saved credentials passed a password login through Supabase
+Auth. Credentials remain outside the repository. A transaction-rolled-back
+database test confirmed stale compare-and-set updates affect zero rows. The
+production organization allowlist is configured, but the runtime is not yet
+deployed.
+
+Full local build, test, and typecheck passed: core 32 tests, MCP 43 tests, and
+cloud 234 tests (27 optional database tests skipped). Both Node 22/24 CI jobs
+and both Vercel previews passed for implementation commit `c760aec7`.
+PR #55 remains open with a required approving review; a normal merge was
+blocked and auto-merge is disabled. No admin bypass was performed. Preview
+build success is not production activation or an in-host OAuth test.
+
+Remaining release and submission checks:
+
+1. Merge with the required review or separately authorized admin override, then verify the production alias and exact deployed commit. Retain the unresolved error-result-delivery limitation in the review notes. The synthetic reports provide non-zero fixture data, but actual hosted report execution and refreshed submission media remain outstanding.
 2. Complete the five-positive/three-negative reviewer suite using a populated, private, non-spending reviewer workspace. No campaign activation is authorized by this test plan.
 3. Capture current, sanitized in-host inventory, report, and preview cards. Existing baseline PNGs predate these fixes.
 4. Verify refresh beyond token expiry and reconnect behavior. Successful initial OAuth does not prove the refresh lifecycle.

@@ -44,13 +44,15 @@ Regenerate with `pnpm --filter @adport/mcp render:submission-previews`. Replace 
 
 ## Reviewer account
 
-Create one dedicated reviewer login containing synthetic or non-sensitive sample data with:
+Use the dedicated [synthetic reviewer workspace](./synthetic-reviewer.md). Its login and database state have been provisioned; activation still requires deployment of PR #55 and an actual hosted OAuth test. All sample data is fictional and must be described as such in the private review instructions.
+
+The workspace contains:
 
 - at least two scoped sample accounts;
 - campaign rows with spend, impressions, clicks, conversions, and conversion value;
-- at least one open recommendation;
-- one write-capable demo campaign that can safely exercise preview/apply without enabling spend;
-- OAuth consent for `tools:read tools:write`.
+- four paused demo campaigns; `demo_set_budget` exercises the real preview/apply policy gate without contacting an advertising platform.
+
+Before submission, generate and verify an open recommendation through the audit tools, and complete hosted OAuth consent for `tools:read tools:write`. These remain unverified. Automated provider-specific recommendation application is not available in this synthetic workspace; do not imply otherwise to reviewers.
 
 Share the login only through Anthropic's private review field. Never include passwords or tokens in source, screenshots, or public documentation.
 
@@ -82,4 +84,4 @@ As checked September 5, 2026, remote MCP submissions use Claude's organization s
 
 The current [pre-submission checklist](https://claude.com/docs/connectors/building/review-criteria) also calls for testing every tool in MCP Inspector and Claude, populated reviewer credentials, explicit annotations, and API references for freeform queries. Its wording requires `destructiveHint=true` for modifying tools. The shared registry now defaults modifying tools to that hint, including preview-first tools that can apply changes; an SDK scanner regression checks every registered modifying tool. Do not mask a modifying tool as read-only just because its first call previews. This annotation check does not establish complete functional tool coverage in Claude.
 
-The checked-in screenshots need regeneration for the currency/error corrections. Real Claude execution, OAuth refresh, complete tool coverage, and reviewer provisioning remain unverified; see [validation status](./validation-status.md).
+The checked-in screenshots need regeneration for the currency/error corrections. Reviewer provisioning is complete, but production activation, real Claude execution, OAuth refresh, and complete tool coverage remain unverified; see [validation status](./validation-status.md).
