@@ -2,7 +2,63 @@
 
 This is an evidence log, not a public approval claim. No customer identifiers, credentials, private chat links, or production account screenshots belong here.
 
+## Production-only release audit — September 7, 2026
+
+- The owner explicitly requires real, production-ready connectors, not the
+  synthetic demo surface. Both submission guides now make that distinction
+  explicit and link the production release gate.
+- Fresh OpenAI portal inspection still shows exactly nine tools: seven common
+  tools plus `demo_list_campaigns` and `demo_set_budget`. No native provider
+  tools are in the saved snapshot. No scan or submission was performed.
+- Source inspection confirms tenant-dependent registry construction. A
+  network-disabled native factory audit counted 94 provider tool definitions;
+  this does not prove that all eleven providers are approved or production-ready.
+- Added an offline production/review metadata comparator and CI regression
+  suite. All 12 tests pass, covering synthetic catalogs, missing/extra native
+  tools, schema/annotation/security/UI drift, pagination, malformed exports,
+  duplicates and provider release scope. Passing metadata equality alone is
+  explicitly not a production-readiness claim.
+- Real Adport Chrome navigation redirected to sign-in; the existing account
+  table was stale page state. The in-app browser is still in the isolated
+  Synthetic Reviewer workspace. Fresh production provider tests require login.
+- The portal additionally reports enterprise domain restrictions unavailable:
+  OIDC discovery, verified-email userinfo and openid/email scopes are absent.
+  This is a visible capability warning, not evidence that the portal rejected
+  the application. No enterprise-domain support is claimed.
+
 ## Submission preparation — September 6, 2026
+
+### Production retest after PR #62
+
+- PR #62 merged as `d02358a9120bcde592543033536899c9f10786c7`.
+  Vercel deployment `dpl_rYHb3B2kaRu3WcBrrVFQJhWXmRjv` is now Ready,
+  targets production, and owns `app.adport.dev`. Its earlier queued state
+  was not a failed deployment; no duplicate deployment was started.
+- Fresh actual ChatGPT account-level and campaign-level reports both show
+  EUR spend 336, clicks 1,659, conversions 63 and ROAS 4.50; USD remains
+  154, 791, 42 and 6.55. The expanded campaign report response includes
+  `summary` with `scope=returned_rows`, `complete=true`, two groups,
+  four rows, no errors or warnings, and `data_source=synthetic`.
+  The adjacent model-written campaign totals now agree with the iframe.
+  The old incorrect 4.16 remains in historical messages, not the fresh result.
+- Actual currency/metric clicks change the EUR conversion bars to 35, 21,
+  and 7, and USD to one bar of 42. A new short conversation initially made
+  two account-level report calls despite a campaign request. An explicit
+  campaign-level request for both accounts in one report produced the
+  expected single currency-tabbed card. This model call-selection variability
+  remains a limitation; it is not evidence of duplicated iframe rendering.
+- A new genuine browser recording was encoded as H.264, 1600x900, 70.03
+  seconds from 2,334 timestamped screencast frames. It shows the live report
+  call, metric/currency interaction and an unapplied preview from EUR 27.5625
+  to EUR 28.940625, with local-validation details. Original frame timestamps
+  are retained; it is not a slideshow or generated UI. This clip does not
+  include OAuth onboarding or an apply/readback sequence and has not been
+  uploaded. Capture resumed after a transient browser-document interception;
+  the earlier partial attempt is not used in this clip. All recordings stopped.
+- Portal-compliant listing screenshots, private reviewer credentials,
+  final legal confirmations, actual Claude access/tests and complete release
+  evidence remain open. Full-viewport host screenshots are evidence only:
+  native clipped capture still does not reliably match the requested bounds.
 
 Latest verification after PR #61:
 

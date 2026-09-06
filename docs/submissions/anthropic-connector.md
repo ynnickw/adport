@@ -2,6 +2,10 @@
 
 This file is the copy-and-checklist source for the Claude Connector Directory submission. Keep reviewer credentials and customer data out of the repository.
 
+**Submission hold — production only:** Follow the [production release gate](./production-readiness.md).
+Synthetic tests/media below are historical regression evidence, not final
+native-provider acceptance. Do not list demo tools as the production connector.
+
 ## Directory listing
 
 - **Name:** Adport
@@ -44,7 +48,7 @@ Regenerate with `pnpm --filter @adport/mcp render:submission-previews`. Replace 
 
 ## Reviewer account
 
-Use the dedicated [synthetic reviewer workspace](./synthetic-reviewer.md). Its login and database state have been provisioned, PR #55 is deployed, and production OAuth, report, preview, and exact apply were exercised in ChatGPT. Claude OAuth remains unverified. All sample data is fictional and must be described as such in the private review instructions.
+The dedicated [synthetic reviewer workspace](./synthetic-reviewer.md) was provisioned for isolated regression testing. PR #55 is deployed, and hosted OAuth, report, preview, and exact synthetic apply were exercised in ChatGPT. This is not native-provider verification. Claude OAuth remains unverified. Final submission needs an isolated real-provider review workflow matching the advertised production tools, not this demo catalog.
 
 The workspace contains:
 
@@ -68,6 +72,7 @@ Share the login only through Anthropic's private review field. Never include pas
 
 ## Final submission checklist
 
+- [ ] Production release gate passes: native catalog parity, verified release providers, real reviewer workflows, no demo tools.
 - [ ] Fresh Claude Web/Desktop connection completes OAuth and discovers tools.
 - [ ] Fresh Claude Code connection completes OAuth and refreshes successfully.
 - [ ] The three required directory prompts work with the reviewer account.
