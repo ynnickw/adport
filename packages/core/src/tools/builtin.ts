@@ -3,6 +3,7 @@ import { DATE_PRESETS, ENTITY_LEVELS, METRICS, type NormalizedQuery, type Report
 import { selectConnectedProviders, type Account } from '../provider.js';
 import { AdportError } from '../errors.js';
 import { defineTool, type AnyToolDefinition } from './registry.js';
+import { summarizeReport } from '../report-summary.js';
 
 const dateRangeSchema = z.union([
   z.enum(DATE_PRESETS),
@@ -49,7 +50,8 @@ export function builtinTools(): AnyToolDefinition[] {
       namespace: 'core',
       description:
         'Cross-platform performance report with normalized metrics (spend, clicks, conversions, ROAS, ...). ' +
-        'Rows are capped by `limit`; the response says when it truncated.',
+        'Rows are capped by `limit`; the response says when it truncated. ' +
+        'Use summary.groups for currency-separated totals and spend-weighted ROAS; never average row ratios or combine currencies. Null metrics are unavailable.',
       input: z.object({
         provider: z.string().optional().describe('Limit to one provider id.'),
         account_ids: z.array(z.string()).optional().describe('Filter to available accounts. Cross-provider requests route each ID only to its matching provider; set provider to disambiguate shared IDs.'),
@@ -129,7 +131,8 @@ export function builtinTools(): AnyToolDefinition[] {
           }
         }
         const truncated = providerTruncated || rows.length > input.limit;
-        return { rows: rows.slice(0, input.limit), truncated, errors, warnings, date_range: input.date_range };
+        const returnedRows = rows.slice(0, input.limit);
+        return { rows: returnedRows, summary: summarizeReport(returnedRows, !truncated && errors.length === 0), truncated, errors, warnings, date_range: input.date_range };
       },
     }),
   ];

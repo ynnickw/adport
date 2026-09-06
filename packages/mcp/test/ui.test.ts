@@ -60,6 +60,21 @@ const row = (accountId: string, spend: number, currency?: string, conversionValu
 });
 
 describe('shipped MCP iframe', () => {
+  it('uses the same server summary as the agent and preserves explicit unavailable ratios', () => {
+    const ui = widget();
+    ui.render('report', {
+      rows: [row('eur', 100, 'EUR', 200), row('usd', 50, 'USD', 200)],
+      summary: { scope: 'returned_rows', complete: true, groups: [
+        { key: 'EUR', metrics: { spend: 100, roas: 2 } },
+        { key: 'USD', metrics: { spend: 50, roas: null } },
+      ] },
+    });
+    expect(ui.app.innerHTML).toContain('<small>ROAS</small><strong>2.00×</strong>');
+    ui.buttons[1]!.click();
+    expect(ui.app.innerHTML).toContain('$50.00');
+    expect(ui.app.innerHTML).toContain('<small>ROAS</small><strong>—</strong>');
+  });
+
   it('labels synthetic results explicitly and clears the label for real results', () => {
     const ui = widget();
     ui.render('report', { data_source: 'synthetic', rows: [row('demo-eur', 100, 'EUR')] });

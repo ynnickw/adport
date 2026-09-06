@@ -14,6 +14,9 @@ browser screenshots, not composited or generated cards.
 | `report-eur.png` | Report six campaign metrics for demo Europe only / last seven days | Real populated inline bar chart, EUR-only totals and synthetic label. |
 | `report-conversions-live.png` | Switch the actual four-metric report to Conversions after a 390 CSS-pixel responsive test | Actual 35 / 21 / 7 bars and 4.50x reported ROAS; unmodified desktop capture after restoring viewport. |
 | `budget-preview-precision-before.png` | Fresh current-budget read followed by a 5% preview, no apply | Records the precision defect: 27,562,500 micros rendered as EUR 27.56. Not a final listing asset. |
+| `budget-preview-precision-fixed.png` | Same saved response after PR #61 production deployment, connector refresh and conversation reload | Real Before/After table now shows EUR 26.25 to EUR 27.5625 exactly; no new write invocation. |
+| `budget-applied-live.png` | Exact pending synthetic apply followed by campaign readback | Partial card and host readback evidence only; the card header is outside this capture. Not a final listing image. |
+| `report-usd-conversions-live.png` | Fresh six-metric report for both synthetic accounts, then USD and Conversions selected | Actual USD card shows $154, 791 clicks, 42 conversions, 6.55x ROAS and a 42-conversion bar; EUR remains a separate selectable group. |
 
 These full host captures are evidence sources. They are not yet the final
 cropped directory screenshots and do not prove Claude rendering. See

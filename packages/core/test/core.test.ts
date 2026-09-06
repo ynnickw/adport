@@ -91,6 +91,21 @@ describe('createContext + ToolRegistry', () => {
     }, ctx) as { rows: unknown[]; errors: Array<{ provider: string; message: string }> };
     expect(report.rows.length).toBeGreaterThan(0);
     expect(report.errors).toEqual([{ provider: 'broken', message: 'broken report read' }]);
+    expect(report).toMatchObject({ summary: { scope: 'returned_rows', complete: false } });
+  });
+
+  it('summarizes only the rows returned after the global limit', async () => {
+    const { ctx, registry } = await createContext({ includeMock: true });
+    const result = await registry.call('report', { metrics: ['spend'], limit: 1 }, ctx) as {
+      rows: Array<{ metrics: { spend: number } }>; truncated: boolean;
+      summary: { complete: boolean; groups: Array<{ row_count: number; metrics: { spend: number } }> };
+    };
+    expect(result.rows).toHaveLength(1);
+    expect(result.truncated).toBe(true);
+    expect(result.summary.complete).toBe(false);
+    expect(result.summary.groups).toHaveLength(1);
+    expect(result.summary.groups[0]?.row_count).toBe(1);
+    expect(result.summary.groups[0]?.metrics.spend).toBe(result.rows[0]?.metrics.spend);
   });
 
   it('rejects invalid tool input with INVALID_INPUT', async () => {

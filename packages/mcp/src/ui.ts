@@ -215,9 +215,12 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       const rows=selected?.rows || [], currency=selected?.currency;
       state.reportGroup=selected?.key;
       const tabs=choices.length>1 ? '<div class="tabs" role="group" aria-label="Report currency or account">'+choices.map((g,i)=>'<button data-group="'+i+'" aria-pressed="'+(g===selected)+'">'+esc(g.label)+'</button>').join('')+'</div>' : '';
-      const spend=total(rows,'spend'), returns=rows.map(rowReturn);
+      const summary=arr(data.summary?.groups).find(group=>group.key===selected?.key)?.metrics;
+      const aggregate=key=>summary ? (available(summary[key])?summary[key]:null) : total(rows,key);
+      const spend=aggregate('spend'), returns=rows.map(rowReturn);
       const value=returns.length && returns.every(available) ? returns.reduce((sum,value)=>sum+value,0) : null;
-      const roas=spend>0 && value!==null ? (value/spend).toFixed(2)+'×' : '—';
+      const ratio=summary ? summary.roas : spend>0 && value!==null ? value/spend : null;
+      const roas=available(ratio) ? ratio.toFixed(2)+'×' : '—';
       const metric=state.reportMetric, labels={spend:'Spend',clicks:'Clicks',conversions:'Conversions',roas:'ROAS'};
       const metricValue=r=>metric==='roas' ? (available(r.metrics?.conversion_value) && r.metrics?.spend>0 ? r.metrics.conversion_value/r.metrics.spend : r.metrics?.roas) : r.metrics?.[metric];
       const format=value=>metric==='spend'?money(value,currency):metric==='roas'?value.toFixed(2)+'×':compact(value);
