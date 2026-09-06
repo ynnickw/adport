@@ -95,13 +95,15 @@ those independent evidence gates. Its regression suite runs in CI:
 node --test scripts/test-connector-catalog.mjs
 ```
 
-## Access currently needed
+## Browser access update
 
-The Adport Chrome profile's existing account page displayed a prior signed-in
-snapshot, but navigating to Connections redirected to sign-in. It is not fresh
-provider evidence. The in-app browser is signed in as the Synthetic Reviewer.
-Reauthenticate the real workspace before collecting browser-specific production
-OAuth and host-rendering evidence; do not convert the isolated reviewer into an
-owner with real customer access. A separate existing Codex hosted connection now
+The real owner signed in successfully through Google in the Adport Chrome
+profile on September 7. The dashboard visibly identifies `ynnickw20@gmail.com`.
+The Accounts page currently enables Meta Adport Test, Microsoft, and Snapchat;
+the other accounts remain disabled for agent access. This is not public provider
+approval evidence. The in-app browser's old synthetic session has been signed out;
+the ChatGPT connector must be authorized with the real account and rescanned.
+Do not convert the retired reviewer into an owner with real customer access.
+A separate existing Codex hosted connection
 provides verified real Google/Reddit reads (see the validation log), but it is not
 the ChatGPT review grant and does not establish public approval or write coverage.

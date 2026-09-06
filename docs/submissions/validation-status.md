@@ -4,6 +4,18 @@ This is an evidence log, not a public approval claim. No customer identifiers, c
 
 ## Production-only release audit — September 7, 2026
 
+- PR #64 merged after green Node 22/24 CI as
+  `f1c7b48bfc484abc7299fd86d1ae0a4002192a61`. Its GitHub commit deployment
+  status identifies Vercel `dpl_4fej53EQ2vTYCh4Qoekdf22JgJtn`; inspection
+  confirms Ready, production and alias `app.adport.dev`. The deployment's
+  inspection metadata does not itself expose the commit SHA, so the association
+  is based on the exact commit's GitHub status target.
+- Live post-release `accounts_list(provider=demo)` now returns dashboard setup
+  guidance with `NOT_CONNECTED` and `isError=true` in text and structured
+  content, with no synthetic fallback. A real Google native read still succeeds;
+  the out-of-scope negative read still returns `POLICY_VIOLATION`. No campaign,
+  budget, provider permission or OAuth grant was changed during these tests.
+
 - A separate existing Codex connection was verified as Streamable HTTP to
   `https://app.adport.dev/mcp`. It supplies real provider reads despite the
   expired dashboard browser session. Do not conflate its grant with the

@@ -45,6 +45,7 @@ async function serverOptions(principal = freePrincipal) {
 describe('hosted MCP entitlement explanation', () => {
   it('directs missing-provider recovery to cloud account setup, not a local CLI command', async () => {
     const options = await serverOptions();
+    expect(options.productionOnly).toBe(true);
     expect(options.notConnectedMessage).toContain('Connections in the Adport dashboard');
     expect(options.notConnectedMessage).toContain('Accounts to enable agent access');
     expect(options.notConnectedMessage).not.toMatch(/adport connect|--demo/);

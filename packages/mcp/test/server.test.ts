@@ -11,6 +11,30 @@ import { ADPORT_UI_DOMAIN, ADPORT_UI_URI } from '../src/ui.js';
 let home: string;
 let client: Client;
 
+it('rejects demo runtimes before advertising tools on the production connector', async () => {
+  const runtime = await createContext({ includeMock: true });
+  expect(() => createMcpServer({ runtime, productionOnly: true })).toThrow(/not available on the production connector/);
+});
+
+it('rejects synthetic provenance even without demo-named tools in production', async () => {
+  const runtime = await createContext({ providerModules: [] });
+  runtime.dataSource = 'synthetic';
+  expect(() => createMcpServer({ runtime, productionOnly: true })).toThrow(/not available on the production connector/);
+});
+
+it('allows an empty real runtime without substituting demos in production', async () => {
+  const runtime = await createContext({ providerModules: [] });
+  const server = createMcpServer({ runtime, productionOnly: true });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const productionClient = new Client({ name: 'production-test', version: '1' });
+  await server.connect(serverTransport);
+  await productionClient.connect(clientTransport);
+  try {
+    expect((await productionClient.listTools()).tools.every(tool => !/^(demo|mock|synthetic)_/.test(tool.name))).toBe(true);
+    expect((await productionClient.callTool({ name: 'demo_set_budget', arguments: {} })).isError).toBe(true);
+  } finally { await productionClient.close(); await server.close(); }
+});
+
 function textOf(result: { content?: Array<{ type: string; text?: string }> }): unknown {
   const text = result.content?.find((c) => c.type === 'text')?.text;
   return text ? JSON.parse(text) : undefined;

@@ -33,6 +33,7 @@ async function handle(request: Request): Promise<Response> {
     const server = createMcpServer({
       runtime,
       name: 'adport-cloud',
+      productionOnly: true,
       version: '0.1.0',
       icons: [{
         src: `${oauthIssuerUrl()}/icon.svg?brand=orange-dot-v2`,
