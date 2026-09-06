@@ -9,9 +9,12 @@ This is an evidence log, not a public approval claim. No customer identifiers, c
 - September 6: a new `report` call selected all three workspace accounts together, requested six metrics, and used `continue_on_error=true`. The expanded request and response confirmed one Snapchat account row, `errors=[]`, `warnings=[]`, and `truncated=false`. The previous cross-provider scope failures did not recur. Meta and Microsoft returned no rows; their missing performance must not be described as zero.
 - The actual report iframe displayed EUR, the requested period, and selectable metrics. Clicking Clicks switched the selected metric and chart label in the host. The returned row contained zero activity, so this does not prove a populated multi-row graph or currency switching in ChatGPT.
 - A fresh, first-call-only Meta status preview rendered the production Change / Before / After table. The expanded request had no pending token; the actual response showed `pending_validation` and `applied=false`. The requested status and existing status were both PAUSED. No apply call was made.
-- Opening Details in that live iframe did not remain open, including through a frame-scoped locator. The resource rebuilt its DOM on every host-context update. A follow-up now avoids rebuilding for size/theme updates and preserves disclosure state during locale changes. A synthetic host that echoes iframe size changes verified Details stays expanded; this fix still needs release and a live retest.
+- Opening Details in that live iframe did not remain open, including through a frame-scoped locator. The resource rebuilt its DOM on every host-context update. PR #51 avoids rebuilding for size/theme updates and preserves disclosure state during locale changes. A synthetic host that echoes iframe size changes verified Details stays expanded.
+- PR #51 merged as `b832e600930c5e62d200078b69919538aafa0127` after Node 22/24 CI and both Vercel previews passed. The production alias was verified Ready on the new deployment. After refreshing the ChatGPT connector and reloading the conversation, the actual production preview's Details control stayed expanded and exposed validation, the original change, and the no-apply notice; it also closed normally.
 - Error paths now return the same safe payload as structured content as well as text, allowing embedded hosts to render the existing Request failed view. MCP unit/SDK tests cover policy and plan denials. The fresh negative host test exposed the actual request under its activity trace, but not the returned error payload; the assistant's rejection summary alone still does not prove the full negative test.
+- After PR #51 deployed, a fresh out-of-scope report still produced a Loading card after the conversation reloaded, despite the assistant describing the rejection and claiming an error card was shown. The screenshot contradicts that claim. Structured-error output alone did not resolve this host behavior; error/cancelled-result delivery and the no-result fallback remain to investigate. Do not mark embedded error rendering as passed.
 - No campaign was activated or changed during these retests. Successful next-day tool execution is evidence of continued access, not a trace proving which OAuth refresh path ran.
+- The unrelated-request negative test returned the German translation directly without an Adport call, permission request, or card.
 
 The earlier observations below are retained as a historical record of the defects and local checks that led to this release.
 
@@ -64,7 +67,24 @@ that the changed resource has reached ChatGPT production.
 
 ## Remaining before public submission
 
-1. Obtain populated, non-spending reviewer report data. The released mixed-provider retest returned a real zero-activity row without errors, but not the non-zero multi-row graph needed for submission media.
+### Error bridge follow-up (2026-09-06, local)
+
+The iframe now accepts initial and late `openai:set_globals` hydration, including
+the full `toolResponseMetadata.mcp_tool_result` / `call_tool_result` envelopes,
+in addition to the standard MCP Apps result notification. JSON text-only error
+envelopes are supported; stale compatibility output no longer replaces a new
+error. Cancellation produces an interrupted-request notice without asserting
+that a write succeeded or that nothing changed. Duplicate hydration does not
+reset an open disclosure.
+
+This follows the [OpenAI UI reference](https://developers.openai.com/plugins/reference)
+and [MCP Apps cancellation contract](https://apps.extensions.modelcontextprotocol.io/api/interfaces/app.McpUiToolCancelledNotification.html).
+The full local build/test/typecheck passed (36 MCP tests). Exact-source browser
+fixtures rendered both late compatibility errors and cancellation notices.
+This is compatibility coverage, not yet proof of the live ChatGPT root cause
+or a successful production error-card retest.
+
+1. Resolve the indefinitely loading card for rejected tools in ChatGPT, then obtain populated, non-spending reviewer report data. The released mixed-provider retest returned a real zero-activity row without errors, but not the non-zero multi-row graph needed for submission media. The user has been asked whether to use a clearly labeled synthetic reviewer workspace or an existing account with historical data; neither option has been assumed authorized.
 2. Complete the five-positive/three-negative reviewer suite using a populated, private, non-spending reviewer workspace. No campaign activation is authorized by this test plan.
 3. Capture current, sanitized in-host inventory, report, and preview cards. Existing baseline PNGs predate these fixes.
 4. Verify refresh beyond token expiry and reconnect behavior. Successful initial OAuth does not prove the refresh lifecycle.

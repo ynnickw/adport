@@ -243,8 +243,17 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     }
     function render(result) {
       let data = result?.structuredContent || result || {};
-      if (!data._adport && window.openai?.toolOutput?._adport) data=window.openai.toolOutput;
+      if (!result?.structuredContent && Array.isArray(result?.content)) {
+        for (const item of result.content) {
+          if (item.type !== 'text') continue;
+          try { const parsed = JSON.parse(item.text); if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) { data = parsed; break; } } catch {}
+        }
+      }
       const meta = data._adport || {};
+      if (data.cancelled) {
+        app.innerHTML=chrome('<p class="notice">'+esc(data.message || 'The host interrupted this request. Check the tool response before retrying.')+'</p>','Request interrupted');
+        return;
+      }
       if (result?.isError || data.error) {
         app.innerHTML=chrome('<p class="notice">'+esc(data.message || 'The request could not complete. See the tool response for details.')+'</p>','Request failed');
         return;
@@ -253,6 +262,21 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       if (meta.view === 'report') return renderReport(data,meta);
       if (meta.view === 'operation') return renderOperation(data,meta);
       return renderInsights(data,meta);
+    }
+    function acceptResult(result) {
+      if (!result || typeof result !== 'object') return;
+      // ChatGPT can deliver the same result through both supported bridges.
+      // Do not reset an open disclosure when the second copy arrives.
+      if (state.result && JSON.stringify(state.result) === JSON.stringify(result)) return;
+      state.result = result;
+      render(result);
+    }
+    function receiveGlobals(globals) {
+      if (!globals) return;
+      const metadata = globals.toolResponseMetadata;
+      const envelope = metadata?.mcp_tool_result || metadata?.call_tool_result;
+      if (envelope && typeof envelope === 'object') return acceptResult(envelope);
+      if (globals.toolOutput && typeof globals.toolOutput === 'object') acceptResult({structuredContent:globals.toolOutput});
     }
     const send = (message) => window.parent.postMessage(message,'*');
     const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => {
@@ -270,7 +294,8 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
         resize?.observe(document.body);
         if (state.result) render(state.result);
       }
-      if (message.method === 'ui/notifications/tool-result') { state.result = message.params; render(message.params); }
+      if (message.method === 'ui/notifications/tool-result') acceptResult(message.params);
+      if (message.method === 'ui/notifications/tool-cancelled') acceptResult({structuredContent:{cancelled:true,message:message.params?.reason}});
       if (message.method === 'ui/notifications/host-context-changed') {
         const previousLocale = state.host.locale;
         state.host = {...state.host,...message.params};
@@ -285,8 +310,11 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
         }
       }
     });
+    // The compatibility bridge can hydrate after the iframe has mounted,
+    // including full error envelopes in toolResponseMetadata.
+    window.addEventListener('openai:set_globals', event => receiveGlobals(event.detail?.globals));
     send({jsonrpc:'2.0',id:id++,method:'ui/initialize',params:{appInfo:{name:'Adport Insight',version:'1.0.0'},appCapabilities:{},protocolVersion:'2026-01-26'}});
-    if (window.openai?.toolOutput) render({structuredContent:window.openai.toolOutput});
+    receiveGlobals(window.openai);
   })();
   </script>
 </body>

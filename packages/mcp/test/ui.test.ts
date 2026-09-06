@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { ADPORT_UI_HTML, structuredResult, viewForTool, type AdportView } from '../src/ui.js';
 
 // Execute the shipped iframe script, not a second implementation of its math.
-function widget() {
-  let receive: (event: unknown) => void = () => {};
+function widget(initialGlobals?: Record<string, unknown>) {
+  const listeners = new Map<string, (event: unknown) => void>();
   const buttons: Array<{ dataset: { group: string }; click: () => void }> = [];
   const metrics: Array<{ dataset: { metric: string }; click: () => void }> = [];
   let html = '';
@@ -35,13 +35,14 @@ function widget() {
   const root = { dataset: {} as Record<string, string> };
   const sent: unknown[] = [];
   const parent = { postMessage: (message: unknown) => sent.push(message) };
-  const window = { parent, addEventListener: (_: string, fn: typeof receive) => { receive = fn; } };
+  const window = { parent, openai: initialGlobals, addEventListener: (name: string, fn: (event: unknown) => void) => { listeners.set(name, fn); } };
   runInNewContext(ADPORT_UI_HTML.match(/<script>([\s\S]+)<\/script>/)![1]!, {
     window, document: { getElementById: () => app, documentElement: root }, Intl,
   });
-  const message = (data: unknown, source: unknown = parent) => receive({ data, source });
+  const message = (data: unknown, source: unknown = parent) => listeners.get('message')?.({ data, source });
   return {
     app, buttons, metrics, root, sent, message, details,
+    globals: (globals: Record<string, unknown>) => listeners.get('openai:set_globals')?.({ detail: { globals } }),
     renderCount: () => renders,
     render: (view: AdportView, data: unknown, tool: string = view) => message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult(tool, view, data) } }),
   };
@@ -130,6 +131,55 @@ describe('shipped MCP iframe', () => {
     expect(ui.app.innerHTML).toContain('Request failed');
     expect(ui.app.innerHTML).toContain('Account &lt;outside&gt; is not connected.');
     expect(ui.app.innerHTML).not.toMatch(/Loading|No active recommendations|Preview · Not applied/);
+  });
+
+  it('hydrates errors from initial and late ChatGPT compatibility globals', () => {
+    const payload = structuredResult('report', 'report', { error: 'POLICY_VIOLATION', message: 'Account <outside> is not connected.' });
+    const envelope = { isError: true, structuredContent: payload };
+    for (const key of ['mcp_tool_result', 'call_tool_result']) {
+      const globals = { toolResponseMetadata: { [key]: envelope } };
+      for (const ui of [widget(globals), widget()]) {
+        ui.globals(globals);
+        expect(ui.app.innerHTML).toContain('Request failed');
+        expect(ui.app.innerHTML).toContain('Account &lt;outside&gt; is not connected.');
+      }
+    }
+    const ui = widget();
+    ui.globals({ toolOutput: payload });
+    expect(ui.app.innerHTML).toContain('Request failed');
+  });
+
+  it('reads JSON content error envelopes without replacing them with stale success output', () => {
+    const ui = widget({ toolOutput: structuredResult('accounts_list', 'accounts', { accounts: [] }) });
+    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: {
+      isError: true, content: [{ type: 'text', text: JSON.stringify({ error: 'DENIED', message: '<blocked>' }) }],
+    } });
+    expect(ui.app.innerHTML).toContain('Request failed');
+    expect(ui.app.innerHTML).toContain('&lt;blocked&gt;');
+    expect(ui.app.innerHTML).not.toContain('0 accounts');
+  });
+
+  it('handles cancellation honestly without claiming execution succeeded or nothing changed', () => {
+    const ui = widget();
+    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-cancelled', params: { reason: '<timeout>' } });
+    expect(ui.app.innerHTML).toContain('Request interrupted');
+    expect(ui.app.innerHTML).toContain('&lt;timeout&gt;');
+    expect(ui.app.innerHTML).not.toMatch(/Loading|Nothing has been changed|Not applied/);
+    ui.render('accounts', { accounts: [] });
+    expect(ui.app.innerHTML).not.toContain('Request interrupted');
+  });
+
+  it('ignores duplicate compatibility hydration and context-only globals', () => {
+    const ui = widget();
+    const payload = structuredResult('meta_set_campaign_status', 'operation', { preview: { summary: 'Review', changes: [] } });
+    ui.globals({ toolOutput: payload });
+    ui.details.open = true;
+    const count = ui.renderCount();
+    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: payload } });
+    ui.globals({ theme: 'dark' });
+    ui.globals({ toolOutput: null });
+    expect(ui.renderCount()).toBe(count);
+    expect(ui.details.open).toBe(true);
   });
 
   it('does not describe unknown account status as healthy or available', () => {
