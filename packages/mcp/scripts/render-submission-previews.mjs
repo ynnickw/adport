@@ -34,6 +34,13 @@ const providerNames = {
 };
 
 const fixtures = {
+  error: {
+    viewportHeight: 240,
+    tool: 'report',
+    view: 'report',
+    isError: true,
+    result: { error: 'POLICY_VIOLATION', message: 'The selected demo account is not connected to this workspace.' },
+  },
   accounts: {
     viewportHeight: 580,
     tool: 'accounts_list',
@@ -115,7 +122,7 @@ for (const [name, fixture] of Object.entries(fixtures)) {
   const notification = JSON.stringify({
     jsonrpc: '2.0',
     method: 'ui/notifications/tool-result',
-    params: { structuredContent },
+    params: { structuredContent, ...(fixture.isError ? { isError: true } : {}) },
   });
   const htmlPath = join(temporaryDirectory, `${name}.html`);
   // Exercise a real parent/iframe boundary. This is a synthetic MCP host, not a
@@ -128,7 +135,14 @@ for (const [name, fixture] of Object.entries(fixtures)) {
     window.addEventListener('message', event=>{
       if(event.source!==frame.contentWindow) return;
       if(event.data.method==='ui/initialize') frame.contentWindow.postMessage({jsonrpc:'2.0',id:event.data.id,result:{hostContext:{theme:params.get('theme')==='dark'?'dark':'light',locale:'en-US'}}},'*');
-      if(event.data.method==='ui/notifications/initialized') frame.contentWindow.postMessage(${notification},'*');
+      if(event.data.method==='ui/notifications/initialized') {
+        const notification=${notification};
+        if(params.get('bridge')==='globals') {
+          frame.contentWindow.dispatchEvent(new frame.contentWindow.CustomEvent('openai:set_globals',{detail:{globals:{toolResponseMetadata:{mcp_tool_result:notification.params}}}}));
+        } else if(params.get('bridge')==='cancelled') {
+          frame.contentWindow.postMessage({jsonrpc:'2.0',method:'ui/notifications/tool-cancelled',params:{reason:'The host interrupted this demo request.'}},'*');
+        } else frame.contentWindow.postMessage(notification,'*');
+      }
       if(event.data.method==='ui/notifications/size-changed') {
         frame.style.height=event.data.params.height+'px';
         frame.contentWindow.postMessage({jsonrpc:'2.0',method:'ui/notifications/host-context-changed',params:{containerDimensions:{height:event.data.params.height}}},'*');

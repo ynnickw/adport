@@ -67,6 +67,23 @@ that the changed resource has reached ChatGPT production.
 
 ## Remaining before public submission
 
+### Error bridge follow-up (2026-09-06, local)
+
+The iframe now accepts initial and late `openai:set_globals` hydration, including
+the full `toolResponseMetadata.mcp_tool_result` / `call_tool_result` envelopes,
+in addition to the standard MCP Apps result notification. JSON text-only error
+envelopes are supported; stale compatibility output no longer replaces a new
+error. Cancellation produces an interrupted-request notice without asserting
+that a write succeeded or that nothing changed. Duplicate hydration does not
+reset an open disclosure.
+
+This follows the [OpenAI UI reference](https://developers.openai.com/plugins/reference)
+and [MCP Apps cancellation contract](https://apps.extensions.modelcontextprotocol.io/api/interfaces/app.McpUiToolCancelledNotification.html).
+The full local build/test/typecheck passed (36 MCP tests). Exact-source browser
+fixtures rendered both late compatibility errors and cancellation notices.
+This is compatibility coverage, not yet proof of the live ChatGPT root cause
+or a successful production error-card retest.
+
 1. Resolve the indefinitely loading card for rejected tools in ChatGPT, then obtain populated, non-spending reviewer report data. The released mixed-provider retest returned a real zero-activity row without errors, but not the non-zero multi-row graph needed for submission media. The user has been asked whether to use a clearly labeled synthetic reviewer workspace or an existing account with historical data; neither option has been assumed authorized.
 2. Complete the five-positive/three-negative reviewer suite using a populated, private, non-spending reviewer workspace. No campaign activation is authorized by this test plan.
 3. Capture current, sanitized in-host inventory, report, and preview cards. Existing baseline PNGs predate these fixes.
