@@ -271,7 +271,19 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
         if (state.result) render(state.result);
       }
       if (message.method === 'ui/notifications/tool-result') { state.result = message.params; render(message.params); }
-      if (message.method === 'ui/notifications/host-context-changed') { state.host = {...state.host,...message.params}; document.documentElement.dataset.theme = state.host.theme || ''; if(state.result) render(state.result); }
+      if (message.method === 'ui/notifications/host-context-changed') {
+        const previousLocale = state.host.locale;
+        state.host = {...state.host,...message.params};
+        document.documentElement.dataset.theme = state.host.theme || '';
+        // Size/theme updates must not rebuild the DOM: opening Details changes
+        // the iframe height, which some hosts echo back as a context update.
+        if (state.result && previousLocale !== state.host.locale) {
+          const expanded = app.querySelector('details')?.open || false;
+          render(state.result);
+          const details = app.querySelector('details');
+          if (details) details.open = expanded;
+        }
+      }
     });
     send({jsonrpc:'2.0',id:id++,method:'ui/initialize',params:{appInfo:{name:'Adport Insight',version:'1.0.0'},appCapabilities:{},protocolVersion:'2026-01-26'}});
     if (window.openai?.toolOutput) render({structuredContent:window.openai.toolOutput});

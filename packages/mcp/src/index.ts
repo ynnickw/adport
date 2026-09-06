@@ -123,16 +123,18 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
     };
     const callback = async (args: Record<string, unknown>) => {
       if (scopeDenial) {
+        const payload = {
+          error: scopeDenial.code,
+          code: scopeDenial.code,
+          message: scopeDenial.message,
+          ...scopeDenial.data,
+        };
         return {
           content: [{
             type: 'text' as const,
-            text: JSON.stringify({
-              error: scopeDenial.code,
-              code: scopeDenial.code,
-              message: scopeDenial.message,
-              ...scopeDenial.data,
-            }, null, 2),
+            text: JSON.stringify(payload, null, 2),
           }],
+          ...(view ? { structuredContent: structuredResult(tool.name, view, payload) } : {}),
           isError: true,
         };
       }
@@ -149,6 +151,7 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
             : { error: 'INTERNAL', message: err instanceof Error ? err.message : String(err) };
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(payload, null, 2) }],
+          ...(view ? { structuredContent: structuredResult(tool.name, view, payload) } : {}),
           isError: true,
         };
       }

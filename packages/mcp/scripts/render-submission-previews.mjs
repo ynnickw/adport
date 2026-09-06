@@ -129,7 +129,10 @@ for (const [name, fixture] of Object.entries(fixtures)) {
       if(event.source!==frame.contentWindow) return;
       if(event.data.method==='ui/initialize') frame.contentWindow.postMessage({jsonrpc:'2.0',id:event.data.id,result:{hostContext:{theme:params.get('theme')==='dark'?'dark':'light',locale:'en-US'}}},'*');
       if(event.data.method==='ui/notifications/initialized') frame.contentWindow.postMessage(${notification},'*');
-      if(event.data.method==='ui/notifications/size-changed') frame.style.height=event.data.params.height+'px';
+      if(event.data.method==='ui/notifications/size-changed') {
+        frame.style.height=event.data.params.height+'px';
+        frame.contentWindow.postMessage({jsonrpc:'2.0',method:'ui/notifications/host-context-changed',params:{containerDimensions:{height:event.data.params.height}}},'*');
+      }
     });
   </script></body></html>`);
 

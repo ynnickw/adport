@@ -8,8 +8,13 @@ function widget() {
   let receive: (event: unknown) => void = () => {};
   const buttons: Array<{ dataset: { group: string }; click: () => void }> = [];
   const metrics: Array<{ dataset: { metric: string }; click: () => void }> = [];
+  let html = '';
+  let renders = 0;
+  const details = { open: false };
   const app = {
-    innerHTML: '',
+    get innerHTML() { return html; },
+    set innerHTML(value: string) { html = value; renders++; details.open = false; },
+    querySelector: (selector: string) => selector === 'details' && html.includes('<details>') ? details : null,
     querySelectorAll: (selector: string) => {
       if (selector === '[data-metric]') {
         metrics.length = 0;
@@ -36,7 +41,8 @@ function widget() {
   });
   const message = (data: unknown, source: unknown = parent) => receive({ data, source });
   return {
-    app, buttons, metrics, root, sent, message,
+    app, buttons, metrics, root, sent, message, details,
+    renderCount: () => renders,
     render: (view: AdportView, data: unknown, tool: string = view) => message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult(tool, view, data) } }),
   };
 }
@@ -116,6 +122,14 @@ describe('shipped MCP iframe', () => {
     expect(ui.app.innerHTML).toContain('Report unavailable');
     expect(ui.app.innerHTML).toContain('&lt;img');
     expect(ui.app.innerHTML).not.toContain('<img');
+  });
+
+  it('renders structured policy errors instead of a loading or success view', () => {
+    const ui = widget();
+    ui.render('operation', { error: 'POLICY_VIOLATION', message: 'Account <outside> is not connected.' });
+    expect(ui.app.innerHTML).toContain('Request failed');
+    expect(ui.app.innerHTML).toContain('Account &lt;outside&gt; is not connected.');
+    expect(ui.app.innerHTML).not.toMatch(/Loading|No active recommendations|Preview · Not applied/);
   });
 
   it('does not describe unknown account status as healthy or available', () => {
@@ -217,5 +231,22 @@ describe('shipped MCP iframe', () => {
     ui.message({ jsonrpc: '2.0', method: 'ui/notifications/host-context-changed', params: { theme: 'light', locale: 'en-US' } });
     expect(ui.root.dataset.theme).toBe('light');
     expect(ui.app.innerHTML).toContain('123.45');
+  });
+
+  it('keeps Details open when the host echoes iframe size or changes theme/locale', () => {
+    const ui = widget();
+    ui.render('operation', { pending_operation_id: 'test', preview: { summary: 'Review demo' } });
+    ui.details.open = true;
+    const renders = ui.renderCount();
+    for (const params of [{ containerDimensions: { width: 768, height: 420 } }, { theme: 'dark' }]) {
+      ui.message({ jsonrpc: '2.0', method: 'ui/notifications/host-context-changed', params });
+      expect(ui.details.open).toBe(true);
+      expect(ui.renderCount()).toBe(renders);
+    }
+    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/host-context-changed', params: { locale: 'de-DE' } });
+    expect(ui.renderCount()).toBe(renders + 1);
+    expect(ui.details.open).toBe(true);
+    ui.render('operation', { pending_operation_id: 'new', preview: { summary: 'New preview' } });
+    expect(ui.details.open).toBe(false);
   });
 });
