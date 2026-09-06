@@ -99,9 +99,44 @@ modifying tools as destructive for host permission purposes, matching Claude's
 current review criteria. The SDK scanner checks this on every registered write
 tool and enforces the 64-character tool-name limit. Authorization, preview/apply,
 and campaign-pausing policies are unchanged. Full local build/test/typecheck
-passed, including 38 MCP tests. Release and host retest are still required.
+passed, including 38 MCP tests.
 
-1. Release and verify the delivery fallback for rejected tools in ChatGPT; retain the unresolved result-delivery limitation in the review notes. Obtain populated, non-spending reviewer report data. The released mixed-provider retest returned a real zero-activity row without errors, but not the non-zero multi-row graph needed for submission media. The user has been asked whether to use a clearly labeled synthetic reviewer workspace or an existing account with historical data; neither option has been assumed authorized.
+### Production verification (2026-09-06)
+
+PR #53 merged as `450d98041df97123cf626532197e0fc92f040866` after both Node
+CI jobs and both Vercel previews passed. Production deployment
+`dpl_DmsHzTDSXXgN5Yo3ExcHNa9XxJBG` is Ready and owns `app.adport.dev`.
+After refreshing the ChatGPT development connector and reloading the existing
+test conversation, actual rejected-tool iframes displayed “Result not received”
+after the timeout instead of remaining on Loading. The actual successful
+preview still rendered its Before/After table, and Details expanded correctly.
+Existing inventory and report frames also retained their successful results.
+These were persisted genuine tool responses; no new apply call was made.
+The underlying missing error-result delivery to ChatGPT's iframe remains
+unresolved and must not be reported as fixed.
+
+### Public URLs and unexpected-error privacy (2026-09-06)
+
+Unauthenticated HTTP checks returned 200 for the website, support, privacy,
+terms, and data-deletion pages (redirecting from `adport.dev` to
+`www.adport.dev`). Support gives a contact address and warns against sending
+credentials; deletion instructions distinguish disconnecting a provider from
+deleting Adport data and do not claim to delete advertising campaigns. This
+checks reachability and visible instructions, not legal approval or actual
+destructive deletion behavior. The landing page still advertises a Cloud
+waitlist, so public availability must be decided before directory publication.
+
+The MCP adapter's unexpected-exception path previously copied raw error
+messages into text and widget payloads. It now returns a generic `INTERNAL`
+message that avoids asserting a write was not applied and advises checking its
+status before retrying. SDK tests cover Error objects, thrown strings, and an
+object that must not be stringified, on both UI and text-only tools. Existing
+typed policy-error handling remains covered. Full build/test/typecheck passed
+with 41 MCP tests. This local correction does not establish that every typed
+provider error is free of sensitive data; it closes the unchecked exception
+path specifically.
+
+1. Retain the unresolved result-delivery limitation in the review notes. Obtain populated, non-spending reviewer report data. The released mixed-provider retest returned a real zero-activity row without errors, but not the non-zero multi-row graph needed for submission media. The user has been asked whether to use a clearly labeled synthetic reviewer workspace or an existing account with historical data; neither option has been assumed authorized.
 2. Complete the five-positive/three-negative reviewer suite using a populated, private, non-spending reviewer workspace. No campaign activation is authorized by this test plan.
 3. Capture current, sanitized in-host inventory, report, and preview cards. Existing baseline PNGs predate these fixes.
 4. Verify refresh beyond token expiry and reconnect behavior. Successful initial OAuth does not prove the refresh lifecycle.
