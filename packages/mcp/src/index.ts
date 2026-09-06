@@ -68,6 +68,8 @@ export interface CreateServerOptions {
   scopeDenials?: Readonly<Record<string, ToolScopeDenial | undefined>>;
   /** Hosted transports can replace local CLI setup guidance, without changing the error code. */
   notConnectedMessage?: string;
+  /** Hosted production must never serve synthetic results or demo tool definitions. */
+  productionOnly?: boolean;
 }
 
 export interface ToolScopeDenial {
@@ -80,7 +82,12 @@ export interface ToolScopeDenial {
  * Thin adapter: every tool in the shared registry becomes an MCP tool.
  * No tool logic lives here — see the "one tool-definition layer" principle.
  */
-export function createMcpServer({ runtime, name = 'adport', version = packageJson.version, icons = DEFAULT_MCP_ICONS, scopes, scopeDenials, notConnectedMessage }: CreateServerOptions): McpServer {
+export function createMcpServer({ runtime, name = 'adport', version = packageJson.version, icons = DEFAULT_MCP_ICONS, scopes, scopeDenials, notConnectedMessage, productionOnly = false }: CreateServerOptions): McpServer {
+  if (productionOnly && (runtime.dataSource === 'synthetic'
+    || runtime.ctx.providers.list().some(provider => !PROVIDER_IDS.includes(provider.id as typeof PROVIDER_IDS[number]))
+    || runtime.registry.list().some(tool => /^(demo|mock|synthetic)(_|$)/.test(tool.name) || /^(demo|mock|synthetic)$/.test(tool.namespace)))) {
+    throw new AdportError('POLICY_VIOLATION', 'Demo tools and synthetic runtimes are not available on the production connector.');
+  }
   const provenance = (value: unknown): unknown => runtime.dataSource === 'synthetic'
     ? { ...(value && typeof value === 'object' && !Array.isArray(value) ? value : { value }), data_source: 'synthetic' }
     : value;
