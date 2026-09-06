@@ -52,7 +52,7 @@ The workspace contains:
 - campaign rows with spend, impressions, clicks, conversions, and conversion value;
 - four paused demo campaigns; `demo_set_budget` exercises the real preview/apply policy gate without contacting an advertising platform.
 
-Before submission, generate and verify an open recommendation through the audit tools, and complete Claude's hosted OAuth consent for `tools:read tools:write`. These remain unverified. Automated provider-specific recommendation application is not available in this synthetic workspace; do not imply otherwise to reviewers.
+The production audit now generates one persisted fictional CPA warning, verified through actual ChatGPT audit and recommendations cards after PR #56. Complete Claude's hosted OAuth consent for `tools:read tools:write` and verify its own rendering before submission; those Claude checks remain unverified. Automated provider-specific recommendation application is not available in this synthetic workspace; do not imply otherwise to reviewers.
 
 Share the login only through Anthropic's private review field. Never include passwords or tokens in source, screenshots, or public documentation.
 

@@ -2,6 +2,54 @@
 
 This is an evidence log, not a public approval claim. No customer identifiers, credentials, private chat links, or production account screenshots belong here.
 
+## Current production host evidence — PR #56
+
+PR #56 merged as `c1f93a0c04d7f4105c7a20b1e462653d58343314`. The cloud
+deployment `dpl_4aQXEHUvKeVhJNHkU41fye1AQErj` reached Ready and owns
+`app.adport.dev`; HTTP and OAuth discovery checks succeeded.
+
+- Fresh ChatGPT `audit_run` and `recommendations_list` calls rendered real
+  embedded cards with one persisted fictional warning: Discovery CPA 16 versus
+  account median 4.33. No recommendation was applied or dismissed.
+- A fresh budget preview read the stored 26,250,000 micros and proposed
+  27,000,000 for `demo-search`. The host permission details confirmed there was
+  no pending token in that first call. No apply was authorized for this preview.
+- Before connector refresh, the new data rendered through ChatGPT's cached old
+  template without currency. After **Refresh** in the development connector and
+  reloading the conversation, the same actual response rendered **Daily budget ·
+  EUR**, **€26.25 → €27.00**, and **Preview · Not applied**.
+- Captures are in `assets/chatgpt/`. They contain only synthetic data and a
+  collapsed sidebar. They are actual host screenshots, not generated fixtures;
+  final directory crops and mobile captures remain outstanding.
+- The altered-preview negative test is now verified from ChatGPT's expanded
+  tool-call inspector, not just assistant prose: the request reused the pending
+  EUR 27 preview with 28,000,000 micros and returned `PENDING_MISMATCH`,
+  `is_error=true`, and `data_source=synthetic`. The following independent
+  `demo_list_campaigns` response still showed 26,250,000 micros and PAUSED.
+  The error's widget state and responseMetadata were null; this does not prove
+  error-card delivery even though the rejection and unchanged state are proven.
+- The EUR-only positive report case is verified in the expanded ChatGPT request:
+  `provider=demo`, `account_ids=["demo-eur"]`, campaign level, last seven days,
+  six metrics. Its response contained three rows, no errors/warnings, and
+  `truncated=false`. The actual frame showed EUR 336 spend, 63 conversions,
+  and 4.50× ROAS. Clicking Conversions changed the bars to 35, 21, and 7.
+  `assets/chatgpt/report-eur.png` captures the actual hosted spend chart.
+- The foreign-account negative test is verified in the expanded tool inspector:
+  the exact `demo` / `reviewer-outside-scope` request returned only the safe
+  `POLICY_VIOLATION` message, synthetic marker, tool metadata, and
+  `is_error=true`. No credentials, stack trace, or foreign account data appeared.
+  The separately requested `accounts_list` returned exactly demo Europe and
+  demo US, and the real inventory iframe showed both PAUSED. Unlike the
+  successful inventory call, the rejected report had null widget
+  responseMetadata. That contrast narrows the unresolved error-frame issue to
+  host result delivery rather than a successful call's ordinary rendering.
+- A fresh unrelated translation prompt returned “Guten Morgen” directly, with
+  no Adport activity, OAuth prompt, or embedded card in that assistant turn.
+
+This proves the populated recommendation and currency-preview production
+paths, not Claude execution, OAuth refresh beyond expiry, public directory
+approval, or the unresolved rejected-result delivery to the ChatGPT iframe.
+
 ## Released revision and live retest
 
 - PR #50 was merged with the owner's authorization as `0c45609a7e6e01e9fb43940bd65ccfd1affe591d`. Remote `main` matches that revision. Node 22/24 CI and both Vercel deployments passed; the production alias was verified Ready.
