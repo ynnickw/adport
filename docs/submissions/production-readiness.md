@@ -5,17 +5,18 @@ current synthetic-reviewer catalog as Adport's public product. Synthetic tests
 remain useful UI/policy regression evidence, not provider approval or production
 API evidence. This gate applies to both the OpenAI and Claude submissions.
 
-## Current blocker (September 7, 2026)
+## Current state (September 7, 2026)
 
-The OpenAI draft was inspected again: its saved snapshot contains seven common
-tools plus `demo_list_campaigns` and `demo_set_budget`. No native provider tools
-are present. Domain verification and saved annotation explanations do not fix
-that omission. The draft has not been submitted.
+PR #65 removed the hosted synthetic runtime and blocks legacy demo workspaces.
+Production MCP registration rejects demo/mock/synthetic providers and tools.
+The installed ChatGPT connector and the OpenAI draft were rescanned through the
+real owner account: 101 tools (seven common plus 94 native), with no demo tools.
+The draft has not been submitted. Existing common-tool explanations survived
+the scan; native-tool explanations still need completion and verification.
 
-The cloud runtime assembles native tools from each tenant's connected providers;
-the synthetic-reviewer branch deliberately supplies a different runtime. MCP
-registration currently uses that runtime's registry directly. Consequently, a
-single tenant scan is not a stable catalog for the full public connector.
+The cloud runtime still assembles native tools from each tenant's connected
+providers, and MCP registration uses that registry directly. Consequently, the
+owner scan does not establish a stable, approved catalog for all public users.
 
 [OpenAI's review requirements](https://developers.openai.com/plugins/deploy/app-review)
 state that the published plugin uses the reviewed metadata snapshot while calls
@@ -58,7 +59,11 @@ public API approval, usable credentials, production correctness, or launch scope
 4. Provide isolated reviewer access to the actual advertised native workflows.
    Use provider-supported non-spending test resources where available; never
    silently attach customer accounts, widen account access, or activate campaigns.
-   The current synthetic login is not a substitute for this coverage.
+   The retired synthetic login cannot be used. OpenAI's current Testing form
+   explicitly requires a dedicated test account with sample data, never a real
+   user's production account. The owner's live test login must not be shared.
+   Isolate provider-supported test resources behind the same native tools;
+   do not reintroduce reviewer-only tool implementations.
 5. Verify each advertised tool, OAuth refresh beyond expiry/concurrent sessions,
    scope rejection, partial provider failures, accurate graphs and exact
    before/after previews in the real hosts. Only claim apply coverage where an
@@ -101,8 +106,12 @@ The real owner signed in successfully through Google in the Adport Chrome
 profile on September 7. The dashboard visibly identifies `ynnickw20@gmail.com`.
 The Accounts page currently enables Meta Adport Test, Microsoft, and Snapchat;
 the other accounts remain disabled for agent access. This is not public provider
-approval evidence. The in-app browser's old synthetic session has been signed out;
-the ChatGPT connector must be authorized with the real account and rescanned.
+approval evidence. The in-app browser's old synthetic session was signed out;
+the ChatGPT connector is now authorized with the real account and rescanned.
+Actual ChatGPT tests returned the three enabled accounts, a native paused Meta
+campaign, empty native Microsoft/Snapchat campaign lists, an unapplied Meta
+PAUSED-to-PAUSED table, and an honest empty last-30-days report. These are limited
+live tests, not complete provider coverage, populated graph or apply evidence.
 Do not convert the retired reviewer into an owner with real customer access.
 A separate existing Codex hosted connection
 provides verified real Google/Reddit reads (see the validation log), but it is not

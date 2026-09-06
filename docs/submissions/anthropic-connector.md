@@ -48,17 +48,24 @@ Regenerate with `pnpm --filter @adport/mcp render:submission-previews`. Replace 
 
 ## Reviewer account
 
-The dedicated [synthetic reviewer workspace](./synthetic-reviewer.md) was provisioned for isolated regression testing. PR #55 is deployed, and hosted OAuth, report, preview, and exact synthetic apply were exercised in ChatGPT. This is not native-provider verification. Claude OAuth remains unverified. Final submission needs an isolated real-provider review workflow matching the advertised production tools, not this demo catalog.
+The former [synthetic reviewer workspace](./synthetic-reviewer.md) is retired
+and denied by the production runtime after PR #65. Do not supply that login or
+promise fictional tools, campaigns or recommendations to reviewers.
 
-The workspace contains:
+Provision a dedicated review workspace with isolated, provider-supported test
+resources and the same native tools as production. Keep resources non-spending
+and preserve the preview/exact-apply gate. Do not share the owner's credentials
+or attach customer accounts as a shortcut. Run the native acceptance cases in
+[the OpenAI guide](./openai-plugin.md#native-acceptance-cases) separately in Claude;
+ChatGPT success does not establish Claude behavior.
 
-- at least two scoped sample accounts;
-- campaign rows with spend, impressions, clicks, conversions, and conversion value;
-- four paused demo campaigns; `demo_set_budget` exercises the real preview/apply policy gate without contacting an advertising platform.
+The September 7 Claude account is Free, with its single custom connector slot
+occupied by AppLaunchFlow. Adport connection and rendering remain unverified.
+Replacing that connector or using another account requires the owner's choice;
+do not remove it or purchase a plan automatically.
 
-The production audit now generates one persisted fictional CPA warning, verified through actual ChatGPT audit and recommendations cards after PR #56. Complete Claude's hosted OAuth consent for `tools:read tools:write` and verify its own rendering before submission; those Claude checks remain unverified. Automated provider-specific recommendation application is not available in this synthetic workspace; do not imply otherwise to reviewers.
-
-Share the login only through Anthropic's private review field. Never include passwords or tokens in source, screenshots, or public documentation.
+Share dedicated credentials only through the private review field. Never put
+passwords, tokens or customer data in source, screenshots or public documentation.
 
 ## Policy mapping
 
@@ -78,15 +85,23 @@ Share the login only through Anthropic's private review field. Never include pas
 - [ ] The three required directory prompts work with the reviewer account.
 - [ ] MCP Apps cards render on a compatible Claude surface; text/structured fallback is checked separately.
 - [ ] A preview proves that no write occurs on the first call.
-- [ ] An apply test uses only a paused/non-spending demo resource.
+- [ ] An apply test uses only an isolated paused/non-spending native test resource.
 - [ ] Tool annotations and descriptions match actual behavior.
 - [ ] Support, privacy, terms, and deletion paths are reachable without login.
-- [ ] Yannick gives fresh confirmation immediately before the final directory submission.
+- [ ] All required evidence and reviewer access pass before the authorized submission.
 
 ## Current portal and asset requirements
 
-As checked September 5, 2026, remote MCP submissions use Claude's organization submission portal and require Team/Enterprise plus directory-management access (Owner on Team). Interactive listings require 3–5 PNG screenshots, at least 1000px wide, cropped to the app response, with prompts supplied separately. Do not purchase a plan or assume portal access is already available. See [Anthropic's submission guide](https://claude.com/docs/connectors/building/submission).
+Rechecked September 7, 2026: remote MCP submissions use Claude's organization
+submission portal and require Team/Enterprise plus directory-management access
+(Owner on Team). Switching the existing Free account's custom connector would
+enable a test, not directory submission. Interactive listings require 3–5 PNG
+screenshots, at least 1000px wide, cropped to the app response, with prompts
+supplied separately. Do not purchase a plan or assume portal access is already
+available. See [Anthropic's submission guide](https://claude.com/docs/connectors/building/submission).
 
 The current [pre-submission checklist](https://claude.com/docs/connectors/building/review-criteria) also calls for testing every tool in MCP Inspector and Claude, populated reviewer credentials, explicit annotations, and API references for freeform queries. Its wording requires `destructiveHint=true` for modifying tools. The shared registry now defaults modifying tools to that hint, including preview-first tools that can apply changes; an SDK scanner regression checks every registered modifying tool. Do not mask a modifying tool as read-only just because its first call previews. This annotation check does not establish complete functional tool coverage in Claude.
 
-The checked-in screenshots need regeneration for the currency/error corrections. Reviewer provisioning and production dashboard activation are confirmed, but real Claude execution, OAuth refresh, and complete tool coverage remain unverified; see [validation status](./validation-status.md).
+The checked-in synthetic screenshots are regression baselines, not final review
+assets. Dedicated native reviewer access, actual Claude execution, OAuth refresh
+and complete tool coverage remain open; see [validation status](./validation-status.md).
