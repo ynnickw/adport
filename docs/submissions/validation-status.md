@@ -13,6 +13,7 @@ This is an evidence log, not a public approval claim. No customer identifiers, c
 - PR #51 merged as `b832e600930c5e62d200078b69919538aafa0127` after Node 22/24 CI and both Vercel previews passed. The production alias was verified Ready on the new deployment. After refreshing the ChatGPT connector and reloading the conversation, the actual production preview's Details control stayed expanded and exposed validation, the original change, and the no-apply notice; it also closed normally.
 - Error paths now return the same safe payload as structured content as well as text, allowing embedded hosts to render the existing Request failed view. MCP unit/SDK tests cover policy and plan denials. The fresh negative host test exposed the actual request under its activity trace, but not the returned error payload; the assistant's rejection summary alone still does not prove the full negative test.
 - After PR #51 deployed, a fresh out-of-scope report still produced a Loading card after the conversation reloaded, despite the assistant describing the rejection and claiming an error card was shown. The screenshot contradicts that claim. Structured-error output alone did not resolve this host behavior; error/cancelled-result delivery and the no-result fallback remain to investigate. Do not mark embedded error rendering as passed.
+- PR #52 merged as `9dbff00a9aea920d38092d89ef8dca8675e352f8`. Its production deployment became Ready at the public alias on September 6. After connector refresh, a fresh out-of-scope report still mounted a Loading card. A DOM-backed inspection of the mounted resource's script confirmed that both the new compatibility-event and cancellation handlers were present, ruling out the old resource as the explanation for this retest. The exact reason the host did not deliver a usable result remains unproven. An error-level log scan of that deployment returned no entries; this is not a claim of complete observability.
 - No campaign was activated or changed during these retests. Successful next-day tool execution is evidence of continued access, not a trace proving which OAuth refresh path ran.
 - The unrelated-request negative test returned the German translation directly without an Adport call, permission request, or card.
 
@@ -84,9 +85,25 @@ fixtures rendered both late compatibility errors and cancellation notices.
 This is compatibility coverage, not yet proof of the live ChatGPT root cause
 or a successful production error-card retest.
 
-1. Resolve the indefinitely loading card for rejected tools in ChatGPT, then obtain populated, non-spending reviewer report data. The released mixed-provider retest returned a real zero-activity row without errors, but not the non-zero multi-row graph needed for submission media. The user has been asked whether to use a clearly labeled synthetic reviewer workspace or an existing account with historical data; neither option has been assumed authorized.
+### Delivery fallback and directory annotations (local follow-up)
+
+After 15 seconds without a result, the iframe now explains that the host has not
+provided a result to the view and directs the user to the conversation's tool
+response. It does not label the operation successful, failed, or unapplied, does
+not retry it, and still accepts a late result. The exact-source no-notification
+browser fixture transitioned from Loading to this message. This fixes the
+indefinite-loading presentation, not the unproven host delivery problem.
+
+The shared tool registry and guarded-write helper now conservatively annotate
+modifying tools as destructive for host permission purposes, matching Claude's
+current review criteria. The SDK scanner checks this on every registered write
+tool and enforces the 64-character tool-name limit. Authorization, preview/apply,
+and campaign-pausing policies are unchanged. Full local build/test/typecheck
+passed, including 38 MCP tests. Release and host retest are still required.
+
+1. Release and verify the delivery fallback for rejected tools in ChatGPT; retain the unresolved result-delivery limitation in the review notes. Obtain populated, non-spending reviewer report data. The released mixed-provider retest returned a real zero-activity row without errors, but not the non-zero multi-row graph needed for submission media. The user has been asked whether to use a clearly labeled synthetic reviewer workspace or an existing account with historical data; neither option has been assumed authorized.
 2. Complete the five-positive/three-negative reviewer suite using a populated, private, non-spending reviewer workspace. No campaign activation is authorized by this test plan.
 3. Capture current, sanitized in-host inventory, report, and preview cards. Existing baseline PNGs predate these fixes.
 4. Verify refresh beyond token expiry and reconnect behavior. Successful initial OAuth does not prove the refresh lifecycle.
-5. Test Claude's actual OAuth, tools, cards, and fallback. Reconcile its latest modifying-tool annotation requirements.
+5. Test Claude's actual OAuth, tools, cards, and fallback; deploy and scan the corrected modifying-tool annotations.
 6. Confirm publisher identity/domain, portal permissions, reviewer access, public policy URLs, and availability. A ChatGPT development connector is not a public submission.

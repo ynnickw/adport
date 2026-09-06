@@ -46,7 +46,9 @@ export function defineTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
     ...def,
     annotations: {
       readOnly: def.annotations?.readOnly ?? false,
-      destructive: def.annotations?.destructive ?? false,
+      // Directory reviewers treat modifying tools, not just deletions, as
+      // destructive for host permission prompts. Read tools stay read-only.
+      destructive: def.annotations?.destructive ?? !(def.annotations?.readOnly ?? false),
       openWorld: def.annotations?.openWorld ?? openWorldByDefault,
     },
   } as AnyToolDefinition;

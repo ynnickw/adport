@@ -265,6 +265,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     }
     function acceptResult(result) {
       if (!result || typeof result !== 'object') return;
+      clearTimeout(resultWait);
       // ChatGPT can deliver the same result through both supported bridges.
       // Do not reset an open disclosure when the second copy arrives.
       if (state.result && JSON.stringify(state.result) === JSON.stringify(result)) return;
@@ -278,6 +279,11 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       if (envelope && typeof envelope === 'object') return acceptResult(envelope);
       if (globals.toolOutput && typeof globals.toolOutput === 'object') acceptResult({structuredContent:globals.toolOutput});
     }
+    // Some hosts mount an error result's resource but never relay its payload.
+    // This is a delivery fallback, not a claim about tool execution or success.
+    const resultWait = setTimeout(() => {
+      if (!state.result) app.innerHTML=chrome('<p class="notice">The host has not provided a result to this view. Check the tool response in the conversation. This card will update if a result arrives.</p>','Result not received');
+    }, 15000);
     const send = (message) => window.parent.postMessage(message,'*');
     const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => {
       send({jsonrpc:'2.0',method:'ui/notifications/size-changed',params:{height:Math.ceil(document.body.getBoundingClientRect().height)}});

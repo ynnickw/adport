@@ -105,7 +105,7 @@ Additional entitlement regression: distinguish missing `tools:write` OAuth scope
 - Read tools declare `readOnlyHint=true`.
 - Provider reads declare `openWorldHint=true` because they contact the selected advertising provider. Locally persisted audit/findings reads remain closed-world.
 - Every mutation declares `readOnlyHint=false`.
-- Removal tools declare `destructiveHint=true`; reversible updates and preview-first writes do not claim to be destructive.
+- Modifying tools, including creates, updates, removals, and persisted findings, declare `destructiveHint=true` conservatively. A preview-first tool can also apply a change, so its full capability determines the annotation, not just its first call.
 - Write tools remain subject to the two-step policy gate regardless of client or UI.
 
 Run **Scan Tools** again after each production metadata or CSP change. Confirm the scan shows the same annotations and schemas as the current MCP endpoint.

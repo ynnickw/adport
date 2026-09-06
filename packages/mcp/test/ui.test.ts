@@ -6,6 +6,8 @@ import { ADPORT_UI_HTML, structuredResult, viewForTool, type AdportView } from '
 // Execute the shipped iframe script, not a second implementation of its math.
 function widget(initialGlobals?: Record<string, unknown>) {
   const listeners = new Map<string, (event: unknown) => void>();
+  const timers = new Map<number, () => void>();
+  let timerId = 0;
   const buttons: Array<{ dataset: { group: string }; click: () => void }> = [];
   const metrics: Array<{ dataset: { metric: string }; click: () => void }> = [];
   let html = '';
@@ -38,11 +40,14 @@ function widget(initialGlobals?: Record<string, unknown>) {
   const window = { parent, openai: initialGlobals, addEventListener: (name: string, fn: (event: unknown) => void) => { listeners.set(name, fn); } };
   runInNewContext(ADPORT_UI_HTML.match(/<script>([\s\S]+)<\/script>/)![1]!, {
     window, document: { getElementById: () => app, documentElement: root }, Intl,
+    setTimeout: (fn: () => void) => { const id = ++timerId; timers.set(id, fn); return id; },
+    clearTimeout: (id: number) => timers.delete(id),
   });
   const message = (data: unknown, source: unknown = parent) => listeners.get('message')?.({ data, source });
   return {
     app, buttons, metrics, root, sent, message, details,
     globals: (globals: Record<string, unknown>) => listeners.get('openai:set_globals')?.({ detail: { globals } }),
+    elapse: () => { for (const [id, fn] of timers) { timers.delete(id); fn(); } },
     renderCount: () => renders,
     render: (view: AdportView, data: unknown, tool: string = view) => message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult(tool, view, data) } }),
   };
@@ -167,6 +172,25 @@ describe('shipped MCP iframe', () => {
     expect(ui.app.innerHTML).not.toMatch(/Loading|Nothing has been changed|Not applied/);
     ui.render('accounts', { accounts: [] });
     expect(ui.app.innerHTML).not.toContain('Request interrupted');
+  });
+
+  it('replaces indefinite loading with an honest delivery fallback and accepts a late result', () => {
+    const ui = widget();
+    ui.elapse();
+    expect(ui.app.innerHTML).toContain('Result not received');
+    expect(ui.app.innerHTML).toContain('Check the tool response');
+    expect(ui.app.innerHTML).not.toMatch(/Request failed|Nothing has been changed|Loading/);
+    ui.render('accounts', { accounts: [] });
+    expect(ui.app.innerHTML).toContain('0 accounts');
+    expect(ui.app.innerHTML).not.toContain('Result not received');
+  });
+
+  it('does not overwrite received results with the delivery timeout', () => {
+    const ui = widget();
+    ui.render('report', { error: 'POLICY_VIOLATION', message: 'Not connected.' });
+    ui.elapse();
+    expect(ui.app.innerHTML).toContain('Request failed');
+    expect(ui.app.innerHTML).not.toContain('Result not received');
   });
 
   it('ignores duplicate compatibility hydration and context-only globals', () => {

@@ -88,6 +88,8 @@ describe('all-provider shared tool surface', () => {
           openWorldHint: source.annotations.openWorld ?? false,
         });
         expect(tool.inputSchema.type, tool.name).toBe('object');
+        expect(tool.name.length, tool.name).toBeLessThanOrEqual(64);
+        if (!tool.annotations?.readOnlyHint) expect(tool.annotations?.destructiveHint, tool.name).toBe(true);
       }
     } finally {
       await client.close();

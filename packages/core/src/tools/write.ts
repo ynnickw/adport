@@ -33,7 +33,7 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
     namespace: def.namespace,
     description: `${def.description}\n\n${TWO_STEP_NOTE}`,
     input,
-    annotations: { readOnly: false, destructive: def.destructive ?? false },
+    annotations: { readOnly: false, destructive: def.destructive ?? true },
     async handler(raw, ctx) {
       const { account_id, pending_operation_id, ...payload } = raw as Record<string, unknown> & {
         account_id: string;

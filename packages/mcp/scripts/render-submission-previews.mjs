@@ -136,6 +136,7 @@ for (const [name, fixture] of Object.entries(fixtures)) {
       if(event.source!==frame.contentWindow) return;
       if(event.data.method==='ui/initialize') frame.contentWindow.postMessage({jsonrpc:'2.0',id:event.data.id,result:{hostContext:{theme:params.get('theme')==='dark'?'dark':'light',locale:'en-US'}}},'*');
       if(event.data.method==='ui/notifications/initialized') {
+        if(params.get('bridge')==='none') return;
         const notification=${notification};
         if(params.get('bridge')==='globals') {
           frame.contentWindow.dispatchEvent(new frame.contentWindow.CustomEvent('openai:set_globals',{detail:{globals:{toolResponseMetadata:{mcp_tool_result:notification.params}}}}));
