@@ -51,8 +51,10 @@ public API approval, usable credentials, production correctness, or launch scope
    tenant's actual runtime, scopes, enabled accounts and policy. No placeholders,
    inert providers, or reviewer-only implementations may masquerade as live tools.
 3. Scan the exact intended catalog, with no demo tools and no unreleased provider
-   tools. Preserve account isolation and plan/scope denials. Re-scan after metadata
-   changes and re-enter the portal explanations that a new scan clears.
+   tools. Also compare server instructions and linked UI resource metadata/CSP,
+   which are not part of a tools/list export. Preserve account isolation and
+   plan/scope denials. Re-scan after metadata changes and re-enter the portal
+   explanations that a new scan clears.
 4. Provide isolated reviewer access to the actual advertised native workflows.
    Use provider-supported non-spending test resources where available; never
    silently attach customer accounts, widen account access, or activate campaigns.
@@ -81,8 +83,8 @@ node scripts/check-connector-catalog.mjs \
 Replace `VERIFIED_PROVIDER_IDS` with the comma-separated release set established
 in step 1, not all installed packages. The check rejects demo tools, missing native
 providers, out-of-scope providers, incomplete exports, duplicates, missing explicit
-annotations and any saved metadata differences. It compares schemas, annotations,
-security metadata and UI resource metadata, not just tool counts.
+annotations and any saved tool metadata differences. It compares schemas,
+annotations, tool security metadata and UI references, not just tool counts.
 
 A passing result means **metadata parity only**, not production readiness. The
 checker cannot authenticate the origin of manually supplied files or prove app
