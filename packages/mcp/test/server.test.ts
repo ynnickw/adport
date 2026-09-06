@@ -247,7 +247,7 @@ describe('adport MCP server', () => {
     }
   });
 
-  it('keeps plan-blocked write tools discoverable and returns an upgrade response', async () => {
+  it('keeps plan-blocked write tools discoverable and explains the entitlement without an upsell', async () => {
     const runtime = await createContext({ includeMock: true });
     const scopedServer = createMcpServer({
       runtime,
@@ -255,14 +255,13 @@ describe('adport MCP server', () => {
       scopeDenials: {
         'tools:write': {
           code: 'PLAN_LIMIT',
-          message: 'Free is a read-only plan. Upgrade to operator or higher to use MCP write tools.',
+          message: 'MCP write tools are not included in the current Free plan. They require operator or higher with write access. No changes were made.',
           data: {
             planLimit: {
               kind: 'write_access',
               currentPlan: 'Free',
               recommendedPlan: 'operator',
-              message: 'Free is a read-only plan. Upgrade to operator or higher to use MCP write tools.',
-              upgradeUrl: 'https://app.adport.dev/dashboard/billing?intent=write_access',
+              message: 'MCP write tools are not included in the current Free plan. They require operator or higher with write access. No changes were made.',
             },
           },
         },
@@ -290,16 +289,16 @@ describe('adport MCP server', () => {
       expect(textOf(result as never)).toEqual({
         error: 'PLAN_LIMIT',
         code: 'PLAN_LIMIT',
-        message: 'Free is a read-only plan. Upgrade to operator or higher to use MCP write tools.',
+        message: 'MCP write tools are not included in the current Free plan. They require operator or higher with write access. No changes were made.',
         planLimit: {
           kind: 'write_access',
           currentPlan: 'Free',
           recommendedPlan: 'operator',
-          message: 'Free is a read-only plan. Upgrade to operator or higher to use MCP write tools.',
-          upgradeUrl: 'https://app.adport.dev/dashboard/billing?intent=write_access',
+          message: 'MCP write tools are not included in the current Free plan. They require operator or higher with write access. No changes were made.',
         },
       });
 
+      expect(JSON.stringify(result)).not.toMatch(/upgradeUrl|checkout|dashboard\/billing|Upgrade to/);
       const campaigns = textOf(
         (await scopedClient.callTool({ name: 'mock_list_campaigns', arguments: { account_id: 'mock-1' } })) as never,
       ) as { campaigns: Array<{ id: string; dailyBudgetMicros: number }> };

@@ -2,6 +2,33 @@
 
 This is an evidence log, not a public approval claim. No customer identifiers, credentials, private chat links, or production account screenshots belong here.
 
+## Submission preparation — September 6, 2026
+
+- An Adport 1.0.0 draft was created in the OpenAI Platform submission portal.
+  Its basic description, support/legal URLs, and OAuth MCP URL were entered.
+  This is a draft, not a submitted or approved directory listing.
+- The publisher identity selection still needs a saved-state check. The domain
+  challenge token was blank in both the rendered portal and its accessible
+  fields; the public challenge endpoint returned 404. Do not configure an empty
+  or invented token or claim domain verification complete.
+- A tool scan was started, but its result is not yet verified. Browser access
+  is currently blocked by the locked Mac. Resume the existing draft instead of
+  creating another one.
+- Directory/composer PNG icons have now been rendered directly from the existing
+  orange-dot SVG, validated, and visually inspected. Upload persistence is not
+  yet verified. A hosted demo recording and final media remain outstanding.
+- The MCP plan-limit response now explains the missing entitlement without an
+  upgrade call-to-action or billing URL. It retains `PLAN_LIMIT`, the current
+  plan, and required-plan metadata. OAuth scopes, role restrictions, paid
+  entitlements, dashboard billing, and mutation policy remain unchanged.
+  Local cloud tests (239), MCP tests (44), and cloud typecheck passed. Production
+  rollout of this change is not yet proven.
+
+The entitlement copy follows the current [OpenAI commerce guidelines](https://developers.openai.com/plugins/app-guidelines):
+explain unavailable entitlements without promoting an upgrade or directing a
+user into a digital-subscription transaction. This targeted correction is not a
+claim that all submission requirements have been satisfied.
+
 ## Current production host evidence — PR #56
 
 PR #56 merged as `c1f93a0c04d7f4105c7a20b1e462653d58343314`. The cloud

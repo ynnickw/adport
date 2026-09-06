@@ -30,6 +30,14 @@ The MCP App resource `ui://adport/insight-card-v1.html` renders account inventor
 
 ## Submission media
 
+Portal icon exports (exact existing orange-dot brand):
+
+- [Directory icon, 512 × 512 PNG](./assets/icons/adport-directory.png)
+- [Composer icon, 128 × 128 PNG](./assets/icons/adport-composer.png)
+
+The public submission portal also requires a hosted demo recording URL showing
+the actual Developer Mode experience. Screenshots do not replace that video.
+
 Actual ChatGPT production captures from September 6, 2026, against merge
 `c1f93a0c04d7f4105c7a20b1e462653d58343314`:
 
