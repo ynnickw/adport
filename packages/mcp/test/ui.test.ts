@@ -108,6 +108,48 @@ describe('shipped MCP iframe', () => {
     expect(ui.app.innerHTML).not.toContain('€100.00');
   });
 
+  it('renders reported ROAS without requiring an extra conversion_value metric', () => {
+    const ui = widget();
+    ui.render('report', { rows: [
+      { ...row('search', 91, 'EUR'), metrics: { spend: 91, roas: 5.54 } },
+      { ...row('discovery', 112, 'EUR'), metrics: { spend: 112, roas: 1.5 } },
+      { ...row('retargeting', 133, 'EUR'), metrics: { spend: 133, roas: 6.32 } },
+    ] });
+    expect(ui.app.innerHTML).toContain('<small>ROAS</small><strong>4.50×</strong>');
+    ui.metrics[3]!.click();
+    expect(ui.app.innerHTML).toContain('6.32×');
+    expect(ui.app.innerHTML).toContain('5.54×');
+    expect(ui.app.innerHTML).toContain('1.50×');
+    expect(ui.app.innerHTML.indexOf('Campaign retargeting')).toBeLessThan(ui.app.innerHTML.indexOf('Campaign discovery'));
+  });
+
+  it('uses spend-weighted ratios and prefers exact conversion values when present', () => {
+    const ui = widget();
+    ui.render('report', { rows: [
+      { ...row('exact', 100, 'EUR', 200), metrics: { spend: 100, conversion_value: 200, roas: 99 } },
+      { ...row('reported', 900, 'EUR'), metrics: { spend: 900, roas: 4 } },
+    ] });
+    expect(ui.app.innerHTML).toContain('<small>ROAS</small><strong>3.80×</strong>');
+    ui.metrics[3]!.click();
+    expect(ui.app.innerHTML).toContain('2.00×');
+    expect(ui.app.innerHTML).not.toContain('99.00×');
+  });
+
+  it('does not merge currencies or invent weights for reported ROAS', () => {
+    const ui = widget();
+    ui.render('report', { rows: [
+      { ...row('eu', 100, 'EUR'), metrics: { spend: 100, roas: 2 } },
+      { ...row('us', 900, 'USD'), metrics: { spend: 900, roas: 4 } },
+    ] });
+    expect(ui.app.innerHTML).toContain('<small>ROAS</small><strong>2.00×</strong>');
+    ui.buttons[1]!.click();
+    expect(ui.app.innerHTML).toContain('<small>ROAS</small><strong>4.00×</strong>');
+    for (const metrics of [{ roas: 4 }, { spend: 0, roas: 4 }, { spend: 100, roas: null }, { spend: 100, roas: Infinity }]) {
+      ui.render('report', { rows: [{ ...row('eu', 100, 'EUR'), metrics }] });
+      expect(ui.app.innerHTML).toContain('<small>ROAS</small><strong>—</strong>');
+    }
+  });
+
   it('keeps unknown currencies isolated by provider AND account', () => {
     const ui = widget();
     ui.render('report', { rows: [row('same', 100), { ...row('same', 900), provider: 'meta' }] });
