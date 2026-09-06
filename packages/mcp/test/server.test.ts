@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { createContext } from '@adport/core';
+import { AdportError, createContext } from '@adport/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createMcpServer } from '../src/index.js';
 import { ADPORT_UI_DOMAIN, ADPORT_UI_URI } from '../src/ui.js';
@@ -33,6 +33,46 @@ afterEach(async () => {
 });
 
 describe('adport MCP server', () => {
+  it('preserves CLI connection guidance for local MCP clients', async () => {
+    const result = await client.callTool({ name: 'accounts_list', arguments: { provider: 'google' } });
+    expect(result.isError).toBe(true);
+    expect(textOf(result as never)).toMatchObject({
+      error: 'NOT_CONNECTED', message: expect.stringContaining('adport connect google'),
+    });
+  });
+
+  it('uses hosted guidance for missing providers without weakening errors or inventing demo data', async () => {
+    const runtime = await createContext();
+    const notConnectedMessage = 'Open Connections in the dashboard, then enable account access in Accounts.';
+    const server = createMcpServer({ runtime, notConnectedMessage });
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    const hosted = new Client({ name: 'cloud-connection-guidance', version: '1' });
+    await Promise.all([server.connect(st), hosted.connect(ct)]);
+    try {
+      for (const request of [
+        { name: 'accounts_list', arguments: {} },
+        { name: 'accounts_list', arguments: { provider: 'demo' } },
+        { name: 'report', arguments: { provider: 'google' } },
+      ]) {
+        const result = await hosted.callTool(request);
+        expect(result.isError).toBe(true);
+        const expected = { error: 'NOT_CONNECTED', message: notConnectedMessage };
+        expect(textOf(result as never)).toEqual(expected);
+        expect(result.structuredContent).toMatchObject(expected);
+        expect(result.structuredContent).not.toHaveProperty('accounts');
+        expect(result.structuredContent).not.toHaveProperty('rows');
+        expect(JSON.stringify(result)).not.toMatch(/adport connect|--demo/);
+      }
+      runtime.ctx.authorizeToolCall = () => { throw new AdportError('POLICY_VIOLATION', 'Account access denied.'); };
+      const denied = await hosted.callTool({ name: 'accounts_list', arguments: {} });
+      expect(denied.isError).toBe(true);
+      expect(textOf(denied as never)).toEqual({ error: 'POLICY_VIOLATION', message: 'Account access denied.' });
+    } finally {
+      await hosted.close();
+      await server.close();
+    }
+  });
+
   it('marks synthetic success and error responses in both text and structured content', async () => {
     const runtime = await createContext({ includeMock: true });
     runtime.dataSource = 'synthetic';

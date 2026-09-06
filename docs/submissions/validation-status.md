@@ -4,6 +4,34 @@ This is an evidence log, not a public approval claim. No customer identifiers, c
 
 ## Production-only release audit — September 7, 2026
 
+- A separate existing Codex connection was verified as Streamable HTTP to
+  `https://app.adport.dev/mcp`. It supplies real provider reads despite the
+  expired dashboard browser session. Do not conflate its grant with the
+  Synthetic Reviewer grant installed in ChatGPT or the OpenAI draft.
+- Fresh native Google campaign lookup returned five rows. The six-metric,
+  last-seven-days campaign report returned five real EUR rows, no errors,
+  warnings or truncation, and a complete currency summary. Independent sums
+  of returned spend, impressions, clicks, conversions and conversion value,
+  plus conversion-value/spend ROAS, matched the summary without discrepancy.
+  Structured report-view metadata is present; this is not yet a real-data
+  ChatGPT iframe-rendering test or proof of public provider-app approval.
+- Fresh Reddit campaign lookup returned three paused campaigns; its report
+  returned no rows for the requested period and no provider error. X returned
+  no campaigns or report rows; inventory labels that account REJECTED. Empty
+  results are not evidence of full reporting or write readiness.
+- A native Google read for an explicitly out-of-scope test identifier returned
+  `POLICY_VIOLATION`. Requesting the demo provider on the real runtime returned
+  `NOT_CONNECTED`, not synthetic data. No write, preview, apply or account
+  permission change was performed.
+- The missing-provider response incorrectly instructed hosted users to run a
+  local CLI connect command. The fix supplies cloud dashboard guidance at the
+  MCP transport boundary while preserving the error code, error flag, account
+  authorization and CLI defaults. MCP tests pass (51); cloud route tests pass
+  (6); full local build, test and typecheck pass. Release/live retest is pending.
+- Fresh ChatGPT settings inspection shows its only installed Adport connector
+  still has the nine synthetic-reviewer tools and OAuth enabled. No connection
+  was replaced, refreshed or granted access to real accounts.
+
 - The owner explicitly requires real, production-ready connectors, not the
   synthetic demo surface. Both submission guides now make that distinction
   explicit and link the production release gate.
