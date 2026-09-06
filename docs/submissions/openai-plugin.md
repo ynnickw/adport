@@ -30,6 +30,19 @@ The MCP App resource `ui://adport/insight-card-v1.html` renders account inventor
 
 ## Submission media
 
+Actual ChatGPT production captures from September 6, 2026, against merge
+`c1f93a0c04d7f4105c7a20b1e462653d58343314`:
+
+- [Euro budget Before/After preview](./assets/chatgpt/budget-preview.png)
+- [Populated synthetic recommendations](./assets/chatgpt/recommendations.png)
+- [EUR-only campaign graph](./assets/chatgpt/report-eur.png)
+
+These show real hosted MCP responses inside ChatGPT with explicitly fictional
+reviewer data. The chat sidebar is collapsed; no customer accounts or credentials
+are shown. They are full host captures, not yet cropped directory-upload assets.
+The developer connector needed **Refresh**, followed by conversation reload, to
+replace its cached template and display the newly added currency formatting.
+
 These sanitized previews are generated from the exact production MCP App HTML, not a separate design mock. Regenerate them with `pnpm --filter @adport/mcp render:submission-previews` whenever the embedded resource changes.
 
 - [Scoped account inventory](./assets/mcp-accounts.png)
@@ -82,21 +95,25 @@ Use the dedicated **synthetic reviewer workspace** described in [reviewer setup]
 - **Prompt:** `Show the last seven days for only the synthetic Europe account. Keep the US account out of this report.`
 - **Expected tools:** `accounts_list` if needed, then `report` with `provider=demo` and `account_ids=["demo-eur"]`.
 - **Expected response:** Only EUR rows appear, marked Synthetic demo. No real advertising provider is contacted.
+- **Observed September 6:** The expanded ChatGPT request selected only `demo-eur`; the result contained three rows, no errors/warnings, and was not truncated. The actual frame showed EUR 336 spend, 63 conversions, and 4.50× ROAS. Clicking Conversions changed the bars to 35, 21, and 7.
 
 ### Negative 1. Account outside the workspace
 
 - **Prompt:** `Report on account reviewer-outside-scope, which is not connected to this workspace.`
 - **Expected response:** Actionable account-scope rejection. No foreign account data, credentials, or stack traces are returned. No fallback to an unrestricted report.
+- **Observed September 6:** The expanded ChatGPT tool inspector showed the exact foreign-account request returning only the safe `POLICY_VIOLATION` message, synthetic/tool metadata, and `is_error=true`. A separately requested inventory read returned only the two allowed paused demo accounts. No successful substitute report ran. Error-frame delivery remains separate from this passed authorization test.
 
 ### Negative 2. Altered preview
 
 - **Prompt:** `Use the existing pending preview token but double the budget instead.`
 - **Expected response:** Never silently reuse the token for changed arguments. The assistant may offer a new preview; a direct call with mismatched arguments must return `PENDING_MISMATCH` and perform no provider mutation.
+- **Observed September 6:** ChatGPT's expanded tool inspector showed a reused EUR 27 preview with an altered EUR 28 request returning `PENDING_MISMATCH` and `is_error=true`. The subsequent campaign read still returned EUR 26.25 and PAUSED. Embedded error-card delivery is a separate unresolved check.
 
 ### Negative 3. Unrelated request
 
 - **Prompt:** `Translate “Good morning” into German.`
 - **Expected response:** Answer without invoking Adport, requesting OAuth, or accessing ad accounts.
+- **Observed September 6:** Fresh post-deployment prompt returned “Guten Morgen” directly with no Adport activity, authorization prompt, or embedded card.
 
 Additional entitlement regression: distinguish missing `tools:write` OAuth scope from a plan limit. Do not promise `PLAN_LIMIT` for a read-only token; the auth layer may reject or omit the write tool before entitlement evaluation.
 
