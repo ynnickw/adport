@@ -48,7 +48,8 @@ export function auditTools(): AnyToolDefinition[] {
         account_ids: z.array(z.string()).optional(),
         date_range: dateRangeSchema.default('last_30_days'),
       }),
-      annotations: { readOnly: false, openWorld: false },
+      // Persisting findings is local, but evaluation reads connected providers.
+      annotations: { readOnly: false, openWorld: true },
       async handler(input, ctx) {
         const runner = new AuditRunner(ctx.providers, ctx.findings ?? new FindingsStore());
         const result = await runner.run({

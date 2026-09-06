@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuditRunner } from '../src/audit/runner.js';
 import { FindingsStore } from '../src/audit/store.js';
 import { createContext } from '../src/context.js';
@@ -51,6 +51,17 @@ describe('AuditRunner + core-performance pack', () => {
 });
 
 describe('recommendation tools', () => {
+  it('declares provider-reporting audits open-world while retaining their distinct write behavior', async () => {
+    const { ctx, registry } = await createContext({ includeMock: true });
+    const report = vi.spyOn(ctx.providers.get('mock'), 'report');
+    for (const name of ['audit_preview', 'audit_run']) {
+      expect(registry.get(name).annotations.openWorld).toBe(true);
+      expect(registry.get(name).annotations.readOnly).toBe(name === 'audit_preview');
+      await registry.call(name, { provider: 'mock' }, ctx);
+    }
+    expect(report).toHaveBeenCalledTimes(2);
+  });
+
   it('previews audit findings without persisting them', async () => {
     const { ctx, registry } = await createContext({ includeMock: true });
     const result = (await registry.call('audit_preview', {}, ctx)) as { findings: Array<{ id: string }> };

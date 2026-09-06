@@ -4,6 +4,46 @@ This is an evidence log, not a public approval claim. No customer identifiers, c
 
 ## Submission preparation — September 6, 2026
 
+- Later portal verification confirmed the saved Individual publisher identity,
+  both orange-dot icons, and a verified domain. The production challenge endpoint
+  returned the exact portal-provided challenge; no authentication secrets are
+  included in this log.
+- Three starter prompts and five positive test plans are saved in the draft.
+  The portal's three negative cases specifically mean **no tool invocation**,
+  not authorization-error tests. The draft now uses translation, fictional
+  coffee-shop copy, and general organic-search advice. Fresh ChatGPT turns for
+  the latter two returned answers without Adport activity or cards; the
+  translation case was already observed below.
+- Portal OAuth successfully opened the real consent page for the isolated
+  Synthetic Reviewer workspace. After consent, Scan Tools returned its nine
+  registered tools and their annotations. Most justifications are entered;
+  `audit_run` exposed an incorrect closed-world annotation despite calling
+  provider reporting. Its correction is under validation. The catalog is the
+  synthetic workspace catalog, not proof that every real provider tool has
+  been scanned or reviewed.
+- PR #59 merged as `afd574246bfb319179cfa1ae08fcc4b1a19f83ca` after Node
+  22/24 CI passed. Production deployment `dpl_7wf8haqzBJkbFM3AM2TY718doh4c`
+  reached Ready and owns `app.adport.dev`. It fixes reported ROAS rendering
+  when conversion value is not requested, using spend weighting and separate
+  currencies. After refreshing the development connector and reopening the
+  actual ChatGPT conversation, a fresh `report` request with four metrics
+  returned three synthetic rows without errors or truncation. Its real embedded
+  graph displayed EUR 336, 63 conversions and 4.50x ROAS instead of unavailable.
+  The expanded request confirmed `demo-eur`, campaign level and last seven days.
+  No apply call or real-provider mutation occurred.
+- Reviewer credentials, the hosted demo recording, final mobile/media evidence,
+  and public submission remain outstanding. Claude execution remains unverified.
+- The live portal screenshot dialog requires the actual widget UI without a
+  baked-in user prompt, PNG/JPG at 706 px wide and 400–860 px high (860
+  recommended). Existing full-conversation evidence images are not compliant
+  listing media and were not uploaded. The prompt is rendered separately by
+  the directory. Prepare real host crops/layout captures to those dimensions.
+- The `audit_run` correction passed full build/test/typecheck, including the
+  core provider-call regression and SDK annotation expectation. It changes
+  metadata only; it is not yet deployed or re-scanned in the portal.
+
+Earlier observations, superseded where explicitly updated above:
+
 - An Adport 1.0.0 draft was created in the OpenAI Platform submission portal.
   Its basic description, support/legal URLs, and OAuth MCP URL were entered.
   This is a draft, not a submitted or approved directory listing.
