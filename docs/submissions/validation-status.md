@@ -4,7 +4,63 @@ This is an evidence log, not a public approval claim. No customer identifiers, c
 
 ## Submission preparation — September 6, 2026
 
-Latest verification after PR #60:
+Latest verification after PR #61:
+
+- A fresh short ChatGPT conversation rendered one accounts card, one report
+  card and one budget-preview card. Account repetition did not recur. The
+  report card correctly showed EUR ROAS 4.50x, but ChatGPT's adjacent prose
+  table incorrectly said 4.16. The actual row values imply 1512 / 336 = 4.50.
+  The follow-up adds currency-separated `summary.groups` to the shared report
+  result, including returned-row coverage, null unavailable metrics and the
+  ROAS calculation method. The iframe uses this same authoritative ratio.
+  Full local build/test/typecheck passed; production model retest remains open.
+- A genuine 98.57-second browser screencast was captured through the supported
+  CDP capability, with 2,118 timestamped frames, then encoded as H.264 MP4
+  (1600x900). It shows real tool execution, EUR/USD and metric switching, and
+  a preview from EUR 27.5625 to EUR 28.940625 with Details expanded. No apply
+  was requested. The local recording is a test draft, not final submission
+  media: it contains the host's incorrect prose ROAS described above. No video
+  was uploaded and no screenshot sequence was presented as a live recording.
+
+- The exact pending synthetic budget operation was applied with unchanged
+  arguments (26,250,000 to 27,562,500 micros). The actual ChatGPT card showed
+  **Applied** and the exact EUR values. An independently inspected subsequent
+  `demo_list_campaigns` response showed Search at 27,562,500 micros and PAUSED.
+  The other two EUR campaigns remained PAUSED. This exercised the fictional
+  reviewer store only; it is not evidence of a real-provider mutation.
+- A fresh six-metric, two-account `report` returned four rows, no errors or
+  warnings, `truncated=false`, and `data_source=synthetic`. After reopening the
+  actual ChatGPT conversation, the EUR card displayed 336 spend, 1,659 clicks,
+  63 conversions and 4.50x ROAS. Clicking USD displayed 154 spend, 791 clicks,
+  42 conversions and 6.55x ROAS. Clicking Conversions changed its single bar
+  to 42. The currency groups were never summed together. The real host capture
+  is `assets/chatgpt/report-usd-conversions-live.png`.
+- The same response contained three repeated accounts cards before its report.
+  The report itself rendered correctly. Do not present this full conversation
+  as a polished directory screenshot; investigate call repetition separately
+  if it recurs in a fresh, short reviewer conversation.
+- Claude's Free account was rechecked: AppLaunchFlow occupies its sole custom
+  connector slot and Add custom connector is disabled. No connector was removed
+  and no plan was purchased. Actual Adport-on-Claude verification is still open.
+- An earlier native QuickTime recording attempt did not expose a controllable recording
+  session. No recording was started or saved. A genuine continuous demo video,
+  a reviewer-access decision and portal-compliant screenshot assets remained open
+  at that point. The later browser screencast above supersedes the capture blocker,
+  but not the final-media or review-access requirements.
+
+- Follow-up PR #61 merged as `8dc6166597aeef7061f31a1870ebdf28d5df9402`
+  after full local build/test/typecheck and green Node 22/24 CI. Production
+  `dpl_9L6mZBs8fbedqkLQYPdmmJCfjePs` is Ready and owns `app.adport.dev`.
+  ChatGPT confirmed **Actions refreshed**; reloading the actual conversation
+  rendered the same saved preview as **EUR 26.25 → EUR 27.5625**, matching
+  the inspected micros exactly. No new write invocation was needed for that
+  rendering retest. `budget-preview-precision-fixed.png` is the unmodified
+  real-host evidence. MCP tests now total 48 passed.
+- The portal release notes were saved and verified on return. Its final
+  section currently flags the missing demo recording URL and required
+  confirmations. Legal/compliance confirmations remain unchecked and final
+  Submit for Review was not pressed. The reviewer-credentials field is still
+  blank; neither portal validation nor a saved draft proves review readiness.
 
 - PR #60 merged as `dd4ccd4ddd5b554fec3cf68c532af0191ab663bf` with the
   owner's explicit admin-merge authorization and green Node 22/24 CI. The
@@ -36,8 +92,8 @@ Latest verification after PR #60:
   call occurred. The real Before/After table rendered but rounded the proposed
   EUR 27.5625 to EUR 27.56. This identified a presentation precision defect.
   The follow-up preserves up to six decimals for authoritative budget deltas,
-  while leaving report formatting unchanged. Its production release/retest
-  is not yet proven. `budget-preview-precision-before.png` records the defect,
+  while leaving report formatting unchanged. The production release/retest is
+  recorded above. `budget-preview-precision-before.png` records the defect,
   not an approved listing asset.
 
 The dated observations below are historical where superseded by this block.
