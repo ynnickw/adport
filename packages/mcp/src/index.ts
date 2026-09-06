@@ -148,7 +148,12 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
         const payload =
           err instanceof AdportError
             ? err.toJSON()
-            : { error: 'INTERNAL', message: err instanceof Error ? err.message : String(err) };
+            : {
+              error: 'INTERNAL',
+              // Unexpected exceptions can contain credentials or private paths.
+              // Do not imply that a failed response means a write was not applied.
+              message: 'Adport could not complete this request. If this was a write, check its status before retrying. Contact support if the problem persists.',
+            };
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(payload, null, 2) }],
           ...(view ? { structuredContent: structuredResult(tool.name, view, payload) } : {}),

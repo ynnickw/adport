@@ -182,6 +182,39 @@ describe('adport MCP server', () => {
     expect(payload).toEqual(parsed);
   });
 
+  it.each([
+    new Error('Authorization: Bearer synthetic-private-secret at /private/internal/config'),
+    'synthetic-private-secret',
+    { toString: () => { throw new Error('must not stringify unknown exceptions'); } },
+  ])('does not disclose unexpected exceptions in tool or widget responses (%#)', async (failure) => {
+    const runtime = await createContext({ includeMock: true });
+    runtime.ctx.authorizeToolCall = () => { throw failure; };
+    const server = createMcpServer({ runtime });
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    const errorClient = new Client({ name: 'error-privacy-test', version: '0.0.0' });
+    await Promise.all([server.connect(st), errorClient.connect(ct)]);
+    try {
+      for (const request of [
+        { name: 'accounts_list', arguments: {} },
+        { name: 'mock_list_campaigns', arguments: { account_id: 'mock-1' } },
+      ]) {
+        const result = await errorClient.callTool(request);
+        expect(result.isError).toBe(true);
+        const payload = textOf(result as never);
+        expect(payload).toEqual({
+          error: 'INTERNAL',
+          message: 'Adport could not complete this request. If this was a write, check its status before retrying. Contact support if the problem persists.',
+        });
+        expect(JSON.stringify(result)).not.toMatch(/synthetic-private-secret|\/private\/internal|must not stringify/);
+        if (request.name === 'accounts_list') {
+          expect(result.structuredContent).toMatchObject({ ...payload as object, _adport: { view: 'accounts' } });
+        }
+      }
+    } finally {
+      await errorClient.close();
+    }
+  });
+
   it('omits tools outside a remote API key scope', async () => {
     const runtime = await createContext({ includeMock: true });
     const scopedServer = createMcpServer({ runtime, scopes: ['tools:read'] });
