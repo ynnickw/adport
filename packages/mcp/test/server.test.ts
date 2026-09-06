@@ -170,10 +170,16 @@ describe('adport MCP server', () => {
     const result = (await client.callTool({
       name: 'mock_set_budget',
       arguments: { account_id: 'mock-1', campaign_id: 'c1', daily_budget_micros: 99_000_000 },
-    })) as { isError?: boolean };
+    }));
     expect(result.isError).toBe(true);
     const parsed = textOf(result as never) as { error: string };
     expect(parsed.error).toBe('POLICY_VIOLATION');
+    expect(result.structuredContent).toMatchObject({
+      error: 'POLICY_VIOLATION',
+      _adport: { tool: 'mock_set_budget', view: 'operation' },
+    });
+    const { _adport, ...payload } = result.structuredContent as Record<string, unknown>;
+    expect(payload).toEqual(parsed);
   });
 
   it('omits tools outside a remote API key scope', async () => {
@@ -227,6 +233,12 @@ describe('adport MCP server', () => {
         arguments: { account_id: 'mock-1', campaign_id: 'c1', daily_budget_micros: 11_500_000 },
       });
       expect(result.isError).toBe(true);
+      expect(result.structuredContent).toMatchObject({
+        error: 'PLAN_LIMIT',
+        _adport: { tool: 'mock_set_budget', view: 'operation' },
+      });
+      const { _adport, ...payload } = result.structuredContent as Record<string, unknown>;
+      expect(payload).toEqual(textOf(result as never));
       expect(textOf(result as never)).toEqual({
         error: 'PLAN_LIMIT',
         code: 'PLAN_LIMIT',
