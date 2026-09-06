@@ -16,6 +16,7 @@ const providerNames: Record<string, string> = {
   linkedin: 'LinkedIn Ads',
   x: 'X Ads',
   mock: 'Demo',
+  demo: 'Synthetic demo',
 };
 
 export function viewForTool(name: string, readOnly: boolean): AdportView | undefined {
@@ -187,7 +188,8 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       reddit:'<svg viewBox="0 0 24 24"><path fill="#ff4500" d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0Zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614.028.169.042.342.042.52 0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .378-.239l2.906.617a1.214 1.214 0 0 1 1.108-.701Z"/></svg>'
     };
     const logo = (id) => '<span class="logo '+esc(id)+'" aria-hidden="true">'+(providerSvg[id] || esc(initials(id)))+'</span>';
-    const chrome = (body, context) => '<header class="top"><div class="brand"><span class="dot"></span><b>adport.dev</b></div><span class="context">'+esc(context || '')+'</span></header><section class="content">'+body+'</section>';
+    let syntheticResult = false;
+    const chrome = (body, context) => '<header class="top"><div class="brand"><span class="dot"></span><b>adport.dev</b></div><span class="context">'+(syntheticResult?'Synthetic demo · ':'')+esc(context || '')+'</span></header><section class="content">'+body+'</section>';
     function renderAccounts(data, meta) {
       const accounts = arr(data.accounts), errors = arr(data.errors), names = meta.providerNames || {};
       const body = notices(data)+(accounts.length ? '<div class="list">'+accounts.map(a => { const status=statusOf(a.status); return '<div class="row"><div class="identity">'+logo(a.provider)+'<div class="identity-copy"><b>'+esc(a.name || 'Ad account')+'</b><span>'+esc(providerName(a.provider,names))+' · '+esc(a.id)+(a.currency ? ' · '+esc(a.currency) : '')+'</span></div></div><span class="pill '+status.tone+'">'+esc(status.label)+'</span></div>'; }).join('')+'</div>' : '<div class="empty">'+(errors.length ? 'Account inventory could not be fully loaded.' : 'No accessible ad accounts were returned.')+'</div>');
@@ -250,6 +252,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
         }
       }
       const meta = data._adport || {};
+      syntheticResult = data.data_source === 'synthetic';
       if (data.cancelled) {
         app.innerHTML=chrome('<p class="notice">'+esc(data.message || 'The host interrupted this request. Check the tool response before retrying.')+'</p>','Request interrupted');
         return;

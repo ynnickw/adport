@@ -79,6 +79,9 @@ export interface ToolScopeDenial {
  * No tool logic lives here — see the "one tool-definition layer" principle.
  */
 export function createMcpServer({ runtime, name = 'adport', version = packageJson.version, icons = DEFAULT_MCP_ICONS, scopes, scopeDenials }: CreateServerOptions): McpServer {
+  const provenance = (value: unknown): unknown => runtime.dataSource === 'synthetic'
+    ? { ...(value && typeof value === 'object' && !Array.isArray(value) ? value : { value }), data_source: 'synthetic' }
+    : value;
   const server = new McpServer({ name, version, ...(icons ? { icons } : {}) });
   registerAppResource(
     server,
@@ -123,12 +126,12 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
     };
     const callback = async (args: Record<string, unknown>) => {
       if (scopeDenial) {
-        const payload = {
+        const payload = provenance({
           error: scopeDenial.code,
           code: scopeDenial.code,
           message: scopeDenial.message,
           ...scopeDenial.data,
-        };
+        });
         return {
           content: [{
             type: 'text' as const,
@@ -139,13 +142,13 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
         };
       }
       try {
-        const result = await runtime.registry.call(tool.name, args, runtime.ctx);
+        const result = provenance(await runtime.registry.call(tool.name, args, runtime.ctx));
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
           ...(view ? { structuredContent: structuredResult(tool.name, view, result) } : {}),
         };
       } catch (err) {
-        const payload =
+        const payload = provenance(
           err instanceof AdportError
             ? err.toJSON()
             : {
@@ -153,7 +156,7 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
               // Unexpected exceptions can contain credentials or private paths.
               // Do not imply that a failed response means a write was not applied.
               message: 'Adport could not complete this request. If this was a write, check its status before retrying. Contact support if the problem persists.',
-            };
+            });
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(payload, null, 2) }],
           ...(view ? { structuredContent: structuredResult(tool.name, view, payload) } : {}),

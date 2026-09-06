@@ -55,6 +55,7 @@ const schema = z.object({
   // Server-owned apps. Explicit rollout switches are separate from credentials:
   // possessing a client secret does not prove approval for external advertisers.
   ADPORT_PROVIDER_TEST_ORGANIZATION_IDS: z.string().optional(),
+  ADPORT_SYNTHETIC_REVIEWER_ORGANIZATION_IDS: z.string().optional(),
   SNAPCHAT_CLIENT_ID: z.string().min(1).optional(),
   SNAPCHAT_CLIENT_SECRET: z.string().min(8).optional(),
   SNAPCHAT_OAUTH_ENABLED: z.enum(['true', 'false']).default('false'),

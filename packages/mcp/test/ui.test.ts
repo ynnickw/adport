@@ -60,6 +60,13 @@ const row = (accountId: string, spend: number, currency?: string, conversionValu
 });
 
 describe('shipped MCP iframe', () => {
+  it('labels synthetic results explicitly and clears the label for real results', () => {
+    const ui = widget();
+    ui.render('report', { data_source: 'synthetic', rows: [row('demo-eur', 100, 'EUR')] });
+    expect(ui.app.innerHTML).toContain('Synthetic demo');
+    ui.render('accounts', { accounts: [] });
+    expect(ui.app.innerHTML).not.toContain('Synthetic demo');
+  });
   it('keeps every view compact without marketing headings or footers', () => {
     const ui = widget();
     for (const view of ['accounts', 'report', 'operation', 'insights'] as const) {

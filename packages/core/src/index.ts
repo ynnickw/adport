@@ -57,6 +57,7 @@ export {
 export { guardedWriteTool } from './tools/write.js';
 export { builtinTools } from './tools/builtin.js';
 export { MockProvider, mockTools } from './testing/mock-provider.js';
+export { SyntheticProvider, syntheticTools, syntheticSeed, syntheticStateSchema, type SyntheticCampaign, type SyntheticStateStore } from './testing/synthetic-provider.js';
 export {
   createContext,
   type AdportRuntime,

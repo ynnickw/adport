@@ -51,7 +51,7 @@ Use these in the listing:
 
 ## Reviewer test cases
 
-Provide a dedicated reviewer login with synthetic or non-sensitive sample data, populated reports, and a paused/non-spending demo resource. Enable preview-required policy and both `tools:read` and `tools:write` OAuth scopes. The following five positive and three negative cases are a test plan, not a record that they all passed. Replace demo references with the private review fixture IDs in the portal.
+Use the dedicated **synthetic reviewer workspace** described in [reviewer setup](./synthetic-reviewer.md). It uses real Adport OAuth, MCP, policy, and durable audit/pending stores, but a network-free `demo` provider. It does not simulate platform approval or prove real-provider API behavior. Both `tools:read` and `tools:write` OAuth scopes are needed. The following cases remain a test plan until production execution is recorded.
 
 ### 1. Account inventory
 
@@ -68,7 +68,7 @@ Provide a dedicated reviewer login with synthetic or non-sensitive sample data, 
 ### 3. Safe write preview
 
 - **Prompt:** `Preview a small budget change for the demo campaign. Do not apply it.`
-- **Expected tools:** the connected provider's budget tool without `pending_operation_id`
+- **Expected tools:** `demo_list_campaigns` for `demo-eur`, then `demo_set_budget` for `demo-search`, with the observed `expected_daily_budget_micros` and a 5% increase, without `pending_operation_id`
 - **Expected response:** The tool returns `pending_validation`, a short-lived `pending_operation_id`, exact changes, validation mode, policy coercions, and budget deltas. The inline card says that nothing has changed yet.
 
 ### 4. Exact apply gate
@@ -79,9 +79,9 @@ Provide a dedicated reviewer login with synthetic or non-sensitive sample data, 
 
 ### 5. Provider-specific account report
 
-- **Prompt:** `Show the last seven days for only the Meta demo account. Keep the other providers out of this report.`
-- **Expected tools:** `accounts_list` if needed, then `report` with `provider=meta` and only its selected account ID.
-- **Expected response:** Only authorized Meta rows appear. No request is routed to another advertising provider.
+- **Prompt:** `Show the last seven days for only the synthetic Europe account. Keep the US account out of this report.`
+- **Expected tools:** `accounts_list` if needed, then `report` with `provider=demo` and `account_ids=["demo-eur"]`.
+- **Expected response:** Only EUR rows appear, marked Synthetic demo. No real advertising provider is contacted.
 
 ### Negative 1. Account outside the workspace
 

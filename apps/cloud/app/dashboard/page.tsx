@@ -3,11 +3,14 @@ import { Empty, PageHeader, Provider, StatusPill } from '@/components/ui';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { countAuditEvents, listConnections, listPendingOperations } from '@/lib/cloud/repository';
 import { LiveData } from './live-data';
+import { isSyntheticReviewer } from '@/lib/cloud/synthetic-reviewer';
+import { SyntheticReviewer } from '@/components/synthetic-reviewer';
 
 export const metadata = { title: 'Overview' };
 
 export default async function OverviewPage() {
   const tenant = await requireDashboardTenant();
+  if (isSyntheticReviewer(tenant.organizationId)) return <SyntheticReviewer tenant={tenant} />;
   const [connections, pending, auditCount] = await Promise.all([
     listConnections(tenant.organizationId),
     listPendingOperations(tenant.organizationId, 5),

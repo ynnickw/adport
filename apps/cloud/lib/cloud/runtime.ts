@@ -28,6 +28,7 @@ import {
   updateProviderCredential,
 } from './repository';
 import type { ProviderCredentialMap, TenantPrincipal } from './types';
+import { createSyntheticReviewerRuntime, isSyntheticReviewer } from './synthetic-reviewer';
 
 export interface TenantRuntimeOptions {
   /** Used only immediately after OAuth exchange to discover provider accounts. */
@@ -40,6 +41,7 @@ export interface TenantRuntimeOptions {
  * server secrets, so no tenant ever holds an application secret.
  */
 export async function createTenantRuntime(principal: TenantPrincipal, options: TenantRuntimeOptions = {}): Promise<AdportRuntime> {
+  if (isSyntheticReviewer(principal.organizationId)) return createSyntheticReviewerRuntime(principal);
   const enforceAccountScope = options.enforceAccountScope ?? true;
   const [policy, credentials, enabledAccountIds, inventory] = await Promise.all([
     getOrganizationPolicy(principal.organizationId),
