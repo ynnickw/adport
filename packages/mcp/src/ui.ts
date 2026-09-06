@@ -172,6 +172,14 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     const compact = (value) => new Intl.NumberFormat(state.host.locale || 'en', { notation:'compact', maximumFractionDigits:1 }).format(num(value));
     const available = (value) => typeof value === 'number' && Number.isFinite(value);
     const total = (rows, key) => rows.length && rows.every(r => available(r.metrics?.[key])) ? rows.reduce((sum,r) => sum+r.metrics[key],0) : null;
+    const rowReturn = (row) => {
+      const m=row.metrics || {};
+      if (available(m.conversion_value)) return m.conversion_value;
+      // A report can request ROAS without conversion_value. Weight reported
+      // ratios by spend; never average campaign ratios or infer missing revenue.
+      const value=available(m.spend) && m.spend>0 && available(m.roas) ? m.spend*m.roas : null;
+      return available(value) ? value : null;
+    };
     const currencyOf = (row) => typeof row.currency === 'string' && /^[A-Z]{3}$/.test(row.currency) ? row.currency : null;
     const statusOf = (status) => !status || /unknown|unspecified/i.test(status) ? {label:'Status unavailable',tone:'neutral'} : /disabled|removed|inactive|closed|suspended/i.test(status) ? {label:status,tone:'danger'} : /paused|disable$/i.test(status) ? {label:status,tone:'warn'} : /^(enabled|active|approved)$/i.test(status) ? {label:status,tone:''} : {label:status,tone:'neutral'};
     const notices = (data) => [...arr(data.errors).map(e => (e.provider || 'Provider')+': '+(e.message || 'Read failed')), ...arr(data.warnings).map(e => e.message || 'Some metadata is unavailable'), ...(data.truncated ? ['Partial result: row limit reached. Totals and charts cover returned rows only.'] : [])].map(text => '<p class="notice">'+esc(text)+'</p>').join('');
@@ -207,10 +215,11 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       const rows=selected?.rows || [], currency=selected?.currency;
       state.reportGroup=selected?.key;
       const tabs=choices.length>1 ? '<div class="tabs" role="group" aria-label="Report currency or account">'+choices.map((g,i)=>'<button data-group="'+i+'" aria-pressed="'+(g===selected)+'">'+esc(g.label)+'</button>').join('')+'</div>' : '';
-      const spend=total(rows,'spend'), value=total(rows,'conversion_value');
+      const spend=total(rows,'spend'), returns=rows.map(rowReturn);
+      const value=returns.length && returns.every(available) ? returns.reduce((sum,value)=>sum+value,0) : null;
       const roas=spend>0 && value!==null ? (value/spend).toFixed(2)+'×' : '—';
       const metric=state.reportMetric, labels={spend:'Spend',clicks:'Clicks',conversions:'Conversions',roas:'ROAS'};
-      const metricValue=r=>metric==='roas' ? (available(r.metrics?.conversion_value) && r.metrics?.spend>0 ? r.metrics.conversion_value/r.metrics.spend : null) : r.metrics?.[metric];
+      const metricValue=r=>metric==='roas' ? (available(r.metrics?.conversion_value) && r.metrics?.spend>0 ? r.metrics.conversion_value/r.metrics.spend : r.metrics?.roas) : r.metrics?.[metric];
       const format=value=>metric==='spend'?money(value,currency):metric==='roas'?value.toFixed(2)+'×':compact(value);
       const ranked=[...rows].filter(r=>available(metricValue(r))).sort((a,b)=>metricValue(b)-metricValue(a)).slice(0,6), max=Math.max(1,...ranked.map(metricValue));
       const bars=ranked.length ? ranked.map(r=>'<div class="bar-row"><span class="bar-name" title="'+esc(r.entity?.name || r.entity?.id)+'">'+logo(r.provider)+'<span>'+esc(r.entity?.name || r.entity?.id || 'Entity')+'</span></span><span class="track" aria-hidden="true"><span class="fill" style="display:block;width:'+Math.max(0,metricValue(r)/max*100).toFixed(1)+'%"></span></span><span class="bar-value">'+esc(format(metricValue(r)))+'</span></div>').join('') : '<div class="empty">No '+esc(labels[metric])+' values were returned.</div>';
