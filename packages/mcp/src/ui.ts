@@ -225,7 +225,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       if (meta.tool === 'recommendation_apply' && data.result) data = data.result;
       const preview = data.preview || {}, pending = data.pending_operation_id, applied = data.status === 'applied' || data.applied === true;
       const changes = arr(preview.changes), coercions = arr(preview.coercions), deltas = arr(preview.budgetDeltas);
-      const comparisons=deltas.map(v=>({label:(v.target || 'Budget')+' (account units)',before:available(v.fromMicros)?money(v.fromMicros/1e6):'—',after:available(v.toMicros)?money(v.toMicros/1e6):'—'}));
+      const comparisons=deltas.map(v=>{const currency=currencyOf(v);return {label:(v.target || 'Budget')+(currency?' · '+currency:' (account units)'),before:available(v.fromMicros)?money(v.fromMicros/1e6,currency):'—',after:available(v.toMicros)?money(v.toMicros/1e6,currency):'—'};});
       // Only split provider diff formats with explicit field/value boundaries.
       // Freeform JSON updates stay in details; do not invent previous values.
       for (const change of changes) {

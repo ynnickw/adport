@@ -281,6 +281,20 @@ describe('shipped MCP iframe', () => {
     expect(ui.app.innerHTML).toContain('<td>—</td><td class="changed">132</td>');
   });
 
+  it('formats budget comparisons only with provider-reported currency', () => {
+    const ui = widget();
+    ui.render('operation', { preview: { budgetDeltas: [
+      { target: 'Daily budget', currency: 'EUR', fromMicros: 25000000, toMicros: 26250000 },
+      { target: 'US budget', currency: 'USD', toMicros: 20000000 },
+      { target: 'Unknown budget', currency: '<invalid>', fromMicros: 1000000, toMicros: 2000000 },
+    ] } });
+    expect(ui.app.innerHTML).toContain('Daily budget · EUR');
+    expect(ui.app.innerHTML).toContain('<td>€25.00</td><td class="changed">€26.25</td>');
+    expect(ui.app.innerHTML).toContain('<td>—</td><td class="changed">$20.00</td>');
+    expect(ui.app.innerHTML).toContain('Unknown budget (account units)');
+    expect(ui.app.innerHTML).toContain('<td>1</td><td class="changed">2</td>');
+  });
+
   it('never fabricates a previous value from a freeform update', () => {
     const ui = widget();
     ui.render('operation', { preview: { summary: '<img src=x>', changes: ['~ demo {"name":"new"}'] } });

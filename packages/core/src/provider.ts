@@ -23,6 +23,8 @@ export interface WriteOperation {
 export interface BudgetDelta {
   /** Human-readable target, e.g. "campaign c1 daily budget". */
   target: string;
+  /** Currency reported by the provider; omit when unknown. */
+  currency?: string;
   fromMicros?: number;
   toMicros: number;
 }

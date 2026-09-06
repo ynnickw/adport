@@ -33,6 +33,9 @@ it('uses the real policy gate, persists across runtimes, and never changes histo
   const before = await provider.report({ ...query, metrics: [...query.metrics] });
   const preview = await runtime.registry.call('demo_set_budget', args, runtime.ctx) as { pending_operation_id: string; applied: boolean };
   expect(preview.applied).toBe(false);
+  expect(preview).toMatchObject({ preview: { budgetDeltas: [
+    { target: 'Daily budget', currency: 'EUR', fromMicros: 25_000_000, toMicros: 27_000_000 },
+  ] } });
   expect((await provider.listCampaigns('demo-eur'))[0]?.dailyBudgetMicros).toBe(25_000_000);
   await expect(runtime.registry.call('demo_set_budget', { ...args, daily_budget_micros: 28_000_000, pending_operation_id: preview.pending_operation_id }, runtime.ctx)).rejects.toMatchObject({ code: 'PENDING_MISMATCH' });
   const result = await runtime.registry.call('demo_set_budget', { ...args, pending_operation_id: preview.pending_operation_id }, runtime.ctx);
@@ -52,6 +55,24 @@ it('rejects foreign accounts, cross-account campaigns, activation, stale budgets
   await expect(runtime.registry.call('demo_set_campaign_status', { status: 'ENABLED' }, runtime.ctx)).rejects.toMatchObject({ code: 'UNKNOWN_TOOL' });
   await expect(runtime.registry.call('demo_set_budget', { ...args, expected_daily_budget_micros: 1 }, runtime.ctx)).rejects.toMatchObject({ code: 'PENDING_MISMATCH' });
   await expect(runtime.registry.call('demo_set_budget', { ...args, daily_budget_micros: 100_000_000 }, runtime.ctx)).rejects.toMatchObject({ code: 'POLICY_VIOLATION' });
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it('produces a persisted evidence-backed CPA finding while all campaigns remain paused', async () => {
+  const { provider } = fixture();
+  const { ctx, registry } = await createContext({ providerModules: [{ provider, tools: syntheticTools(provider) }] });
+  const audit = await registry.call('audit_run', { provider: 'demo', account_ids: ['demo-eur'], date_range: 'last_7_days' }, ctx) as { findings: Array<{ id: string }> };
+  expect(audit.findings).toHaveLength(1);
+  expect(audit.findings[0]).toMatchObject({
+    ruleId: 'cpa-outlier', provider: 'demo', accountId: 'demo-eur', status: 'open',
+    entity: { id: 'demo-discovery', status: 'PAUSED' },
+    metrics: { spend: 112, conversions: 7, cpa: 16 },
+  });
+  expect(audit.findings[0]).toHaveProperty('proposedAction', undefined);
+  const listed = await registry.call('recommendations_list', { provider: 'demo', status: 'open' }, ctx);
+  expect(listed).toMatchObject({ count: 1, findings: [{ id: audit.findings[0]!.id }] });
+  await expect(registry.call('recommendation_apply', { finding_id: audit.findings[0]!.id }, ctx)).rejects.toThrow(/human judgment/);
+  expect((await provider.listCampaigns('demo-eur')).every(c => c.status === 'PAUSED')).toBe(true);
   expect(fetch).not.toHaveBeenCalled();
 });
 
