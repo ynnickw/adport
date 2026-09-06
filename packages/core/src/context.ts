@@ -31,6 +31,8 @@ export interface CreateContextOptions {
 }
 
 export interface AdportRuntime {
+  /** Set only by an isolated, server-provisioned reviewer runtime. */
+  dataSource?: 'synthetic';
   ctx: ToolContext;
   registry: ToolRegistry;
   policySource: string;

@@ -5,11 +5,14 @@ import { providerLabel } from '@/lib/cloud/providers';
 import { listConnections } from '@/lib/cloud/repository';
 import { OAUTH_PROVIDERS } from '@/lib/cloud/types';
 import { ProviderConnections, type OAuthProviderView } from './provider-connections';
+import { isSyntheticReviewer } from '@/lib/cloud/synthetic-reviewer';
+import { SyntheticReviewer } from '@/components/synthetic-reviewer';
 
 export const metadata = { title: 'Connections' };
 
 export default async function ConnectionsPage({ searchParams }: { searchParams: Promise<{ connected?: string; error?: string }> }) {
   const tenant = await requireDashboardTenant();
+  if (isSyntheticReviewer(tenant.organizationId)) return <SyntheticReviewer tenant={tenant} />;
   const [connections, params] = await Promise.all([listConnections(tenant.organizationId), searchParams]);
   const availability = oauthAvailability(tenant.organizationId);
   const oauthProviders: OAuthProviderView[] = OAUTH_PROVIDERS.map((id) => ({ id, available: availability[id] }));

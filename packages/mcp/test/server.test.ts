@@ -33,6 +33,21 @@ afterEach(async () => {
 });
 
 describe('adport MCP server', () => {
+  it('marks synthetic success and error responses in both text and structured content', async () => {
+    const runtime = await createContext({ includeMock: true });
+    runtime.dataSource = 'synthetic';
+    const server = createMcpServer({ runtime });
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    const reviewer = new Client({ name: 'synthetic-test', version: '1' });
+    await Promise.all([server.connect(st), reviewer.connect(ct)]);
+    try {
+      for (const args of [{}, { provider: 'not-connected' }]) {
+        const result = await reviewer.callTool({ name: 'accounts_list', arguments: args });
+        expect(result.structuredContent).toMatchObject({ data_source: 'synthetic' });
+        expect(textOf(result as Parameters<typeof textOf>[0])).toMatchObject({ data_source: 'synthetic' });
+      }
+    } finally { await reviewer.close(); }
+  });
   it('uses the orange dot for local MCP connections by default', () => {
     expect(client.getServerVersion()?.icons).toEqual([
       { src: 'https://app.adport.dev/icon.svg?brand=orange-dot-v2', mimeType: 'image/svg+xml', sizes: ['any'] },

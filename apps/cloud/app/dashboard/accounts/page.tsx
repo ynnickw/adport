@@ -6,11 +6,14 @@ import { listConnections, listOrganizationAdAccounts } from '@/lib/cloud/reposit
 import { providerLabel } from '@/lib/cloud/providers';
 import { isOAuthProvider } from '@/lib/cloud/types';
 import { AccountAccessManager } from './account-access-manager';
+import { isSyntheticReviewer } from '@/lib/cloud/synthetic-reviewer';
+import { SyntheticReviewer } from '@/components/synthetic-reviewer';
 
 export const metadata = { title: 'Accounts' };
 
 export default async function AccountsPage({ searchParams }: { searchParams: Promise<{ connected?: string; accounts_saved?: string; error?: string; select_provider?: string }> }) {
   const tenant = await requireDashboardTenant();
+  if (isSyntheticReviewer(tenant.organizationId)) return <SyntheticReviewer tenant={tenant} />;
   const [connections, inventory, entitlement, params] = await Promise.all([
     listConnections(tenant.organizationId),
     listOrganizationAdAccounts(tenant.organizationId),
