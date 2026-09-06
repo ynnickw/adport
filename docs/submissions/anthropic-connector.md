@@ -44,7 +44,7 @@ Regenerate with `pnpm --filter @adport/mcp render:submission-previews`. Replace 
 
 ## Reviewer account
 
-Use the dedicated [synthetic reviewer workspace](./synthetic-reviewer.md). Its login and database state have been provisioned; activation still requires deployment of PR #55 and an actual hosted OAuth test. All sample data is fictional and must be described as such in the private review instructions.
+Use the dedicated [synthetic reviewer workspace](./synthetic-reviewer.md). Its login and database state have been provisioned, PR #55 is deployed, and the production dashboard was checked in the browser. Hosted reviewer OAuth still needs completion and verification. All sample data is fictional and must be described as such in the private review instructions.
 
 The workspace contains:
 
@@ -84,4 +84,4 @@ As checked September 5, 2026, remote MCP submissions use Claude's organization s
 
 The current [pre-submission checklist](https://claude.com/docs/connectors/building/review-criteria) also calls for testing every tool in MCP Inspector and Claude, populated reviewer credentials, explicit annotations, and API references for freeform queries. Its wording requires `destructiveHint=true` for modifying tools. The shared registry now defaults modifying tools to that hint, including preview-first tools that can apply changes; an SDK scanner regression checks every registered modifying tool. Do not mask a modifying tool as read-only just because its first call previews. This annotation check does not establish complete functional tool coverage in Claude.
 
-The checked-in screenshots need regeneration for the currency/error corrections. Reviewer provisioning is complete, but production activation, real Claude execution, OAuth refresh, and complete tool coverage remain unverified; see [validation status](./validation-status.md).
+The checked-in screenshots need regeneration for the currency/error corrections. Reviewer provisioning and production dashboard activation are confirmed, but real Claude execution, OAuth refresh, and complete tool coverage remain unverified; see [validation status](./validation-status.md).

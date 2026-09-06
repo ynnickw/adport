@@ -151,19 +151,34 @@ dry-run and transaction-rolled-back privilege test. The private reviewer login
 was created and its saved credentials passed a password login through Supabase
 Auth. Credentials remain outside the repository. A transaction-rolled-back
 database test confirmed stale compare-and-set updates affect zero rows. The
-production organization allowlist is configured, but the runtime is not yet
-deployed.
+production organization allowlist is configured. Production deployment is
+confirmed below.
 
 Full local build, test, and typecheck passed: core 32 tests, MCP 43 tests, and
 cloud 234 tests (27 optional database tests skipped). Both Node 22/24 CI jobs
 and both Vercel previews passed for implementation commit `c760aec7`.
-PR #55 remains open with a required approving review; a normal merge was
-blocked and auto-merge is disabled. No admin bypass was performed. Preview
-build success is not production activation or an in-host OAuth test.
+The final documentation commit `a8f57b1` also passed both Node CI jobs and both
+Vercel previews. After explicit user authorization, PR #55 was admin-merged
+as `3c210b832b114b7a1e724c9dd5a27214a8c901ae`. GitHub's production deployment
+record for that SHA points to
+`adport-cloud-fmzypr4rq-yannick-westermann-labs.vercel.app`. Vercel reports
+deployment `dpl_8Qmmt6MqMBU1wQ24nQsvZuLfA3aE` Ready, and inspecting
+`app.adport.dev` resolves to that same deployment. The public root returned
+HTTP 200.
+
+In the actual in-app browser, the production dashboard opened as
+`Adport Synthetic Reviewer` and displayed the explicit fictional-data notice,
+two demo accounts, and four non-zero campaign report rows. The ChatGPT
+development connector's Reconnect flow reached Adport's real OAuth consent
+screen with that exact workspace and `tools:read tools:write`. Authorization
+was left for the user; no completed callback, new synthetic tool call, or
+embedded synthetic response is established by reaching this screen. On the
+next inspection the authorization tab was no longer present, so completion
+must be verified rather than inferred from the tab closing.
 
 Remaining release and submission checks:
 
-1. Merge with the required review or separately authorized admin override, then verify the production alias and exact deployed commit. Retain the unresolved error-result-delivery limitation in the review notes. The synthetic reports provide non-zero fixture data, but actual hosted report execution and refreshed submission media remain outstanding.
+1. Complete and verify reviewer OAuth in ChatGPT. Retain the unresolved error-result-delivery limitation in the review notes. The synthetic reports provide non-zero fixture data, but actual hosted MCP report execution and refreshed submission media remain outstanding.
 2. Complete the five-positive/three-negative reviewer suite using a populated, private, non-spending reviewer workspace. No campaign activation is authorized by this test plan.
 3. Capture current, sanitized in-host inventory, report, and preview cards. Existing baseline PNGs predate these fixes.
 4. Verify refresh beyond token expiry and reconnect behavior. Successful initial OAuth does not prove the refresh lifecycle.
