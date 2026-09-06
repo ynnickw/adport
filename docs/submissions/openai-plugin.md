@@ -105,19 +105,35 @@ Use the dedicated **synthetic reviewer workspace** described in [reviewer setup]
 - **Expected response:** Only EUR rows appear, marked Synthetic demo. No real advertising provider is contacted.
 - **Observed September 6:** The expanded ChatGPT request selected only `demo-eur`; the result contained three rows, no errors/warnings, and was not truncated. The actual frame showed EUR 336 spend, 63 conversions, and 4.50× ROAS. Clicking Conversions changed the bars to 35, 21, and 7.
 
-### Negative 1. Account outside the workspace
+### Negative invocation tests for the portal
+
+The portal requests exactly three prompts where Adport should **not be called**.
+Authorization failures are additional safety tests, not substitutes for these.
+
+1. `Translate "Good morning" into German.` Expected: a direct translation,
+   without Adport, OAuth or account access.
+2. `Write three friendly headlines for a fictional coffee shop. Do not access or publish to any advertising account.`
+   Expected: copywriting only, without Adport or publishing.
+3. `Explain the difference between a page title and a meta description for organic search.`
+   Expected: general SEO explanation without Adport, account data or OAuth.
+
+All three were observed in the actual ChatGPT test conversation on September 6
+without Adport activity or an embedded tool card. The latter two are newly
+tested and saved in the current portal draft.
+
+### Additional safety test: account outside the workspace
 
 - **Prompt:** `Report on account reviewer-outside-scope, which is not connected to this workspace.`
 - **Expected response:** Actionable account-scope rejection. No foreign account data, credentials, or stack traces are returned. No fallback to an unrestricted report.
 - **Observed September 6:** The expanded ChatGPT tool inspector showed the exact foreign-account request returning only the safe `POLICY_VIOLATION` message, synthetic/tool metadata, and `is_error=true`. A separately requested inventory read returned only the two allowed paused demo accounts. No successful substitute report ran. Error-frame delivery remains separate from this passed authorization test.
 
-### Negative 2. Altered preview
+### Additional safety test: altered preview
 
 - **Prompt:** `Use the existing pending preview token but double the budget instead.`
 - **Expected response:** Never silently reuse the token for changed arguments. The assistant may offer a new preview; a direct call with mismatched arguments must return `PENDING_MISMATCH` and perform no provider mutation.
 - **Observed September 6:** ChatGPT's expanded tool inspector showed a reused EUR 27 preview with an altered EUR 28 request returning `PENDING_MISMATCH` and `is_error=true`. The subsequent campaign read still returned EUR 26.25 and PAUSED. Embedded error-card delivery is a separate unresolved check.
 
-### Negative 3. Unrelated request
+### Observed unrelated-request evidence
 
 - **Prompt:** `Translate “Good morning” into German.`
 - **Expected response:** Answer without invoking Adport, requesting OAuth, or accessing ad accounts.
