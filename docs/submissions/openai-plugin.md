@@ -2,6 +2,12 @@
 
 This file is the copy-and-checklist source for the OpenAI Apps Management submission. Do not place reviewer credentials, access tokens, or customer data in this repository.
 
+**Submission hold — production only:** The owner requires real, production-ready
+provider workflows. The saved portal draft still contains demo tools, not the
+native production catalog. Follow the [production release gate](./production-readiness.md)
+before submission. Historical synthetic prompts/media below are regression
+evidence only and must not be used as final native-provider acceptance evidence.
+
 ## Listing
 
 - **Name:** Adport
@@ -70,9 +76,9 @@ Use these in the listing:
 3. `Find the three biggest performance opportunities and explain the evidence.`
 4. `Preview a 10% budget increase for my best converting campaign. Do not apply it.`
 
-## Reviewer test cases
+## Historical synthetic test cases — not production acceptance
 
-Use the dedicated **synthetic reviewer workspace** described in [reviewer setup](./synthetic-reviewer.md). It uses real Adport OAuth, MCP, policy, and durable audit/pending stores, but a network-free `demo` provider. It does not simulate platform approval or prove real-provider API behavior. Both `tools:read` and `tools:write` OAuth scopes are needed. The following cases remain a test plan until production execution is recorded.
+The dedicated **synthetic reviewer workspace** described in [reviewer setup](./synthetic-reviewer.md) uses real Adport OAuth, MCP, policy, and durable audit/pending stores, but a network-free `demo` provider. It does not simulate platform approval or prove real-provider API behavior. Both `tools:read` and `tools:write` OAuth scopes are needed. These historical tests must be replaced by real native-provider review cases for the production submission; do not submit this demo catalog.
 
 ### 1. Account inventory
 
@@ -162,6 +168,7 @@ Run **Scan Tools** again after each production metadata or CSP change. Confirm t
 
 ## Final submission checklist
 
+- [ ] Production release gate passes: native catalog parity, verified release providers, real reviewer workflows, no demo tools.
 - [x] Production MCP endpoint completed OAuth, tool invocation, and account-card rendering in ChatGPT on September 5, 2026.
 - [ ] Repeat against the final deployed revision and verify token refresh beyond access-token expiry.
 - [ ] Tools scan passes with current schemas, annotations, security schemes, and UI CSP.

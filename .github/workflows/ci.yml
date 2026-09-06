@@ -32,6 +32,8 @@ jobs:
       - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm test
+      - name: Connector submission catalog guard
+        run: node --test scripts/test-connector-catalog.mjs
       - name: CLI smoke (fail-closed and explicit demo mode)
         run: |
           export ADPORT_HOME="$(mktemp -d)"
