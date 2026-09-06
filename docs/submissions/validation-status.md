@@ -178,9 +178,64 @@ must be verified rather than inferred from the tab closing.
 
 Remaining release and submission checks:
 
-1. Complete and verify reviewer OAuth in ChatGPT. Retain the unresolved error-result-delivery limitation in the review notes. The synthetic reports provide non-zero fixture data, but actual hosted MCP report execution and refreshed submission media remain outstanding.
+1. Reviewer OAuth and populated hosted reports in ChatGPT are verified below. Retain the unresolved error-result-delivery limitation and capture final submission media after the currency-label correction is released.
 2. Complete the five-positive/three-negative reviewer suite using a populated, private, non-spending reviewer workspace. No campaign activation is authorized by this test plan.
 3. Capture current, sanitized in-host inventory, report, and preview cards. Existing baseline PNGs predate these fixes.
 4. Verify refresh beyond token expiry and reconnect behavior. Successful initial OAuth does not prove the refresh lifecycle.
 5. Test Claude's actual OAuth, tools, cards, and fallback; deploy and scan the corrected modifying-tool annotations.
 6. Confirm publisher identity/domain, portal permissions, reviewer access, public policy URLs, and availability. A ChatGPT development connector is not a public submission.
+
+### Actual synthetic ChatGPT execution (2026-09-06, after OAuth consent)
+
+The owner authorized completing consent. ChatGPT returned through the real
+OAuth callback, and refreshing the existing development connector replaced
+real-provider tools with the isolated demo tool catalogue. A subsequent fresh
+`accounts_list` returned exactly Synthetic Europe / EUR and Synthetic US / USD;
+the genuine sandbox iframe displayed both as paused and labeled synthetic.
+
+The fresh last-seven-days campaign report rendered populated bars inside the
+actual Adport iframe. EUR showed spend 336, clicks 1,659, conversions 56 and
+ROAS 4.00; the three campaign spend bars were 133, 112 and 91. Switching to USD
+showed one campaign with spend 154, and switching to Clicks updated its bar to
+791. EUR and USD were not combined by Adport's card. ChatGPT separately generated
+an additional chart outside the iframe; that host-generated chart is not Adport
+submission media. The persisted report and preview rendered again after reload.
+
+`demo_list_campaigns` followed by the first `demo_set_budget` call produced an
+unapplied preview from 25 to 26.25 EUR for the fictional Search campaign. The
+live Before/After table rendered, and Details remained expanded, showing local
+preview / not server validated and the no-change notice. The owner-authorized
+synthetic apply then displayed **Applied** in the actual iframe. The expanded
+subsequent `demo_list_campaigns` tool response independently showed
+`dailyBudgetMicros: 26250000` and `status: PAUSED`. No real provider was contacted
+and no campaign was activated.
+
+The live table exposed a clarity gap: the row repeated the campaign name and
+used “account units” despite this provider knowing EUR. The local follow-up
+adds optional provider-reported currency to budget deltas and labels this demo
+row “Daily budget”. Widget tests cover EUR/USD, missing prior values, invalid
+currency fallback, and existing currency-unknown previews. Production captures
+must be refreshed after this follow-up is deployed; do not label it live yet.
+The full local `pnpm build && pnpm test && pnpm typecheck` sequence passed,
+including core 32, MCP 44 and cloud 234 tests; 27 optional cloud database tests
+were skipped. The new currency metadata does not change policy amounts or
+authorization behavior.
+
+A fresh out-of-scope synthetic report produced the assistant's quoted
+`POLICY_VIOLATION` with the expected synthetic marker, but no expandable tool
+trace or iframe was present for that response. This is not sufficient to mark
+the negative host test or embedded error delivery passed.
+
+Current external test limits, rechecked in the browser:
+
+- ChatGPT displayed a usage-limit notice: files, images and data analysis are
+  unavailable until its displayed reset time. No upgrade was purchased.
+- Claude's signed-in Free account has AppLaunchFlow in its single custom
+  connector slot. “Add custom connector” is disabled and explicitly says the
+  Free plan permits one connector. No existing connector was removed. A user
+  choice is needed to free the slot or provide an eligible account.
+
+Remaining: fresh mismatch/scope tool-trace evidence, audit/recommendation suite,
+token-expiry refresh evidence, final sanitized host media, actual Claude tests,
+and private submission-portal completion. Initial OAuth and persisted chat
+reloading do not prove token refresh.

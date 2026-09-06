@@ -95,7 +95,7 @@ export class SyntheticProvider implements AdProvider {
     const preview: WritePreview = {
       summary: `Synthetic demo: change daily budget for "${campaign.name}"`,
       changes: [`~ campaign ${campaign.id} daily budget ${campaign.dailyBudgetMicros / 1e6} ${currency} → ${payload.daily_budget_micros / 1e6} ${currency}`],
-      coercions: [], budgetDeltas: [{ target: campaign.name, fromMicros: campaign.dailyBudgetMicros, toMicros: payload.daily_budget_micros }],
+      coercions: [], budgetDeltas: [{ target: 'Daily budget', currency, fromMicros: campaign.dailyBudgetMicros, toMicros: payload.daily_budget_micros }],
       serverValidated: false,
     };
     return { state, campaign, payload, preview };

@@ -44,7 +44,7 @@ Regenerate with `pnpm --filter @adport/mcp render:submission-previews`. Replace 
 
 ## Reviewer account
 
-Use the dedicated [synthetic reviewer workspace](./synthetic-reviewer.md). Its login and database state have been provisioned, PR #55 is deployed, and the production dashboard was checked in the browser. Hosted reviewer OAuth still needs completion and verification. All sample data is fictional and must be described as such in the private review instructions.
+Use the dedicated [synthetic reviewer workspace](./synthetic-reviewer.md). Its login and database state have been provisioned, PR #55 is deployed, and production OAuth, report, preview, and exact apply were exercised in ChatGPT. Claude OAuth remains unverified. All sample data is fictional and must be described as such in the private review instructions.
 
 The workspace contains:
 
@@ -52,7 +52,7 @@ The workspace contains:
 - campaign rows with spend, impressions, clicks, conversions, and conversion value;
 - four paused demo campaigns; `demo_set_budget` exercises the real preview/apply policy gate without contacting an advertising platform.
 
-Before submission, generate and verify an open recommendation through the audit tools, and complete hosted OAuth consent for `tools:read tools:write`. These remain unverified. Automated provider-specific recommendation application is not available in this synthetic workspace; do not imply otherwise to reviewers.
+Before submission, generate and verify an open recommendation through the audit tools, and complete Claude's hosted OAuth consent for `tools:read tools:write`. These remain unverified. Automated provider-specific recommendation application is not available in this synthetic workspace; do not imply otherwise to reviewers.
 
 Share the login only through Anthropic's private review field. Never include passwords or tokens in source, screenshots, or public documentation.
 
