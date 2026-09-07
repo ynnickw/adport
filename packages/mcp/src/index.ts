@@ -122,13 +122,19 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
     if (scopes && !scopes.includes(requiredScope) && !scopeDenial) continue;
     const view = viewForTool(tool.name, tool.annotations.readOnly ?? false);
     const labels = view ? toolInvocationLabels(view) : undefined;
+    // MCP structuredContent must be an object. Preserve legacy raw arrays in
+    // text/CLI results, exposing their declared schema under a value envelope.
+    const wrapOutput = !!tool.output && !(tool.output instanceof z.ZodObject);
+    const objectOutput = tool.output
+      ? tool.output instanceof z.ZodObject ? tool.output : z.object({ value: tool.output })
+      : undefined;
     const config = {
       title: toolTitle(tool.name),
       description: scopeDenial
         ? `${tool.description}\n\nUnavailable on the current plan: ${scopeDenial.message}`
         : tool.description,
       inputSchema: tool.input.shape,
-      ...(tool.output ? { outputSchema: tool.output.extend({
+      ...(objectOutput ? { outputSchema: objectOutput.extend({
         ...(view ? { _adport: z.object({ tool: z.literal(tool.name), view: z.literal(view), providerNames: z.record(z.string(), z.string()) }) } : {}),
         ...(runtime.dataSource === 'synthetic' ? { data_source: z.literal('synthetic') } : {}),
       }) } : {}),
@@ -151,16 +157,20 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
             type: 'text' as const,
             text: JSON.stringify(payload, null, 2),
           }],
-          ...(view ? { structuredContent: structuredResult(tool.name, view, payload) } : {}),
+          // SDK clients validate structuredContent even on isError responses.
+          // Errors use JSON text (also consumed by the widget), never a fake
+          // success object to satisfy the advertised output schema.
           isError: true,
         };
       }
       try {
-        const result = provenance(await runtime.registry.call(tool.name, args, runtime.ctx));
+        const rawResult = await runtime.registry.call(tool.name, args, runtime.ctx);
+        const result = provenance(rawResult);
+        const structured = provenance(wrapOutput ? { value: rawResult } : rawResult);
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-          ...(view ? { structuredContent: structuredResult(tool.name, view, result) }
-            : tool.output ? { structuredContent: result as Record<string, unknown> } : {}),
+          ...(view ? { structuredContent: structuredResult(tool.name, view, structured) }
+            : tool.output ? { structuredContent: structured as Record<string, unknown> } : {}),
         };
       } catch (err) {
         const payload = provenance(
@@ -174,7 +184,6 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
             });
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(payload, null, 2) }],
-          ...(view ? { structuredContent: structuredResult(tool.name, view, payload) } : {}),
           isError: true,
         };
       }

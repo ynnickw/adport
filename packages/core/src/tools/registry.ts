@@ -30,7 +30,7 @@ export interface AnyToolDefinition {
   description: string;
   input: z.ZodObject<z.ZodRawShape>;
   /** Successful result contract, shared by all transports. Errors use their own envelope. */
-  output?: z.ZodObject<z.ZodRawShape>;
+  output?: z.ZodType;
   annotations: ToolAnnotations;
   handler: (input: never, ctx: ToolContext) => Promise<unknown>;
 }
@@ -40,7 +40,7 @@ export function defineTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   namespace: string;
   description: string;
   input: S;
-  output?: z.ZodObject<z.ZodRawShape>;
+  output?: z.ZodType;
   annotations?: ToolAnnotations;
   handler: (input: z.infer<S>, ctx: ToolContext) => Promise<unknown>;
 }): AnyToolDefinition {
