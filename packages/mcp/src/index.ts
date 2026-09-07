@@ -71,6 +71,8 @@ export interface CreateServerOptions {
   notConnectedMessage?: string;
   /** Hosted production must never serve synthetic results or demo tool definitions. */
   productionOnly?: boolean;
+  /** Host-specific MCP Apps sandbox domain; OpenAI's widget domain stays independent. */
+  uiDomain?: string;
 }
 
 export interface ToolScopeDenial {
@@ -83,7 +85,7 @@ export interface ToolScopeDenial {
  * Thin adapter: every tool in the shared registry becomes an MCP tool.
  * No tool logic lives here — see the "one tool-definition layer" principle.
  */
-export function createMcpServer({ runtime, name = 'adport', version = packageJson.version, icons = DEFAULT_MCP_ICONS, scopes, scopeDenials, notConnectedMessage, productionOnly = false }: CreateServerOptions): McpServer {
+export function createMcpServer({ runtime, name = 'adport', version = packageJson.version, icons = DEFAULT_MCP_ICONS, scopes, scopeDenials, notConnectedMessage, productionOnly = false, uiDomain = ADPORT_UI_DOMAIN }: CreateServerOptions): McpServer {
   if (productionOnly && (runtime.dataSource === 'synthetic'
     || runtime.ctx.providers.list().some(provider => !PROVIDER_IDS.includes(provider.id as typeof PROVIDER_IDS[number]))
     || runtime.registry.list().some(tool => /^(demo|mock|synthetic)(_|$)/.test(tool.name) || /^(demo|mock|synthetic)$/.test(tool.namespace)))) {
@@ -100,7 +102,7 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
     {
       description: 'Responsive Adport accounts, performance, recommendations, and guarded-change view.',
       _meta: {
-        ui: { domain: ADPORT_UI_DOMAIN, prefersBorder: false, csp: { connectDomains: [], resourceDomains: [] } },
+        ui: { domain: uiDomain, prefersBorder: false, csp: { connectDomains: [], resourceDomains: [] } },
         'openai/widgetDomain': ADPORT_UI_DOMAIN,
       },
     },
@@ -110,7 +112,7 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
         mimeType: RESOURCE_MIME_TYPE,
         text: ADPORT_UI_HTML,
         _meta: {
-          ui: { domain: ADPORT_UI_DOMAIN, prefersBorder: false, csp: { connectDomains: [], resourceDomains: [] } },
+          ui: { domain: uiDomain, prefersBorder: false, csp: { connectDomains: [], resourceDomains: [] } },
           'openai/widgetDomain': ADPORT_UI_DOMAIN,
         },
       }],

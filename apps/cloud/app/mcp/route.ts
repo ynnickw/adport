@@ -3,13 +3,20 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { apiPrincipal } from '@/lib/cloud/auth';
 import { createTenantRuntime } from '@/lib/cloud/runtime';
 import { HttpError } from '@/lib/http';
-import { oauthIssuerUrl, protectedResourceMetadataUrl } from '@/lib/mcp-oauth';
+import { mcpResourceUrl, oauthIssuerUrl, protectedResourceMetadataUrl } from '@/lib/mcp-oauth';
+import { getMcpOAuthClient } from '@/lib/cloud/mcp-oauth-repository';
+import { mcpUiDomain } from '@/lib/mcp-ui-domain';
 import { recommendedUpgradePlan } from '@/lib/cloud/plans';
 
 async function handle(request: Request): Promise<Response> {
   try {
     const principal = await apiPrincipal(request);
     const runtime = await createTenantRuntime(principal);
+    // Each HTTP request has a fresh server, so initialize/clientInfo cannot
+    // identify the host on subsequent resources/read requests.
+    const oauthClient = principal.oauthTokenId && principal.clientId
+      ? await getMcpOAuthClient(principal.clientId)
+      : undefined;
     const planLimitMessage = principal.entitlement
       ? `MCP write tools are not included in the current ${principal.entitlement.planName} plan. They require ${recommendedUpgradePlan(principal.entitlement.planId)} or higher with write access. No changes were made.`
       : undefined;
@@ -34,6 +41,7 @@ async function handle(request: Request): Promise<Response> {
       runtime,
       name: 'adport-cloud',
       productionOnly: true,
+      uiDomain: mcpUiDomain(oauthClient?.redirectUris ?? [], mcpResourceUrl()),
       version: '0.1.0',
       icons: [{
         src: `${oauthIssuerUrl()}/icon.svg?brand=orange-dot-v2`,

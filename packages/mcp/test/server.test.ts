@@ -58,6 +58,26 @@ afterEach(async () => {
 });
 
 describe('adport MCP server', () => {
+  it('uses the host sandbox domain consistently without changing the OpenAI domain', async () => {
+    const runtime = await createContext({ providerModules: [] });
+    const uiDomain = '0123456789abcdef0123456789abcdef.claudemcpcontent.com';
+    const server = createMcpServer({ runtime, uiDomain });
+    const hostClient = new Client({ name: 'host-domain-test', version: '1' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await hostClient.connect(clientTransport);
+    try {
+      const listing = (await hostClient.listResources()).resources.find(resource => resource.uri === ADPORT_UI_URI);
+      const content = (await hostClient.readResource({ uri: ADPORT_UI_URI })).contents[0];
+      for (const resource of [listing, content]) {
+        expect(resource?._meta).toMatchObject({
+          ui: { domain: uiDomain, csp: { connectDomains: [], resourceDomains: [] } },
+          'openai/widgetDomain': ADPORT_UI_DOMAIN,
+        });
+      }
+    } finally { await hostClient.close(); await server.close(); }
+  });
+
   it('advertises meaningful shared output schemas for every common submission tool', async () => {
     const runtime = await createContext();
     const { tools } = await client.listTools();
