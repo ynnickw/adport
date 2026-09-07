@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { WriteKind, WriteOperation } from '../provider.js';
 import { defineTool, type AnyToolDefinition } from './registry.js';
+import { writeOutput } from './outputs.js';
 
 const TWO_STEP_NOTE =
   'Two-step write: call WITHOUT pending_operation_id to get a dry-run preview and a pending_operation_id; ' +
@@ -33,6 +34,7 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
     namespace: def.namespace,
     description: `${def.description}\n\n${TWO_STEP_NOTE}`,
     input,
+    output: writeOutput,
     annotations: { readOnly: false, destructive: def.destructive ?? true },
     async handler(raw, ctx) {
       const { account_id, pending_operation_id, ...payload } = raw as Record<string, unknown> & {

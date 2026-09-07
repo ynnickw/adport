@@ -1,6 +1,7 @@
 import { defineTool, guardedWriteTool, type AnyToolDefinition } from '@adport/core';
 import { z } from 'zod';
 import type { MetaAdsProvider } from './provider.js';
+import { apiReadOutput, insightsOutput, pageEngagementOutput, pagesOutput } from './outputs.js';
 
 const statusSchema = z.enum(['ACTIVE', 'PAUSED']);
 
@@ -32,6 +33,7 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
       description:
         'List the Facebook Pages the connected user can access, including their Page roles/tasks. Uses pages_show_list and never returns Page access tokens.',
       input: z.object({}),
+      output: pagesOutput,
       annotations: { readOnly: true },
       async handler() {
         const pages = await provider.listPages();
@@ -40,6 +42,7 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
     }),
     defineTool({
       name: 'meta_page_engagement',
+      output: pageEngagementOutput,
       namespace: 'meta',
       description:
         'Read engagement metadata and recent posts for an accessible Facebook Page. Uses pages_read_engagement after verifying the Page belongs to the connected user.',
@@ -54,6 +57,7 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
     }),
     defineTool({
       name: 'meta_api_read',
+      output: apiReadOutput,
       namespace: 'meta',
       description:
         'Read any Meta Marketing API v25 ad-account edge with fields and string query parameters, following pagination.',
@@ -72,6 +76,7 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
     }),
     defineTool({
       name: 'meta_insights',
+      output: insightsOutput,
       namespace: 'meta',
       description:
         'Query the Meta Ads Insights API directly: pick a level (account/campaign/adset/ad), fields ' +

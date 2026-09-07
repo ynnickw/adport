@@ -67,6 +67,18 @@ const applied = z.object({
   result: z.object({ applied: z.literal(true), resourceIds: z.array(z.string()), details: z.unknown().optional() }),
 });
 
+// Flat wire format is retained for existing CLI/REST consumers. Phase-specific
+// fields are optional because the same tool returns either preview or apply.
+export const writeOutput = z.object({
+  status: z.enum(['pending_validation', 'applied']),
+  applied: z.boolean(),
+  preview,
+  pending_operation_id: z.string().optional().describe('Present for pending_validation; pass with identical arguments to apply.'),
+  expires_at: z.string().optional().describe('Pending operation expiry, present for pending_validation.'),
+  next_step: z.string().optional(),
+  result: applied.shape.result.optional().describe('Provider result, present after successful apply.'),
+});
+
 export const recommendationsOutput = z.object({ findings: z.array(findingOutput), count: z.number().int().nonnegative() });
 export const dismissOutput = z.object({ finding: findingOutput });
 export const recommendationApplyOutput = z.object({

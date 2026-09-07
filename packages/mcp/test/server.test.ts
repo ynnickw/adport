@@ -5,6 +5,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { AdportError, createContext, FindingsStore } from '@adport/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { createMcpServer } from '../src/index.js';
 import { ADPORT_UI_DOMAIN, ADPORT_UI_URI } from '../src/ui.js';
 
@@ -65,7 +66,9 @@ describe('adport MCP server', () => {
       const schema = tools.find(tool => tool.name === name)?.outputSchema;
       expect(schema?.type).toBe('object');
       expect(schema?.required).toContain('_adport');
-      expect(Object.keys(schema?.properties ?? {})).toEqual(expect.arrayContaining(Object.keys(runtime.registry.get(name).output!.shape)));
+      const output = runtime.registry.get(name).output;
+      expect(output).toBeInstanceOf(z.ZodObject);
+      expect(Object.keys(schema?.properties ?? {})).toEqual(expect.arrayContaining(Object.keys((output as z.ZodObject).shape)));
     }
     const report = tools.find(tool => tool.name === 'report')!.outputSchema!;
     expect(JSON.stringify(report)).toContain('conversion_value_over_spend');
@@ -114,13 +117,14 @@ describe('adport MCP server', () => {
     const empty = new Client({ name: 'empty-reviewer', version: '1' });
     await Promise.all([server.connect(st), empty.connect(ct)]);
     try {
+      await empty.listTools();
       const list = await empty.callTool({ name: 'recommendations_list', arguments: {} });
       expect(list.isError).not.toBe(true);
       expect(list.structuredContent).toMatchObject({ findings: [], count: 0 });
       const disconnected = await empty.callTool({ name: 'accounts_list', arguments: {} });
       expect(disconnected.isError).toBe(true);
-      expect(disconnected.structuredContent).toHaveProperty('error', 'NOT_CONNECTED');
-      expect(disconnected.structuredContent).not.toHaveProperty('accounts');
+      expect(disconnected.structuredContent).toBeUndefined();
+      expect(textOf(disconnected as never)).toHaveProperty('error', 'NOT_CONNECTED');
     } finally { await empty.close(); await server.close(); }
   });
 
@@ -140,6 +144,7 @@ describe('adport MCP server', () => {
     const hosted = new Client({ name: 'cloud-connection-guidance', version: '1' });
     await Promise.all([server.connect(st), hosted.connect(ct)]);
     try {
+      await hosted.listTools();
       for (const request of [
         { name: 'accounts_list', arguments: {} },
         { name: 'accounts_list', arguments: { provider: 'demo' } },
@@ -149,9 +154,7 @@ describe('adport MCP server', () => {
         expect(result.isError).toBe(true);
         const expected = { error: 'NOT_CONNECTED', message: notConnectedMessage };
         expect(textOf(result as never)).toEqual(expected);
-        expect(result.structuredContent).toMatchObject(expected);
-        expect(result.structuredContent).not.toHaveProperty('accounts');
-        expect(result.structuredContent).not.toHaveProperty('rows');
+        expect(result.structuredContent).toBeUndefined();
         expect(JSON.stringify(result)).not.toMatch(/adport connect|--demo/);
       }
       runtime.ctx.authorizeToolCall = () => { throw new AdportError('POLICY_VIOLATION', 'Account access denied.'); };
@@ -164,7 +167,7 @@ describe('adport MCP server', () => {
     }
   });
 
-  it('marks synthetic success and error responses in both text and structured content', async () => {
+  it('marks synthetic responses in text and successful structured content', async () => {
     const runtime = await createContext({ includeMock: true });
     runtime.dataSource = 'synthetic';
     const server = createMcpServer({ runtime });
@@ -174,7 +177,8 @@ describe('adport MCP server', () => {
     try {
       for (const args of [{}, { provider: 'not-connected' }]) {
         const result = await reviewer.callTool({ name: 'accounts_list', arguments: args });
-        expect(result.structuredContent).toMatchObject({ data_source: 'synthetic' });
+        if (result.isError) expect(result.structuredContent).toBeUndefined();
+        else expect(result.structuredContent).toMatchObject({ data_source: 'synthetic' });
         expect(textOf(result as Parameters<typeof textOf>[0])).toMatchObject({ data_source: 'synthetic' });
       }
     } finally { await reviewer.close(); }
@@ -319,6 +323,7 @@ describe('adport MCP server', () => {
   });
 
   it('surfaces policy violations as tool errors', async () => {
+    await client.listTools();
     const result = (await client.callTool({
       name: 'mock_set_budget',
       arguments: { account_id: 'mock-1', campaign_id: 'c1', daily_budget_micros: 99_000_000 },
@@ -326,12 +331,7 @@ describe('adport MCP server', () => {
     expect(result.isError).toBe(true);
     const parsed = textOf(result as never) as { error: string };
     expect(parsed.error).toBe('POLICY_VIOLATION');
-    expect(result.structuredContent).toMatchObject({
-      error: 'POLICY_VIOLATION',
-      _adport: { tool: 'mock_set_budget', view: 'operation' },
-    });
-    const { _adport, ...payload } = result.structuredContent as Record<string, unknown>;
-    expect(payload).toEqual(parsed);
+    expect(result.structuredContent).toBeUndefined();
   });
 
   it.each([
@@ -346,6 +346,7 @@ describe('adport MCP server', () => {
     const errorClient = new Client({ name: 'error-privacy-test', version: '0.0.0' });
     await Promise.all([server.connect(st), errorClient.connect(ct)]);
     try {
+      await errorClient.listTools();
       for (const request of [
         { name: 'accounts_list', arguments: {} },
         { name: 'mock_list_campaigns', arguments: { account_id: 'mock-1' } },
@@ -358,9 +359,7 @@ describe('adport MCP server', () => {
           message: 'Adport could not complete this request. If this was a write, check its status before retrying. Contact support if the problem persists.',
         });
         expect(JSON.stringify(result)).not.toMatch(/synthetic-private-secret|\/private\/internal|must not stringify/);
-        if (request.name === 'accounts_list') {
-          expect(result.structuredContent).toMatchObject({ ...payload as object, _adport: { view: 'accounts' } });
-        }
+        expect(result.structuredContent).toBeUndefined();
       }
     } finally {
       await errorClient.close();
@@ -417,12 +416,7 @@ describe('adport MCP server', () => {
         arguments: { account_id: 'mock-1', campaign_id: 'c1', daily_budget_micros: 11_500_000 },
       });
       expect(result.isError).toBe(true);
-      expect(result.structuredContent).toMatchObject({
-        error: 'PLAN_LIMIT',
-        _adport: { tool: 'mock_set_budget', view: 'operation' },
-      });
-      const { _adport, ...payload } = result.structuredContent as Record<string, unknown>;
-      expect(payload).toEqual(textOf(result as never));
+      expect(result.structuredContent).toBeUndefined();
       expect(textOf(result as never)).toEqual({
         error: 'PLAN_LIMIT',
         code: 'PLAN_LIMIT',
