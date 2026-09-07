@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { z } from 'zod';
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
 import { AdportError, CredentialStore, createContext, type AdportRuntime, type ProviderModule } from '@adport/core';
 import { createGoogleModule } from '@adport/provider-google';
@@ -127,6 +128,10 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
         ? `${tool.description}\n\nUnavailable on the current plan: ${scopeDenial.message}`
         : tool.description,
       inputSchema: tool.input.shape,
+      ...(tool.output ? { outputSchema: tool.output.extend({
+        ...(view ? { _adport: z.object({ tool: z.literal(tool.name), view: z.literal(view), providerNames: z.record(z.string(), z.string()) }) } : {}),
+        ...(runtime.dataSource === 'synthetic' ? { data_source: z.literal('synthetic') } : {}),
+      }) } : {}),
       annotations: {
         readOnlyHint: tool.annotations.readOnly ?? false,
         destructiveHint: tool.annotations.destructive ?? false,
@@ -154,7 +159,8 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
         const result = provenance(await runtime.registry.call(tool.name, args, runtime.ctx));
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-          ...(view ? { structuredContent: structuredResult(tool.name, view, result) } : {}),
+          ...(view ? { structuredContent: structuredResult(tool.name, view, result) }
+            : tool.output ? { structuredContent: result as Record<string, unknown> } : {}),
         };
       } catch (err) {
         const payload = provenance(

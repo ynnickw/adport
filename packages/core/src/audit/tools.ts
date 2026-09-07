@@ -4,6 +4,7 @@ import { DATE_PRESETS } from '../model.js';
 import { defineTool, type AnyToolDefinition } from '../tools/registry.js';
 import { AuditRunner } from './runner.js';
 import { FindingsStore } from './store.js';
+import { auditOutput, recommendationsOutput, dismissOutput, recommendationApplyOutput } from '../tools/outputs.js';
 
 const dateRangeSchema = z.union([
   z.enum(DATE_PRESETS),
@@ -17,6 +18,7 @@ export function auditTools(): AnyToolDefinition[] {
   return [
     defineTool({
       name: 'audit_preview',
+      output: auditOutput,
       namespace: 'audit',
       description:
         'Evaluate the cross-platform audit rule packs over connected accounts and return structured findings ' +
@@ -39,6 +41,7 @@ export function auditTools(): AnyToolDefinition[] {
     }),
     defineTool({
       name: 'audit_run',
+      output: auditOutput,
       namespace: 'audit',
       description:
         'Run the cross-platform audit rule packs over connected accounts (campaign level). ' +
@@ -62,6 +65,7 @@ export function auditTools(): AnyToolDefinition[] {
     }),
     defineTool({
       name: 'recommendations_list',
+      output: recommendationsOutput,
       namespace: 'audit',
       description: 'List persisted audit findings/recommendations (default: open ones), most severe first.',
       input: z.object({
@@ -76,6 +80,7 @@ export function auditTools(): AnyToolDefinition[] {
     }),
     defineTool({
       name: 'recommendation_dismiss',
+      output: dismissOutput,
       namespace: 'audit',
       description: 'Dismiss a finding (it will not be re-opened by future audit runs).',
       input: z.object({ finding_id: z.string() }),
@@ -87,6 +92,7 @@ export function auditTools(): AnyToolDefinition[] {
     }),
     defineTool({
       name: 'recommendation_apply',
+      output: recommendationApplyOutput,
       namespace: 'audit',
       description:
         "Execute a finding's proposed action through the normal two-step write flow: first call returns the dry-run " +
