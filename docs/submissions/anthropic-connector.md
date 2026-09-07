@@ -59,10 +59,18 @@ or attach customer accounts as a shortcut. Run the native acceptance cases in
 [the OpenAI guide](./openai-plugin.md#native-acceptance-cases) separately in Claude;
 ChatGPT success does not establish Claude behavior.
 
-The September 7 Claude account is Free, with its single custom connector slot
-occupied by AppLaunchFlow. Adport connection and rendering remain unverified.
-Replacing that connector or using another account requires the owner's choice;
-do not remove it or purchase a plan automatically.
+On September 7 the owner explicitly authorized replacing the AppLaunchFlow
+custom connector. Adport now connects in that Claude Free account through OAuth,
+using the isolated native reviewer workspace. Claude discovered 20 common/native
+tools; this is the review workspace's current catalog, not all-provider coverage.
+Account and empty-report cards render after the host-domain fix in PR #70
+(production commit `78ae595`). A fresh account-list call also rendered correctly.
+The real paused test campaign was then read through `meta_api_read`, followed by
+a `meta_set_campaign_status` preview without a pending token. Claude rendered
+the before/after table (PAUSED to PAUSED) with `Preview · Not applied`. The actual
+tool response confirmed `pending_validation`, `applied=false`,
+`serverValidated=true` and no budget deltas. No apply was requested in this test.
+The Free-account connection proves testing access, not directory-submission access.
 
 Share dedicated credentials only through the private review field. Never put
 passwords, tokens or customer data in source, screenshots or public documentation.
@@ -80,11 +88,11 @@ passwords, tokens or customer data in source, screenshots or public documentatio
 ## Final submission checklist
 
 - [ ] Production release gate passes: native catalog parity, verified release providers, real reviewer workflows, no demo tools.
-- [ ] Fresh Claude Web/Desktop connection completes OAuth and discovers tools.
+- [x] Fresh Claude Web connection completes OAuth and discovers tools (September 7, native reviewer).
 - [ ] Fresh Claude Code connection completes OAuth and refreshes successfully.
 - [ ] The three required directory prompts work with the reviewer account.
-- [ ] MCP Apps cards render on a compatible Claude surface; text/structured fallback is checked separately.
-- [ ] A preview proves that no write occurs on the first call.
+- [x] Account and empty-report MCP Apps cards render in Claude Web (PR #70); other views and fallback coverage remain separate checks.
+- [x] Native paused-campaign preview returns `applied=false` and renders as not applied in Claude Web.
 - [ ] An apply test uses only an isolated paused/non-spending native test resource.
 - [ ] Tool annotations and descriptions match actual behavior.
 - [ ] Support, privacy, terms, and deletion paths are reachable without login.
