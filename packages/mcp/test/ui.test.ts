@@ -322,6 +322,19 @@ describe('shipped MCP iframe', () => {
     expect(visible).toContain('Preview · Not applied');
   });
 
+  it('shows Applied rather than preview after a successful no-op apply', () => {
+    const ui = widget();
+    ui.render('operation', { status: 'applied', applied: true, preview: {
+      summary: 'Set campaign "Review demo" status PAUSED → PAUSED',
+      changes: ['~ campaign demo-123 status PAUSED → PAUSED'],
+      serverValidated: true,
+    } }, 'meta_set_campaign_status');
+    const visible = ui.app.innerHTML.split('<details>')[0]!;
+    expect(visible).toContain('Applied');
+    expect(visible).not.toContain('Preview');
+    expect(visible).toContain('<td>PAUSED</td><td class="">PAUSED</td>');
+  });
+
   it('compares authoritative budget deltas and keeps coercions visible', () => {
     const ui = widget();
     ui.render('operation', { pending_operation_id: 'test', preview: {

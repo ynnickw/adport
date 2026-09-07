@@ -287,6 +287,11 @@ describe('adport MCP server', () => {
 
   it('enforces the two-step write over MCP (M0 exit criterion)', async () => {
     const args = { account_id: 'mock-1', campaign_id: 'c1', daily_budget_micros: 11_500_000 };
+    const descriptor = (await client.listTools()).tools.find(tool => tool.name === 'mock_set_budget')!;
+    expect(descriptor._meta).toMatchObject({
+      'openai/toolInvocation/invoking': 'Processing change…',
+      'openai/toolInvocation/invoked': 'Change result ready',
+    });
 
     const previewResult = await client.callTool({ name: 'mock_set_budget', arguments: args });
     const first = textOf(previewResult as never) as { status: string; pending_operation_id: string; preview: { budgetDeltas: unknown[] } };
@@ -305,6 +310,7 @@ describe('adport MCP server', () => {
       })) as never,
     ) as { status: string };
     expect(second.status).toBe('applied');
+    expect((await client.listTools()).tools.find(tool => tool.name === 'mock_set_budget')?._meta).toEqual(descriptor._meta);
 
     const campaigns = textOf(
       (await client.callTool({ name: 'mock_list_campaigns', arguments: { account_id: 'mock-1' } })) as never,

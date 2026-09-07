@@ -41,7 +41,8 @@ export function toolInvocationLabels(view: AdportView): { invoking: string; invo
   switch (view) {
     case 'accounts': return { invoking: 'Loading ad accounts…', invoked: 'Ad accounts ready' };
     case 'report': return { invoking: 'Analyzing performance…', invoked: 'Performance ready' };
-    case 'operation': return { invoking: 'Checking the proposed change…', invoked: 'Change preview ready' };
+    // Descriptor labels cover both preview and apply; the card shows the actual result.
+    case 'operation': return { invoking: 'Processing change…', invoked: 'Change result ready' };
     case 'insights': return { invoking: 'Reviewing opportunities…', invoked: 'Opportunities ready' };
   }
 }
