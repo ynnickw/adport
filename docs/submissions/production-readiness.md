@@ -7,6 +7,24 @@ API evidence. This gate applies to both the OpenAI and Claude submissions.
 
 ## Current state (September 7, 2026)
 
+Latest host verification: PR #70 is deployed to `app.adport.dev` at commit
+`78ae595`. The isolated native reviewer has one enabled Meta test account.
+Claude OAuth discovers 20 tools, and real account and empty-report cards now
+render with the required Claude sandbox domain. A fresh account-list call also
+passed. ChatGPT's previously recorded account, empty-report and before/after
+cards were reopened and still render with the OpenAI sandbox domain.
+Claude's fresh native PAUSED-to-PAUSED preview also rendered a before/after
+table, with the actual response confirming `applied=false` and server validation.
+
+The OpenAI draft was rechecked after deployment: its MCP catalog is empty and
+the Scan Tools OAuth dialog stalls without opening an authorization tab. This
+portal scan is not a passing discovery test. The private reviewer instructions
+were updated with the bounded host results and remaining limitations, then
+reloaded to confirm persistence. No final submission has been made. Populated
+graph evidence, complete native tool coverage, approved public provider scope,
+and Claude directory-management access remain open. The earlier owner scan
+described below is historical and must not be mistaken for the current draft.
+
 PR #65 removed the hosted synthetic runtime and blocks legacy demo workspaces.
 Production MCP registration rejects demo/mock/synthetic providers and tools.
 The installed ChatGPT connector and the OpenAI draft were rescanned through the
