@@ -4,6 +4,7 @@ import { selectConnectedProviders, type Account } from '../provider.js';
 import { AdportError } from '../errors.js';
 import { defineTool, type AnyToolDefinition } from './registry.js';
 import { summarizeReport } from '../report-summary.js';
+import { accountsOutput, reportOutput } from './outputs.js';
 
 const dateRangeSchema = z.union([
   z.enum(DATE_PRESETS),
@@ -23,6 +24,7 @@ export function builtinTools(): AnyToolDefinition[] {
   return [
     defineTool({
       name: 'accounts_list',
+      output: accountsOutput,
       namespace: 'core',
       description: 'List connected ad accounts across all providers (or one provider).',
       input: z.object({
@@ -47,6 +49,7 @@ export function builtinTools(): AnyToolDefinition[] {
     }),
     defineTool({
       name: 'report',
+      output: reportOutput,
       namespace: 'core',
       description:
         'Cross-platform performance report with normalized metrics (spend, clicks, conversions, ROAS, ...). ' +

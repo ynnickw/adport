@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { AdportError, createContext } from '@adport/core';
+import { AdportError, createContext, FindingsStore } from '@adport/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createMcpServer } from '../src/index.js';
 import { ADPORT_UI_DOMAIN, ADPORT_UI_URI } from '../src/ui.js';
@@ -57,6 +57,73 @@ afterEach(async () => {
 });
 
 describe('adport MCP server', () => {
+  it('advertises meaningful shared output schemas for every common submission tool', async () => {
+    const runtime = await createContext();
+    const { tools } = await client.listTools();
+    const names = ['accounts_list', 'report', 'audit_preview', 'audit_run', 'recommendations_list', 'recommendation_dismiss', 'recommendation_apply'];
+    for (const name of names) {
+      const schema = tools.find(tool => tool.name === name)?.outputSchema;
+      expect(schema?.type).toBe('object');
+      expect(schema?.required).toContain('_adport');
+      expect(Object.keys(schema?.properties ?? {})).toEqual(expect.arrayContaining(Object.keys(runtime.registry.get(name).output!.shape)));
+    }
+    const report = tools.find(tool => tool.name === 'report')!.outputSchema!;
+    expect(JSON.stringify(report)).toContain('conversion_value_over_spend');
+    expect(JSON.stringify(report)).toContain('null');
+    const apply = tools.find(tool => tool.name === 'recommendation_apply')!.outputSchema!;
+    expect(JSON.stringify(apply)).toContain('pending_operation_id');
+    expect(JSON.stringify(apply)).toContain('pending_validation');
+  });
+
+  it('validates all common success results through SDK output validation, including the recommendation lifecycle', async () => {
+    const requests = [
+      { name: 'accounts_list', arguments: {} },
+      { name: 'report', arguments: { metrics: ['spend', 'clicks'] } },
+      { name: 'audit_preview', arguments: {} },
+      { name: 'audit_run', arguments: {} },
+      { name: 'recommendations_list', arguments: {} },
+    ];
+    for (const request of requests) {
+      const result = await client.callTool(request);
+      expect(result.isError, JSON.stringify(result)).not.toBe(true);
+      expect(result.structuredContent).toHaveProperty('_adport.tool', request.name);
+    }
+    const audit = await client.callTool({ name: 'audit_run', arguments: {} });
+    const findings = (audit.structuredContent as { findings: Array<{ id: string; proposedAction?: unknown }> }).findings;
+    const actionable = findings.find(finding => finding.proposedAction);
+    expect(actionable).toBeDefined();
+    const first = await client.callTool({ name: 'recommendation_apply', arguments: { finding_id: actionable!.id } });
+    expect(first.isError, JSON.stringify(first)).not.toBe(true);
+    const pending = (first.structuredContent as { result: { pending_operation_id: string } }).result;
+    const second = await client.callTool({ name: 'recommendation_apply', arguments: { finding_id: actionable!.id, pending_operation_id: pending.pending_operation_id } });
+    expect(second.isError, JSON.stringify(second)).not.toBe(true);
+    expect(second.structuredContent).toHaveProperty('result.applied', true);
+    const store = new FindingsStore();
+    const other = { ...(await store.get(actionable!.id))!, id: 'dismiss-schema-fixture', status: 'open' as const };
+    await store.save(other);
+    const dismissed = await client.callTool({ name: 'recommendation_dismiss', arguments: { finding_id: other.id } });
+    expect(dismissed.isError, JSON.stringify(dismissed)).not.toBe(true);
+    expect(dismissed.structuredContent).toHaveProperty('finding.status', 'dismissed');
+    expect((await new FindingsStore().get(actionable!.id))?.status).toBe('applied');
+  });
+
+  it('keeps empty results schema-valid and preserves tool errors without manufacturing success fields', async () => {
+    const runtime = await createContext();
+    const server = createMcpServer({ runtime, productionOnly: true });
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    const empty = new Client({ name: 'empty-reviewer', version: '1' });
+    await Promise.all([server.connect(st), empty.connect(ct)]);
+    try {
+      const list = await empty.callTool({ name: 'recommendations_list', arguments: {} });
+      expect(list.isError).not.toBe(true);
+      expect(list.structuredContent).toMatchObject({ findings: [], count: 0 });
+      const disconnected = await empty.callTool({ name: 'accounts_list', arguments: {} });
+      expect(disconnected.isError).toBe(true);
+      expect(disconnected.structuredContent).toHaveProperty('error', 'NOT_CONNECTED');
+      expect(disconnected.structuredContent).not.toHaveProperty('accounts');
+    } finally { await empty.close(); await server.close(); }
+  });
+
   it('preserves CLI connection guidance for local MCP clients', async () => {
     const result = await client.callTool({ name: 'accounts_list', arguments: { provider: 'google' } });
     expect(result.isError).toBe(true);
