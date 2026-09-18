@@ -9,6 +9,7 @@ function widget(initialGlobals?: Record<string, unknown>) {
   const timers = new Map<number, () => void>();
   let timerId = 0;
   const buttons: Array<{ dataset: { group: string }; click: () => void }> = [];
+  const approvals: Array<{ click: () => void }> = [];
   const metrics: Array<{ dataset: { metric: string }; click: () => void }> = [];
   let html = '';
   let renders = 0;
@@ -25,6 +26,13 @@ function widget(initialGlobals?: Record<string, unknown>) {
           metrics.push(button);
           return button;
         });
+      }
+      if (selector === '[data-approve]') {
+        approvals.length = 0;
+        if (!app.innerHTML.includes('data-approve="true"')) return [];
+        const button = { click: () => {}, addEventListener: (_: string, fn: () => void) => { button.click = fn; } };
+        approvals.push(button);
+        return [button];
       }
       buttons.length = 0;
       return [...app.innerHTML.matchAll(/data-group="(\d+)"/g)].map((match) => {
@@ -45,7 +53,7 @@ function widget(initialGlobals?: Record<string, unknown>) {
   });
   const message = (data: unknown, source: unknown = parent) => listeners.get('message')?.({ data, source });
   return {
-    app, buttons, metrics, root, sent, message, details,
+    app, buttons, metrics, approvals, root, sent, message, details,
     globals: (globals: Record<string, unknown>) => listeners.get('openai:set_globals')?.({ detail: { globals } }),
     elapse: () => { for (const [id, fn] of timers) { timers.delete(id); fn(); } },
     renderCount: () => renders,
@@ -381,14 +389,98 @@ describe('shipped MCP iframe', () => {
     expect(visible).toContain('1.235');
   });
 
-  it('never fabricates a previous value from a freeform update', () => {
+  it('shows proposed freeform updates without fabricating previous values', () => {
     const ui = widget();
     ui.render('operation', { preview: { summary: '<img src=x>', changes: ['~ demo {"name":"new"}'] } });
-    expect(ui.app.innerHTML).toContain('Before/after values were not provided');
-    expect(ui.app.innerHTML).not.toContain('<table');
+    expect(ui.app.innerHTML).toContain('<td>Not provided</td>');
+    expect(ui.app.innerHTML).toContain('demo {&quot;name&quot;:&quot;new&quot;}');
     expect(ui.app.innerHTML).not.toContain('<img');
     ui.render('operation', { preview: { changes: ['~ ad_group demo status → PAUSED'] } });
     expect(ui.app.innerHTML).toContain('<td>—</td><td class="changed">PAUSED</td>');
+  });
+
+  it('shows concrete creates and removals in the comparison', () => {
+    const ui = widget();
+    ui.render('operation', { preview: { summary: 'Add 2 keywords', changes: ['+ keyword [EXACT] "shoes"', '+ keyword [PHRASE] "boots"'] } });
+    expect(ui.app.innerHTML).toContain('<td>Not present</td>');
+    expect(ui.app.innerHTML).toContain('keyword [EXACT] &quot;shoes&quot;');
+    ui.render('operation', { preview: { summary: 'Remove keyword', changes: ['- customers/123/adGroupCriteria/456'] } });
+    expect(ui.app.innerHTML).toContain('<td class="changed">Removed</td>');
+  });
+
+  it.each([
+    ['google', '+ ad_group "Spring" in campaign 123 (ENABLED — inherits campaign state)'],
+    ['meta', '+ act_123/campaigns {"name":"Spring","status":"PAUSED"}'],
+    ['tiktok', '~ POST /campaign/update/ {"campaign_id":"123","status":"DISABLE"}'],
+    ['apple', '+ keyword "spring shoes" adGroup=123 match=EXACT status=PAUSED'],
+    ['microsoft', '~ PUT /Campaigns {"Id":123,"Status":"Paused"}'],
+    ['reddit', '- DELETE /campaigns/123'],
+    ['snapchat', '~ 123 name: Old → New'],
+    ['spotify', '~ 123 delivery: ACTIVE → PAUSED'],
+    ['pinterest', '+ {"name":"Spring","status":"PAUSED"}'],
+    ['linkedin', '~ status: DRAFT → PAUSED'],
+    ['x', '+ campaign "Spring"'],
+  ])('renders a visible before/after proposal for %s-style changes', (_provider, change) => {
+    const ui = widget();
+    ui.render('operation', { pending_operation_id: 'pending', preview: { summary: 'Review proposed change', changes: [change] } });
+    const visible = ui.app.innerHTML.split('<details>')[0]!;
+    expect(visible).toContain('aria-label="Before and after"');
+    expect(visible).toContain('>Before</th>');
+    expect(visible).toContain('>After</th>');
+    expect(visible).not.toContain('Before/after values were not provided');
+  });
+
+  it('approves the exact pending arguments inside the widget and shows the applied result', async () => {
+    const ui = widget();
+    const data = structuredResult('google_add_keywords', 'operation', {
+      pending_operation_id: 'pending-1', expires_at: '2026-09-19T12:00:00Z',
+      preview: { summary: 'Add a keyword', changes: ['+ keyword [EXACT] "shoes"'] },
+    }, { arguments: { account_id: '123', ad_group_id: '456', keywords: [{ text: 'shoes', match_type: 'EXACT' }] } });
+    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: data } });
+    expect(ui.app.innerHTML).toContain('Approve and apply');
+    ui.approvals[0]!.click();
+    const request = ui.sent.at(-1) as { id: number; method: string; params: { name: string; arguments: Record<string, unknown> } };
+    expect(request).toMatchObject({ method: 'tools/call', params: {
+      name: 'google_add_keywords', arguments: { account_id: '123', ad_group_id: '456', pending_operation_id: 'pending-1' },
+    } });
+    expect(request.params.arguments.keywords).toEqual([{ text: 'shoes', match_type: 'EXACT' }]);
+    expect(ui.app.innerHTML).toContain('Applying…');
+    ui.message({ jsonrpc: '2.0', id: request.id, result: { structuredContent: structuredResult('google_add_keywords', 'operation', {
+      status: 'applied', applied: true, preview: { summary: 'Add a keyword', changes: ['+ keyword [EXACT] "shoes"'] },
+    }) } });
+    await Promise.resolve();
+    expect(ui.app.innerHTML).toContain('Applied. Add a keyword');
+    expect(ui.app.innerHTML).not.toContain('Approve and apply');
+  });
+
+  it('does not offer approval without server-issued arguments and does not claim success on an error', async () => {
+    const ui = widget();
+    ui.render('operation', { pending_operation_id: 'unbound', preview: { summary: 'Unknown' } });
+    expect(ui.app.innerHTML).not.toContain('Approve and apply');
+    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('google_set_budget', 'operation', {
+      pending_operation_id: 'pending-2', preview: { summary: 'Change budget' },
+    }, { arguments: { account_id: '123', daily_budget_micros: 1000000 } }) } });
+    ui.approvals[0]!.click();
+    const request = ui.sent.at(-1) as { id: number };
+    ui.message({ jsonrpc: '2.0', id: request.id, result: { isError: true, content: [] } });
+    await Promise.resolve();
+    expect(ui.app.innerHTML).toContain('could not confirm the change');
+    expect(ui.app.innerHTML).not.toContain('Applied.');
+  });
+
+  it('treats an unconfirmed apply as uncertain and blocks duplicate clicks', async () => {
+    const ui = widget();
+    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('google_set_budget', 'operation', {
+      pending_operation_id: 'pending-3', preview: { summary: 'Change daily budget' },
+    }, { arguments: { account_id: '123', daily_budget_micros: 1000000 } }) } });
+    ui.approvals[0]!.click();
+    const calls = ui.sent.length;
+    ui.approvals[0]!.click();
+    expect(ui.sent).toHaveLength(calls);
+    ui.elapse();
+    await Promise.resolve();
+    expect(ui.app.innerHTML).toContain('may have succeeded; check its status before retrying');
+    expect(ui.app.innerHTML).not.toContain('Applied.');
   });
 
   it('routes non-campaign audit mutations to actual findings', () => {

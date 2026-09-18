@@ -1,4 +1,4 @@
-export const ADPORT_UI_URI = 'ui://adport/insight-card-v1.html';
+export const ADPORT_UI_URI = 'ui://adport/insight-card-v2.html';
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
 
 export type AdportView = 'accounts' | 'report' | 'operation' | 'insights';
@@ -47,7 +47,7 @@ export function toolInvocationLabels(view: AdportView): { invoking: string; invo
   }
 }
 
-export function structuredResult(tool: string, view: AdportView, result: unknown): Record<string, unknown> {
+export function structuredResult(tool: string, view: AdportView, result: unknown, approval?: { arguments: Record<string, unknown> }): Record<string, unknown> {
   const payload = result && typeof result === 'object' && !Array.isArray(result)
     ? result as Record<string, unknown>
     : { value: result };
@@ -57,6 +57,7 @@ export function structuredResult(tool: string, view: AdportView, result: unknown
       tool,
       view,
       providerNames,
+      ...(approval ? { approval } : {}),
     },
   };
 }
@@ -143,6 +144,9 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     .comparison td:last-child { font-weight:600 }
     .comparison .changed { color:var(--orange) }
     .adjustment { margin:8px 0; color:var(--amber); font-size:11px; line-height:1.4 }
+    .approval { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:12px 0 }
+    .approve { cursor:pointer; padding:9px 16px; border:0; border-radius:99px; background:var(--ink); color:var(--paper); font-size:12px; font-weight:700 }
+    .approve:disabled { cursor:default; opacity:.55 }
     details { border-top:1px solid var(--line); padding-top:10px; color:var(--muted); font-size:11px; line-height:1.5 }
     summary { cursor:pointer; width:fit-content; padding:3px 0 }
     summary:focus-visible { outline:2px solid var(--orange); outline-offset:3px }
@@ -163,7 +167,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
   <script>
   (() => {
     const app = document.getElementById('app');
-    const state = { host: {}, result: null, reportGroup: null, reportMetric: 'spend' };
+    const state = { host: {}, result: null, reportGroup: null, reportMetric: 'spend', approving: false, approvalError: '' };
     const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const arr = (value) => Array.isArray(value) ? value : [];
     const num = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
@@ -240,17 +244,60 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       const changes = arr(preview.changes), coercions = arr(preview.coercions), deltas = arr(preview.budgetDeltas);
       // Review amounts must preserve micros; rounded report totals are not suitable for consent.
       const comparisons=deltas.map(v=>{const currency=currencyOf(v);return {label:(v.target || 'Budget')+(currency?' · '+currency:' (account units)'),before:available(v.fromMicros)?money(v.fromMicros/1e6,currency,6):'—',after:available(v.toMicros)?money(v.toMicros/1e6,currency,6):'—'};});
-      // Only split provider diff formats with explicit field/value boundaries.
-      // Freeform JSON updates stay in details; do not invent previous values.
+      // Split only explicit field/value arrows. Freeform JSON updates still
+      // show the proposed payload, but never claim a previous value.
       for (const change of changes) {
-        const match=String(change).match(/^~\s+.+?\s+(status|bidding_strategy)\s+(.*?)\s*→\s*(.+)$/i);
-        if (match) comparisons.push({label:match[1].toLowerCase()==='status'?'Status':'Bidding strategy',before:match[2].trim() || '—',after:match[3].trim()});
+        const match=String(change).match(/^~\s+(?:.+?\s+)?(status|configured_status|bidding_strategy|delivery|bid|dailyBudget\.value|DailyBudget|value)\s*:?\s*(.*?)\s*→\s*(.+)$/i);
+        if (match) { const label=match[1].replaceAll('_',' ').replace(/([a-z])([A-Z])/g,'$1 $2');comparisons.push({label:label[0].toUpperCase()+label.slice(1),before:match[2].trim() || '—',after:match[3].trim()}); }
       }
+      // Other provider plans still have a concrete change list. Show the
+      // proposed effect without pretending we fetched the previous object.
+      for (const change of changes.slice(0,12)) {
+        const value=String(change).trim();
+        if (/^~\s+(?:.+?\s+)?(status|configured_status|bidding_strategy|delivery|bid|dailyBudget\.value|DailyBudget|value)\s*:?\s*.*?\s*→\s*.+$/i.test(value)) continue;
+        if (deltas.length && /\b(budget|amount_micros)\b/i.test(value) && /\s*→\s*/.test(value)) continue;
+        const kind=value[0];
+        comparisons.push({
+          label:kind==='+'?'Create':kind==='-'?'Remove':kind==='~'?'Update':'Change',
+          before:kind==='+'?'Not present':kind==='-'?value.slice(1).trim():'Not provided',
+          after:kind==='-'?'Removed':/^[+~!]\s*/.test(value)?value.replace(/^[+~!]\s*/,''):value,
+        });
+      }
+      if (!comparisons.length && preview.summary) comparisons.push({label:'Proposed change',before:'Not provided',after:String(preview.summary)});
       const title=String(preview.summary || '').match(/"([^"]+)"/)?.[1] || (comparisons.length ? '' : preview.summary);
       const validation=preview.serverValidated===true?'server validated':preview.serverValidated===false?'local preview · not server validated':'validation not reported';
-      const table=comparisons.length?'<table class="comparison" aria-label="Before and after"><thead><tr><th scope="col">Change</th><th scope="col">Before</th><th scope="col">After</th></tr></thead><tbody>'+comparisons.map(v=>'<tr><td>'+esc(v.label)+'</td><td>'+esc(v.before)+'</td><td class="'+(v.before!==v.after?'changed':'')+'">'+esc(v.after)+'</td></tr>').join('')+'</tbody></table>':'<p class="notice">Before/after values were not provided.</p>';
-      const body=(title?'<p class="operation-name">'+esc(title)+'</p>':'')+table+coercions.map(v=>'<p class="adjustment">'+esc(v)+'</p>').join('')+'<details><summary>Details</summary><p>'+esc(validation)+'</p><p>'+esc(preview.summary || 'No change details returned.')+'</p>'+changes.map(v=>'<p>'+esc(v)+'</p>').join('')+(pending?'<p>Nothing has been changed. Apply requires the matching pending operation token before it expires.</p>':'')+'<p>'+esc(meta.tool || '')+'</p></details>';
+      const table=comparisons.length?'<table class="comparison" aria-label="Before and after"><thead><tr><th scope="col">Change</th><th scope="col">Before</th><th scope="col">After</th></tr></thead><tbody>'+comparisons.map(v=>'<tr><td>'+esc(v.label)+'</td><td>'+esc(v.before)+'</td><td class="'+(v.before!==v.after?'changed':'')+'">'+esc(v.after)+'</td></tr>').join('')+'</tbody></table>':'<p class="notice">No change details were returned. Review the tool response before applying.</p>';
+      const approval=meta.approval;
+      const canApprove=typeof pending==='string' && pending.length>0 && typeof preview.summary==='string' && preview.summary.trim() && approval?.arguments && typeof approval.arguments==='object' && !Array.isArray(approval.arguments) && typeof meta.tool==='string';
+      const action=canApprove?'<div class="approval"><button class="approve" data-approve="true" '+(state.approving?'disabled':'')+'>'+(state.approving?'Applying…':'Approve and apply')+'</button><span class="context">Expires '+esc(data.expires_at || 'soon')+'</span></div>':'';
+      const body=(title?'<p class="operation-name">'+esc(title)+'</p>':'')+table+(changes.length>12?'<p class="notice">Showing 12 of '+changes.length+' changes. All changes are in Details.</p>':'')+coercions.map(v=>'<p class="adjustment">'+esc(v)+'</p>').join('')+(state.approvalError?'<p class="notice" role="alert">'+esc(state.approvalError)+'</p>':'')+action+(applied?'<p class="notice">Applied. '+esc(preview.summary || 'The change was submitted.')+'</p>':'')+'<details><summary>Details</summary><p>'+esc(validation)+'</p><p>'+esc(preview.summary || 'No change details returned.')+'</p>'+changes.map(v=>'<p>'+esc(v)+'</p>').join('')+(pending?'<p>Nothing has been changed. Apply requires the matching pending operation token before it expires.</p>':'')+'<p>'+esc(meta.tool || '')+'</p></details>';
       app.innerHTML = chrome(body, applied?'Applied':pending?'Preview · Not applied':'Result');
+      if (canApprove) app.querySelectorAll('[data-approve]').forEach(button=>button.addEventListener('click',()=>approve(meta.tool,approval.arguments,pending)));
+    }
+    const pendingRequests=new Map();
+    async function approve(tool,args,pending) {
+      if (state.approving || !state.result) return;
+      state.approving=true;state.approvalError='';render(state.result);
+      const requestId=id++;
+      const response=new Promise((resolve,reject)=>{
+        const timer=setTimeout(()=>{
+          pendingRequests.delete(requestId);
+          reject(new Error('No confirmation arrived. The write may have succeeded; check its status before retrying.'));
+        },30000);
+        pendingRequests.set(requestId,{resolve,reject,timer});
+      });
+      send({jsonrpc:'2.0',id:requestId,method:'tools/call',params:{name:tool,arguments:{...args,pending_operation_id:pending}}});
+      try {
+        const result=await response;
+        if (!result || result.isError) throw new Error('Adport could not confirm the change. Check its status before retrying.');
+        const value=result.structuredContent || result;
+        const outcome=tool==='recommendation_apply'?value.result:value;
+        if (outcome?.applied!==true || outcome?.status!=='applied') throw new Error('The change was not confirmed as applied. Check its status before retrying.');
+        state.approving=false;state.approvalError='';acceptResult(result);
+      } catch (error) {
+        state.approving=false;state.approvalError=error?.message || 'The change could not be confirmed. Check its status before retrying.';
+        render(state.result);
+      }
     }
     function renderInsights(data) {
       const items = data.finding ? [data.finding] : arr(data.findings || data.recommendations || data.results || data.entries);
@@ -310,6 +357,14 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       if (event.source !== window.parent) return;
       const message = event.data;
       if (!message || message.jsonrpc !== '2.0') return;
+      if (message.id !== undefined && pendingRequests.has(message.id)) {
+        const request=pendingRequests.get(message.id);
+        pendingRequests.delete(message.id);
+        clearTimeout(request.timer);
+        if (message.error) request.reject(message.error);
+        else request.resolve(message.result);
+        return;
+      }
       if (message.id === 1 && message.result) {
         state.host = message.result.hostContext || {};
         document.documentElement.dataset.theme = state.host.theme || '';

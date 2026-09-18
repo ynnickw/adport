@@ -58,6 +58,17 @@ afterEach(async () => {
 });
 
 describe('adport MCP server', () => {
+  it('binds widget approval to the exact validated write and keeps the normal policy gate', async () => {
+    const input = { account_id: 'mock-1', campaign_id: 'c1', status: 'PAUSED' };
+    const first = await client.callTool({ name: 'mock_set_campaign_status', arguments: input });
+    expect(first.isError).not.toBe(true);
+    const payload = first.structuredContent as { pending_operation_id: string; _adport: { approval: { arguments: Record<string, unknown> } } };
+    expect(payload._adport.approval.arguments).toEqual(input);
+    const second = await client.callTool({ name: 'mock_set_campaign_status', arguments: { ...payload._adport.approval.arguments, pending_operation_id: payload.pending_operation_id } });
+    expect(second.isError).not.toBe(true);
+    expect(second.structuredContent).toHaveProperty('applied', true);
+    expect(second.structuredContent).not.toHaveProperty('_adport.approval');
+  });
   it('uses the host sandbox domain consistently without changing the OpenAI domain', async () => {
     const runtime = await createContext({ providerModules: [] });
     const uiDomain = '0123456789abcdef0123456789abcdef.claudemcpcontent.com';

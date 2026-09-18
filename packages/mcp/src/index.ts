@@ -137,7 +137,7 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
         : tool.description,
       inputSchema: tool.input.shape,
       ...(objectOutput ? { outputSchema: objectOutput.extend({
-        ...(view ? { _adport: z.object({ tool: z.literal(tool.name), view: z.literal(view), providerNames: z.record(z.string(), z.string()) }) } : {}),
+        ...(view ? { _adport: z.object({ tool: z.literal(tool.name), view: z.literal(view), providerNames: z.record(z.string(), z.string()), approval: z.object({ arguments: z.record(z.string(), z.unknown()) }).optional() }) } : {}),
         ...(runtime.dataSource === 'synthetic' ? { data_source: z.literal('synthetic') } : {}),
       }) } : {}),
       annotations: {
@@ -169,9 +169,17 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
         const rawResult = await runtime.registry.call(tool.name, args, runtime.ctx);
         const result = provenance(rawResult);
         const structured = provenance(wrapOutput ? { value: rawResult } : rawResult);
+        const rawObject = rawResult && typeof rawResult === 'object' && !Array.isArray(rawResult)
+          ? rawResult as Record<string, unknown> : {};
+        const nestedResult = rawObject.result && typeof rawObject.result === 'object' && !Array.isArray(rawObject.result)
+          ? rawObject.result as Record<string, unknown> : {};
+        const pending = rawObject.pending_operation_id ?? nestedResult.pending_operation_id;
+        const approval = view === 'operation' && typeof pending === 'string' && !args.pending_operation_id
+          ? { arguments: { ...args } }
+          : undefined;
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-          ...(view ? { structuredContent: structuredResult(tool.name, view, structured) }
+          ...(view ? { structuredContent: structuredResult(tool.name, view, structured, approval) }
             : tool.output ? { structuredContent: structured as Record<string, unknown> } : {}),
         };
       } catch (err) {
@@ -194,7 +202,8 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
       registerAppTool(server, tool.name, {
         ...config,
         _meta: {
-          ui: { resourceUri: ADPORT_UI_URI },
+          ui: { resourceUri: ADPORT_UI_URI, visibility: ['model', 'app'] },
+          'openai/widgetAccessible': true,
           'openai/outputTemplate': ADPORT_UI_URI,
           'openai/toolInvocation/invoking': labels!.invoking,
           'openai/toolInvocation/invoked': labels!.invoked,

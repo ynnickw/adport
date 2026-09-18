@@ -8,6 +8,8 @@ Every Adport mutation uses the same `ToolRegistry` definition and the same polic
 2. Review the summary, field changes, coercions, and budget deltas.
 3. Call the same tool with identical arguments and the returned pending id. Adport rejects expired ids, provider or argument mismatches, newly protected accounts, and policy violations. Only then can the provider apply the plan.
 
+In MCP Apps hosts, the preview widget can show an **Approve and apply** button. It sends the original validated arguments and pending id through the same MCP write tool; it is not a separate or privileged write path. The button shows only after the server returns an eligible pending operation. If the host cannot confirm the result, check the operation status before trying again, since a timed-out write may still have succeeded. Hosts may also impose their own tool-permission prompt, which Adport cannot suppress.
+
 Self-hosted pending operations are file-backed under `${ADPORT_HOME:-~/.config/adport}/pending/`. Cloud pending operations are tenant-scoped Postgres rows. Both expire after the configured TTL (15 minutes by default), and both bind the tool, provider, account, operation kind, and canonicalized payload into the operation hash.
 
 ## Policy controls
