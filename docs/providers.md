@@ -23,14 +23,16 @@ The native tools accept provider-shaped payloads, so use the provider's current 
 
 ## Google Ads
 
-You need a Google Ads developer token and a Google Cloud OAuth desktop client.
+You need a Google Cloud project with Google Ads API access and an OAuth desktop client in that project. Developer tokens were retired in September 2026 and are no longer required or sent by Adport.
 
-1. Create or use a Google Ads manager account and open its API Center.
-2. Obtain a developer token.
+1. Open the Google Ads API Overview in Google Cloud Console for your project.
+2. Verify its API access level: production accounts require Explorer, Basic, or Standard access, not Test access.
 3. In Google Cloud, enable the Google Ads API and configure the OAuth consent screen. For a private project, use a truthful name such as `Adport Local – Acme`; the developer/support identity shown by Google belongs to you.
 4. Create an OAuth client of type **Desktop app** and download its JSON file.
-5. Run `adport connect google`, provide the developer token and client JSON, then sign in with a Google user that can access the intended ad accounts.
+5. Run `adport connect google`, provide the client JSON, then sign in with a Google user that can access the intended ad accounts.
 6. If applicable, provide the manager customer ID used as `login-customer-id`.
+
+Existing credential files and `google-ads.yaml` imports continue to work; any legacy developer token is ignored. No reconnection is needed for this migration. See [Google's migration guidance](https://developers.google.com/google-ads/api/docs/api-policy/developer-token). Cloud operators should also check the project's IAM contacts for API compliance notices.
 
 Google refresh tokens are stored locally. If consent is still in testing mode, Google may expire the authorization after approximately seven days; publish the consent configuration or re-authorize as appropriate for your application.
 

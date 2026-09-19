@@ -1,6 +1,6 @@
 {
   "name": "@adport/provider-snapchat",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Snapchat Marketing API provider for adport",
   "license": "Apache-2.0",
   "type": "module",

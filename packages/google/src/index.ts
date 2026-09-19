@@ -14,10 +14,9 @@ export { googleTools } from './tools.js';
 export async function resolveGoogleCredentials(store: CredentialStore): Promise<GoogleCredentials | undefined> {
   const record = await store.get('google');
   if (record) {
-    const { developer_token, client_id, client_secret, refresh_token, login_customer_id } = record.data;
-    if (developer_token && client_id && client_secret && refresh_token) {
+    const { client_id, client_secret, refresh_token, login_customer_id } = record.data;
+    if (client_id && client_secret && refresh_token) {
       return {
-        developerToken: developer_token,
         clientId: client_id,
         clientSecret: client_secret,
         refreshToken: refresh_token,
@@ -26,9 +25,8 @@ export async function resolveGoogleCredentials(store: CredentialStore): Promise<
     }
   }
   const env = process.env;
-  if (env.GOOGLE_ADS_DEVELOPER_TOKEN && env.GOOGLE_ADS_CLIENT_ID && env.GOOGLE_ADS_CLIENT_SECRET && env.GOOGLE_ADS_REFRESH_TOKEN) {
+  if (env.GOOGLE_ADS_CLIENT_ID && env.GOOGLE_ADS_CLIENT_SECRET && env.GOOGLE_ADS_REFRESH_TOKEN) {
     return {
-      developerToken: env.GOOGLE_ADS_DEVELOPER_TOKEN,
       clientId: env.GOOGLE_ADS_CLIENT_ID,
       clientSecret: env.GOOGLE_ADS_CLIENT_SECRET,
       refreshToken: env.GOOGLE_ADS_REFRESH_TOKEN,

@@ -23,9 +23,7 @@ export interface ConnectGoogleOptions {
 }
 
 /**
- * Guided Google Ads connection. Since Google's Explorer access tier (Oct 2025),
- * a fresh developer token works on production accounts the same day — the wizard's
- * job is navigation, not waiting.
+ * Guided Google Ads connection using Cloud project API access and OAuth.
  */
 export async function connectGoogle({ openBrowser, io }: ConnectGoogleOptions): Promise<void> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -36,13 +34,13 @@ export async function connectGoogle({ openBrowser, io }: ConnectGoogleOptions): 
     io.out('OAuth project. The developer shown will be your project contact. That warning');
     io.out('is expected for BYO personal use; a verified Adport screen is Cloud-only.');
     io.out('');
-    // Re-auth fast path: keep the stored developer token + OAuth client and
+    // Re-auth fast path: keep the stored OAuth client and
     // only redo the browser consent (covers expired/revoked refresh tokens).
     const existing = await store.get('google');
-    if (existing?.data.developer_token && existing.data.client_id && existing.data.client_secret) {
+    if (existing?.data.client_id && existing.data.client_secret) {
       const answer = (
         await rl.question(
-          'Existing Google connection found. Re-authorize with the same developer token and OAuth client? [Y/n] ',
+          'Existing Google connection found. Re-authorize with the same OAuth client? [Y/n] ',
         )
       )
         .trim()
@@ -56,7 +54,6 @@ export async function connectGoogle({ openBrowser, io }: ConnectGoogleOptions): 
         );
         await verifyAndSave(
           {
-            developerToken: existing.data.developer_token,
             clientId: existing.data.client_id,
             clientSecret: existing.data.client_secret,
             refreshToken,
@@ -70,9 +67,9 @@ export async function connectGoogle({ openBrowser, io }: ConnectGoogleOptions): 
     }
 
     io.out('Connecting Google Ads. You need (the wizard guides each step):');
-    io.out('  1. A manager account (MCC) — free, instant:  https://ads.google.com/home/tools/manager-accounts/');
-    io.out('  2. A developer token from the MCC API Center (Explorer access is automatic): https://ads.google.com/aw/apicenter');
-    io.out('  3. A Google Cloud OAuth "Desktop app" client:  https://console.cloud.google.com/apis/credentials');
+    io.out('  1. A Google Cloud project with Google Ads API access: https://console.cloud.google.com/apis/api/googleads.googleapis.com/overview');
+    io.out('     For production accounts, the project needs Explorer, Basic, or Standard access.');
+    io.out('  2. An OAuth "Desktop app" client in that project: https://console.cloud.google.com/apis/credentials');
     io.out('     Enable Google Ads API; choose External; add yourself as a test user.');
     io.out('     Suggested private app name: "Adport Local – <your organization>".');
     io.out('');
@@ -83,8 +80,6 @@ export async function connectGoogle({ openBrowser, io }: ConnectGoogleOptions): 
     if (imported) {
       creds = imported;
     } else {
-      const developerToken = (await rl.question('Developer token (from the MCC API Center): ')).trim();
-
       let clientId = '';
       let clientSecret = '';
       const secretPath = (
@@ -99,8 +94,8 @@ export async function connectGoogle({ openBrowser, io }: ConnectGoogleOptions): 
         clientSecret = (await rl.question('OAuth client secret: ')).trim();
       }
 
-      if (!developerToken || !clientId || !clientSecret) {
-        io.err('Missing developer token or OAuth client credentials — aborting.');
+      if (!clientId || !clientSecret) {
+        io.err('Missing OAuth client credentials — aborting.');
         process.exitCode = 1;
         return;
       }
@@ -109,7 +104,7 @@ export async function connectGoogle({ openBrowser, io }: ConnectGoogleOptions): 
         (await rl.question('Manager (MCC) customer id for login-customer-id (Enter to skip): ')).trim() || undefined;
 
       const refreshToken = await runOAuthFlow(clientId, clientSecret, openBrowser, io);
-      creds = { developerToken, clientId, clientSecret, refreshToken, loginCustomerId };
+      creds = { clientId, clientSecret, refreshToken, loginCustomerId };
     }
 
     await verifyAndSave(creds, store, io);
@@ -160,7 +155,6 @@ async function verifyAndSave(creds: GoogleCredentials, store: CredentialStore, i
     provider: 'google',
     source: 'byo',
     data: {
-      developer_token: creds.developerToken,
       client_id: creds.clientId,
       client_secret: creds.clientSecret,
       refresh_token: creds.refreshToken,
@@ -194,16 +188,14 @@ async function tryImportGoogleAdsYaml(
       continue;
     }
     const parsed = YAML.parse(raw) as Record<string, unknown> | null;
-    const developerToken = str(parsed?.developer_token);
     const clientId = str(parsed?.client_id);
     const clientSecret = str(parsed?.client_secret);
     const refreshToken = str(parsed?.refresh_token);
-    if (!developerToken || !clientId || !clientSecret || !refreshToken) continue;
+    if (!clientId || !clientSecret || !refreshToken) continue;
     const answer = (await rl.question(`Found ${candidate} — import it? [Y/n] `)).trim().toLowerCase();
     if (answer === 'n' || answer === 'no') continue;
     io.out(`Importing credentials from ${candidate}.`);
     return {
-      developerToken,
       clientId,
       clientSecret,
       refreshToken,
