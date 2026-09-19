@@ -4,7 +4,8 @@ import { AdportError } from '@adport/core';
  * Matches the google-ads.yaml naming conventions so credentials translate 1:1.
  */
 export interface GoogleCredentials {
-  developerToken: string;
+  /** @deprecated Ignored. API access belongs to the OAuth client's Cloud project. */
+  developerToken?: string;
   clientId: string;
   clientSecret: string;
   refreshToken: string;
@@ -86,7 +87,6 @@ export class GoogleAdsRestClient {
     const token = await this.getAccessToken();
     const headers: Record<string, string> = {
       authorization: `Bearer ${token}`,
-      'developer-token': this.credentials.developerToken,
       'content-type': 'application/json',
     };
     const operatingCustomerId = path.match(/^customers\/(\d{10})\//)?.[1];

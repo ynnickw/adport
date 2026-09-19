@@ -18,7 +18,6 @@ function fakeFetch(routes: Array<{ match: (url: string, body: string) => boolean
 }
 
 const CREDS = {
-  developerToken: 'dev-token',
   clientId: 'client-id',
   clientSecret: 'client-secret',
   refreshToken: 'refresh-token',
@@ -40,7 +39,7 @@ describe('normalizeCustomerId', () => {
 });
 
 describe('GoogleAdsRestClient', () => {
-  it('refreshes the token once and sends required headers', async () => {
+  it.each([undefined, 'legacy-token'])('uses project access without sending a developer token (%s)', async (developerToken) => {
     const { impl, calls } = fakeFetch([
       tokenRoute,
       {
@@ -49,7 +48,7 @@ describe('GoogleAdsRestClient', () => {
       },
       { match: (url) => url.includes('googleAds:search'), reply: { results: [] } },
     ]);
-    const client = new GoogleAdsRestClient({ ...CREDS, loginCustomerId: '111-222-3333' }, 'v25', impl);
+    const client = new GoogleAdsRestClient({ ...CREDS, developerToken, loginCustomerId: '111-222-3333' }, 'v25', impl);
     expect(await client.listAccessibleCustomers()).toEqual(['1234567890', '9876543210']);
     await client.listAccessibleCustomers();
     await client.search('1234567890', 'SELECT customer.id FROM customer');
@@ -59,10 +58,11 @@ describe('GoogleAdsRestClient', () => {
     const apiCall = calls.find((c) => c.url.includes(':listAccessibleCustomers'));
     const headers = apiCall?.init.headers as Record<string, string>;
     expect(headers.authorization).toBe('Bearer access-token');
-    expect(headers['developer-token']).toBe('dev-token');
+    expect(headers['developer-token']).toBeUndefined();
     expect(headers['login-customer-id']).toBeUndefined();
     const searchHeaders = calls.find((c) => c.url.includes('googleAds:search'))?.init.headers as Record<string, string>;
     expect(searchHeaders['login-customer-id']).toBe('1112223333');
+    expect(searchHeaders['developer-token']).toBeUndefined();
   });
 
   it('omits partialFailure for customer manager link mutations', async () => {

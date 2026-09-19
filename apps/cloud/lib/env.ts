@@ -27,7 +27,6 @@ const schema = z.object({
   // Adport-owned Google Ads OAuth application (verified project).
   GOOGLE_ADS_CLIENT_ID: z.string().min(10).optional(),
   GOOGLE_ADS_CLIENT_SECRET: z.string().min(8).optional(),
-  GOOGLE_ADS_DEVELOPER_TOKEN: z.string().min(8).optional(),
   GOOGLE_ADS_LOGIN_CUSTOMER_ID: z.string().regex(/^\d{10}$/).optional(),
   GOOGLE_OAUTH_TOKEN_URL: z.string().url().default('https://oauth2.googleapis.com/token'),
   GOOGLE_OAUTH_REVOKE_URL: z.string().url().default('https://oauth2.googleapis.com/revoke'),
@@ -77,7 +76,6 @@ export type CloudEnv = z.infer<typeof schema>;
 export type GoogleCloudEnv = CloudEnv & {
   GOOGLE_ADS_CLIENT_ID: string;
   GOOGLE_ADS_CLIENT_SECRET: string;
-  GOOGLE_ADS_DEVELOPER_TOKEN: string;
 };
 
 let parsed: CloudEnv | undefined;
@@ -89,8 +87,8 @@ export function env(): CloudEnv {
 
 export function googleEnv(): GoogleCloudEnv {
   const value = env();
-  if (!value.GOOGLE_ADS_CLIENT_ID || !value.GOOGLE_ADS_CLIENT_SECRET || !value.GOOGLE_ADS_DEVELOPER_TOKEN) {
-    throw new Error('Google Ads cloud OAuth is not configured. Set GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET, and GOOGLE_ADS_DEVELOPER_TOKEN.');
+  if (!value.GOOGLE_ADS_CLIENT_ID || !value.GOOGLE_ADS_CLIENT_SECRET) {
+    throw new Error('Google Ads cloud OAuth is not configured. Set GOOGLE_ADS_CLIENT_ID and GOOGLE_ADS_CLIENT_SECRET.');
   }
   return value as GoogleCloudEnv;
 }

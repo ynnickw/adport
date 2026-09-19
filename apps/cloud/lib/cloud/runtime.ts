@@ -94,7 +94,6 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
   if (credentials.google) {
     const config = googleEnv();
     const client = new GoogleAdsRestClient({
-      developerToken: config.GOOGLE_ADS_DEVELOPER_TOKEN,
       clientId: config.GOOGLE_ADS_CLIENT_ID,
       clientSecret: config.GOOGLE_ADS_CLIENT_SECRET,
       refreshToken: credentials.google.refreshToken,
