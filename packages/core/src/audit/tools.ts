@@ -28,7 +28,7 @@ export function auditTools(): AnyToolDefinition[] {
         account_ids: z.array(z.string()).optional(),
         date_range: dateRangeSchema.default('last_30_days'),
       }),
-      annotations: { readOnly: true, openWorld: true },
+      annotations: { readOnly: true, openWorld: false },
       async handler(input, ctx) {
         const runner = new AuditRunner(ctx.providers, ctx.findings ?? new FindingsStore());
         return runner.run({
@@ -51,8 +51,8 @@ export function auditTools(): AnyToolDefinition[] {
         account_ids: z.array(z.string()).optional(),
         date_range: dateRangeSchema.default('last_30_days'),
       }),
-      // Persisting findings is local, but evaluation reads connected providers.
-      annotations: { readOnly: false, openWorld: true },
+      // Both provider reads and persisted findings stay within connected accounts.
+      annotations: { readOnly: false, openWorld: false },
       async handler(input, ctx) {
         const runner = new AuditRunner(ctx.providers, ctx.findings ?? new FindingsStore());
         const result = await runner.run({

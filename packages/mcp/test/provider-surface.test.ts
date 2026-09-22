@@ -78,6 +78,15 @@ describe('all-provider shared tool surface', () => {
     try {
       const scanned = (await client.listTools()).tools;
       expect(scanned.map(tool => tool.name).sort()).toEqual([...names].sort());
+      // Externally hosted private account data is not public/open-ended access.
+      for (const name of ['accounts_list', 'report', 'audit_preview', 'audit_run',
+        'meta_list_pages', 'meta_page_engagement', 'meta_api_read', 'meta_insights']) {
+        expect(scanned.find(tool => tool.name === name)?.annotations?.openWorldHint, name).toBe(false);
+      }
+      // Delivery-affecting operations retain the more conservative external-action hint.
+      expect(scanned.find(tool => tool.name === 'meta_set_campaign_status')?.annotations).toMatchObject({
+        readOnlyHint: false, destructiveHint: true, openWorldHint: true,
+      });
       for (const tool of scanned) {
         expect(tool.title, tool.name).toBeTruthy();
         expect(tool.description, tool.name).toBeTruthy();
