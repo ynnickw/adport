@@ -39,6 +39,22 @@ rejection has yet been reproduced. The test account has no serving history:
 empty reports are legitimate but do not prove populated graph functionality.
 Never substitute fictional metrics or owner production data as reviewer data.
 
+## Recording and metadata refresh
+
+- The submitted Drive recording is accessible to anyone with its link without
+  sign-in. Playback shows the real empty performance report and a compact
+  PAUSED-to-PAUSED preview, marked Not applied. It is not evidence of the revised
+  independent apply case or the new recommendation case.
+- The publisher tool rescan initially stalled because its OAuth popup did not
+  appear in the in-app browser. The browser's window-open diagnostic identified
+  the intended authorization page. Opening that page and renewing the existing
+  reviewer authorization completed the redirect and restored all 20 production
+  tools in the saved draft, with their existing justifications preserved.
+- The refreshed catalog still labels scoped inventory/report/Meta reads as
+  open-world. Current review guidance distinguishes bounded private account
+  access from public/open-ended access; this needs a source-level semantic audit
+  before changing annotations. It is not an established cause of rejection.
+
 ## Required remediation before resubmission
 
 The portal revision is now an editable saved draft. Its fourth case has been
