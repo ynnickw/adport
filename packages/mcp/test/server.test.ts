@@ -249,15 +249,15 @@ describe('adport MCP server', () => {
     expect(remove?.annotations?.openWorldHint).toBe(false);
     const list = tools.find((t) => t.name === 'accounts_list');
     expect(list?.annotations?.readOnlyHint).toBe(true);
-    expect(list?.annotations?.openWorldHint).toBe(true);
+    expect(list?.annotations?.openWorldHint).toBe(false);
     const persistedFindings = tools.find((t) => t.name === 'recommendations_list');
     expect(persistedFindings?.annotations?.openWorldHint).toBe(false);
     const previewAudit = tools.find((t) => t.name === 'audit_preview');
     expect(previewAudit?.annotations?.readOnlyHint).toBe(true);
-    expect(previewAudit?.annotations?.openWorldHint).toBe(true);
+    expect(previewAudit?.annotations?.openWorldHint).toBe(false);
     const persistedAudit = tools.find((t) => t.name === 'audit_run');
     expect(persistedAudit?.annotations?.readOnlyHint).toBe(false);
-    expect(persistedAudit?.annotations?.openWorldHint).toBe(true);
+    expect(persistedAudit?.annotations?.openWorldHint).toBe(false);
     const applyFinding = tools.find((t) => t.name === 'recommendation_apply');
     expect(applyFinding?.annotations?.openWorldHint).toBe(true);
     expect(list?.title).toBe('Show connected ad accounts');

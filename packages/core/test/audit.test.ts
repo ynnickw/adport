@@ -51,11 +51,11 @@ describe('AuditRunner + core-performance pack', () => {
 });
 
 describe('recommendation tools', () => {
-  it('declares provider-reporting audits open-world while retaining their distinct write behavior', async () => {
+  it('declares account-scoped audits closed-world while retaining their distinct write behavior', async () => {
     const { ctx, registry } = await createContext({ includeMock: true });
     const report = vi.spyOn(ctx.providers.get('mock'), 'report');
     for (const name of ['audit_preview', 'audit_run']) {
-      expect(registry.get(name).annotations.openWorld).toBe(true);
+      expect(registry.get(name).annotations.openWorld).toBe(false);
       expect(registry.get(name).annotations.readOnly).toBe(name === 'audit_preview');
       await registry.call(name, { provider: 'mock' }, ctx);
     }

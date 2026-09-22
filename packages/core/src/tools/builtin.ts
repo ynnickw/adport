@@ -31,7 +31,7 @@ export function builtinTools(): AnyToolDefinition[] {
         provider: z.string().optional().describe('Limit to one provider id, e.g. "google".'),
         continue_on_error: z.boolean().default(false).describe('Return successful providers plus per-provider errors instead of failing the whole read.'),
       }),
-      annotations: { readOnly: true, openWorld: true },
+      annotations: { readOnly: true, openWorld: false },
       async handler(input, ctx) {
         const providers = selectConnectedProviders(ctx.providers, input.provider);
         const accounts: Account[] = [];
@@ -64,7 +64,7 @@ export function builtinTools(): AnyToolDefinition[] {
         limit: z.number().int().positive().max(1000).default(100),
         continue_on_error: z.boolean().default(false).describe('Return successful providers plus per-provider errors instead of failing the whole read.'),
       }),
-      annotations: { readOnly: true, openWorld: true },
+      annotations: { readOnly: true, openWorld: false },
       async handler(input, ctx) {
         const providers = selectConnectedProviders(ctx.providers, input.provider);
         const query: NormalizedQuery = {

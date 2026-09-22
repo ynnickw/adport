@@ -34,7 +34,7 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
         'List the Facebook Pages the connected user can access, including their Page roles/tasks. Uses pages_show_list and never returns Page access tokens.',
       input: z.object({}),
       output: pagesOutput,
-      annotations: { readOnly: true },
+      annotations: { readOnly: true, openWorld: false },
       async handler() {
         const pages = await provider.listPages();
         return { pages, page_count: pages.length };
@@ -50,7 +50,7 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
         page_id: z.string().regex(/^\d+$/),
         post_limit: z.number().int().positive().max(100).default(25),
       }),
-      annotations: { readOnly: true },
+      annotations: { readOnly: true, openWorld: false },
       async handler(input) {
         return provider.pageEngagement(input);
       },
@@ -69,7 +69,7 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
         limit: z.number().int().positive().max(5000).default(200),
         paged: z.boolean().default(true).describe('Set false for endpoints that return a single object instead of a data page'),
       }),
-      annotations: { readOnly: true },
+      annotations: { readOnly: true, openWorld: false },
       async handler(input) {
         return provider.apiRead(input);
       },
@@ -92,7 +92,7 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
         breakdowns: z.array(z.string()).optional(),
         limit: z.number().int().positive().max(5000).default(200),
       }),
-      annotations: { readOnly: true },
+      annotations: { readOnly: true, openWorld: false },
       async handler(input) {
         const rows = await provider.insights(input);
         return { rows, row_count: rows.length };

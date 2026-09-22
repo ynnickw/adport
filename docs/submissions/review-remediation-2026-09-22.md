@@ -55,6 +55,23 @@ Never substitute fictional metrics or owner production data as reviewer data.
   access from public/open-ended access; this needs a source-level semantic audit
   before changing annotations. It is not an established cause of rejection.
 
+## Annotation correction
+
+Source inspection confirms inventory, reports, audit evaluation, and the four
+Meta read tools operate on connected accounts or accessible Pages, not arbitrary
+public internet targets. They now explicitly declare `openWorld: false`.
+`audit_run` remains modifying because it persists findings. Provider mutations
+and recommendation application retain their conservative annotations and the
+existing policy gate. No default behavior for other providers was changed.
+
+The actual MCP `tools/list` contract test covers the eight corrected tools and
+also asserts that Meta status writes remain non-read-only, destructive, and
+open-world. `pnpm build && pnpm test && pnpm typecheck` passed locally on September
+22. Environment-gated database/HTTP integration tests remain skipped, not passed.
+Production deployment and the final portal rescan are still pending.
+
+Reference: https://developers.openai.com/plugins/deploy/app-review
+
 ## Required remediation before resubmission
 
 The portal revision is now an editable saved draft. Its fourth case has been
