@@ -103,7 +103,8 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     modules.push({ provider: scopeProvider(provider), tools: googleTools(provider) });
   }
   if (credentials.meta) {
-    const provider = new MetaAdsProvider(new MetaGraphClient(hydrateMeta(credentials.meta)));
+    const provider = new MetaAdsProvider(new MetaGraphClient(hydrateMeta(credentials.meta)),
+      enforceAccountScope ? new Set(credentials.meta.selectedPageIds ?? []) : undefined);
     modules.push({ provider: scopeProvider(provider), tools: metaTools(provider) });
   }
   if (credentials.tiktok) {

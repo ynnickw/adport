@@ -24,6 +24,20 @@ beforeEach(() => {
 });
 
 describe('one-time account picker', () => {
+  it('shows separate, unchecked Facebook Pages even for a single ad account', () => {
+    const html = renderToStaticMarkup(<ProviderAccountPicker organizationId={organizationId} selectionId={selectionId} provider="meta"
+      accounts={[{ provider: 'meta', id: 'a', name: 'Ad account' }]} initialSelectedIds={[]}
+      pages={[{ id: '123', name: 'Managed Page', category: 'Software' }]} />);
+    expect(html).toContain('Facebook Pages'); expect(html).toContain('Allow Page Managed Page (123)');
+    expect(html).toContain('0 of 1 selected'); expect(html).not.toContain('checked=""');
+    expect(html).toContain('Save accounts and Pages'); expect(html).toContain('does not link');
+  });
+
+  it('explains that an empty Page selection grants no Page access', () => {
+    const html = renderToStaticMarkup(<ProviderAccountPicker organizationId={organizationId} selectionId={selectionId} provider="meta"
+      accounts={[]} initialSelectedIds={[]} pages={[]} />);
+    expect(html).toContain('Meta returned no Pages'); expect(html).toContain('Page tools will have no access');
+  });
   it.each(OAUTH_PROVIDERS)('starts unchecked and supports selecting accounts for %s', provider => {
     const html = renderToStaticMarkup(<ProviderAccountPicker organizationId={organizationId} selectionId={selectionId} provider={provider}
       accounts={[{ provider, id: 'a', name: 'Candidate account' }, { provider, id: 'b', name: 'Other account' }]} initialSelectedIds={[]} />);
@@ -66,11 +80,21 @@ describe('one-time account picker', () => {
 });
 
 describe('account selection API', () => {
+  it('passes only explicit Page ids to the tenant-scoped save', async () => {
+    const response = await POST(request({ organizationId, selectionId, accountIds: ['a'], pageIds: ['123'] }));
+    expect(response.status).toBe(200);
+    expect(mocks.save).toHaveBeenCalledWith({ ...tenant, scopes: [] }, selectionId, ['a'], ['123']);
+  });
+
+  it('rejects malformed Page ids', async () => {
+    expect((await POST(request({ organizationId, selectionId, accountIds: [], pageIds: ['../me'] }))).status).toBe(403);
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
   it('authenticates the exact organization and returns a non-cacheable result', async () => {
     const response = await POST(request({ organizationId, selectionId, accountIds: ['a'] }));
     expect(response.status).toBe(200); expect(response.headers.get('cache-control')).toBe('no-store');
     expect(mocks.session).toHaveBeenCalledWith(organizationId);
-    expect(mocks.save).toHaveBeenCalledWith({ ...tenant, scopes: [] }, selectionId, ['a']);
+    expect(mocks.save).toHaveBeenCalledWith({ ...tenant, scopes: [] }, selectionId, ['a'], undefined);
   });
 
   it('rejects client-supplied account metadata rather than persisting it', async () => {

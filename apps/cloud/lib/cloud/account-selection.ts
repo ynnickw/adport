@@ -3,7 +3,7 @@ import type { Account } from '@adport/core';
 import { db } from '@/lib/db';
 import { decryptSecret, encryptSecret } from '@/lib/crypto';
 import { safeReturnPath } from '@/lib/return-path';
-import type { CloudProvider, TenantPrincipal } from './types';
+import type { CloudProvider, StoredMetaCredential, TenantPrincipal } from './types';
 import { providerLabel } from './providers';
 
 interface SelectionRow {
@@ -22,6 +22,14 @@ function requireManager(principal: TenantPrincipal) {
 
 const aad = (organizationId: string, id: string) => `account-selection:${organizationId}:${id}`;
 
+export interface SelectablePage { id: string; name: string; category?: string }
+interface Discovery { accounts: Account[]; pages?: SelectablePage[] }
+function discovery(ciphertext: string, organizationId: string, id: string): Discovery {
+  const value = decryptSecret<Account[] | Discovery>(ciphertext, aad(organizationId, id));
+  // In-flight authorizations created before this release remain readable.
+  return Array.isArray(value) ? { accounts: value } : value;
+}
+
 /** Only the OAuth callback may create a discovery snapshot; it is never inventory. */
 export async function stageAccountSelection(input: {
   principal: TenantPrincipal;
@@ -29,6 +37,7 @@ export async function stageAccountSelection(input: {
   connectionId: string;
   provider: CloudProvider;
   accounts: Account[];
+  pages?: SelectablePage[];
   returnPath: string;
 }): Promise<void> {
   requireManager(input.principal);
@@ -47,7 +56,9 @@ export async function stageAccountSelection(input: {
       insert into private.provider_account_selections
         (id, organization_id, connection_id, provider, user_id, ciphertext, return_path)
       values (${input.id}, ${input.principal.organizationId}, ${input.connectionId}, ${input.provider},
-        ${input.principal.userId!}, ${encryptSecret(accounts, aad(input.principal.organizationId, input.id))},
+        ${input.principal.userId!}, ${encryptSecret({ accounts, ...(input.provider === 'meta' ? {
+          pages: [...new Map((input.pages ?? []).map(page => [page.id, { id: page.id, name: page.name, category: page.category }])).values()],
+        } : {}) }, aad(input.principal.organizationId, input.id))},
         ${safeReturnPath(input.returnPath)})
     `;
   });
@@ -66,11 +77,11 @@ export async function getAccountSelection(principal: TenantPrincipal, id: string
   `;
   const row = rows[0];
   if (!row) return undefined;
-  return { id: row.id, provider: row.provider, accounts: decryptSecret<Account[]>(row.ciphertext, aad(principal.organizationId, id)) };
+  return { id: row.id, provider: row.provider, ...discovery(row.ciphertext, principal.organizationId, id) };
 }
 
 /** Commit a subset atomically, then destroy the full discovery snapshot. */
-export async function saveAccountSelection(principal: TenantPrincipal, id: string, accountIds: string[]) {
+export async function saveAccountSelection(principal: TenantPrincipal, id: string, accountIds: string[], pageIds?: string[]) {
   requireManager(principal);
   return db().begin(async sql => {
     // Serialize inventory changes with account activation and other selections.
@@ -87,12 +98,35 @@ export async function saveAccountSelection(principal: TenantPrincipal, id: strin
     `;
     const row = rows[0];
     if (!row) throw new Error('This account selection has expired or was already saved. Re-authorize to choose accounts again.');
-    const accounts = decryptSecret<Account[]>(row.ciphertext, aad(principal.organizationId, id));
+    const { accounts, pages } = discovery(row.ciphertext, principal.organizationId, id);
+    if (row.provider === 'meta' && pages !== undefined && pageIds === undefined) {
+      throw new Error('Choose Facebook Pages before saving. Refresh this selection and try again.');
+    }
+    const selectedPageIds = pageIds ?? [];
+    if (new Set(selectedPageIds).size !== selectedPageIds.length ||
+      selectedPageIds.some(value => row.provider !== 'meta' || !pages?.some(page => page.id === value))) {
+      throw new Error('Only Pages returned by this authorization may be added.');
+    }
     const selectedIds = new Set(accountIds);
     if (selectedIds.size !== accountIds.length || accountIds.some(value => !accounts.some(account => account.id === value))) {
       throw new Error('Only accounts returned by this authorization may be added.');
     }
     const selected = accounts.filter(account => selectedIds.has(account.id));
+    if (row.provider === 'meta') {
+      const credentials = await sql<Array<{ ciphertext: string }>>`
+        select ciphertext from private.provider_credentials
+        where connection_id = ${row.connectionId} and organization_id = ${principal.organizationId}
+          and provider = 'meta' for update
+      `;
+      if (!credentials[0]) throw new Error('Meta authorization is unavailable. Re-authorize to choose Pages.');
+      const credentialAad = `connection:${principal.organizationId}:meta`;
+      const credential = decryptSecret<StoredMetaCredential>(credentials[0].ciphertext, credentialAad);
+      await sql`
+        update private.provider_credentials
+        set ciphertext = ${encryptSecret({ ...credential, selectedPageIds }, credentialAad)}, updated_at = now()
+        where connection_id = ${row.connectionId} and organization_id = ${principal.organizationId} and provider = 'meta'
+      `;
+    }
     await sql`
       delete from public.organization_ad_accounts where organization_id = ${principal.organizationId}
         and provider = ${row.provider} and not (account_id = any(${accountIds}::text[]))
@@ -118,7 +152,7 @@ export async function saveAccountSelection(principal: TenantPrincipal, id: strin
       insert into public.audit_events (organization_id, actor_user_id, event, provider, tool, account_id, summary, details)
       values (${principal.organizationId}, ${principal.userId!}, 'account_access_updated', ${row.provider},
         'account_selection_save', '*', ${`Added ${selected.length} selected ${providerLabel(row.provider)} account(s)`},
-        ${sql.json({ selectedAccountIds: accountIds } as never)})
+        ${sql.json({ selectedAccountIds: accountIds, ...(row.provider === 'meta' ? { selectedPageIds } : {}) } as never)})
     `;
     const returnUrl = new URL(safeReturnPath(row.returnPath), 'https://adport.invalid');
     returnUrl.searchParams.delete('connected');

@@ -32,6 +32,8 @@ export interface StoredGoogleCredential {
 
 export interface StoredMetaCredential {
   accessToken: string;
+  /** Explicit cloud Page scope. Missing means no Page access until selection. */
+  selectedPageIds?: string[];
   appId?: string;
   appSecret?: string;
   /** Unix seconds when Meta reports the long-lived user token expires. */

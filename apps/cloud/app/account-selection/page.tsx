@@ -27,6 +27,7 @@ export default async function SelectAccountsPage({ searchParams }: { searchParam
     <PageHeader title={`Add ${providerLabel(selection.provider)} accounts`} description={selection.accounts.length === 1 ? 'Confirm this account to add it to Adport. Enabling agent access is a separate step.' : 'Choose which accounts to add to Adport. Everything you leave unchecked will disappear after you save. Re-authorize the provider to choose again.'} />
     <ProviderAccountPicker organizationId={tenant.organizationId} selectionId={selection.id}
       provider={selection.provider} accounts={selection.accounts}
+      pages={selection.pages}
       initialSelectedIds={inventory.filter(account => account.provider === selection.provider).map(account => account.accountId)} />
     </div>
   </main>;

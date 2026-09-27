@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { GoogleAdsProvider } from '@adport/provider-google';
+import { MetaAdsProvider } from '@adport/provider-meta';
 import { sessionPrincipal } from '@/lib/cloud/auth';
 import { oauthAdapter } from '@/lib/cloud/provider-oauth';
 import { providerAllowedForOrganization } from '@/lib/cloud/provider-rollout';
@@ -77,6 +78,7 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
       const runtime = await createTenantRuntime(principal, { enforceAccountScope: false });
       const connectedProvider = runtime.ctx.providers.get(provider);
       const accounts = await connectedProvider.listAccounts();
+      const pages = connectedProvider instanceof MetaAdsProvider ? await connectedProvider.listPages() : undefined;
       if (provider === 'google' && connectedProvider instanceof GoogleAdsProvider) {
         const googleCredential = credential as { refreshToken: string };
         await updateProviderCredential(transaction.organizationId, 'google', {
@@ -90,6 +92,7 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
         connectionId,
         provider,
         accounts,
+        pages,
         returnPath,
       });
       await setConnectionVerification(transaction.organizationId, provider, {
