@@ -127,4 +127,27 @@ suite('one-time provider account selection (local database)', () => {
       })).rejects.toMatchObject({ code: '42501' });
     }
   });
+
+  it('atomically saves Meta Page scope and rejects omitted, duplicate or invented Pages', async () => {
+    const metaId = randomUUID();
+    const metaConnection = await upsertProviderConnection({ organizationId: principal.organizationId, userId: principal.userId!,
+      provider: 'meta', credential: { accessToken: 'fixture-meta' }, selectionId: metaId });
+    await stageAccountSelection({ principal, id: metaId, connectionId: metaConnection, provider: 'meta',
+      accounts: [{ provider: 'meta', id: 'ad', name: 'Meta account' }],
+      pages: [{ id: '123', name: 'Chosen Page' }, { id: '456', name: 'Excluded Page' }], returnPath: '/dashboard/accounts' });
+    expect((await getAccountSelection(principal, metaId))?.pages).toHaveLength(2);
+    await expect(saveAccountSelection(principal, metaId, ['ad'])).rejects.toThrow(/Choose Facebook Pages/);
+    for (const ids of [['999'], ['123', '123']]) {
+      await expect(saveAccountSelection(principal, metaId, ['ad'], ids)).rejects.toThrow(/Only Pages returned/);
+    }
+    await expect(saveAccountSelection(other, metaId, ['ad'], ['123'])).rejects.toThrow(/expired/);
+    await saveAccountSelection(principal, metaId, ['ad'], ['123']);
+    expect((await loadProviderCredentials(principal.organizationId)).meta).toMatchObject({ selectedPageIds: ['123'], accessToken: 'fixture-meta' });
+    await expect(saveAccountSelection(principal, metaId, ['ad'], ['456'])).rejects.toThrow(/expired/);
+    const nextId = randomUUID();
+    await upsertProviderConnection({ organizationId: principal.organizationId, userId: principal.userId!, provider: 'meta', credential: { accessToken: 'next-meta' }, selectionId: nextId });
+    await stageAccountSelection({ principal, id: nextId, connectionId: metaConnection, provider: 'meta', accounts: [], pages: [{ id: '123', name: 'Page' }], returnPath: '/dashboard/accounts' });
+    await saveAccountSelection(principal, nextId, [], []);
+    expect((await loadProviderCredentials(principal.organizationId)).meta).toMatchObject({ selectedPageIds: [] });
+  });
 });

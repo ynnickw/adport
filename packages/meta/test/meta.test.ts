@@ -107,6 +107,22 @@ describe('MetaAdsProvider.listAccounts', () => {
 });
 
 describe('Meta Page reads', () => {
+  it('restricts Page tools to the explicit selection, not the full grant', async () => {
+    const { impl, calls } = fakeFetch([{ match: url => url.includes('/me/accounts'),
+      reply: { data: [{ id: '123', name: 'Selected' }, { id: '456', name: 'Excluded' }] } }]);
+    const provider = new MetaAdsProvider(new MetaGraphClient(CREDS, 'v25.0', impl), new Set(['123']));
+    expect(await provider.listPages()).toEqual([{ id: '123', name: 'Selected', tasks: [] }]);
+    await expect(provider.pageEngagement({ page_id: '456' })).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    expect(calls.every(call => call.url.includes('/me/accounts'))).toBe(true);
+  });
+
+  it('makes no provider calls when no Pages have been selected', async () => {
+    const { impl, calls } = fakeFetch([]);
+    const provider = new MetaAdsProvider(new MetaGraphClient(CREDS, 'v25.0', impl), new Set());
+    expect(await provider.listPages()).toEqual([]);
+    await expect(provider.pageEngagement({ page_id: '123' })).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    expect(calls).toEqual([]);
+  });
   it('lists accessible Pages without requesting or returning Page access tokens', async () => {
     const { impl, calls } = fakeFetch([
       {

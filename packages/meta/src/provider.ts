@@ -75,7 +75,7 @@ interface WritePlan {
 export class MetaAdsProvider implements AdProvider {
   readonly id = 'meta';
 
-  constructor(private readonly client: MetaGraphClient) {}
+  constructor(private readonly client: MetaGraphClient, private readonly selectedPageIds?: ReadonlySet<string>) {}
 
   capabilities(): ProviderCapabilities {
     return { serverDryRun: true };
@@ -107,6 +107,7 @@ export class MetaAdsProvider implements AdProvider {
   }
 
   async listPages(): Promise<Array<{ id: string; name: string; category?: string; tasks: string[] }>> {
+    if (this.selectedPageIds?.size === 0) return [];
     const rows = await this.client.getPaged<MetaPageRow>(
       'me/accounts',
       { fields: 'id,name,category,tasks', limit: '100' },
@@ -114,6 +115,7 @@ export class MetaAdsProvider implements AdProvider {
     );
     return rows
       .filter((row): row is MetaPageRow & { id: string } => Boolean(row.id))
+      .filter(row => this.selectedPageIds === undefined || this.selectedPageIds.has(row.id))
       .map((row) => ({
         id: row.id,
         name: row.name ?? `(page ${row.id})`,
