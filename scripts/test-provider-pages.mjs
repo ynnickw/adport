@@ -105,7 +105,7 @@ test('tabs switch by click and keyboard, wrap, and keep exactly one active panel
   const tabList = { hidden: true, querySelectorAll: () => tabs };
   const setup = { querySelector: () => tabList, querySelectorAll: () => panels };
   const document = { querySelector: () => null, querySelectorAll: selector => selector === '[data-agent-tabs]' ? [setup] : [] };
-  runInNewContext(await readFile(path.join(site, 'landing.js'), 'utf8'), { document });
+  runInNewContext(await readFile(path.join(site, 'site.js'), 'utf8'), { document });
   const expectSelected = index => {
     assert.equal(tabList.hidden, false);
     tabs.forEach((tab, i) => { assert.equal(tab.attributes['aria-selected'], String(i === index)); assert.equal(tab.tabIndex, i === index ? 0 : -1); });
