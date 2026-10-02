@@ -296,7 +296,7 @@ function initGate(root) {
     emptyTicket();
     setLit(1);
     root.dataset.ready = "";
-    document.querySelector(".hero")?.setAttribute("data-demo", "");
+    root.closest(".gate")?.setAttribute("data-demo", "");
 
     await wait(320);
     if (!live()) return;
