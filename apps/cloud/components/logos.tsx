@@ -6,12 +6,11 @@ export function BrandMark() {
   return <span className="brand-mark" aria-hidden="true" />;
 }
 
-/** Same lockup as adport.dev: the orange dot plus domain wordmark. */
+/** Same wordmark as adport.dev: the domain with an orange dot. */
 export function BrandLockup({ size = 'default' }: { size?: 'default' | 'large' }) {
   return (
     <span className={`brand-lockup${size === 'large' ? ' brand-lockup-large' : ''}`}>
-      <BrandMark />
-      <span className="domain-wordmark">adport.dev</span>
+      <span className="domain-wordmark">adport<span className="wordmark-dot">.</span>dev</span>
     </span>
   );
 }

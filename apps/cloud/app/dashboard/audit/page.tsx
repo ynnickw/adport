@@ -4,7 +4,8 @@ import { listAuditEvents } from '@/lib/cloud/repository';
 
 export const metadata = { title: 'Audit log' };
 
-const TONE: Record<string, string> = { rejected: 'critical', revoked: 'warn', deletion_requested: 'critical', note: 'neutral', member_removed: 'warn', api_key_revoked: 'warn' };
+// Same colours as the adport.dev audit strip: previews orange, applied green, rejections red.
+const TONE: Record<string, string> = { validated: 'pending', rejected: 'critical', revoked: 'warn', deletion_requested: 'critical', note: 'neutral', member_removed: 'warn', api_key_revoked: 'warn' };
 
 export default async function AuditPage() {
   const tenant = await requireDashboardTenant();
