@@ -23,8 +23,8 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
         description="Connect your ad platforms and manage account access."
       />
       <div className="stack" style={{ marginBottom: '0.9rem' }}>
-        {params.connected ? <div className="callout success">{providerLabel(params.connected)} is connected and its accessible ad accounts were verified.</div> : null}
-        {params.error ? <div className="error-callout" style={{ marginBottom: 0 }}>{params.error}</div> : null}
+        {params.connected ? <div className="callout success" role="status">{providerLabel(params.connected)} is connected and its accessible ad accounts were verified.</div> : null}
+        {params.error ? <div className="error-callout" role="alert" style={{ marginBottom: 0 }}>{params.error}</div> : null}
       </div>
       <ProviderConnections
         organizationId={tenant.organizationId}

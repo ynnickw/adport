@@ -42,8 +42,8 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
   return (
     <>
       <PlanLimitModal limit={planLimit} onClose={() => setPlanLimit(undefined)} />
-      {message.error ? <div className="card-body" style={{ paddingBottom: 0 }}><div className="error-callout" style={{ marginBottom: 0 }}>{message.error}</div></div> : null}
-      {message.success ? <div className="card-body" style={{ paddingBottom: 0 }}><div className="callout success">{message.success}</div></div> : null}
+      {message.error ? <div className="card-body" style={{ paddingBottom: 0 }}><div className="error-callout" role="alert" style={{ marginBottom: 0 }}>{message.error}</div></div> : null}
+      {message.success ? <div className="card-body" style={{ paddingBottom: 0 }}><div className="callout success" role="status">{message.success}</div></div> : null}
       <div className="row-list">
         {members.map((member) => (
           <div className="row-item" key={member.userId}>

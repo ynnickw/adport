@@ -14,7 +14,7 @@ export default async function FindingsPage() {
       <PageHeader title="Findings" description="Persisted, evidence-backed audit results for this workspace. Applying a proposed action still requires the normal preview and exact second call." />
       <section className="card">
         {findings.length === 0 ? (
-          <Empty title="No findings yet" copy="Ask an Adport-connected agent to run an account audit. Findings remain scoped to this workspace until dismissed or applied." />
+          <Empty title="No findings yet" copy="Ask your agent to “run an Adport audit of my ad accounts”. Findings stay in this workspace until you dismiss or apply them." href="/dashboard/agents" action="Connect an agent" />
         ) : (
           <>
             <div className="card-head"><h2>Audit findings</h2><span className="card-note">{findings.length} total</span></div>

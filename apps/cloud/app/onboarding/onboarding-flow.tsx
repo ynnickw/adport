@@ -56,7 +56,7 @@ export function OnboardingFlow({ organizationId, canManage, initialStep, initial
   return (
     <div className="onboarding-shell">
       <ol className="onboarding-progress" aria-label="Setup progress">
-        {STEPS.map((item, index) => <li key={item.id} data-active={item.id === step} data-complete={index < activeIndex}><span>{index + 1}</span>{item.label}</li>)}
+        {STEPS.map((item, index) => <li key={item.id} data-active={item.id === step} data-complete={index < activeIndex} aria-current={item.id === step ? 'step' : undefined}><span>{index + 1}</span>{item.label}</li>)}
       </ol>
       {error ? <div className="error-callout" role="alert">{error}</div> : null}
       {oauthError ? <div className="error-callout" role="alert">{oauthError}</div> : null}
@@ -70,22 +70,22 @@ export function OnboardingFlow({ organizationId, canManage, initialStep, initial
       </section> : null}
 
       {step === 'connect' ? <section className="onboarding-stage">
-        <div className="onboarding-title"><span className="plan-kicker">Step 2</span><h1>Connect an ad platform</h1><p>Start with one provider. You can add the rest later from Connections.</p></div>
+        <div className="onboarding-title"><span className="plan-kicker">Step 2 of 4</span><h1>Connect an ad platform</h1><p>Start with one provider. You can add the rest later from Connections.</p></div>
         <ProviderConnections organizationId={organizationId} canManage={canManage} connections={connections} oauthProviders={providers} returnTo="/onboarding" />
-        <div className="onboarding-actions"><button className="button" disabled={busy} onClick={() => void advance('accounts')}>{connections.length ? 'Choose accounts' : 'Continue without a provider'}</button><button className="button secondary" onClick={() => void advance('welcome')}>Back</button></div>
+        <div className="onboarding-actions"><button className="button secondary" disabled={busy} onClick={() => void advance('welcome')}>Back</button><button className="button" disabled={busy} onClick={() => void advance('accounts')}>{connections.length ? 'Choose accounts' : 'Continue without a provider'}</button></div>
       </section> : null}
 
       {step === 'accounts' ? <section className="onboarding-stage">
-        <div className="onboarding-title"><span className="plan-kicker">Step 3</span><h1>{providerFilter ? `Choose ${providerLabel(providerFilter)} accounts` : 'Choose the accounts your agents can use'}</h1><p>Nothing is enabled automatically. Read access and guarded writes only apply to the accounts you activate here.</p></div>
+        <div className="onboarding-title"><span className="plan-kicker">Step 3 of 4</span><h1>{providerFilter ? `Choose ${providerLabel(providerFilter)} accounts` : 'Choose the accounts your agents can use'}</h1><p>Nothing is enabled automatically. Read access and guarded writes only apply to the accounts you activate here.</p></div>
         {providerFilter ? <button className="button secondary small" onClick={() => setProviderFilter(undefined)}>View all providers’ accounts</button> : null}
         {accounts.length || providerFilter ? <AccountAccessManager organizationId={organizationId} accounts={accounts} canManage={canManage} maxActiveAccounts={maxActiveAccounts} providerFilter={providerFilter} /> : <div className="card"><div className="empty"><h2>No accounts discovered yet</h2><p>Connect a provider first, or continue and add one from the dashboard later.</p></div></div>}
-        <div className="onboarding-actions"><button className="button" disabled={busy} onClick={() => void advance('agent')}>Connect an agent</button><button className="button secondary" onClick={() => void advance('connect')}>Back</button></div>
+        <div className="onboarding-actions"><button className="button secondary" disabled={busy} onClick={() => void advance('connect')}>Back</button><button className="button" disabled={busy} onClick={() => void advance('agent')}>Connect an agent</button></div>
       </section> : null}
 
       {step === 'agent' ? <section className="onboarding-stage">
-        <div className="onboarding-title"><span className="plan-kicker">Step 4</span><h1>Add Adport to your agent</h1><p>Choose your client, copy its setup, and finish the secure workspace authorization in your browser.</p></div>
+        <div className="onboarding-title"><span className="plan-kicker">Step 4 of 4</span><h1>Add Adport to your agent</h1><p>Choose your client, copy its setup, and finish the secure workspace authorization in your browser.</p></div>
         <AgentSetupGuide baseUrl={baseUrl} initialSelectedId={agent} onSelectionChange={setAgent} />
-        <div className="onboarding-actions"><button className="button" disabled={busy} onClick={() => void advance('complete', true)}>{busy ? 'Finishing…' : 'Finish setup'}</button><button className="button secondary" onClick={() => void advance('accounts')}>Back</button></div>
+        <div className="onboarding-actions"><button className="button secondary" disabled={busy} onClick={() => void advance('accounts')}>Back</button><button className="button" disabled={busy} onClick={() => void advance('complete', true)}>{busy ? 'Finishing…' : 'Finish setup'}</button></div>
       </section> : null}
     </div>
   );

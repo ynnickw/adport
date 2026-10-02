@@ -726,6 +726,14 @@ export async function listAuditEvents(organizationId: string, limit = 100): Prom
   `;
 }
 
+export async function countPendingOperations(organizationId: string): Promise<number> {
+  const rows = await db()<Array<{ count: number }>>`
+    select count(*)::int as count from public.pending_operations
+    where organization_id = ${organizationId} and consumed_at is null and expires_at > now()
+  `;
+  return rows[0]?.count ?? 0;
+}
+
 export async function countAuditEvents(organizationId: string): Promise<number> {
   const rows = await db()<Array<{ count: number }>>`
     select count(*)::int as count from public.audit_events where organization_id = ${organizationId}

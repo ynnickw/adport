@@ -69,7 +69,7 @@ export default async function ApprovalsPage() {
       <PageHeader title="Approvals" description="Previewed writes waiting for their exact second call. Each entry is hash-bound to its arguments and expires under the organization policy." />
       {pending.length === 0 ? (
         <section className="card">
-          <Empty title="No operations awaiting approval" copy="When an agent previews a guarded write, its exact operation, preview, and expiry appear here until it is applied or expires." />
+          <Empty title="Nothing waiting for approval" copy="When an agent previews a change, the exact operation, its preview, and its expiry appear here until it is applied or expires." href="/dashboard/policies" action="Review safety policy" />
         </section>
       ) : (
         <section aria-label={`${pending.length} pending operations`}>

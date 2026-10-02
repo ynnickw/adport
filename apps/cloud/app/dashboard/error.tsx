@@ -9,7 +9,7 @@ export default function DashboardError({ error, reset }: { error: Error & { dige
           <p className="subhead">No provider operation was applied. Retry, or check the connections for this organization.</p>
         </div>
       </div>
-      <div className="error-callout">{error.message}</div>
+      <div className="error-callout" role="alert">{error.message}</div>
       <button className="button" onClick={reset}>Try again</button>
     </main>
   );

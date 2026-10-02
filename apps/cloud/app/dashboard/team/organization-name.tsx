@@ -32,8 +32,8 @@ export function OrganizationName({ organizationId, name, canManage }: {
     <section className="card">
       <div className="card-head"><h2>Organization</h2></div>
       <div className="card-body stack" style={{ gap: '0.8rem' }}>
-        {message.error ? <div className="error-callout" style={{ marginBottom: 0 }}>{message.error}</div> : null}
-        {message.success ? <div className="callout success">{message.success}</div> : null}
+        {message.error ? <div className="error-callout" role="alert" style={{ marginBottom: 0 }}>{message.error}</div> : null}
+        {message.success ? <div className="callout success" role="status">{message.success}</div> : null}
         <form className="form-row" onSubmit={(event) => void save(event)}>
           <input
             name="name"
