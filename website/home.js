@@ -7,6 +7,17 @@ if (gate) initGate(gate);
 
 // The poster is a plain YouTube link until someone presses play; only then is the
 // privacy-enhanced player loaded (the CSP allows frames from youtube-nocookie.com only).
+// "Watch the demo" starts the hero video instead of only scrolling to it.
+document.querySelectorAll("[data-play-video]").forEach((link) => {
+  link.addEventListener("click", (event) => {
+    const facade = document.querySelector(".video-facade");
+    if (!facade || event.metaKey || event.ctrlKey || event.shiftKey) return;
+    event.preventDefault();
+    facade.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+    facade.click();
+  });
+});
+
 document.querySelectorAll(".video-facade").forEach((facade) => {
   facade.addEventListener("click", (event) => {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
@@ -296,7 +307,7 @@ function initGate(root) {
     emptyTicket();
     setLit(1);
     root.dataset.ready = "";
-    document.querySelector(".hero")?.setAttribute("data-demo", "");
+    root.closest(".gate")?.setAttribute("data-demo", "");
 
     await wait(320);
     if (!live()) return;

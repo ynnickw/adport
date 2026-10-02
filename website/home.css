@@ -8,26 +8,47 @@
 
 /* Hero ----------------------------------------------------------------- */
 
-.hero { padding: clamp(2.5rem, 7vh, 5rem) var(--gutter) 0; }
-.headline {
-  font-size: clamp(2.2rem, 7vw, 6.25rem);
-  font-weight: 820;
-  line-height: 0.96;
-  letter-spacing: -0.04em;
+.hero { padding: clamp(2.5rem, 6vh, 4.5rem) var(--gutter) 0; }
+.hero-grid { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr); gap: 3rem clamp(2.5rem, 5vw, 5rem); align-items: center; }
+.hero-kicker { color: var(--signal-ink); font-size: 1rem; font-weight: 750; }
+.hero-title { margin-top: 1rem; font-size: clamp(2.5rem, 5.2vw, 4.75rem); font-weight: 820; line-height: 1.02; letter-spacing: -0.04em; }
+.hero-lead, .agent-line { display: block; }
+.agent-line { display: flex; align-items: baseline; gap: 0.24em; white-space: nowrap; }
+
+/* The agent name rotates through every supported client. All names share one grid cell,
+   so the slot is as wide as the longest name and nothing reflows while it cycles. */
+.agent-rotator { display: inline-grid; color: #ec5f00; }
+.agent { display: inline-flex; grid-area: 1 / 1; align-items: center; gap: 0.2em; opacity: 0; animation: agent-cycle 17.5s var(--ease-out) infinite both; }
+.agent svg { display: block; width: 0.74em; height: 0.74em; flex: none; fill: currentColor; transform: translateY(0.02em); }
+.agent:nth-child(2) { animation-delay: 2.5s; }
+.agent:nth-child(3) { animation-delay: 5s; }
+.agent:nth-child(4) { animation-delay: 7.5s; }
+.agent:nth-child(5) { animation-delay: 10s; }
+.agent:nth-child(6) { animation-delay: 12.5s; }
+.agent:nth-child(7) { animation-delay: 15s; }
+.hero-title:hover .agent { animation-play-state: paused; }
+@keyframes agent-cycle {
+  0% { opacity: 0; transform: translateY(0.32em); }
+  2.5%, 12% { opacity: 1; transform: none; }
+  14.3%, 100% { opacity: 0; transform: translateY(-0.28em); }
 }
-.headline-line { display: block; transition: color 700ms var(--ease-out); }
-/* Lines wait for the demo: dimmed only while it runs, lit as each step happens. */
-@media (prefers-reduced-motion: no-preference) and (min-width: 56rem) {
-  .hero[data-demo] .headline-line:not(.is-lit) { color: var(--dim); }
+@media (prefers-reduced-motion: reduce) {
+  .agent { animation: none !important; opacity: 0; }
+  .agent-chatgpt { opacity: 1; }
 }
-.hero-row {
-  display: grid;
-  grid-template-columns: minmax(0, 37rem) auto;
-  align-items: end;
-  justify-content: space-between;
-  gap: 1.5rem 3rem;
-  margin-top: clamp(1.75rem, 3.5vw, 2.75rem);
-}
+
+.hero-copy .lede { max-width: 36rem; margin-top: 1.5rem; }
+.hero-copy .hero-actions { margin-top: 2rem; }
+
+/* The demo video sits beside the pitch; it loads from YouTube only after play is pressed. */
+.hero-video { min-width: 0; }
+.hero-video .video-frame { margin-top: 0; }
+/* The headline beside it already carries the message, so the poster keeps just brand, play and length. */
+.hero-video .video-title { display: none; }
+.hero-video .video-meta { display: block; align-self: end; grid-row: 3; }
+.hero-video .video-play { width: clamp(3.75rem, 6vw, 5.25rem); }
+.hero-video .video-play::after { font-size: clamp(0.85rem, 1.4vw, 1.2rem); }
+.hero-video figcaption { margin-top: 0.75rem; color: var(--muted); font-size: 0.875rem; }
 
 /* Platform logos under the hero: the first thing after the pitch, as on the original site. */
 .hero-platforms { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.75rem 2.5rem; align-items: start; margin-top: clamp(2.25rem, 4vw, 3.25rem); padding-top: 1.5rem; border-top: 1px solid var(--rule); }
@@ -45,8 +66,14 @@
 /* Write gate demo ---------------------------------------------------- */
 
 .gate { padding: clamp(2.5rem, 4.5vw, 3.75rem) var(--gutter) 0; }
-.gate-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem 1.5rem; margin-bottom: 0.9rem; }
-.gate-title { font-size: 1.0625rem; font-weight: 750; letter-spacing: -0.01em; }
+.gate-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem 2rem; margin-bottom: 1.1rem; }
+.gate-kicker { color: var(--signal-ink); font-size: 1rem; font-weight: 750; }
+.gate-title { max-width: 16em; margin-top: 0.4rem; font-size: clamp(1.9rem, 3.6vw, 3rem); font-weight: 820; line-height: 1.04; letter-spacing: -0.035em; text-wrap: balance; }
+.headline-line { transition: color 700ms var(--ease-out); }
+/* The three lines wait for the demo: dimmed only while it runs, lit as each step happens. */
+@media (prefers-reduced-motion: no-preference) and (min-width: 56rem) {
+  .gate[data-demo] .headline-line:not(.is-lit) { color: var(--dim); }
+}
 .scenarios { display: flex; gap: 0.2rem; padding: 0.2rem; border: 1px solid var(--rule); border-radius: 999px; background: var(--raised); }
 .scenario { min-height: 2.3rem; padding: 0.4rem 0.95rem 0.3rem; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: 0.875rem; font-weight: 650; white-space: nowrap; cursor: pointer; transition: background-color 180ms ease, color 180ms ease; }
 .scenario:hover { color: var(--ink); }
@@ -173,10 +200,6 @@
 .gate-note { margin-top: 0.9rem; color: var(--muted); font-size: 0.875rem; }
 
 /* Demo video: a click-to-load poster, so YouTube is only contacted when someone presses play. */
-.video { padding: clamp(5rem, 10vw, 8rem) var(--gutter) 0; scroll-margin-top: 4.5rem; }
-.video-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 1rem 3rem; }
-.video-head h2 { max-width: 14em; font-size: clamp(2.05rem, 4.3vw, 3.5rem); font-weight: 800; line-height: 1.02; letter-spacing: -0.035em; text-wrap: balance; }
-.video-head p { max-width: 27rem; color: var(--ink-soft); }
 .video-frame { position: relative; overflow: hidden; margin-top: clamp(1.75rem, 3.5vw, 2.5rem); aspect-ratio: 16 / 9; border-radius: 1.25rem; background: #1d1d1f; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05), 0 44px 90px -44px rgba(0, 0, 0, 0.4); }
 .video-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 .video-facade {
@@ -198,7 +221,6 @@
 .video-play::after { content: ""; position: absolute; top: 50%; left: 54%; border-style: solid; border-width: 0.62em 0 0.62em 1.05em; border-color: transparent transparent transparent #1d1d1f; font-size: clamp(0.9rem, 1.9vw, 1.45rem); transform: translate(-50%, -50%); }
 .video-facade:hover .video-play { background: var(--signal-hover); transform: translate(-50%, -50%) scale(1.06); }
 .video-facade:active .video-play { transform: translate(-50%, -50%) scale(0.97); }
-.video-note { margin-top: 0.9rem; color: var(--muted); font-size: 0.875rem; }
 
 .watch-link { gap: 0.55rem; }
 .watch-icon { position: relative; width: 1.35rem; height: 1.35rem; flex: none; border: 1.5px solid currentColor; border-radius: 50%; }
@@ -287,6 +309,8 @@
 
 @media (max-width: 64rem) {
   .logo-strip, .agent-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .hero-grid { grid-template-columns: minmax(0, 1fr); }
+  .hero-video { max-width: 40rem; }
   .setup-layout { grid-template-columns: minmax(0, 1fr); }
   .console-body { grid-template-columns: minmax(0, 1fr); height: auto; }
   .transcript { height: 22rem; padding-bottom: 1.25rem; }
@@ -297,8 +321,12 @@
   .workflow { grid-template-columns: minmax(0, 1fr); }
 }
 
+@media (max-width: 30rem) {
+  /* The slot is as wide as "any MCP client"; on phones it takes its own line. */
+  .agent-line { flex-wrap: wrap; }
+}
+
 @media (max-width: 52rem) {
-  .hero-row { grid-template-columns: minmax(0, 1fr); }
   .hero-platforms { grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
   .logo-strip, .agent-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
