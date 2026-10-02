@@ -64,7 +64,7 @@ export function OnboardingFlow({ organizationId, canManage, initialStep, initial
       {step === 'welcome' ? <section className="onboarding-hero">
         <span className="plan-kicker">About four minutes</span>
         <h1>Bring your ad accounts into one safe agent workspace.</h1>
-        <p>Connect providers, choose exactly which accounts an agent may access, then add Adport to ChatGPT, Codex, Claude, Cursor, or VS Code.</p>
+        <p>Connect providers, choose exactly which accounts an agent may access, then add Adport to ChatGPT, Codex, Claude, Cursor, or any MCP client.</p>
         <div className="onboarding-points"><span>OAuth credentials stay encrypted</span><span>Every write requires an exact preview</span><span>New campaigns start paused</span></div>
         <button className="button" disabled={busy} onClick={() => void advance('connect')}>Start setup</button>
       </section> : null}
