@@ -40,9 +40,9 @@ export function LiveData({ organizationId, connected }: { organizationId: string
 
   return (
     <>
-      {error ? <div className="error-callout">Provider read failed: {error}</div> : null}
+      {error ? <div className="error-callout" role="alert">Provider read failed: {error}</div> : null}
       {summary?.warnings?.map((warning) => (
-        <div className="error-callout" key={`${warning.provider}:${warning.message}`}>Partial provider read: {warning.message}</div>
+        <div className="error-callout" role="alert" key={`${warning.provider}:${warning.message}`}>Partial provider read: {warning.message}</div>
       ))}
       <section className="metrics" aria-label="Performance summary" aria-busy={loading}>
         <Metric label="Spend" value={loading ? '…' : formatNumber(totals.spend)} foot="Last 7 days · account currencies" />

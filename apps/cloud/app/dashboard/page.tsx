@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Empty, PageHeader, Provider, StatusPill } from '@/components/ui';
+import { providerLabel } from '@/components/logos';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { countAuditEvents, listConnections, listPendingOperations } from '@/lib/cloud/repository';
 import { LiveData } from './live-data';
@@ -17,6 +18,7 @@ export default async function OverviewPage() {
     countAuditEvents(tenant.organizationId),
   ]);
   const connected = connections.filter((connection) => connection.status === 'connected');
+  const broken = connections.filter((connection) => connection.status === 'error');
   return (
     <main className="page">
       <PageHeader
@@ -35,6 +37,24 @@ export default async function OverviewPage() {
         </div>
       ) : (
         <>
+          {pending.length || broken.length ? (
+            <section className="attention" aria-label="Needs your attention">
+              {pending.length ? (
+                <div className="attention-item">
+                  <span className="attention-dot" aria-hidden="true" />
+                  <p><strong>{pending.length === 5 ? '5 or more changes' : `${pending.length} ${pending.length === 1 ? 'change' : 'changes'}`} waiting for approval.</strong> Previewed by an agent; nothing runs until it repeats the exact call.</p>
+                  <Link className="button small" href="/dashboard/approvals" prefetch={false}>Review approvals</Link>
+                </div>
+              ) : null}
+              {broken.map((connection) => (
+                <div className="attention-item critical" key={connection.provider}>
+                  <span className="attention-dot" aria-hidden="true" />
+                  <p><strong>{providerLabel(connection.provider)} needs reconnecting.</strong> {connection.lastError ?? 'Verification failed.'}</p>
+                  <Link className="button small secondary" href="/dashboard/connections" prefetch={false}>Open connections</Link>
+                </div>
+              ))}
+            </section>
+          ) : null}
           <LiveData organizationId={tenant.organizationId} connected={connected.length > 0} />
           <div className="grid-2" style={{ marginTop: '0.9rem' }}>
             <section className="card">

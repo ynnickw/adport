@@ -27,7 +27,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
     <main className="page">
       <PageHeader title={providerFilter ? `${providerLabel(providerFilter)} accounts` : 'Accounts'} description="Only accounts you added appear here. Enable agent access when ready. To add other accounts, re-authorize their provider in Connections." />
       {providerFilter ? <Link className="button secondary small" href="/dashboard/accounts" style={{ marginBottom: '1rem' }}>View all providers’ accounts</Link> : null}
-      {params.connected ? <div className="callout success" style={{ marginBottom: '1rem' }}>{providerLabel(params.connected)} is connected. Select the specific accounts agents may access below.</div> : null}
+      {params.connected ? <div className="callout success" role="status" style={{ marginBottom: '1rem' }}>{providerLabel(params.connected)} is connected. Select the specific accounts agents may access below.</div> : null}
       {params.accounts_saved ? <div className="callout success" role="status" style={{ marginBottom: '1rem' }}>Account selection saved. Unselected accounts are no longer listed or available to Adport. Enable newly added accounts below when ready.</div> : null}
       {params.error ? <div className="error-callout" role="alert">{params.error}</div> : null}
       {inventory.length === 0 && !providerFilter ? <section className="card">

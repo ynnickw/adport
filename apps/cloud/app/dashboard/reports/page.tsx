@@ -11,8 +11,8 @@ export default async function ReportsPage() {
   return (
     <main className="page">
       <PageHeader title="Campaign report" description="Thirty days, queried through the same cross-platform report tool the REST API and remote MCP endpoint use. Currencies stay provider-specific." />
-      {!result.ok ? <div className="error-callout">Provider read failed: {result.error}</div> : null}
-      {result.warnings.map((warning) => <div className="error-callout" key={`${warning.provider}:${warning.message}`}>Partial provider read: {warning.message}</div>)}
+      {!result.ok ? <div className="error-callout" role="alert">Provider read failed: {result.error}</div> : null}
+      {result.warnings.map((warning) => <div className="error-callout" role="alert" key={`${warning.provider}:${warning.message}`}>Partial provider read: {warning.message}</div>)}
       <section className="card">
         {rows.length === 0 ? (
           <Empty

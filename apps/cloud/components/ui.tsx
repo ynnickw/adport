@@ -70,3 +70,14 @@ export function formatDate(value: string | Date | null | undefined): string {
   if (!value) return '—';
   return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(value)) + ' UTC';
 }
+/** "3 minutes ago" style for scanning recent activity; pair it with formatDate in a title. */
+export function formatRelative(value: string | Date, now = Date.now()): string {
+  const seconds = Math.round((now - new Date(value).getTime()) / 1000);
+  if (seconds < 45) return 'just now';
+  if (seconds > 30 * 86_400) return formatDate(value);
+  const format = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+  if (seconds < 3_600) return format.format(-Math.round(seconds / 60), 'minute');
+  if (seconds < 86_400) return format.format(-Math.round(seconds / 3_600), 'hour');
+  if (seconds < 604_800) return format.format(-Math.round(seconds / 86_400), 'day');
+  return format.format(-Math.round(seconds / 604_800), 'week');
+}

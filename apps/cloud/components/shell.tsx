@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { signOut } from '@/app/dashboard/actions';
 import { BrandLockup } from '@/components/logos';
-import { Nav, UtilityNav } from '@/components/nav';
+import { Nav, SidebarFrame, UtilityNav } from '@/components/nav';
 import { SupportWidget } from '@/components/support-widget';
 
 export interface ShellTenant {
@@ -11,19 +11,15 @@ export interface ShellTenant {
   role: string;
 }
 
-export function Shell({ tenant, children }: { tenant: ShellTenant; children: React.ReactNode }) {
+export function Shell({ tenant, pendingApprovals = 0, children }: { tenant: ShellTenant; pendingApprovals?: number; children: React.ReactNode }) {
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="sidebar-head">
-          <Link className="brand-lockup" href="/dashboard" prefetch={false} aria-label="Adport overview">
-            <BrandLockup />
-          </Link>
-          <div className="workspace">
-            <span className="workspace-name">{tenant.organizationName}</span>
-          </div>
-        </div>
-        <Nav />
+      <a className="skip-link" href="#content">Skip to content</a>
+      <SidebarFrame
+        brand={<Link className="brand-lockup" href="/dashboard" prefetch={false} aria-label="Adport overview"><BrandLockup /></Link>}
+        workspace={tenant.organizationName}
+      >
+        <Nav pendingApprovals={pendingApprovals} />
         <div className="sidebar-lower"><UtilityNav /></div>
         <div className="sidebar-foot">
           <div className="user">
@@ -37,8 +33,8 @@ export function Shell({ tenant, children }: { tenant: ShellTenant; children: Rea
             <button className="link-button" type="submit">Sign out</button>
           </form>
         </div>
-      </aside>
-      <div className="main">{children}</div>
+      </SidebarFrame>
+      <div className="main" id="content" tabIndex={-1}>{children}</div>
       <SupportWidget />
     </div>
   );

@@ -30,6 +30,7 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
   const router = useRouter();
   const [message, setMessage] = useState<{ error?: string; success?: string }>({});
   const [busy, setBusy] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [planLimit, setPlanLimit] = useState<PlanLimitDetails>();
   const discoveredAccountIds = new Set(accounts.map((account) => account.accountId));
   const manualProtectedAccounts = policy.protected_accounts.filter((accountId) => !discoveredAccountIds.has(accountId));
@@ -64,15 +65,13 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
     const limit = planLimitFromResponse(result);
     if (limit) setPlanLimit(limit);
     else if (!response.ok) setMessage({ error: result.error ?? 'Unable to save settings.' });
-    else { setMessage({ success: 'Safety policy saved.' }); router.refresh(); }
+    else { setMessage({ success: 'Safety policy saved.' }); setDirty(false); router.refresh(); }
     setBusy(false);
   }
 
   return (
-    <form className="form" onSubmit={(event) => void save(event)}>
+    <form className="form" onSubmit={(event) => void save(event)} onChange={() => { setDirty(true); setMessage({}); }}>
       <PlanLimitModal limit={planLimit} onClose={() => setPlanLimit(undefined)} />
-      {message.error ? <div className="error-callout" style={{ marginBottom: 0 }}>{message.error}</div> : null}
-      {message.success ? <div className="callout success">{message.success}</div> : null}
       <fieldset className="form" disabled={!canAdminister} style={{ border: 0, margin: 0, padding: 0 }}>
         {!writeAccess ? <div className="policy-plan-note"><div><strong>{planName} is read only</strong><p>Your safeguards are saved now and become active automatically when write access is enabled.</p></div><Link className="button secondary small" href="/dashboard/billing">See plans &amp; start free trial</Link></div> : null}
         <section className="policy-section">
@@ -132,7 +131,15 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
             </label>
           </div>
         </section>
-        {canAdminister ? <div className="form-actions"><button className="button" disabled={busy}>{busy ? 'Saving…' : 'Save policy'}</button></div> : <p className="inline-note">Owners and admins can change the policy.</p>}
+        {canAdminister ? (
+          // Sticky so the save action and its result stay in view on this long form.
+          <div className="form-actions save-bar">
+            <p className={`save-state${message.error ? ' is-error' : message.success ? ' is-saved' : dirty ? ' is-dirty' : ''}`} role={message.error ? 'alert' : 'status'}>
+              {message.error ?? message.success ?? (dirty ? 'Unsaved changes' : 'All changes saved')}
+            </p>
+            <button className="button" disabled={busy || !dirty}>{busy ? 'Saving…' : 'Save policy'}</button>
+          </div>
+        ) : <p className="inline-note">Owners and admins can change the policy.</p>}
       </fieldset>
     </form>
   );

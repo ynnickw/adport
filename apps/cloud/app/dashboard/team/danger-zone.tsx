@@ -31,7 +31,7 @@ export function DangerZone({ organizationId }: { organizationId: string }) {
       <div className="card-head"><h2>Delete organization</h2><span className="status critical">Irreversible</span></div>
       <div className="card-body stack">
         <p className="subhead">Revokes OAuth grants where the provider allows it, then deletes this organization&apos;s encrypted credentials, memberships, API keys, pending approvals, and audit events. Apple and Microsoft access must also be removed in those platforms.</p>
-        {error ? <div className="error-callout" style={{ marginBottom: 0 }}>{error}</div> : null}
+        {error ? <div className="error-callout" role="alert" style={{ marginBottom: 0 }}>{error}</div> : null}
         <div className="form-row">
           <input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder="Type DELETE to confirm" aria-label="Type DELETE to confirm" style={{ maxWidth: '16rem' }} />
           <button className="button danger" disabled={busy || confirmation !== 'DELETE'} onClick={() => void deleteOrganization()}>{busy ? 'Deleting…' : 'Delete organization'}</button>

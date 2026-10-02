@@ -62,11 +62,11 @@ export function ApiKeyManager({ organizationId, canManage }: { organizationId: s
     <>
       {createdKey ? (
         <div className="card-body" style={{ paddingBottom: 0 }}>
-          <div className="callout success">Copy this key now — it is shown only once and stored as a hash.</div>
+          <div className="callout success" role="status">Copy this key now — it is shown only once and stored as a hash.</div>
           <div className="code secret-reveal">{createdKey}</div>
         </div>
       ) : null}
-      {error ? <div className="card-body" style={{ paddingBottom: 0 }}><div className="error-callout" style={{ marginBottom: 0 }}>{error}</div></div> : null}
+      {error ? <div className="card-body" style={{ paddingBottom: 0 }}><div className="error-callout" role="alert" style={{ marginBottom: 0 }}>{error}</div></div> : null}
       <div className="row-list">
         {keys === undefined || oauthGrants === undefined ? <div className="row-item"><span className="inline-note">Loading credentials…</span></div> : null}
         {oauthGrants?.map((grant) => (

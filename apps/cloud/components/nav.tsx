@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { SUPPORT_OPEN_EVENT } from './support-widget';
 
-type NavItem = { label: string; href: string; icon: React.ReactNode; exact?: boolean };
+type NavItem = { label: string; href: string; icon: React.ReactNode; exact?: boolean; badge?: number };
 
 const icon = {
   overview: <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6" /><rect x="13.5" y="3.5" width="7" height="7" rx="1.6" /><rect x="3.5" y="13.5" width="7" height="7" rx="1.6" /><rect x="13.5" y="13.5" width="7" height="7" rx="1.6" /></svg>,
@@ -38,16 +39,24 @@ const UTILITY_ITEMS: NavItem[] = [
   { label: 'Plan', href: '/dashboard/billing', icon: icon.billing },
 ];
 
+const isActive = (item: NavItem, pathname: string) => item.exact ? pathname === item.href : pathname.startsWith(item.href);
+
 function NavLinks({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
   return items.map((item) => {
-    const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
-    return <Link key={item.href} href={item.href} prefetch={false} aria-current={active ? 'page' : undefined}>{item.icon}{item.label}</Link>;
+    const active = isActive(item, pathname);
+    return (
+      <Link key={item.href} href={item.href} prefetch={false} aria-current={active ? 'page' : undefined}>
+        {item.icon}{item.label}
+        {item.badge ? <span className="nav-badge"><span aria-hidden="true">{item.badge}</span><span className="sr-only">, {item.badge} waiting</span></span> : null}
+      </Link>
+    );
   });
 }
 
-export function Nav() {
-  return <nav className="nav" aria-label="Cloud navigation"><NavLinks items={PRIMARY_ITEMS} /></nav>;
+export function Nav({ pendingApprovals = 0 }: { pendingApprovals?: number }) {
+  const items = PRIMARY_ITEMS.map((item) => item.href === '/dashboard/approvals' ? { ...item, badge: pendingApprovals } : item);
+  return <nav className="nav" aria-label="Cloud navigation"><NavLinks items={items} /></nav>;
 }
 
 export function UtilityNav() {
@@ -56,5 +65,35 @@ export function UtilityNav() {
       <button type="button" onClick={() => window.dispatchEvent(new Event(SUPPORT_OPEN_EVENT))}>{icon.support}Support</button>
       <NavLinks items={UTILITY_ITEMS} />
     </nav>
+  );
+}
+
+// On narrow screens the navigation collapses behind a menu button so each page starts with its content.
+export function SidebarFrame({ brand, workspace, children }: { brand: React.ReactNode; workspace: string; children: React.ReactNode }) {
+  const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+  const current = [...PRIMARY_ITEMS, ...UTILITY_ITEMS].find((item) => isActive(item, pathname))?.label ?? 'Menu';
+
+  useEffect(() => { setOpen(false); }, [pathname]);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  return (
+    <aside className="sidebar" data-open={open}>
+      <div className="sidebar-head">
+        {brand}
+        <div className="workspace"><span className="workspace-name">{workspace}</span></div>
+        <button className="menu-toggle" type="button" aria-expanded={open} aria-controls="sidebar-menu" onClick={() => setOpen((value) => !value)}>
+          <span className="menu-current">{current}</span>
+          <span className="menu-icon" aria-hidden="true" />
+          <span className="sr-only">{open ? 'Close navigation' : 'Open navigation'}</span>
+        </button>
+      </div>
+      <div className="sidebar-menu" id="sidebar-menu">{children}</div>
+    </aside>
   );
 }

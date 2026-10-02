@@ -54,7 +54,7 @@ export default async function BillingPage({
         title="Choose how you operate"
         description="Connect ad accounts once, then use the same governed workspace from ChatGPT, Codex, Claude Code, REST, and the dashboard."
       />
-      {query.checkout === 'complete' ? <div className="callout success plan-notice">Checkout completed. Stripe is confirming the subscription through the signed webhook.</div> : null}
+      {query.checkout === 'complete' ? <div className="callout success plan-notice" role="status">Checkout completed. Stripe is confirming the subscription through the signed webhook.</div> : null}
       {query.checkout === 'canceled' ? <div className="callout plan-notice">Checkout was canceled. Your current plan is unchanged.</div> : null}
 
       <section className="plan-summary">
