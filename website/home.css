@@ -11,7 +11,10 @@
 .hero { padding: clamp(2.5rem, 6vh, 4.5rem) var(--gutter) 0; }
 .hero-grid { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr); gap: 3rem clamp(2.5rem, 5vw, 5rem); align-items: center; }
 .hero-kicker { color: var(--signal-ink); font-size: 1rem; font-weight: 750; }
-.hero-title { margin-top: 1rem; font-size: clamp(2.5rem, 5.2vw, 4.75rem); font-weight: 820; line-height: 1.02; letter-spacing: -0.04em; }
+/* Sized to its own column (container units): the longest line, "from any MCP client", is ~9.7em,
+   so 10cqi always fits beside the video instead of running into it. */
+.hero-copy { container-type: inline-size; }
+.hero-title { margin-top: 1rem; font-size: clamp(2rem, 10cqi, 4.75rem); font-weight: 820; line-height: 1.02; letter-spacing: -0.04em; }
 .hero-lead, .agent-line { display: block; }
 .agent-line { display: flex; align-items: baseline; gap: 0.24em; white-space: nowrap; }
 
@@ -19,7 +22,7 @@
    so the slot is as wide as the longest name and nothing reflows while it cycles. */
 .agent-rotator { display: inline-grid; color: #ec5f00; }
 .agent { display: inline-flex; grid-area: 1 / 1; align-items: center; gap: 0.2em; opacity: 0; animation: agent-cycle 17.5s var(--ease-out) infinite both; }
-.agent svg { display: block; width: 0.74em; height: 0.74em; flex: none; fill: currentColor; transform: translateY(0.02em); }
+.agent svg { display: block; overflow: visible; width: 0.74em; height: 0.74em; flex: none; fill: currentColor; transform: translateY(0.02em); }
 .agent:nth-child(2) { animation-delay: 2.5s; }
 .agent:nth-child(3) { animation-delay: 5s; }
 .agent:nth-child(4) { animation-delay: 7.5s; }

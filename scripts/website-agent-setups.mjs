@@ -32,9 +32,9 @@ export const agentSetups = [
     command: baseUrl => JSON.stringify({ mcpServers: { adport: { url: `${baseUrl}/mcp` } } }, null, 2),
   },
   {
-    id: 'vscode', name: 'VS Code', logo: 'vscode',
-    instructions: 'Open the Command Palette and choose “MCP: Open User Configuration”, then add this server.',
-    nextStep: 'Start the Adport server from VS Code and complete the browser authorization.',
-    command: baseUrl => JSON.stringify({ servers: { adport: { type: 'http', url: `${baseUrl}/mcp` } } }, null, 2),
+    id: 'mcp', name: 'Any MCP client', logo: 'mcp',
+    instructions: 'Add a remote MCP server in your client, name it Adport, and use the endpoint below. Choose OAuth or streamable HTTP if your client asks.',
+    nextStep: 'Approve the browser sign-in when prompted. For a client without MCP OAuth, create an API key under Agent access instead.',
+    command: baseUrl => `${baseUrl}/mcp`,
   },
 ];

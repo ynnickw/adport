@@ -746,7 +746,7 @@ input:disabled, textarea:disabled { background: rgba(245, 245, 247, 0.8); color:
 .agent-logo svg { width: 0.92rem; height: 0.92rem; fill: currentColor; }
 .agent-logo.anthropic { color: #c15f3c; background: #fff9f5; }
 .agent-logo.cursor { color: #fff; background: #111; }
-.agent-logo.vscode { color: #087cd5; background: #f4faff; }
+.agent-logo.mcp { color: #111; background: #fff; }
 .agent-logo.large { width: 2.35rem; height: 2.35rem; border-radius: 0.65rem; }
 .agent-logo.large svg { width: 1.25rem; height: 1.25rem; }
 .agent-panel { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 1.2rem; align-items: stretch; }

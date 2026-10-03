@@ -1,13 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { SiAnthropic, SiCursor } from 'react-icons/si';
-import { VscVscode } from 'react-icons/vsc';
+import { SiAnthropic, SiCursor, SiModelcontextprotocol } from 'react-icons/si';
 
 type Setup = {
   id: string;
   name: string;
-  provider: 'openai' | 'anthropic' | 'cursor' | 'vscode';
+  provider: 'openai' | 'anthropic' | 'cursor' | 'mcp';
   label: string;
   instructions: string;
   nextStep: string;
@@ -46,10 +45,10 @@ export const AGENT_SETUPS: Setup[] = [
     command: (baseUrl) => JSON.stringify({ mcpServers: { adport: { url: `${baseUrl}/mcp` } } }, null, 2),
   },
   {
-    id: 'vscode', name: 'VS Code', provider: 'vscode', label: 'User MCP',
-    instructions: 'Open the Command Palette and choose “MCP: Open User Configuration”, then add this server.',
-    nextStep: 'Start the Adport server from VS Code and complete the browser authorization.',
-    command: (baseUrl) => JSON.stringify({ servers: { adport: { type: 'http', url: `${baseUrl}/mcp` } } }, null, 2),
+    id: 'mcp', name: 'Any MCP client', provider: 'mcp', label: 'Remote MCP',
+    instructions: 'Add a remote MCP server in your client, name it Adport, and use the endpoint below. Choose OAuth or streamable HTTP if your client asks.',
+    nextStep: 'Approve the browser sign-in when prompted. For a client without MCP OAuth, create an API key under Agent access instead.',
+    command: (baseUrl) => `${baseUrl}/mcp`,
   },
 ];
 
@@ -65,7 +64,7 @@ function AgentLogo({ provider }: { provider: Setup['provider'] }) {
   if (provider === 'openai') return <OpenAiLogo />;
   if (provider === 'anthropic') return <SiAnthropic aria-hidden="true" />;
   if (provider === 'cursor') return <SiCursor aria-hidden="true" />;
-  return <VscVscode aria-hidden="true" />;
+  return <SiModelcontextprotocol aria-hidden="true" />;
 }
 
 function CopyButton({ value, label }: { value: string; label: string }) {

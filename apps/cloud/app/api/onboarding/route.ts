@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import { sessionPrincipal } from '@/lib/cloud/auth';
-import { AGENT_IDS, ONBOARDING_STEPS, updateOnboardingState } from '@/lib/cloud/onboarding';
+import { AGENT_IDS, LEGACY_AGENT_IDS, ONBOARDING_STEPS, updateOnboardingState } from '@/lib/cloud/onboarding';
 import { apiError, noStoreJson } from '@/lib/http';
 
 const inputSchema = z.object({
   currentStep: z.enum(ONBOARDING_STEPS),
-  selectedAgent: z.enum(AGENT_IDS).optional(),
+  // A page loaded before this release may still send 'vscode'.
+  selectedAgent: z.enum([...AGENT_IDS, 'vscode']).transform((id) => LEGACY_AGENT_IDS[id] ?? id).pipe(z.enum(AGENT_IDS)).optional(),
   complete: z.boolean().optional(),
 });
 

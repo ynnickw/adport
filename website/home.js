@@ -5,31 +5,44 @@
 const gate = document.getElementById("console");
 if (gate) initGate(gate);
 
-// The poster is a plain YouTube link until someone presses play; only then is the
-// privacy-enhanced player loaded (the CSP allows frames from youtube-nocookie.com only).
-// "Watch the demo" starts the hero video instead of only scrolling to it.
-document.querySelectorAll("[data-play-video]").forEach((link) => {
-  link.addEventListener("click", (event) => {
-    const facade = document.querySelector(".video-facade");
-    if (!facade || event.metaKey || event.ctrlKey || event.shiftKey) return;
-    event.preventDefault();
-    facade.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
-    facade.click();
-  });
-});
+// The poster is a plain YouTube link without JavaScript. With JavaScript the hero video starts
+// muted and looping (browsers only autoplay muted video); people who prefer reduced motion keep
+// the poster until they press play. Frames come from youtube-nocookie.com only (see the CSP).
+function loadVideo(current, { muted }) {
+  const id = current.dataset.videoId;
+  const player = document.createElement("iframe");
+  const params = new URLSearchParams({ autoplay: "1", mute: muted ? "1" : "0", rel: "0", playsinline: "1" });
+  if (muted) { params.set("loop", "1"); params.set("playlist", id); }
+  player.src = `https://www.youtube-nocookie.com/embed/${id}?${params}`;
+  player.title = current.dataset.videoTitle;
+  player.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
+  player.allowFullscreen = true;
+  player.referrerPolicy = "strict-origin-when-cross-origin";
+  player.dataset.videoId = id;
+  player.dataset.videoTitle = current.dataset.videoTitle;
+  current.replaceWith(player);
+  return player;
+}
 
 document.querySelectorAll(".video-facade").forEach((facade) => {
   facade.addEventListener("click", (event) => {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
     event.preventDefault();
-    const player = document.createElement("iframe");
-    player.src = `https://www.youtube-nocookie.com/embed/${facade.dataset.videoId}?autoplay=1&rel=0&playsinline=1`;
-    player.title = facade.dataset.videoTitle;
-    player.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
-    player.allowFullscreen = true;
-    player.referrerPolicy = "strict-origin-when-cross-origin";
-    facade.replaceWith(player);
-    player.focus();
+    loadVideo(facade, { muted: false }).focus();
+  });
+  if (facade.hasAttribute("data-autoplay") && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    loadVideo(facade, { muted: true });
+  }
+});
+
+// "Watch the demo" plays the hero video with sound, from the poster or from the muted autoplay.
+document.querySelectorAll("[data-play-video]").forEach((link) => {
+  link.addEventListener("click", (event) => {
+    const current = document.querySelector(".hero-video .video-facade, .hero-video iframe");
+    if (!current || event.metaKey || event.ctrlKey || event.shiftKey) return;
+    event.preventDefault();
+    current.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+    loadVideo(current, { muted: false }).focus({ preventScroll: true });
   });
 });
 
