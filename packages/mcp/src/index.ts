@@ -119,6 +119,9 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
     }),
   );
   for (const tool of runtime.registry.list()) {
+    // Hosted directory tools must expose each operation explicitly. Keep generic
+    // dispatchers in the local CLI/stdio registry, never as a hosted escape hatch.
+    if (productionOnly && (tool.name === 'recommendation_apply' || /_api_(read|create|update|delete|remove)$/.test(tool.name))) continue;
     const requiredScope = tool.annotations.readOnly ? 'tools:read' : 'tools:write';
     const scopeDenial = scopes && !scopes.includes(requiredScope) ? scopeDenials?.[requiredScope] : undefined;
     if (scopes && !scopes.includes(requiredScope) && !scopeDenial) continue;

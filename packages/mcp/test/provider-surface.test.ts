@@ -104,5 +104,21 @@ describe('all-provider shared tool surface', () => {
       await client.close();
       await server.close();
     }
+
+    const hosted = createMcpServer({ runtime, productionOnly: true });
+    const hostedClient = new Client({ name: 'hosted-surface-test', version: '1.0.0' });
+    const [hostClientTransport, hostServerTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([hosted.connect(hostServerTransport), hostedClient.connect(hostClientTransport)]);
+    try {
+      const hostedNames = (await hostedClient.listTools()).tools.map(tool => tool.name);
+      expect(hostedNames).toContain('meta_get_campaign');
+      expect(hostedNames).toContain('meta_list_campaigns');
+      expect(hostedNames).toContain('meta_set_campaign_status');
+      const dispatchers = names.filter(name => name === 'recommendation_apply' || /_api_(read|create|update|delete|remove)$/.test(name));
+      for (const name of dispatchers) {
+        expect(hostedNames).not.toContain(name);
+        expect((await hostedClient.callTool({ name, arguments: {} })).isError).toBe(true);
+      }
+    } finally { await hostedClient.close(); await hosted.close(); }
   });
 });

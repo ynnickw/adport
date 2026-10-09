@@ -1,7 +1,7 @@
 import { defineTool, guardedWriteTool, type AnyToolDefinition } from '@adport/core';
 import { z } from 'zod';
 import type { MetaAdsProvider } from './provider.js';
-import { apiReadOutput, insightsOutput, pageEngagementOutput, pagesOutput } from './outputs.js';
+import { apiReadOutput, campaignOutput, campaignsOutput, insightsOutput, pageEngagementOutput, pagesOutput } from './outputs.js';
 
 const statusSchema = z.enum(['ACTIVE', 'PAUSED']);
 
@@ -27,6 +27,24 @@ const specialAdCategorySchema = z.enum([
 
 export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
   return [
+    defineTool({
+      name: 'meta_list_campaigns',
+      namespace: 'meta',
+      description: 'List campaigns in one connected Meta ad account with their names, delivery status, objectives and budgets. Budget strings are minor currency units. Does not change campaigns.',
+      input: z.object({ account_id: z.string().regex(/^(act_)?\d+$/), limit: z.number().int().positive().max(5000).default(200) }),
+      output: campaignsOutput,
+      annotations: { readOnly: true, openWorld: false },
+      handler: input => provider.listCampaigns(input),
+    }),
+    defineTool({
+      name: 'meta_get_campaign',
+      namespace: 'meta',
+      description: 'Read one Meta campaign by ID, verifying that it belongs to the selected connected ad account. Returns name, delivery status, objective and budgets in minor currency units. Does not change the campaign.',
+      input: z.object({ account_id: z.string().regex(/^(act_)?\d+$/), campaign_id: z.string().regex(/^\d+$/) }),
+      output: campaignOutput,
+      annotations: { readOnly: true, openWorld: false },
+      handler: input => provider.getCampaign(input),
+    }),
     defineTool({
       name: 'meta_list_pages',
       namespace: 'meta',
@@ -103,7 +121,8 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
       namespace: 'meta',
       description:
         'Create a Meta campaign. Budget is optional at campaign level (Advantage/CBO) — otherwise set it on ad sets. ' +
-        'special_ad_categories is required by Meta for regulated verticals; defaults to none.',
+        'special_ad_categories is required by Meta for regulated verticals; defaults to none. ' +
+        'Creates only a campaign, not ad sets, ads or creatives. The first call previews; an identical call with the pending token applies. Workspace policy can force paused creation. No ad is published by this tool.',
       provider: 'meta',
       kind: 'create',
       payload: z.object({
