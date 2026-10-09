@@ -1,5 +1,12 @@
 import { z } from 'zod';
 
+export const campaignOutput = z.object({
+  id: z.string(), account_id: z.string(), name: z.string(), status: z.string(),
+  effective_status: z.string().optional(), objective: z.string().optional(),
+  daily_budget: z.string().optional(), lifetime_budget: z.string().optional(),
+});
+export const campaignsOutput = z.object({ campaigns: z.array(campaignOutput), count: z.number().int().nonnegative() });
+
 const page = z.object({
   id: z.string(), name: z.string(), category: z.string().optional(), tasks: z.array(z.string()),
 });

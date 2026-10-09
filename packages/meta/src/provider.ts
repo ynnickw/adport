@@ -15,6 +15,7 @@ import {
   type WriteResult,
 } from '@adport/core';
 import { ACCOUNT_STATUS, MetaGraphClient, normalizeAccountId } from './client.js';
+import { campaignOutput } from './outputs.js';
 
 /** Meta budgets are minor currency units (cents); the policy engine speaks micros. */
 export const CENTS_TO_MICROS = 10_000;
@@ -266,6 +267,31 @@ export class MetaAdsProvider implements AdProvider {
     return input.paged === false
       ? this.client.get(`act_${act}/${edge}`, params)
       : this.client.getPaged(`act_${act}/${edge}`, params, Math.min(input.limit ?? 200, 5000));
+  }
+
+  async listCampaigns(input: { account_id: string; limit: number }) {
+    const account = normalizeAccountId(input.account_id);
+    const rows = await this.client.getPaged<unknown>(`act_${account}/campaigns`, {
+      fields: 'id,account_id,name,status,effective_status,objective,daily_budget,lifetime_budget',
+      limit: '100',
+    }, input.limit);
+    const campaigns = rows.map(row => campaignOutput.parse(row));
+    if (campaigns.some(row => normalizeAccountId(row.account_id) !== account)) {
+      throw new AdportError('INVALID_INPUT', 'Meta returned a campaign outside the selected ad account.');
+    }
+    return { campaigns, count: campaigns.length };
+  }
+
+  async getCampaign(input: { account_id: string; campaign_id: string }) {
+    const account = normalizeAccountId(input.account_id);
+    if (!/^\d+$/.test(input.campaign_id)) throw new AdportError('INVALID_INPUT', 'Meta campaign_id must be numeric.');
+    const campaign = campaignOutput.parse(await this.client.get<unknown>(input.campaign_id, {
+      fields: 'id,account_id,name,status,effective_status,objective,daily_budget,lifetime_budget',
+    }));
+    if (campaign.id !== input.campaign_id || normalizeAccountId(campaign.account_id) !== account) {
+      throw new AdportError('INVALID_INPUT', 'Meta campaign does not belong to the selected ad account.');
+    }
+    return campaign;
   }
 
   async previewWrite(op: WriteOperation, guard: WriteGuard): Promise<WritePreview> {

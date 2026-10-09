@@ -126,7 +126,7 @@ describe('Meta E2E over MCP with doc-faithful Graph mocks', () => {
     expect(names.some((n) => n.startsWith('mock_'))).toBe(false);
     expect(names.some((n) => n.startsWith('google_'))).toBe(false);
     const meta = tools.filter(tool => tool.name.startsWith('meta_'));
-    expect(meta).toHaveLength(13);
+    expect(meta).toHaveLength(15);
     for (const tool of meta) {
       expect(tool.outputSchema, tool.name).toMatchObject({ type: 'object' });
       expect(Object.keys(tool.outputSchema?.properties ?? {}).length).toBeGreaterThan(0);
