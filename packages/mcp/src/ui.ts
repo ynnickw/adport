@@ -147,6 +147,11 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     .approval { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:12px 0 }
     .approve { cursor:pointer; padding:9px 16px; border:0; border-radius:99px; background:var(--ink); color:var(--paper); font-size:12px; font-weight:700 }
     .approve:disabled { cursor:default; opacity:.55 }
+    .approve { position:relative; overflow:hidden; touch-action:none; user-select:none }
+    .approve::before { content:''; position:absolute; inset:0; background:#ff650055; transform:scaleX(0); transform-origin:left }
+    .approve.holding::before { transform:scaleX(1); transition:transform .9s linear }
+    .approve:focus-visible { outline:2px solid var(--orange); outline-offset:3px }
+    @media (prefers-reduced-motion:reduce) { .approve.holding::before { transition:none } }
     details { border-top:1px solid var(--line); padding-top:10px; color:var(--muted); font-size:11px; line-height:1.5 }
     summary { cursor:pointer; width:fit-content; padding:3px 0 }
     summary:focus-visible { outline:2px solid var(--orange); outline-offset:3px }
@@ -269,14 +274,37 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       const table=comparisons.length?'<table class="comparison" aria-label="Before and after"><thead><tr><th scope="col">Change</th><th scope="col">Before</th><th scope="col">After</th></tr></thead><tbody>'+comparisons.map(v=>'<tr><td>'+esc(v.label)+'</td><td>'+esc(v.before)+'</td><td class="'+(v.before!==v.after?'changed':'')+'">'+esc(v.after)+'</td></tr>').join('')+'</tbody></table>':'<p class="notice">No change details were returned. Review the tool response before applying.</p>';
       const approval=meta.approval;
       const canApprove=typeof pending==='string' && pending.length>0 && typeof preview.summary==='string' && preview.summary.trim() && approval?.arguments && typeof approval.arguments==='object' && !Array.isArray(approval.arguments) && typeof meta.tool==='string';
-      const action=canApprove?'<div class="approval"><button class="approve" data-approve="true" '+(state.approving?'disabled':'')+'>'+(state.approving?'Applying…':'Approve and apply')+'</button><span class="context">Expires '+esc(data.expires_at || 'soon')+'</span></div>':'';
+      const action=canApprove?'<div class="approval"><button class="approve" data-approve="true" aria-label="Hold to approve and apply" '+(state.approving || state.approvalError?'disabled':'')+'>'+(state.approving?'Applying…':state.approvalError?'Check result in chat':'Hold to apply')+'</button><span class="context">Hold for 0.9s · release to cancel. Expires '+esc(data.expires_at || 'soon')+'</span></div>':'';
       const body=(title?'<p class="operation-name">'+esc(title)+'</p>':'')+table+(changes.length>12?'<p class="notice">Showing 12 of '+changes.length+' changes. All changes are in Details.</p>':'')+coercions.map(v=>'<p class="adjustment">'+esc(v)+'</p>').join('')+(state.approvalError?'<p class="notice" role="alert">'+esc(state.approvalError)+'</p>':'')+action+(applied?'<p class="notice">Applied. '+esc(preview.summary || 'The change was submitted.')+'</p>':'')+'<details><summary>Details</summary><p>'+esc(validation)+'</p><p>'+esc(preview.summary || 'No change details returned.')+'</p>'+changes.map(v=>'<p>'+esc(v)+'</p>').join('')+(pending?'<p>Nothing has been changed. Apply requires the matching pending operation token before it expires.</p>':'')+'<p>'+esc(meta.tool || '')+'</p></details>';
       app.innerHTML = chrome(body, applied?'Applied':pending?'Preview · Not applied':'Result');
-      if (canApprove) app.querySelectorAll('[data-approve]').forEach(button=>button.addEventListener('click',()=>approve(meta.tool,approval.arguments,pending)));
+      if (canApprove) app.querySelectorAll('[data-approve]').forEach(button=>bindHold(button,()=>approve(meta.tool,approval.arguments,pending)));
+    }
+    function bindHold(button,complete) {
+      let timer=null, interacted=false;
+      const cancel=()=>{clearTimeout(timer);timer=null;button.classList.remove('holding');};
+      const begin=event=>{
+        if (button.disabled || timer!==null) return;
+        if (event.type==='keydown') {
+          if (![' ','Enter'].includes(event.key) || event.repeat) return;
+          event.preventDefault();
+        } else {
+          if (event.button!==0) return;
+          button.setPointerCapture?.(event.pointerId);
+        }
+        interacted=true;button.classList.add('holding');
+        timer=setTimeout(()=>{cancel();complete();},900);
+      };
+      button.addEventListener('pointerdown',begin);
+      button.addEventListener('keydown',begin);
+      ['pointerup','pointerleave','pointercancel','lostpointercapture','blur'].forEach(name=>button.addEventListener(name,cancel));
+      button.addEventListener('keyup',event=>{if ([' ','Enter','Escape'].includes(event.key)) cancel();});
+      button.addEventListener('contextmenu',event=>event.preventDefault());
+      // Screen-reader activation has no pointer/key sequence. Retain an accessible activation path.
+      button.addEventListener('click',event=>{if (event.detail===0 && !interacted && !button.disabled) complete();});
     }
     const pendingRequests=new Map();
     async function approve(tool,args,pending) {
-      if (state.approving || !state.result) return;
+      if (state.approving || state.approvalError || !state.result) return;
       state.approving=true;state.approvalError='';render(state.result);
       const requestId=id++;
       const response=new Promise((resolve,reject)=>{
@@ -286,14 +314,27 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
         },30000);
         pendingRequests.set(requestId,{resolve,reject,timer});
       });
-      send({jsonrpc:'2.0',id:requestId,method:'tools/call',params:{name:tool,arguments:{...args,pending_operation_id:pending}}});
+      const parameters={...args,pending_operation_id:pending};
+      // Use the native ChatGPT bridge when supplied; never dispatch a second write as fallback.
+      if (typeof window.openai?.callTool==='function') {
+        Promise.resolve().then(()=>window.openai.callTool(tool,parameters)).then(result=>{
+          const request=pendingRequests.get(requestId);
+          if (request) {clearTimeout(request.timer);pendingRequests.delete(requestId);request.resolve(result);}
+        },error=>{
+          const request=pendingRequests.get(requestId);
+          if (request) {clearTimeout(request.timer);pendingRequests.delete(requestId);request.reject(error);}
+        });
+      } else send({jsonrpc:'2.0',id:requestId,method:'tools/call',params:{name:tool,arguments:parameters}});
       try {
         const result=await response;
         if (!result || result.isError) throw new Error('Adport could not confirm the change. Check its status before retrying.');
-        const value=result.structuredContent || result;
+        let value=result.structuredContent || result;
+        if (!result.structuredContent && Array.isArray(result.content)) {
+          for (const item of result.content) {if (item.type==='text') {try {value=JSON.parse(item.text);break;} catch {}}}
+        }
         const outcome=tool==='recommendation_apply'?value.result:value;
         if (outcome?.applied!==true || outcome?.status!=='applied') throw new Error('The change was not confirmed as applied. Check its status before retrying.');
-        state.approving=false;state.approvalError='';acceptResult(result);
+        state.approving=false;state.approvalError='';acceptResult({structuredContent:{...value,_adport:{...(state.result.structuredContent?._adport || {}),...value._adport,approval:undefined}}});
       } catch (error) {
         state.approving=false;state.approvalError=error?.message || 'The change could not be confirmed. Check its status before retrying.';
         render(state.result);

@@ -32,7 +32,9 @@ export function googleTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
       name: 'google_create_campaign',
       namespace: 'google',
       description:
-        'Create a Google Ads campaign with its own (non-shared) daily budget, atomically. Manual CPC bidding; refine later.',
+        'Create a campaign and non-shared budget atomically, with bidding and optional location/language targeting. ' +
+        'Search defaults to Google Search only (no partners or Display expansion). Use google_gaql to resolve geo_target_constant and language_constant IDs. ' +
+        'Ad groups, keywords and responsive search ads have separate explicit tools. Creation remains subject to paused-creation policy.',
       provider: 'google',
       kind: 'create',
       payload: z.object({
@@ -40,6 +42,12 @@ export function googleTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
         daily_budget_micros: z.number().int().positive().describe('1 currency unit = 1,000,000 micros'),
         channel_type: z.enum(['SEARCH', 'DISPLAY', 'SHOPPING', 'VIDEO', 'PERFORMANCE_MAX']).default('SEARCH'),
         status: statusSchema.optional(),
+        bidding_strategy: z.enum(['MANUAL_CPC', 'MAXIMIZE_CLICKS', 'MAXIMIZE_CONVERSIONS', 'MAXIMIZE_CONVERSION_VALUE']).default('MANUAL_CPC'),
+        search_partners: z.boolean().optional().describe('SEARCH only; defaults false'),
+        display_expansion: z.boolean().optional().describe('SEARCH only; defaults false'),
+        location_ids: z.array(z.string().regex(/^\d+$/)).min(1).max(100).optional().describe('Google geo target constant IDs; omitted means unrestricted locations'),
+        language_ids: z.array(z.string().regex(/^\d+$/)).min(1).max(100).optional().describe('Google language constant IDs; omitted means unrestricted languages'),
+        location_presence_only: z.boolean().optional().describe('Target people in locations rather than people interested in them; defaults true when locations are specified'),
       }),
     }),
     guardedWriteTool({
