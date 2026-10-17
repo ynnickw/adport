@@ -9,7 +9,7 @@ function widget(initialGlobals?: Record<string, unknown>) {
   const timers = new Map<number, () => void>();
   let timerId = 0;
   const buttons: Array<{ dataset: { group: string }; click: () => void }> = [];
-  const approvals: Array<{ click: () => void }> = [];
+  const approvals: Array<{ click: () => void; fire: (name: string, event?: Record<string, unknown>) => void }> = [];
   const metrics: Array<{ dataset: { metric: string }; click: () => void }> = [];
   let html = '';
   let renders = 0;
@@ -30,7 +30,13 @@ function widget(initialGlobals?: Record<string, unknown>) {
       if (selector === '[data-approve]') {
         approvals.length = 0;
         if (!app.innerHTML.includes('data-approve="true"')) return [];
-        const button = { click: () => {}, addEventListener: (_: string, fn: () => void) => { button.click = fn; } };
+        const events = new Map<string, (event: unknown) => void>();
+        const button = {
+          disabled: app.innerHTML.includes('disabled'), classList: { add: () => {}, remove: () => {} },
+          click: () => events.get('click')?.({ detail: 0 }),
+          fire: (name: string, event: Record<string, unknown> = {}) => events.get(name)?.({ type: name, preventDefault: () => {}, ...event }),
+          addEventListener: (name: string, fn: (event: unknown) => void) => { events.set(name, fn); },
+        };
         approvals.push(button);
         return [button];
       }
@@ -55,7 +61,7 @@ function widget(initialGlobals?: Record<string, unknown>) {
   return {
     app, buttons, metrics, approvals, root, sent, message, details,
     globals: (globals: Record<string, unknown>) => listeners.get('openai:set_globals')?.({ detail: { globals } }),
-    elapse: () => { for (const [id, fn] of timers) { timers.delete(id); fn(); } },
+    elapse: () => { for (const [id, fn] of [...timers]) { if (timers.delete(id)) fn(); } },
     renderCount: () => renders,
     render: (view: AdportView, data: unknown, tool: string = view) => message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult(tool, view, data) } }),
   };
@@ -437,7 +443,7 @@ describe('shipped MCP iframe', () => {
       preview: { summary: 'Add a keyword', changes: ['+ keyword [EXACT] "shoes"'] },
     }, { arguments: { account_id: '123', ad_group_id: '456', keywords: [{ text: 'shoes', match_type: 'EXACT' }] } });
     ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: data } });
-    expect(ui.app.innerHTML).toContain('Approve and apply');
+    expect(ui.app.innerHTML).toContain('Hold to apply');
     ui.approvals[0]!.click();
     const request = ui.sent.at(-1) as { id: number; method: string; params: { name: string; arguments: Record<string, unknown> } };
     expect(request).toMatchObject({ method: 'tools/call', params: {
@@ -481,6 +487,42 @@ describe('shipped MCP iframe', () => {
     await Promise.resolve();
     expect(ui.app.innerHTML).toContain('may have succeeded; check its status before retrying');
     expect(ui.app.innerHTML).not.toContain('Applied.');
+  });
+
+  it('uses the native ChatGPT bridge without dispatching a duplicate write and renders text-only results', async () => {
+    const calls: unknown[] = [];
+    const ui = widget({ callTool: async (...args: unknown[]) => {
+      calls.push(args);
+      return { content: [{ type: 'text', text: JSON.stringify({ status: 'applied', applied: true, preview: { summary: 'Done' } }) }] };
+    } });
+    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('google_create_campaign', 'operation', {
+      pending_operation_id: 'native', preview: { summary: 'Create paused campaign' },
+    }, { arguments: { account_id: '123', name: 'Paused test' } }) } });
+    ui.approvals[0]!.click();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    expect(calls).toEqual([['google_create_campaign', { account_id: '123', name: 'Paused test', pending_operation_id: 'native' }]]);
+    expect(ui.sent).not.toContainEqual(expect.objectContaining({ method: 'tools/call' }));
+    expect(ui.app.innerHTML).toContain('Applied. Done');
+    expect(ui.app.innerHTML).not.toContain('Applying…');
+  });
+
+  it('cancels a released hold and applies once after a completed keyboard hold', () => {
+    const ui = widget();
+    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('google_create_campaign', 'operation', {
+      pending_operation_id: 'hold', preview: { summary: 'Paused campaign' },
+    }, { arguments: { account_id: '123' } }) } });
+    const button = ui.approvals[0]!;
+    button.fire('pointerdown', { button: 0, pointerId: 1 });
+    button.fire('pointerup');
+    ui.elapse();
+    expect(ui.sent.filter((m: any) => m.method === 'tools/call')).toHaveLength(0);
+    button.fire('keydown', { key: ' ' });
+    button.fire('keydown', { key: ' ', repeat: true });
+    ui.elapse();
+    button.fire('keyup', { key: ' ' });
+    button.click();
+    expect(ui.sent.filter((m: any) => m.method === 'tools/call')).toHaveLength(1);
+    expect(ui.app.innerHTML).toContain('Applying…');
   });
 
   it('routes non-campaign audit mutations to actual findings', () => {

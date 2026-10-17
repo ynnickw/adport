@@ -256,6 +256,29 @@ describe('GoogleAdsProvider writes', () => {
     );
   });
 
+  it('atomically creates targeting with explicit Search networks and conversion bidding', async () => {
+    // Google Ads Campaign / CampaignCriterion wire fields and temporary resource references.
+    const { impl, calls } = fakeFetch([tokenRoute, { match: url => url.includes('googleAds:mutate'), reply: { mutateOperationResponses: [] } }]);
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
+    const preview = await provider.previewWrite({
+      tool: 'google_create_campaign', provider: 'google', accountId: '1234567890', kind: 'create',
+      payload: { name: 'Targeted', daily_budget_micros: 3_000_000, bidding_strategy: 'MAXIMIZE_CONVERSIONS', location_ids: ['2840', '2826', '2276'], language_ids: ['1000'] },
+    }, { forcePausedCreation: true });
+    const body = JSON.parse(String(calls.find(c => c.url.includes('googleAds:mutate'))?.init.body));
+    expect(body.validateOnly).toBe(true);
+    expect(body.mutateOperations).toHaveLength(6);
+    expect(body.mutateOperations[1].campaignOperation.create).toMatchObject({
+      resourceName: 'customers/1234567890/campaigns/-2', status: 'PAUSED', maximizeConversions: {},
+      networkSettings: { targetGoogleSearch: true, targetSearchNetwork: false, targetContentNetwork: false, targetPartnerSearchNetwork: false },
+      geoTargetTypeSetting: { positiveGeoTargetType: 'PRESENCE' },
+    });
+    expect(body.mutateOperations[1].campaignOperation.create).not.toHaveProperty('manualCpc');
+    expect(body.mutateOperations[2]).toEqual({ campaignCriterionOperation: { create: { campaign: 'customers/1234567890/campaigns/-2', location: { geoTargetConstant: 'geoTargetConstants/2840' } } } });
+    expect(body.mutateOperations[5]).toEqual({ campaignCriterionOperation: { create: { campaign: 'customers/1234567890/campaigns/-2', language: { languageConstant: 'languageConstants/1000' } } } });
+    expect(preview.changes.join(' ')).toContain('presence only');
+    expect(preview.budgetDeltas[0]?.toMicros).toBe(3_000_000);
+  });
+
   it('rejects an invalid RSA client-side before any API call', async () => {
     const { impl, calls } = fakeFetch([tokenRoute]);
     const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));

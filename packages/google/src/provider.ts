@@ -384,7 +384,12 @@ export class GoogleAdsProvider implements AdProvider {
 
   private async planCreateCampaign(
     cid: string,
-    payload: { name: string; daily_budget_micros: number; channel_type?: string; status?: string },
+    payload: {
+      name: string; daily_budget_micros: number; channel_type?: string; status?: string;
+      bidding_strategy?: 'MANUAL_CPC' | 'MAXIMIZE_CLICKS' | 'MAXIMIZE_CONVERSIONS' | 'MAXIMIZE_CONVERSION_VALUE';
+      search_partners?: boolean; display_expansion?: boolean;
+      location_ids?: string[]; language_ids?: string[]; location_presence_only?: boolean;
+    },
     guard: WriteGuard,
   ): Promise<WritePlan> {
     const coercions: string[] = [];
@@ -394,8 +399,14 @@ export class GoogleAdsProvider implements AdProvider {
       coercions.push('status coerced to PAUSED by policy (paused_creation)');
     }
     const channelType = payload.channel_type ?? 'SEARCH';
+    if (channelType !== 'SEARCH' && (payload.search_partners !== undefined || payload.display_expansion !== undefined)) {
+      throw new AdportError('INVALID_INPUT', 'search_partners and display_expansion require a SEARCH campaign');
+    }
+    const strategy = payload.bidding_strategy ?? 'MANUAL_CPC';
+    const strategyField = { MANUAL_CPC: 'manualCpc', MAXIMIZE_CLICKS: 'targetSpend', MAXIMIZE_CONVERSIONS: 'maximizeConversions', MAXIMIZE_CONVERSION_VALUE: 'maximizeConversionValue' }[strategy];
     const budgetTempResource = `customers/${cid}/campaignBudgets/-1`;
-    const mutateOperations = [
+    const campaignTempResource = `customers/${cid}/campaigns/-2`;
+    const mutateOperations: Array<Record<string, unknown>> = [
       {
         campaignBudgetOperation: {
           create: {
@@ -410,21 +421,40 @@ export class GoogleAdsProvider implements AdProvider {
       {
         campaignOperation: {
           create: {
+            resourceName: campaignTempResource,
             name: payload.name,
             status,
             advertisingChannelType: channelType,
             containsEuPoliticalAdvertising: 'DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING',
-            manualCpc: {},
+            [strategyField]: {},
+            ...(channelType === 'SEARCH' ? { networkSettings: {
+              targetGoogleSearch: true,
+              targetSearchNetwork: payload.search_partners ?? false,
+              targetContentNetwork: payload.display_expansion ?? false,
+              targetPartnerSearchNetwork: false,
+            } } : {}),
+            ...(payload.location_ids?.length ? { geoTargetTypeSetting: {
+              positiveGeoTargetType: payload.location_presence_only === false ? 'PRESENCE_OR_INTEREST' : 'PRESENCE',
+            } } : {}),
             campaignBudget: budgetTempResource,
           },
         },
       },
     ];
+    for (const locationId of new Set(payload.location_ids ?? [])) {
+      mutateOperations.push({ campaignCriterionOperation: { create: { campaign: campaignTempResource, location: { geoTargetConstant: `geoTargetConstants/${locationId}` } } } });
+    }
+    for (const languageId of new Set(payload.language_ids ?? [])) {
+      mutateOperations.push({ campaignCriterionOperation: { create: { campaign: campaignTempResource, language: { languageConstant: `languageConstants/${languageId}` } } } });
+    }
     return {
       summary: `Create ${channelType} campaign "${payload.name}" (${status}), daily budget ${payload.daily_budget_micros} micros`,
       changes: [
         `+ campaign_budget ${payload.daily_budget_micros} micros/day (not shared)`,
-        `+ campaign "${payload.name}" status=${status} channel=${channelType} bidding=manual_cpc`,
+        `+ campaign "${payload.name}" status=${status} channel=${channelType} bidding=${strategy}`,
+        ...(channelType === 'SEARCH' ? [`+ networks Google Search; search partners=${payload.search_partners ?? false}; Display expansion=${payload.display_expansion ?? false}`] : []),
+        `+ locations ${payload.location_ids?.join(', ') ?? 'unrestricted'}${payload.location_ids?.length ? ` (${payload.location_presence_only === false ? 'presence or interest' : 'presence only'})` : ''}`,
+        `+ languages ${payload.language_ids?.join(', ') ?? 'unrestricted'}`,
       ],
       coercions,
       budgetDeltas: [{ target: `new campaign "${payload.name}" daily budget`, toMicros: payload.daily_budget_micros }],
