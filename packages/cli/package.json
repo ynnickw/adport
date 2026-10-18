@@ -28,7 +28,7 @@
     "@adport/provider-linkedin": "workspace:*",
     "@adport/provider-x": "workspace:*",
     "@adport/provider-tiktok": "workspace:*",
-    "commander": "^13.0.0",
+    "commander": "^15.0.0",
     "yaml": "^2.6.0",
     "zod": "^4.4.3"
   },
