@@ -3,9 +3,65 @@ import { z } from 'zod';
 import type { AppleAdsProvider } from './provider.js';
 
 const statusSchema = z.enum(['ENABLED', 'PAUSED']);
+const idSchema = z.string().regex(/^\d+$/).refine((id) => Number.isSafeInteger(Number(id)) && Number(id) > 0, 'Expected a positive safe integer ID');
+const keywordSchema = z.object({
+  text: z.string().trim().min(1),
+  match_type: z.enum(['BROAD', 'EXACT']),
+  bid: z.number().positive().optional(),
+  currency: z.string().length(3).optional(),
+  status: statusSchema.default('PAUSED'),
+}).refine((v) => (v.bid === undefined) === (v.currency === undefined), 'Provide bid and currency together');
+const timestamp = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z?$/)
+  .refine((v) => Number.isFinite(Date.parse(v.endsWith('Z') ? v : `${v}Z`)), 'Expected UTC date-time');
 
 export function appleTools(provider: AppleAdsProvider): AnyToolDefinition[] {
   return [
+    ...(['adgroups', 'keywords', 'negative-keywords', 'ads', 'creatives', 'product-pages'] as const).map((resource) => defineTool({
+      name: `apple_${resource.replaceAll('-', '_')}`,
+      namespace: 'apple',
+      description: `Read Apple ${resource}, including all returned targeting, bids, match types, statuses and creative destinations. Use resource_id for a single record, or filters and offset for paginated queries.`,
+      input: z.object({
+        account_id: idSchema,
+        resource_id: z.string().min(1).optional(),
+        filters: z.array(z.object({ field: z.string().min(1), operator: z.literal('EQUALS').default('EQUALS'), value: z.array(z.string()).min(1) })).default([]),
+        offset: z.number().int().nonnegative().default(0),
+        limit: z.number().int().positive().max(1000).default(100),
+      }),
+      annotations: { readOnly: true },
+      handler: (input) => provider.apiRead({
+        account_id: input.account_id,
+        method: input.resource_id ? 'GET' : 'POST',
+        path: input.resource_id ? `${resource}/${input.resource_id}` : `${resource}/query`,
+        ...(input.resource_id ? {} : { body: { filters: input.filters, pagination: { offset: input.offset, pageSize: input.limit, fetchTotalCount: true } } }),
+      }),
+    })),
+    guardedWriteTool({
+      name: 'apple_create_keywords', namespace: 'apple', provider: 'apple', kind: 'create',
+      description: 'Create up to 100 keywords in one preview/apply pair. Inherit the ad-group bid by omitting bid and currency. The batch disallows partial success; created keywords default to PAUSED.',
+      payload: z.object({ ad_group_id: idSchema, keywords: z.array(keywordSchema).min(1).max(100) }),
+    }),
+    guardedWriteTool({
+      name: 'apple_create_negative_keywords', namespace: 'apple', provider: 'apple', kind: 'create',
+      description: 'Add campaign OR ad-group negative keywords in one preview/apply pair. Exclusions are ENABLED to prevent matching; this does not enable campaigns or ads.',
+      payload: z.object({ campaign_id: idSchema.optional(), ad_group_id: idSchema.optional(), keywords: z.array(z.object({ text: z.string().trim().min(1), match_type: z.enum(['BROAD', 'EXACT']) })).min(1).max(100) })
+        .refine((v) => Boolean(v.campaign_id) !== Boolean(v.ad_group_id), 'Specify exactly one campaign_id or ad_group_id'),
+    }),
+    guardedWriteTool({
+      name: 'apple_set_campaign_schedule', namespace: 'apple', provider: 'apple', kind: 'update',
+      description: 'Edit campaign start/end dates in UTC without changing serving status. Omitted fields remain unchanged.',
+      payload: z.object({ campaign_id: idSchema, start_time: timestamp.optional(), end_time: timestamp.optional() })
+        .refine((v) => Boolean(v.start_time || v.end_time), 'Provide start_time or end_time'),
+    }),
+    guardedWriteTool({
+      name: 'apple_create_creative', namespace: 'apple', provider: 'apple', kind: 'create',
+      description: 'Create a default or custom product page creative. Use apple_product_pages to find a product_page_id; then read creative status and link a VALID creative with apple_create_ad.',
+      payload: z.object({ name: z.string().min(1), adam_id: idSchema, product_page_id: z.string().uuid().optional() }),
+    }),
+    guardedWriteTool({
+      name: 'apple_create_ad', namespace: 'apple', provider: 'apple', kind: 'create',
+      description: 'Create a PAUSED ad linked to an existing VALID creative (including a custom product page). Does not enable the campaign.',
+      payload: z.object({ name: z.string().min(1), ad_group_id: idSchema, creative_id: idSchema, status: statusSchema.default('PAUSED') }),
+    }),
     defineTool({
       name: 'apple_api_read',
       namespace: 'apple',

@@ -15,7 +15,7 @@ For a source checkout, replace `adport` below with `node packages/cli/dist/index
 | Google | Google Ads API v25 | `google_gaql` covers every GAQL resource and field available to the credential | `google_api_create`, `google_api_update`, and `google_api_remove` route to v25 mutate services |
 | Meta | Marketing API v25.0 | `meta_api_read` covers ad-account edges; `meta_insights` is the reporting convenience tool | `meta_api_create`, `meta_api_update`, and `meta_api_delete` cover account-owned Marketing API objects |
 | TikTok | Business API v1.3 | `tiktok_api_read` covers documented GET endpoints | `tiktok_api_create`, `tiktok_api_update`, and `tiktok_api_delete` cover endpoints with the matching action suffix |
-| Apple | Campaign Management API v5 | `apple_api_read` covers documented entity, selector, and report paths | `apple_api_create`, `apple_api_update`, and `apple_api_delete` cover campaign-management entities |
+| Apple | Ads Platform API v1 | Typed ad-group, keyword, negative-keyword, ad, creative and product-page reads; `apple_api_read` for other documented queries | Typed batch keywords/exclusions, campaign schedules, creatives and ads; generic guarded entity mutations |
 | Microsoft | Advertising API v13 | `microsoft_api_read` covers query, search, get, and reporting operations | `microsoft_api_create`, `microsoft_api_update`, and `microsoft_api_delete` cover Campaign Management collections |
 | Reddit | Ads API v3 | `reddit_api_read` covers account-scoped GET and read-only POST endpoints; `reddit_report` exposes native reports | `reddit_api_create`, `reddit_api_update`, and `reddit_api_delete` cover account-owned v3 resources |
 

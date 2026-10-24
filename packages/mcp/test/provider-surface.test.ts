@@ -59,6 +59,8 @@ describe('all-provider shared tool surface', () => {
       'meta_api_read', 'meta_api_create', 'meta_api_update', 'meta_api_delete',
       'tiktok_api_read', 'tiktok_api_create', 'tiktok_api_update', 'tiktok_api_delete',
       'apple_api_read', 'apple_api_create', 'apple_api_update', 'apple_api_delete',
+      'apple_adgroups', 'apple_keywords', 'apple_negative_keywords', 'apple_ads', 'apple_creatives', 'apple_product_pages',
+      'apple_create_keywords', 'apple_create_negative_keywords', 'apple_set_campaign_schedule', 'apple_create_creative', 'apple_create_ad',
       'microsoft_api_read', 'microsoft_api_create', 'microsoft_api_update', 'microsoft_api_delete',
       'reddit_api_read', 'reddit_api_create', 'reddit_api_update', 'reddit_api_delete',
       'snapchat_list_campaigns', 'snapchat_create_campaign', 'snapchat_set_campaign_status', 'snapchat_set_budget',
@@ -114,6 +116,10 @@ describe('all-provider shared tool surface', () => {
       expect(hostedNames).toContain('meta_get_campaign');
       expect(hostedNames).toContain('meta_list_campaigns');
       expect(hostedNames).toContain('meta_set_campaign_status');
+      expect(hostedNames).toEqual(expect.arrayContaining([
+        'apple_adgroups', 'apple_keywords', 'apple_negative_keywords', 'apple_ads', 'apple_creatives', 'apple_product_pages',
+        'apple_create_keywords', 'apple_create_negative_keywords', 'apple_set_campaign_schedule', 'apple_create_creative', 'apple_create_ad',
+      ]));
       const dispatchers = names.filter(name => name === 'recommendation_apply' || /_api_(read|create|update|delete|remove)$/.test(name));
       for (const name of dispatchers) {
         expect(hostedNames).not.toContain(name);
