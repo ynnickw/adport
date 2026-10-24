@@ -68,7 +68,11 @@ export class AccountScopedProvider implements AdProvider {
   async listAccounts() {
     // Discovery is an OAuth-only operation. Never enumerate an entire grant
     // just to service a routine dashboard or MCP account-list request.
-    return this.accounts.filter(account => this.allowed.has(account.id)).map(account => ({ ...account }));
+    const accounts = this.accounts.filter(account => this.allowed.has(account.id));
+    return Promise.all(accounts.map(async account => ({
+      ...account,
+      ...(this.provider.accountMetadata ? await this.provider.accountMetadata(account.id) : {}),
+    })));
   }
 
   async report(query: NormalizedQuery) {

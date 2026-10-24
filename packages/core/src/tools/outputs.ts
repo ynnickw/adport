@@ -10,7 +10,7 @@ const action = z.object({ tool: z.string(), input: z.record(z.string(), z.unknow
 export const accountsOutput = z.object({
   accounts: z.array(z.object({
     provider: z.string(), id: z.string(), name: z.string(),
-    currency: z.string().optional(), status: z.string().optional(),
+    currency: z.string().optional(), timezone: z.string().optional(), status: z.string().optional(),
   })),
   errors: z.array(providerError),
 });

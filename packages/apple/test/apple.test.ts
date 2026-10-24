@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { AppleAdsClient, formatAppleError } from '../src/client.js';
 import { createClientSecret } from '../src/jwt.js';
 import { AppleAdsProvider, UNITS_TO_MICROS } from '../src/provider.js';
+import { appleTools } from '../src/tools.js';
 
 const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
 const PEM = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
@@ -39,6 +40,64 @@ const tokenRoute = {
   match: (url: string) => url.includes('appleid.apple.com/auth/oauth2/token'),
   reply: { access_token: 'eyJhbGci-test', token_type: 'Bearer', expires_in: 3600, scope: 'searchadsorg' },
 };
+
+// Wire shapes: developer.apple.com/documentation/apple-ads-platform-api,
+// KeywordCreateBulkRequest, NegativeKeywordCreate, CampaignUpdate, CreativeCreate (2026-10-24).
+describe('Apple campaign setup capabilities', () => {
+  const guard = { forcePausedCreation: true };
+  it('previews 16 keywords without writes and applies them in one atomic batch with bid policy deltas', async () => {
+    const { impl, calls } = fakeFetch([tokenRoute, { match: (url) => url.endsWith('/keywords/bulk-create'), reply: { result: [{ success: true, result: { id: 20 } }] } }]);
+    const provider = new AppleAdsProvider(new AppleAdsClient(CREDS, impl));
+    const op = { tool: 'apple_create_keywords', provider: 'apple', accountId: '1', kind: 'create' as const, payload: {
+      ad_group_id: '2', keywords: Array.from({ length: 16 }, (_, i) => ({ text: `keyword ${i}`, match_type: 'EXACT', bid: 0.5, currency: 'EUR', status: 'ENABLED' })),
+    } };
+    expect((await provider.previewWrite(op, guard)).budgetDeltas).toHaveLength(16);
+    expect(calls).toHaveLength(0);
+    expect(await provider.applyWrite(op, guard)).toEqual({ applied: true, resourceIds: ['20'] });
+    const requests = calls.filter((c) => c.url.endsWith('/keywords/bulk-create'));
+    expect(requests).toHaveLength(1);
+    const body = JSON.parse(String(requests[0]!.init.body));
+    expect(body.allowPartialSuccess).toBe(false);
+    expect(body.items).toHaveLength(16);
+    expect(body.items[0]).toEqual({ correlationId: 0, data: { adGroupId: 2, text: 'keyword 0', matchType: 'EXACT', status: 'PAUSED', bid: { amount: '0.5', currency: 'EUR' } } });
+  });
+  it.each(['campaign_id', 'ad_group_id'])('creates active exclusions at %s scope without enabling ads', async (scope) => {
+    const { impl, calls } = fakeFetch([tokenRoute, { match: (url) => url.endsWith('/negative-keywords/bulk-create'), reply: { result: [] } }]);
+    const provider = new AppleAdsProvider(new AppleAdsClient(CREDS, impl));
+    await provider.applyWrite({ tool: 'apple_create_negative_keywords', provider: 'apple', accountId: '1', kind: 'create', payload: { [scope]: '2', keywords: [{ text: 'irrelevant', match_type: 'EXACT' }] } }, guard);
+    expect(JSON.parse(String(calls.at(-1)!.init.body)).items[0].data).toEqual({ [scope === 'campaign_id' ? 'campaignId' : 'adGroupId']: 2, text: 'irrelevant', matchType: 'EXACT', status: 'ENABLED' });
+  });
+  it('does not report bulk item failures as successful applies', async () => {
+    const { impl } = fakeFetch([tokenRoute, { match: (url) => url.endsWith('/keywords/bulk-create'), reply: { result: [{ success: false, error: { message: 'Invalid bid' } }] } }]);
+    const provider = new AppleAdsProvider(new AppleAdsClient(CREDS, impl));
+    await expect(provider.applyWrite({ tool: 'apple_create_keywords', provider: 'apple', accountId: '1', kind: 'create', payload: { ad_group_id: '2', keywords: [{ text: 'test', match_type: 'EXACT' }] } }, guard)).rejects.toThrow('failed items');
+  });
+  it('edits only campaign dates and validates against the existing start', async () => {
+    const { impl, calls } = fakeFetch([tokenRoute, { match: (url) => url.endsWith('/campaigns/2'), reply: { result: { id: 2, name: 'test', startTime: '2026-10-01T00:00:00.000', status: 'PAUSED' } } }]);
+    const provider = new AppleAdsProvider(new AppleAdsClient(CREDS, impl));
+    const op = { tool: 'apple_set_campaign_schedule', provider: 'apple', accountId: '1', kind: 'update' as const, payload: { campaign_id: '2', end_time: '2026-11-01T00:00:00.000Z' } };
+    await provider.applyWrite(op, guard);
+    expect(JSON.parse(String(calls.at(-1)!.init.body))).toEqual({ endTime: '2026-11-01T00:00:00.000' });
+    await expect(provider.previewWrite({ ...op, payload: { ...op.payload, end_time: '2026-09-01T00:00:00.000Z' } }, guard)).rejects.toThrow('after its start');
+  });
+  it('creates a product page creative and links it to a paused ad', async () => {
+    const { impl, calls } = fakeFetch([tokenRoute, { match: () => true, reply: { result: { id: 3 } } }]);
+    const provider = new AppleAdsProvider(new AppleAdsClient(CREDS, impl));
+    await provider.applyWrite({ tool: 'apple_create_creative', provider: 'apple', accountId: '1', kind: 'create', payload: { name: 'CPP', adam_id: '123', product_page_id: '76659d7a-d146-43d3-b6b8-b7a12f74bf6b' } }, guard);
+    expect(JSON.parse(String(calls.at(-1)!.init.body))).toMatchObject({ creativeType: 'CUSTOM_PRODUCT_PAGE', destination: { destinationType: 'APP_STORE_PRODUCT_PAGE', parameters: { adamId: '123', productPageId: '76659d7a-d146-43d3-b6b8-b7a12f74bf6b' } } });
+    await provider.applyWrite({ tool: 'apple_create_ad', provider: 'apple', accountId: '1', kind: 'create', payload: { name: 'Ad', ad_group_id: '2', creative_id: '3', status: 'ENABLED' } }, guard);
+    expect(JSON.parse(String(calls.at(-1)!.init.body))).toEqual({ name: 'Ad', adGroupId: 2, creativeId: 3, status: 'PAUSED' });
+  });
+  it.each(['adgroups', 'keywords', 'negative_keywords', 'ads', 'creatives', 'product_pages'])('exposes paginated %s reads without dropping provider fields', async (resource) => {
+    const result = [{ id: 3, status: 'PAUSED', bid: { amount: '0.5', currency: 'EUR' }, automatedKeywordsOptIn: true, targeting: { deviceClass: { include: ['IPHONE'] } }, matchType: 'EXACT' }];
+    const { impl, calls } = fakeFetch([tokenRoute, { match: () => true, reply: { result, pagination: { totalCount: 101 } } }]);
+    const provider = new AppleAdsProvider(new AppleAdsClient(CREDS, impl));
+    const tool = appleTools(provider).find((t) => t.name === `apple_${resource}`)!;
+    const input = tool.input.parse({ account_id: '1', offset: 100, filters: [{ field: 'campaignId', value: ['2'] }] });
+    expect(await tool.handler(input as never, {} as never)).toEqual({ result, pagination: { totalCount: 101 } });
+    expect(JSON.parse(String(calls.at(-1)!.init.body)).pagination.offset).toBe(100);
+  });
+});
 
 describe('createClientSecret (ES256 JWT)', () => {
   it('produces a JWT with the documented header and claims', () => {
@@ -122,6 +181,7 @@ describe('AppleAdsProvider', () => {
   it('lists ad accounts from the v1 ACL response', async () => {
     const { impl } = fakeFetch([
       tokenRoute,
+      { match: (url) => url.endsWith('/ad-accounts/40669820'), reply: { result: { currency: 'EUR', timezone: 'Europe/Berlin' } } },
       {
         match: (url) => url.includes('/acls'),
         reply: {
@@ -132,7 +192,7 @@ describe('AppleAdsProvider', () => {
     ]);
     const provider = new AppleAdsProvider(new AppleAdsClient(CREDS, impl));
     const accounts = await provider.listAccounts();
-    expect(accounts).toEqual([{ provider: 'apple', id: '40669820', name: 'Trip Trek', status: 'ADMIN' }]);
+    expect(accounts).toEqual([{ provider: 'apple', id: '40669820', name: 'Trip Trek', status: 'ADMIN', currency: 'EUR', timezone: 'Europe/Berlin' }]);
   });
 
   it('maps campaign reports: taps→clicks, totalInstalls→conversions, localSpend string→spend', async () => {

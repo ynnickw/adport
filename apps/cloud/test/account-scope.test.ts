@@ -21,6 +21,17 @@ function provider(): AdProvider {
 }
 
 describe('AccountScopedProvider', () => {
+  it('enriches only authorized accounts without rediscovering the grant', async () => {
+    const raw = provider();
+    raw.accountMetadata = vi.fn(async () => ({ currency: 'EUR', timezone: 'Europe/Berlin' }));
+    const scoped = new AccountScopedProvider(raw, new Set(['1234567890']), [
+      { provider: 'google', id: '1234567890', name: 'Active' },
+      { provider: 'google', id: '9999999999', name: 'Inactive' },
+    ]);
+    await expect(scoped.listAccounts()).resolves.toEqual([{ provider: 'google', id: '1234567890', name: 'Active', currency: 'EUR', timezone: 'Europe/Berlin' }]);
+    expect(raw.accountMetadata).toHaveBeenCalledExactlyOnceWith('1234567890');
+    expect(raw.listAccounts).not.toHaveBeenCalled();
+  });
   it('filters broad reads to active accounts', async () => {
     const raw = provider();
     const scoped = new AccountScopedProvider(raw, new Set(['1234567890']), [

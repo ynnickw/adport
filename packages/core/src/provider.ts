@@ -6,6 +6,7 @@ export interface Account {
   id: string;
   name: string;
   currency?: string;
+  timezone?: string;
   status?: string;
 }
 
@@ -72,6 +73,8 @@ export interface AdProvider {
   readonly id: string;
   capabilities(): ProviderCapabilities;
   listAccounts(): Promise<Account[]>;
+  /** Enrich an already-authorized account without enumerating the whole grant. */
+  accountMetadata?(accountId: string): Promise<Pick<Account, 'currency' | 'timezone'>>;
   report(query: NormalizedQuery): Promise<Report>;
   /** Dry-run the operation (server-side where supported, client-side diff otherwise). */
   previewWrite(op: WriteOperation, guard: WriteGuard): Promise<WritePreview>;

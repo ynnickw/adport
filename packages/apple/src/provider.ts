@@ -39,6 +39,8 @@ interface AppleCampaign {
   promotedObjectType?: string;
   billingEvent?: string;
   targeting?: Record<string, unknown>;
+  startTime?: string;
+  endTime?: string;
 }
 
 interface SpendRow {
@@ -111,12 +113,21 @@ export class AppleAdsProvider implements AdProvider {
     const envelope = await this.client.request<{
       acls?: Array<{ adAccount?: { id?: number; name?: string; orgId?: number }; roles?: string[] }>;
     }>('GET', 'acls');
-    return (envelope.result?.acls ?? []).flatMap((acl) => (acl.adAccount?.id === undefined ? [] : [{
+    const accounts: Account[] = (envelope.result?.acls ?? []).flatMap((acl) => (acl.adAccount?.id === undefined ? [] : [{
       provider: this.id,
       id: String(acl.adAccount.id),
       name: acl.adAccount.name ?? String(acl.adAccount.id),
       status: acl.roles?.join(',') || undefined,
     }]));
+    for (const account of accounts) {
+      Object.assign(account, await this.accountMetadata(account.id));
+    }
+    return accounts;
+  }
+
+  async accountMetadata(accountId: string): Promise<Pick<Account, 'currency' | 'timezone'>> {
+    const detail = await this.client.request<{ currency?: string; timezone?: string }>('GET', `ad-accounts/${accountId}`, { adAccountId: accountId });
+    return { currency: detail.result?.currency, timezone: detail.result?.timezone };
   }
 
   async listCampaigns(adAccountId: string, limit = 100): Promise<AppleCampaign[]> {
@@ -243,6 +254,52 @@ export class AppleAdsProvider implements AdProvider {
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
     const payload = op.payload as never;
     switch (op.tool) {
+      case 'apple_create_keywords': {
+        const p = op.payload as { ad_group_id: string; keywords: Array<{ text: string; match_type: string; bid?: number; currency?: string; status?: string }> };
+        return this.planApiCreate(op.accountId, { path: 'keywords/bulk-create', body: {
+          allowPartialSuccess: false,
+          items: p.keywords.map((k, correlationId) => ({ correlationId, data: {
+            adGroupId: Number(p.ad_group_id), text: k.text, matchType: k.match_type, status: k.status ?? 'PAUSED',
+            ...(k.bid === undefined ? {} : { bid: { amount: String(k.bid), currency: k.currency } }),
+          } })),
+        } }, guard);
+      }
+      case 'apple_create_negative_keywords': {
+        const p = op.payload as { campaign_id?: string; ad_group_id?: string; keywords: Array<{ text: string; match_type: string }> };
+        // Negative keywords restrict delivery; pausing them would silently disable exclusions.
+        return this.planApiCreate(op.accountId, { path: 'negative-keywords/bulk-create', body: {
+          allowPartialSuccess: false,
+          items: p.keywords.map((k, correlationId) => ({ correlationId, data: {
+            ...(p.ad_group_id ? { adGroupId: Number(p.ad_group_id) } : { campaignId: Number(p.campaign_id) }),
+            text: k.text, matchType: k.match_type, status: 'ENABLED',
+          } })),
+        } }, guard);
+      }
+      case 'apple_set_campaign_schedule': {
+        const p = op.payload as { campaign_id: string; start_time?: string; end_time?: string };
+        const current = await this.getCampaign(op.accountId, p.campaign_id);
+        const start = p.start_time ?? current.startTime;
+        const end = p.end_time ?? current.endTime;
+        const utc = (value: string) => value.endsWith('Z') ? value : `${value}Z`;
+        if (start && end && Date.parse(utc(end)) <= Date.parse(utc(start))) {
+          throw new AdportError('INVALID_INPUT', 'apple: campaign end must be after its start');
+        }
+        const body = { ...(p.start_time ? { startTime: p.start_time.replace(/Z$/, '') } : {}), ...(p.end_time ? { endTime: p.end_time.replace(/Z$/, '') } : {}) };
+        const plan = await this.planApiUpdate(op.accountId, { path: `campaigns/${p.campaign_id}`, body });
+        plan.changes = Object.entries(body).map(([key, value]) => `~ campaign ${p.campaign_id} ${key} ${current[key as 'startTime' | 'endTime'] ?? '(unset)'} → ${value}`);
+        return plan;
+      }
+      case 'apple_create_creative': {
+        const p = op.payload as { name: string; adam_id: string; product_page_id?: string };
+        return this.planApiCreate(op.accountId, { path: 'creatives', body: {
+          name: p.name, creativeType: p.product_page_id ? 'CUSTOM_PRODUCT_PAGE' : 'DEFAULT_PRODUCT_PAGE', creativeSpec: {},
+          destination: { destinationType: 'APP_STORE_PRODUCT_PAGE', parameters: { adamId: p.adam_id, ...(p.product_page_id ? { productPageId: p.product_page_id } : {}) } },
+        } }, guard);
+      }
+      case 'apple_create_ad': {
+        const p = op.payload as { name: string; ad_group_id: string; creative_id: string; status?: string };
+        return this.planApiCreate(op.accountId, { path: 'ads', body: { name: p.name, adGroupId: Number(p.ad_group_id), creativeId: Number(p.creative_id), status: p.status ?? 'PAUSED' } }, guard);
+      }
       case 'apple_create_campaign':
         return this.planCreateCampaign(op.accountId, payload, guard);
       case 'apple_create_ad_group':
@@ -478,7 +535,7 @@ export class AppleAdsProvider implements AdProvider {
     const path = validateMutationPath(payload.path, 'create');
     const body = structuredClone(payload.body);
     const coercions: string[] = [];
-    if (guard.forcePausedCreation) coerceCreatedStatuses(body, coercions);
+    if (guard.forcePausedCreation && !path.startsWith('negative-keywords')) coerceCreatedStatuses(body, coercions);
     const budgetDeltas = collectCreatedMoney(body);
     return {
       summary: `Create Apple Ads resource via POST /${path}`,
@@ -492,6 +549,9 @@ export class AppleAdsProvider implements AdProvider {
           ...(path === 'ad-accounts' ? {} : { adAccountId }),
           body,
         });
+        if (Array.isArray(envelope.result) && envelope.result.some((item) => isRecord(item) && item.success === false)) {
+          throw new AdportError('PROVIDER_ERROR', 'Apple bulk create returned failed items. Read back keywords before retrying to avoid duplicates.', envelope.result);
+        }
         return extractResourceIds(envelope.result);
       },
     };
