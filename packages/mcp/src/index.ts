@@ -144,6 +144,7 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
         ...(runtime.dataSource === 'synthetic' ? { data_source: z.literal('synthetic') } : {}),
       }) } : {}),
       annotations: {
+        title: toolTitle(tool.name),
         readOnlyHint: tool.annotations.readOnly ?? false,
         destructiveHint: tool.annotations.destructive ?? false,
         openWorldHint: tool.annotations.openWorld ?? false,
