@@ -381,7 +381,55 @@ describe('MetaAdsProvider writes', () => {
     expect(JSON.parse(body.get('targeting')!)).toEqual({ geo_locations: { countries: ['DE'] } });
     expect(body.get('optimization_goal')).toBe('LINK_CLICKS');
     expect(body.get('billing_event')).toBe('IMPRESSIONS');
+    expect(body.get('bid_strategy')).toBe('LOWEST_COST_WITHOUT_CAP');
     expect(body.get('status')).toBe('PAUSED');
+  });
+
+  it.each([
+    { daily_budget_cents: 100, expected: 'LOWEST_COST_WITHOUT_CAP' },
+    { expected: null },
+    { bid_amount: 50, expected: null },
+    { daily_budget_cents: 100, bid_strategy: 'COST_CAP', bid_amount: 50, expected: 'COST_CAP' },
+    { bid_strategy: 'LOWEST_COST_WITH_BID_CAP', bid_amount: 75, expected: 'LOWEST_COST_WITH_BID_CAP' },
+    { bid_strategy: 'LOWEST_COST_WITH_MIN_ROAS', optimization_goal: 'VALUE', bid_constraints: { roas_average_floor: 15000 }, expected: 'LOWEST_COST_WITH_MIN_ROAS' },
+  ])('previews bidding without applying: %j', async ({ expected, ...bidding }) => {
+    const { impl, calls } = fakeFetch([{ match: url => url.includes('/adsets'), reply: { success: true } }]);
+    const provider = new MetaAdsProvider(new MetaGraphClient(CREDS, 'v25.0', impl));
+    const op = {
+      tool: 'meta_create_ad_set', provider: 'meta', accountId: '426197654150180', kind: 'create' as const,
+      payload: { campaign_id: '23851234567890123', name: 'Preview', countries: ['DE'], ...bidding },
+    };
+    const preview = await provider.previewWrite(op, { forcePausedCreation: true });
+    expect(preview.serverValidated).toBe(true);
+    expect(preview.changes.join(' ')).toContain(`strategy=${expected ?? 'inherited from campaign'}`);
+    expect(calls).toHaveLength(1);
+    const body = new URLSearchParams(String(calls[0]!.init.body));
+    expect(body.get('execution_options')).toBe('["validate_only"]');
+    expect(body.get('status')).toBe('PAUSED');
+    expect(body.get('bid_strategy')).toBe(expected);
+    expect(body.get('bid_amount')).toBe(bidding.bid_amount === undefined ? null : String(bidding.bid_amount));
+    expect(body.get('bid_constraints')).toBe(bidding.bid_constraints === undefined ? null : JSON.stringify(bidding.bid_constraints));
+    await provider.applyWrite(op, { forcePausedCreation: true });
+    const appliedBody = new URLSearchParams(String(calls[1]!.init.body));
+    body.delete('execution_options');
+    expect(appliedBody.toString()).toBe(body.toString());
+  });
+
+  it.each([
+    { bid_strategy: 'COST_CAP' },
+    { bid_strategy: 'LOWEST_COST_WITH_BID_CAP' },
+    { bid_strategy: 'LOWEST_COST_WITHOUT_CAP', bid_amount: 100 },
+    { bid_strategy: 'LOWEST_COST_WITHOUT_CAP', bid_constraints: { roas_average_floor: 15000 } },
+    { bid_strategy: 'LOWEST_COST_WITH_MIN_ROAS', optimization_goal: 'VALUE' },
+    { bid_strategy: 'LOWEST_COST_WITH_MIN_ROAS', bid_constraints: { roas_average_floor: 15000 } },
+  ])('rejects incomplete or incompatible bidding before Meta: %j', async bidding => {
+    const { impl, calls } = fakeFetch([]);
+    const provider = new MetaAdsProvider(new MetaGraphClient(CREDS, 'v25.0', impl));
+    await expect(provider.previewWrite({
+      tool: 'meta_create_ad_set', provider: 'meta', accountId: '426197654150180', kind: 'create',
+      payload: { campaign_id: '23851234567890123', name: 'Invalid', countries: ['DE'], ...bidding },
+    }, { forcePausedCreation: true })).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    expect(calls).toHaveLength(0);
   });
 
   it('reads arbitrary ad-account edges with pagination parameters', async () => {
@@ -451,6 +499,18 @@ describe('MetaAdsProvider writes', () => {
 });
 
 describe('end-to-end through the shared tool registry (policy engine + meta tools)', () => {
+  it('exposes validated bidding inputs to MCP callers', () => {
+    const { impl } = fakeFetch([]);
+    const provider = new MetaAdsProvider(new MetaGraphClient(CREDS, 'v25.0', impl));
+    const tool = metaTools(provider).find(tool => tool.name === 'meta_create_ad_set')!;
+    const base = { account_id: '426197654150180', campaign_id: '23851234567890123', name: 'Test', countries: ['DE'] };
+    expect(tool.input.parse({ ...base, bid_strategy: 'COST_CAP', bid_amount: 50 })).toMatchObject({ bid_strategy: 'COST_CAP', bid_amount: 50 });
+    expect(tool.input.parse({ ...base, bid_constraints: { roas_average_floor: 15000 } })).toMatchObject({ bid_constraints: { roas_average_floor: 15000 } });
+    for (const bidding of [{ bid_strategy: 'INVALID' }, { bid_amount: -1 }, { bid_amount: 0.5 }, { bid_constraints: { roas_average_floor: 0 } }]) {
+      expect(tool.input.safeParse({ ...base, ...bidding }).success).toBe(false);
+    }
+  });
+
   let home: string;
 
   beforeEach(() => {
