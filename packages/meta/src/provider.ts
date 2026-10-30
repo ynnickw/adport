@@ -570,6 +570,8 @@ export class MetaAdsProvider implements AdProvider {
       bid_strategy?: string;
       bid_amount?: number;
       bid_constraints?: { roas_average_floor: number };
+      dsa_beneficiary?: string;
+      dsa_payor?: string;
       countries: string[];
       status?: string;
     },
@@ -609,6 +611,8 @@ export class MetaAdsProvider implements AdProvider {
     if (bidStrategy !== undefined) fields.bid_strategy = bidStrategy;
     if (payload.bid_amount !== undefined) fields.bid_amount = payload.bid_amount;
     if (payload.bid_constraints !== undefined) fields.bid_constraints = payload.bid_constraints;
+    if (payload.dsa_beneficiary !== undefined) fields.dsa_beneficiary = payload.dsa_beneficiary;
+    if (payload.dsa_payor !== undefined) fields.dsa_payor = payload.dsa_payor;
     const budgetDeltas: WritePreview['budgetDeltas'] = [];
     if (payload.daily_budget_cents) {
       fields.daily_budget = payload.daily_budget_cents;
@@ -626,6 +630,8 @@ export class MetaAdsProvider implements AdProvider {
         `+ bidding strategy=${bidStrategy ?? 'inherited from campaign'}` +
           (payload.bid_amount !== undefined ? ` bid_amount=${payload.bid_amount} minor units` : '') +
           (payload.bid_constraints !== undefined ? ` bid_constraints=${JSON.stringify(payload.bid_constraints)}` : ''),
+        ...(payload.dsa_beneficiary !== undefined ? [`+ advertiser (DSA beneficiary)=${payload.dsa_beneficiary}`] : []),
+        ...(payload.dsa_payor !== undefined ? [`+ payer (DSA)=${payload.dsa_payor}`] : []),
       ],
       coercions,
       budgetDeltas,

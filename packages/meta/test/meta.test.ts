@@ -372,7 +372,7 @@ describe('MetaAdsProvider writes', () => {
         provider: 'meta',
         accountId: '426197654150180',
         kind: 'create',
-        payload: { campaign_id: '23851234567890123', name: 'DE broad', countries: ['DE'], daily_budget_cents: 2000 },
+        payload: { campaign_id: '23851234567890123', name: 'DE broad', countries: ['DE'], daily_budget_cents: 2000, dsa_beneficiary: 'Test Advertiser', dsa_payor: 'Test Payer' },
       },
       { forcePausedCreation: true },
     );
@@ -382,6 +382,8 @@ describe('MetaAdsProvider writes', () => {
     expect(body.get('optimization_goal')).toBe('LINK_CLICKS');
     expect(body.get('billing_event')).toBe('IMPRESSIONS');
     expect(body.get('bid_strategy')).toBe('LOWEST_COST_WITHOUT_CAP');
+    expect(body.get('dsa_beneficiary')).toBe('Test Advertiser');
+    expect(body.get('dsa_payor')).toBe('Test Payer');
     expect(body.get('status')).toBe('PAUSED');
   });
 
@@ -397,16 +399,20 @@ describe('MetaAdsProvider writes', () => {
     const provider = new MetaAdsProvider(new MetaGraphClient(CREDS, 'v25.0', impl));
     const op = {
       tool: 'meta_create_ad_set', provider: 'meta', accountId: '426197654150180', kind: 'create' as const,
-      payload: { campaign_id: '23851234567890123', name: 'Preview', countries: ['DE'], ...bidding },
+      payload: { campaign_id: '23851234567890123', name: 'Preview', countries: ['DE'], dsa_beneficiary: 'Test Advertiser', dsa_payor: 'Test Payer', ...bidding },
     };
     const preview = await provider.previewWrite(op, { forcePausedCreation: true });
     expect(preview.serverValidated).toBe(true);
+    expect(preview.changes).toContain('+ advertiser (DSA beneficiary)=Test Advertiser');
+    expect(preview.changes).toContain('+ payer (DSA)=Test Payer');
     expect(preview.changes.join(' ')).toContain(`strategy=${expected ?? 'inherited from campaign'}`);
     expect(calls).toHaveLength(1);
     const body = new URLSearchParams(String(calls[0]!.init.body));
     expect(body.get('execution_options')).toBe('["validate_only"]');
     expect(body.get('status')).toBe('PAUSED');
     expect(body.get('bid_strategy')).toBe(expected);
+    expect(body.get('dsa_beneficiary')).toBe('Test Advertiser');
+    expect(body.get('dsa_payor')).toBe('Test Payer');
     expect(body.get('bid_amount')).toBe(bidding.bid_amount === undefined ? null : String(bidding.bid_amount));
     expect(body.get('bid_constraints')).toBe(bidding.bid_constraints === undefined ? null : JSON.stringify(bidding.bid_constraints));
     await provider.applyWrite(op, { forcePausedCreation: true });
@@ -506,6 +512,9 @@ describe('end-to-end through the shared tool registry (policy engine + meta tool
     const base = { account_id: '426197654150180', campaign_id: '23851234567890123', name: 'Test', countries: ['DE'] };
     expect(tool.input.parse({ ...base, bid_strategy: 'COST_CAP', bid_amount: 50 })).toMatchObject({ bid_strategy: 'COST_CAP', bid_amount: 50 });
     expect(tool.input.parse({ ...base, bid_constraints: { roas_average_floor: 15000 } })).toMatchObject({ bid_constraints: { roas_average_floor: 15000 } });
+    expect(tool.input.parse({ ...base, dsa_beneficiary: ' Test Advertiser ', dsa_payor: 'Test Payer' })).toMatchObject({ dsa_beneficiary: 'Test Advertiser', dsa_payor: 'Test Payer' });
+    expect(tool.input.safeParse({ ...base, dsa_beneficiary: ' ' }).success).toBe(false);
+    expect(tool.input.safeParse({ ...base, dsa_payor: '' }).success).toBe(false);
     for (const bidding of [{ bid_strategy: 'INVALID' }, { bid_amount: -1 }, { bid_amount: 0.5 }, { bid_constraints: { roas_average_floor: 0 } }]) {
       expect(tool.input.safeParse({ ...base, ...bidding }).success).toBe(false);
     }
