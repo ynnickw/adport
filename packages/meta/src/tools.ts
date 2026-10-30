@@ -178,7 +178,8 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
         'Create an ad set in a campaign with minimal country targeting. Omit daily_budget_cents when the campaign ' +
         'uses CBO. Defaults: LINK_CLICKS optimization, IMPRESSIONS billing. With an ad-set budget and no bidding inputs, ' +
         'uses LOWEST_COST_WITHOUT_CAP; otherwise omitted strategy inherits campaign bidding. Bid/cost caps require ' +
-        'bid_amount; minimum ROAS requires bid_constraints and VALUE optimization. Meta validates compatibility before apply.',
+        'bid_amount; minimum ROAS requires bid_constraints and VALUE optimization. For EU targeting supply dsa_beneficiary ' +
+        'and dsa_payor with the actual advertiser and payer names. Meta validates compatibility before apply.',
       provider: 'meta',
       kind: 'create',
       payload: z.object({
@@ -191,6 +192,8 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
         bid_strategy: z.enum(['LOWEST_COST_WITHOUT_CAP', 'LOWEST_COST_WITH_BID_CAP', 'COST_CAP', 'LOWEST_COST_WITH_MIN_ROAS']).optional(),
         bid_amount: z.number().int().positive().optional().describe('Bid or cost cap in account minor currency units, not whole currency units'),
         bid_constraints: z.object({ roas_average_floor: z.number().int().positive().describe('Meta API ROAS floor, scaled by 10000: 15000 means 1.5x') }).optional(),
+        dsa_beneficiary: z.string().trim().min(1).optional().describe('Actual person or organization benefiting from the ads; required by Meta for EU targeting'),
+        dsa_payor: z.string().trim().min(1).optional().describe('Actual person or organization paying for the ads; may be the same as the beneficiary'),
         status: statusSchema.optional(),
       }),
     }),
