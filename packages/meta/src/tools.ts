@@ -176,7 +176,9 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
       namespace: 'meta',
       description:
         'Create an ad set in a campaign with minimal country targeting. Omit daily_budget_cents when the campaign ' +
-        'uses CBO. Defaults: LINK_CLICKS optimization, IMPRESSIONS billing.',
+        'uses CBO. Defaults: LINK_CLICKS optimization, IMPRESSIONS billing. With an ad-set budget and no bidding inputs, ' +
+        'uses LOWEST_COST_WITHOUT_CAP; otherwise omitted strategy inherits campaign bidding. Bid/cost caps require ' +
+        'bid_amount; minimum ROAS requires bid_constraints and VALUE optimization. Meta validates compatibility before apply.',
       provider: 'meta',
       kind: 'create',
       payload: z.object({
@@ -186,6 +188,9 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
         daily_budget_cents: z.number().int().positive().optional(),
         optimization_goal: z.string().optional(),
         billing_event: z.string().optional(),
+        bid_strategy: z.enum(['LOWEST_COST_WITHOUT_CAP', 'LOWEST_COST_WITH_BID_CAP', 'COST_CAP', 'LOWEST_COST_WITH_MIN_ROAS']).optional(),
+        bid_amount: z.number().int().positive().optional().describe('Bid or cost cap in account minor currency units, not whole currency units'),
+        bid_constraints: z.object({ roas_average_floor: z.number().int().positive().describe('Meta API ROAS floor, scaled by 10000: 15000 means 1.5x') }).optional(),
         status: statusSchema.optional(),
       }),
     }),

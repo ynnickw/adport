@@ -567,6 +567,9 @@ export class MetaAdsProvider implements AdProvider {
       daily_budget_cents?: number;
       optimization_goal?: string;
       billing_event?: string;
+      bid_strategy?: string;
+      bid_amount?: number;
+      bid_constraints?: { roas_average_floor: number };
       countries: string[];
       status?: string;
     },
@@ -586,6 +589,26 @@ export class MetaAdsProvider implements AdProvider {
       targeting: { geo_locations: { countries: payload.countries } },
       status,
     };
+    // Never override campaign bidding for CBO, or infer a strategy when a caller
+    // supplied a bid cap/ROAS constraint for an inherited campaign strategy.
+    const bidStrategy = payload.bid_strategy ?? (
+      payload.daily_budget_cents !== undefined && payload.bid_amount === undefined && payload.bid_constraints === undefined
+        ? 'LOWEST_COST_WITHOUT_CAP' : undefined
+    );
+    if (bidStrategy === 'LOWEST_COST_WITHOUT_CAP' && (payload.bid_amount !== undefined || payload.bid_constraints !== undefined)) {
+      throw new AdportError('INVALID_INPUT', 'LOWEST_COST_WITHOUT_CAP cannot include bid_amount or bid_constraints.');
+    }
+    if ((bidStrategy === 'LOWEST_COST_WITH_BID_CAP' || bidStrategy === 'COST_CAP') && payload.bid_amount === undefined) {
+      throw new AdportError('INVALID_INPUT', `${bidStrategy} requires bid_amount in minor currency units.`);
+    }
+    if (bidStrategy === 'LOWEST_COST_WITH_MIN_ROAS' && (
+      payload.bid_constraints === undefined || !['VALUE', 'ADVERTISER_SILOED_VALUE'].includes(String(fields.optimization_goal))
+    )) {
+      throw new AdportError('INVALID_INPUT', 'LOWEST_COST_WITH_MIN_ROAS requires bid_constraints.roas_average_floor and VALUE or ADVERTISER_SILOED_VALUE optimization.');
+    }
+    if (bidStrategy !== undefined) fields.bid_strategy = bidStrategy;
+    if (payload.bid_amount !== undefined) fields.bid_amount = payload.bid_amount;
+    if (payload.bid_constraints !== undefined) fields.bid_constraints = payload.bid_constraints;
     const budgetDeltas: WritePreview['budgetDeltas'] = [];
     if (payload.daily_budget_cents) {
       fields.daily_budget = payload.daily_budget_cents;
@@ -600,6 +623,9 @@ export class MetaAdsProvider implements AdProvider {
         `+ ad_set "${payload.name}" targeting countries=[${payload.countries.join(', ')}] ` +
           `goal=${fields.optimization_goal} billing=${fields.billing_event} status=${status}` +
           (payload.daily_budget_cents ? ` daily_budget=${payload.daily_budget_cents}` : ' (budget on campaign/CBO)'),
+        `+ bidding strategy=${bidStrategy ?? 'inherited from campaign'}` +
+          (payload.bid_amount !== undefined ? ` bid_amount=${payload.bid_amount} minor units` : '') +
+          (payload.bid_constraints !== undefined ? ` bid_constraints=${JSON.stringify(payload.bid_constraints)}` : ''),
       ],
       coercions,
       budgetDeltas,
