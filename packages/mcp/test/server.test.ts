@@ -58,6 +58,15 @@ afterEach(async () => {
 });
 
 describe('adport MCP server', () => {
+  it('includes the display title in annotations for directory clients', async () => {
+    const { tools } = await client.listTools();
+    expect(tools.length).toBeGreaterThan(0);
+    for (const tool of tools) {
+      expect(tool.title).toEqual(expect.any(String));
+      expect(tool.title?.trim().length).toBeGreaterThan(0);
+      expect(tool.annotations?.title).toBe(tool.title);
+    }
+  });
   it('binds widget approval to the exact validated write and keeps the normal policy gate', async () => {
     const input = { account_id: 'mock-1', campaign_id: 'c1', status: 'PAUSED' };
     const first = await client.callTool({ name: 'mock_set_campaign_status', arguments: input });
