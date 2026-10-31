@@ -829,3 +829,10 @@ details.connection-form[open] summary { margin-bottom: 0.8rem; }
   .sidebar-head:has(.project-switcher) > .workspace { grid-column: 1 / -1; grid-row: 2; }
   .sidebar-head:has(.project-switcher) > .menu-toggle { grid-column: 2; grid-row: 1; }
 }
+.analytics-notice { position: fixed; z-index: 70; right: 24px; bottom: 24px; width: min(520px, calc(100vw - 32px)); padding: 22px; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); color: var(--ink); box-shadow: 0 12px 48px #17252626; }
+.analytics-notice h2 { margin: 0 0 10px; font-size: 18px; }
+.analytics-notice p { margin: 8px 0; font-size: 13px; line-height: 1.55; }
+.analytics-notice-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.analytics-notice-actions button { cursor: pointer; padding: 9px 12px; border: 1px solid currentColor; border-radius: 8px; background: transparent; color: inherit; font: inherit; font-size: 13px; }
+.analytics-notice-actions button:disabled { cursor: wait; opacity: .55; }
+.analytics-preferences-link { position: fixed; bottom: 12px; right: 16px; border: 0; background: transparent; text-decoration: underline; font: inherit; font-size: 12px; cursor: pointer; }

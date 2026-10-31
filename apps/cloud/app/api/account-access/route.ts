@@ -1,3 +1,4 @@
+import { captureProductEvent } from '@/lib/cloud/product-analytics';
 import { z } from 'zod';
 import { sessionPrincipal } from '@/lib/cloud/auth';
 import { getOrganizationEntitlement, recommendedUpgradePlan } from '@/lib/cloud/plans';
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
       currentPlan: entitlement.plan.name,
       recommendedPlan: recommendedUpgradePlan(entitlement.plan.id),
     });
+    captureProductEvent(principal, { event: 'account_access_changed', provider: input.provider, enabled: input.enabled });
     return noStoreJson({ updated: true });
   } catch (error) {
     return apiError(error, 403);

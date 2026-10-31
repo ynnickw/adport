@@ -1,5 +1,6 @@
 'use server';
 
+import { captureProductEvent } from '@/lib/cloud/product-analytics';
 import { redirect } from 'next/navigation';
 import { sessionPrincipal } from '@/lib/cloud/auth';
 import { stripeClient, stripePriceId } from '@/lib/cloud/billing';
@@ -31,13 +32,14 @@ export async function startSubscription(plan: PlanId, interval: BillingInterval)
     allow_promotion_codes: true,
     metadata: { organizationId: billingOrganizationId, plan, interval },
     subscription_data: {
-      metadata: { organizationId: billingOrganizationId, plan, interval },
+      metadata: { organizationId: billingOrganizationId, plan, interval, analyticsActorUserId: principal.userId! },
       trial_period_days: 7,
     },
     success_url: new URL('/dashboard/billing?checkout=complete', baseUrl).toString(),
     cancel_url: new URL('/dashboard/billing?checkout=canceled', baseUrl).toString(),
   });
   if (!session.url) throw new Error('Stripe did not return a checkout URL.');
+  captureProductEvent(principal, { event: 'checkout_started', target_plan: plan, interval });
   redirect(session.url);
 }
 

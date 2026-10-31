@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { SUPPORT_OPEN_EVENT } from './support-widget';
+import { ANALYTICS_PREFERENCES_EVENT } from './product-analytics';
 
 type NavItem = { label: string; href: string; icon: React.ReactNode; exact?: boolean; badge?: number };
 
@@ -66,6 +67,7 @@ export function UtilityNav() {
     <nav className="nav utility-nav" aria-label="Workspace and help">
       <button type="button" onClick={() => window.dispatchEvent(new Event(SUPPORT_OPEN_EVENT))}>{icon.support}Support</button>
       <NavLinks items={UTILITY_ITEMS} />
+      <button type="button" onClick={() => window.dispatchEvent(new Event(ANALYTICS_PREFERENCES_EVENT))}>{icon.policies}Privacy preferences</button>
     </nav>
   );
 }

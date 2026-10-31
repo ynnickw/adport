@@ -3,6 +3,7 @@ import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { countPendingOperations } from '@/lib/cloud/repository';
 import { redirect } from 'next/navigation';
 import { ProjectSwitcher } from '@/components/project-switcher';
+import { ProductAnalytics } from '@/components/product-analytics';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +14,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <Shell tenant={{ organizationName: tenant.organizationName, userName: tenant.userName, email: tenant.email, role: tenant.role, projectSwitcher: <ProjectSwitcher projects={tenant.projects} currentProjectId={tenant.organizationId} /> }} pendingApprovals={pendingApprovals}>
       {children}
+      <ProductAnalytics key={`${tenant.userId}:${tenant.organizationId}`} />
     </Shell>
   );
 }

@@ -1,5 +1,6 @@
 'use server';
 
+import { captureProductEvent } from '@/lib/cloud/product-analytics';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
@@ -52,7 +53,9 @@ export async function selectProjectAction(form: FormData): Promise<void> {
 
 export async function createOrganizationAction(_state: WorkspaceActionState, form: FormData): Promise<WorkspaceActionState> {
   const result = await mutation(async actor => {
-    await setProject(await createOrganization(actor, name.parse(form.get('name'))));
+    const projectId = await createOrganization(actor, name.parse(form.get('name')));
+    await setProject(projectId);
+    captureProductEvent({ userId: actor, organizationId: projectId }, { event: 'organization_created' });
   });
   if (!result.error) redirect('/onboarding');
   return result;
@@ -60,7 +63,9 @@ export async function createOrganizationAction(_state: WorkspaceActionState, for
 
 export async function createProjectAction(_state: WorkspaceActionState, form: FormData): Promise<WorkspaceActionState> {
   const result = await mutation(async actor => {
-    await setProject(await createProject(actor, uuid.parse(form.get('organizationId')), name.parse(form.get('name'))));
+    const projectId = await createProject(actor, uuid.parse(form.get('organizationId')), name.parse(form.get('name')));
+    await setProject(projectId);
+    captureProductEvent({ userId: actor, organizationId: projectId }, { event: 'project_created' });
   });
   if (!result.error) redirect('/onboarding');
   return result;

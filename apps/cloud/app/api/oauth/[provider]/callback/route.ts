@@ -1,3 +1,4 @@
+import { captureProductEvent } from '@/lib/cloud/product-analytics';
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { GoogleAdsProvider } from '@adport/provider-google';
@@ -41,6 +42,7 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
   const label = providerLabel(provider);
   const url = new URL(request.url);
   let returnPath = '/dashboard/connections';
+  let analyticsPrincipal: Awaited<ReturnType<typeof sessionPrincipal>> | undefined;
   let popupId: string | undefined;
   try {
     const stateParam = adapter.stateParam ?? 'state';
@@ -56,6 +58,7 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
     // consent screen. Re-authorize against the transaction's organization
     // before storing a grant or constructing its tenant runtime.
     const principal = await sessionPrincipal(transaction.organizationId);
+    analyticsPrincipal = principal;
     if (!['owner', 'admin'].includes(principal.role ?? '')) {
       throw new Error('Owner or admin access is required.');
     }
@@ -95,6 +98,7 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
         pages,
         returnPath,
       });
+      captureProductEvent(principal, { event: 'provider_connection_verified', provider });
       await setConnectionVerification(transaction.organizationId, provider, {
         ok: true,
         label: 'Choose accounts to finish connecting',
@@ -104,6 +108,7 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
         summary: `Authorized ${label}; account selection required`,
       });
     } catch (error) {
+      captureProductEvent(principal, { event: 'provider_connection_failed', provider, stage: 'verification' });
       console.error(JSON.stringify({
         level: 'error',
         message: 'Provider credential verification failed',
@@ -122,6 +127,7 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
     }
     return back(request, '/account-selection', { selection_id: selectionId }, popupId);
   } catch (error) {
+    if (analyticsPrincipal) captureProductEvent(analyticsPrincipal, { event: 'provider_connection_failed', provider, stage: 'authorization' });
     console.error(`${provider} OAuth callback failed:`, describeProviderError(error, provider));
     return back(request, returnPath, { error: `${label} connection failed. Please retry.` }, popupId);
   }
