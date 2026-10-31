@@ -20,6 +20,8 @@ insert into public.organization_groups (id, name, default_project_id, created_by
 select id, name, id, created_by, created_at from public.organizations;
 update public.organizations set organization_group_id = id;
 alter table public.organizations alter column organization_group_id set not null;
+-- Flush the backfill's deferred FK events before later ALTER TABLE statements.
+set constraints organization_groups_default_project_id_fkey immediate;
 
 create table public.organization_group_memberships (
   organization_group_id uuid not null references public.organization_groups(id) on delete cascade,
