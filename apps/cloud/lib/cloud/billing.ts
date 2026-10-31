@@ -76,6 +76,7 @@ async function applySubscription(subscription: Stripe.Subscription): Promise<voi
 
   const appliedPlan = plan ?? 'reader';
   await db().begin(async (sql) => {
+    await sql`select company.id from public.organization_groups company where company.default_project_id = ${target} for update`;
     await sql`
       update public.organization_subscriptions set
         plan = ${appliedPlan},
@@ -89,18 +90,24 @@ async function applySubscription(subscription: Stripe.Subscription): Promise<voi
     `;
 
     const effectivePlan = ['active', 'trialing', 'past_due'].includes(status) ? appliedPlan : 'reader';
+    await sql`update public.organization_settings setting
+      set data_retention_days = least(setting.data_retention_days, ${PLANS[effectivePlan].maxRetentionDays})
+      from public.organizations project join public.organization_groups company on company.id = project.organization_group_id
+      where setting.organization_id = project.id and company.default_project_id = ${target}`;
     const maxActiveAccounts = PLANS[effectivePlan].maxActiveAccounts;
     if (maxActiveAccounts !== null) {
-      const activeAccounts = await sql<Array<{ provider: string; accountId: string }>>`
-        select provider, account_id from public.organization_ad_accounts
-        where organization_id = ${target} and enabled = true
-        order by discovered_at asc, provider asc, account_id asc
-        for update
+      const activeAccounts = await sql<Array<{ organizationId: string; provider: string; accountId: string }>>`
+        select account.organization_id, account.provider, account.account_id from public.organization_ad_accounts account
+        join public.organizations project on project.id = account.organization_id
+        join public.organization_groups company on company.id = project.organization_group_id
+        where company.default_project_id = ${target} and account.enabled = true
+        order by account.discovered_at, account.provider, account.account_id, account.organization_id
+        for update of account
       `;
       for (const account of activeAccounts.slice(maxActiveAccounts)) {
         await sql`
           update public.organization_ad_accounts set enabled = false
-          where organization_id = ${target} and provider = ${account.provider} and account_id = ${account.accountId}
+          where organization_id = ${account.organizationId} and provider = ${account.provider} and account_id = ${account.accountId}
         `;
       }
     }

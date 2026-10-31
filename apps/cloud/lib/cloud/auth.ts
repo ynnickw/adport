@@ -5,12 +5,19 @@ import { authenticateMcpOAuthAccessToken } from './mcp-oauth-repository';
 import { HttpError } from '@/lib/http';
 import type { TenantPrincipal } from './types';
 import { applyPlanToPrincipal } from './plans';
+import { cookies } from 'next/headers';
+
+export const PROJECT_COOKIE = 'adport_project';
 
 export async function sessionPrincipal(requestedOrganizationId?: string): Promise<TenantPrincipal> {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) throw new Error('Authentication required.');
-  const membership = await resolveMembership(data.user.id, requestedOrganizationId);
+  const selected = requestedOrganizationId ?? (await cookies()).get(PROJECT_COOKIE)?.value;
+  const membership = await resolveMembership(data.user.id, selected).catch(error => {
+    if (requestedOrganizationId || !selected) throw error;
+    return resolveMembership(data.user.id);
+  });
   return applyPlanToPrincipal({
     organizationId: membership.organizationId,
     userId: data.user.id,

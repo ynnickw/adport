@@ -26,7 +26,7 @@ describe('provider-specific account picker', () => {
     const html = renderToStaticMarkup(<AccountAccessManager organizationId="org" accounts={accounts} canManage maxActiveAccounts={3} providerFilter={providerFilter} />);
     expect(html).toContain(`${providerFilter} unique account`);
     for (const other of accounts.filter((account) => account.provider !== providerFilter)) expect(html).not.toContain(other.name);
-    expect(html).toContain('2 / 3 active across workspace');
+    expect(html).toContain('2 active in project · organization limit 3');
   });
 
   it('shows all accounts during ordinary account management', async () => {

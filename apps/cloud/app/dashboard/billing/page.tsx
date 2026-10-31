@@ -45,7 +45,7 @@ export default async function BillingPage({
   const [tenant, query] = await Promise.all([requireDashboardTenant(), searchParams]);
   const entitlement = await getOrganizationEntitlement(tenant.organizationId);
   const configured = billingConfigured();
-  const canManage = tenant.role === 'owner';
+  const canManage = tenant.organizationRole === 'owner';
   const interval: BillingInterval = query.billing === 'annual' ? 'annual' : 'monthly';
 
   return (
@@ -59,12 +59,12 @@ export default async function BillingPage({
 
       <section className="plan-summary">
         <div>
-          <span className="plan-kicker">Current workspace</span>
+          <span className="plan-kicker">{tenant.organizationGroupName}</span>
           <div className="plan-current-line">
             <strong>{entitlement.plan.name}</strong>
             <span className="status">{entitlement.status.replaceAll('_', ' ')}</span>
           </div>
-          <p>Agent access follows the plan and member role. Checkout and upgrade prompts never appear inside agent responses.</p>
+          <p>This plan covers every project in your organization. Account and member allowances are shared across projects.</p>
         </div>
         {entitlement.providerCustomerId && canManage && configured ? (
           <form action={openBillingPortal}><button className="button secondary" type="submit">Manage billing</button></form>

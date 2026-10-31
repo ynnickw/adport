@@ -17,12 +17,13 @@ export interface AccountAccessItem {
   enabled: boolean;
 }
 
-export function AccountAccessManager({ organizationId, accounts, canManage, maxActiveAccounts, providerFilter }: {
+export function AccountAccessManager({ organizationId, accounts, canManage, maxActiveAccounts, providerFilter, organizationActiveCount }: {
   organizationId: string;
   accounts: AccountAccessItem[];
   canManage: boolean;
   maxActiveAccounts: number | null;
   providerFilter?: OAuthProvider;
+  organizationActiveCount?: number;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -52,7 +53,9 @@ export function AccountAccessManager({ organizationId, accounts, canManage, maxA
       <PlanLimitModal limit={planLimit} onClose={() => setPlanLimit(undefined)} />
       <div className="card-head">
         <h2>{providerFilter ? `${providerLabel(providerFilter)} account access` : 'Agent account access'}</h2>
-        <span className="card-note">{activeCount} / {maxActiveAccounts ?? 'unlimited'} active{providerFilter ? ' across workspace' : ''}</span>
+        <span className="card-note">{organizationActiveCount !== undefined
+          ? `${organizationActiveCount} / ${maxActiveAccounts ?? 'unlimited'} active across organization`
+          : `${activeCount} active in project · organization limit ${maxActiveAccounts ?? 'unlimited'}`}</span>
       </div>
       {error ? <div className="error-callout" role="alert">{error}</div> : null}
       {visibleAccounts.length === 0 ? <div className="empty"><h3>No {providerFilter ? `${providerLabel(providerFilter)} ` : ''}accounts added</h3><p>Re-authorize this provider in Connections to choose which accounts to add.</p></div> : <div className="table-wrap"><table>
