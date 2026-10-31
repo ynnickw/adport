@@ -3,6 +3,7 @@ import { canAdminister, requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { env } from '@/lib/env';
 import { AgentSetupGuide } from './agent-setup-guide';
 import { ApiKeyManager } from './api-key-manager';
+import { Disclosure } from '@/components/controls';
 
 export const metadata = { title: 'Agent access' };
 
@@ -14,7 +15,7 @@ export default async function AgentsPage() {
       <PageHeader title="Agent access" description="Connect an MCP client with Adport OAuth. Grants are scoped to this workspace and every write still passes the same policy gate." />
       <div className="stack agent-access-stack">
         <AgentSetupGuide baseUrl={baseUrl} />
-        <div className="grid-2">
+        <Disclosure label="Advanced connection options"><div className="grid-2">
           <section className="card">
             <div className="card-head"><h2>Connection details</h2><span className="card-note">Streamable HTTP</span></div>
             <div className="card-body stack">
@@ -31,10 +32,10 @@ export default async function AgentsPage() {
               <p className="inline-note">Use a manual bearer key only for clients without MCP OAuth. Guarded writes first return a preview; applying requires the matching pending operation.</p>
             </div>
           </section>
-        </div>
+        </div></Disclosure>
         <section className="card">
-          <div className="card-head"><h2>Agent credentials</h2><span className="card-note">OAuth grants and manual keys · secrets never displayed</span></div>
-          <ApiKeyManager organizationId={tenant.organizationId} canManage={canAdminister(tenant)} />
+          <div className="card-head"><h2>Connected agents & keys</h2></div>
+          <ApiKeyManager key={tenant.organizationId} organizationId={tenant.organizationId} canManage={canAdminister(tenant)} />
         </section>
       </div>
     </main>

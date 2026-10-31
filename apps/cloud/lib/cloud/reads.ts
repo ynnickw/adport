@@ -4,6 +4,7 @@ import { createTenantRuntime } from './runtime';
 import { listConnections } from './repository';
 import { describeProviderError } from './provider-errors';
 import type { TenantPrincipal } from './types';
+import type { DashboardReportSummary } from '@/lib/report-summary';
 
 export interface ProviderReadWarning { provider: string; message: string }
 export type ReadResult<T> =
@@ -45,7 +46,7 @@ export async function readAccounts(principal: TenantPrincipal): Promise<ReadResu
 }
 
 /** Server-side campaign report across connected providers, via the shared registry. */
-export async function readReport(principal: TenantPrincipal, dateRange: 'last_7_days' | 'last_30_days'): Promise<ReadResult<{ rows: ReportRow[]; truncated: boolean }>> {
+export async function readReport(principal: TenantPrincipal, dateRange: 'last_7_days' | 'last_30_days'): Promise<ReadResult<{ rows: ReportRow[]; truncated: boolean; summary?: DashboardReportSummary }>> {
   const connected = await hasConnectedProvider(principal.organizationId);
   if (!connected) return { ok: true, data: { rows: [], truncated: false }, connected, warnings: [] };
   try {
@@ -53,9 +54,9 @@ export async function readReport(principal: TenantPrincipal, dateRange: 'last_7_
     const result = await runtime.registry.call('report', {
       level: 'campaign', metrics: ['spend', 'impressions', 'clicks', 'conversions', 'roas'], date_range: dateRange,
       limit: 250, continue_on_error: true,
-    }, runtime.ctx) as { rows: ReportRow[]; truncated: boolean; errors: Array<{ provider: string; message: string }> };
+    }, runtime.ctx) as { rows: ReportRow[]; truncated: boolean; summary: DashboardReportSummary; errors: Array<{ provider: string; message: string }> };
     result.errors.forEach((error) => message(new Error(error.message), error.provider));
-    return { ok: true, data: { rows: result.rows, truncated: result.truncated }, connected, warnings: warnings(result.errors) };
+    return { ok: true, data: { rows: result.rows, truncated: result.truncated, summary: result.summary }, connected, warnings: warnings(result.errors) };
   } catch (error) {
     return { ok: false, error: message(error), connected, warnings: [] };
   }

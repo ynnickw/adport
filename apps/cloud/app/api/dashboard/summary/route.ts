@@ -10,6 +10,7 @@ export async function GET(request: Request) {
     if (!reportResult.ok) throw new HttpError(reportResult.error, 400);
     return noStoreJson({
       rows: reportResult.data.rows,
+      summary: reportResult.data.summary,
       truncated: reportResult.data.truncated,
       warnings: reportResult.warnings,
     });

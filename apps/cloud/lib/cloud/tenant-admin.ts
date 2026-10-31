@@ -5,6 +5,9 @@ import { db } from '@/lib/db';
 import type { TenantPrincipal } from './types';
 import { getOrganizationEntitlement, recommendedUpgradePlan } from './plans';
 import { PlanLimitError } from './plan-limit';
+import { env } from '@/lib/env';
+import { invitationRedirectUrl } from '@/lib/invitations';
+import { editingMemberCapacity, lockProjectOrganization } from './member-capacity';
 
 export type AssignableRole = 'admin' | 'member' | 'viewer';
 
@@ -15,6 +18,13 @@ function requireMemberAdmin(principal: TenantPrincipal): void {
 function requireAssignableRole(principal: TenantPrincipal, role: AssignableRole): void {
   requireMemberAdmin(principal);
   if (role === 'admin' && principal.role !== 'owner') throw new Error('Only an owner can grant admin access.');
+}
+
+async function requireProjectManagedMember(projectId: string, userId: string): Promise<void> {
+  const inherited = await db()`select 1 from public.organization_group_memberships member
+    join public.organizations project on project.organization_group_id = member.organization_group_id
+    where project.id = ${projectId} and member.user_id = ${userId} and member.role in ('owner', 'admin')`;
+  if (inherited.length) throw new Error('Manage organization owners and admins in Organization settings.');
 }
 
 export async function listOrganizationMembers(organizationId: string) {
@@ -29,29 +39,27 @@ export async function inviteOrganizationMember(
   role: AssignableRole,
 ): Promise<{ added: boolean; invitationSent: boolean; targetUserId: string }> {
   requireAssignableRole(principal, role);
-  const entitlement = await getOrganizationEntitlement(principal.organizationId);
-  if (entitlement.plan.maxMembers !== null) {
-    const totals = await db()<Array<{ count: number }>>`
-      select count(*)::int as count from public.organization_memberships
-      where organization_id = ${principal.organizationId}
-    `;
-    if ((totals[0]?.count ?? 0) >= entitlement.plan.maxMembers) {
-      throw new PlanLimitError({
-        kind: 'members', currentPlan: entitlement.plan.name,
-        recommendedPlan: recommendedUpgradePlan(entitlement.plan.id),
-        message: `${entitlement.plan.name} supports ${entitlement.plan.maxMembers} workspace member${entitlement.plan.maxMembers === 1 ? '' : 's'}. Upgrade to invite more people.`,
-      });
-    }
-  }
   const normalizedEmail = email.trim().toLowerCase();
   const users = await db()<Array<{ id: string | null }>>`
     select private.find_auth_user_id(${normalizedEmail}) as id
   `;
   let targetUserId = users[0]?.id;
+  const entitlement = await getOrganizationEntitlement(principal.organizationId);
+  if (role !== 'viewer' && entitlement.plan.maxMembers !== null) {
+    const totals = await editingMemberCapacity(principal.organizationId, targetUserId ?? undefined);
+    if (!totals.existing && totals.count >= entitlement.plan.maxMembers) {
+      throw new PlanLimitError({
+        kind: 'members', currentPlan: entitlement.plan.name,
+        recommendedPlan: recommendedUpgradePlan(entitlement.plan.id),
+        message: `${entitlement.plan.name} supports ${entitlement.plan.maxMembers} editing member${entitlement.plan.maxMembers === 1 ? '' : 's'}. Read-only viewers are free.`,
+      });
+    }
+  }
   let invitationSent = false;
   if (!targetUserId) {
     const result = await createAdminClient().auth.admin.inviteUserByEmail(normalizedEmail, {
       data: { full_name: normalizedEmail.split('@')[0] },
+      redirectTo: invitationRedirectUrl(env().ADPORT_CLOUD_BASE_URL, principal.organizationId),
     });
     if (result.error || !result.data.user) throw result.error ?? new Error('Invitation failed.');
     targetUserId = result.data.user.id;
@@ -59,6 +67,7 @@ export async function inviteOrganizationMember(
   }
 
   const added = await db().begin(async (sql) => {
+    await lockProjectOrganization(principal.organizationId, sql);
     const inserted = await sql<Array<{ userId: string }>>`
       insert into public.organization_memberships (organization_id, user_id, role)
       values (${principal.organizationId}, ${targetUserId}, ${role})
@@ -85,7 +94,9 @@ export async function changeOrganizationMemberRole(
   role: AssignableRole,
 ): Promise<void> {
   requireAssignableRole(principal, role);
+  await requireProjectManagedMember(principal.organizationId, targetUserId);
   await db().begin(async (sql) => {
+    await lockProjectOrganization(principal.organizationId, sql);
     const rows = await sql<Array<{ role: string }>>`
       select role from public.organization_memberships
       where organization_id = ${principal.organizationId} and user_id = ${targetUserId}
@@ -116,7 +127,9 @@ export async function changeOrganizationMemberRole(
 
 export async function removeOrganizationMember(principal: TenantPrincipal, targetUserId: string): Promise<void> {
   requireMemberAdmin(principal);
+  await requireProjectManagedMember(principal.organizationId, targetUserId);
   await db().begin(async (sql) => {
+    await lockProjectOrganization(principal.organizationId, sql);
     const rows = await sql<Array<{ role: string }>>`
       select role from public.organization_memberships
       where organization_id = ${principal.organizationId} and user_id = ${targetUserId}

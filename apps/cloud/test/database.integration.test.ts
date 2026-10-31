@@ -191,6 +191,7 @@ describeDatabase('Supabase tenant boundary', () => {
   });
 
   it('downscales active account access when Stripe returns a subscription to Free', async () => {
+    await db()`update public.organization_subscriptions set plan = 'operator', status = 'active' where organization_id = ${firstOrgId}`;
     process.env.STRIPE_OPERATOR_PRICE_ID = 'price_operator_test';
     process.env.STRIPE_AGENCY_PRICE_ID = 'price_agency_test';
     resetEnvForTests();
@@ -213,7 +214,7 @@ describeDatabase('Supabase tenant boundary', () => {
       await setOrganizationAdAccountEnabled({
         principal: { organizationId: firstOrgId, userId: firstUserId, role: 'owner', scopes: [] },
         provider: 'google', accountId: account.accountId, enabled: true, maxActiveAccounts: 4,
-        currentPlan: 'Operator', recommendedPlan: 'premium',
+        currentPlan: 'Pro', recommendedPlan: 'premium',
       });
     }
     const outcome = await processStripeEvent({
@@ -312,7 +313,7 @@ describeDatabase('Supabase tenant boundary', () => {
       where organization_id = ${firstOrgId} and user_id = ${secondUserId}
     `;
     expect(changed[0]?.role).toBe('viewer');
-    await expect(changeOrganizationMemberRole(owner, firstUserId, 'member')).rejects.toThrow('last owner');
+    await expect(changeOrganizationMemberRole(owner, firstUserId, 'member')).rejects.toThrow('Organization settings');
 
     const updatedPolicy = { ...DEFAULT_POLICY, protected_accounts: ['protected-123'], pending_ttl_minutes: 8 };
     await updateOrganizationSettings(owner, updatedPolicy, 45);

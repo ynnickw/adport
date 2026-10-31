@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/controls';
+
 export default function DashboardError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
     <main className="page">
@@ -10,7 +12,7 @@ export default function DashboardError({ error, reset }: { error: Error & { dige
         </div>
       </div>
       <div className="error-callout" role="alert">{error.message}</div>
-      <button className="button" onClick={reset}>Try again</button>
+      <Button className="button" onClick={reset}>Try again</Button>
     </main>
   );
 }

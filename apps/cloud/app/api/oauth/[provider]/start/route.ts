@@ -1,3 +1,4 @@
+import { captureProductEvent } from '@/lib/cloud/product-analytics';
 import { randomBytes } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { sessionPrincipal } from '@/lib/cloud/auth';
@@ -46,6 +47,7 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
       verifier: prepared?.verifier ?? pkce.verifier,
       returnPath: validPopupId(popupId) ? popupReturnPath(popupId, returnPath) : returnPath,
     });
+    captureProductEvent(principal, { event: 'provider_connection_started', provider });
     return NextResponse.redirect(prepared?.authorizationUrl ?? adapter.authorizationUrl({ state, challenge: pkce.challenge }));
   } catch (error) {
     return failure(error, 401);
