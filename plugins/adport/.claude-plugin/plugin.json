@@ -1,6 +1,7 @@
 {
   "name": "adport",
-  "version": "0.1.0",
+  "version": "0.1.1",
+  "icon": "./assets/icon.svg",
   "description": "Safely analyze and manage paid media across connected advertising platforms.",
   "author": {
     "name": "Yannick Westermann Labs",
