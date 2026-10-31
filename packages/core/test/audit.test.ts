@@ -51,6 +51,16 @@ describe('AuditRunner + core-performance pack', () => {
 });
 
 describe('recommendation tools', () => {
+  it('returns an actionable input error for a nonexistent dismissal without writing', async () => {
+    const { ctx, registry } = await createContext({ includeMock: true });
+    const store = new FindingsStore();
+    ctx.findings = store;
+    const setStatus = vi.spyOn(store, 'setStatus');
+    await expect(registry.call('recommendation_dismiss', { finding_id: 'missing-finding' }, ctx))
+      .rejects.toMatchObject({ code: 'INVALID_INPUT', message: 'Finding not found: missing-finding' });
+    expect(setStatus).not.toHaveBeenCalled();
+  });
+
   it('declares account-scoped audits closed-world while retaining their distinct write behavior', async () => {
     const { ctx, registry } = await createContext({ includeMock: true });
     const report = vi.spyOn(ctx.providers.get('mock'), 'report');
