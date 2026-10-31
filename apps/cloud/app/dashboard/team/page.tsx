@@ -4,6 +4,7 @@ import { listOrganizationMembers } from '@/lib/cloud/tenant-admin';
 import { DangerZone } from './danger-zone';
 import { OrganizationName } from './organization-name';
 import { TeamMembers } from './team-members';
+import Link from 'next/link';
 
 export const metadata = { title: 'Team' };
 
@@ -12,14 +13,15 @@ export default async function TeamPage() {
   const members = await listOrganizationMembers(tenant.organizationId);
   return (
     <main className="page">
-      <PageHeader title="Team" description="Owners and admins manage connections, policy, keys, and members; members can read, preview, and apply; viewers read only." />
+      <PageHeader title="Project team" description="Manage access to this project. Organization owners and admins inherit access; members can read and operate, and viewers read only." />
+      <p style={{ marginBottom: '1rem' }}><Link href="/dashboard/organization">Manage organization roles and access across projects</Link></p>
       <div className="stack" style={{ maxWidth: '46rem' }}>
         <OrganizationName organizationId={tenant.organizationId} name={tenant.organizationName} canManage={['owner', 'admin'].includes(tenant.role)} />
         <section className="card">
           <div className="card-head"><h2>Members</h2><span className="card-note">{members.length} {members.length === 1 ? 'member' : 'members'}</span></div>
           <TeamMembers organizationId={tenant.organizationId} currentUserId={tenant.userId} currentRole={tenant.role} members={members} />
         </section>
-        {tenant.role === 'owner' ? <DangerZone organizationId={tenant.organizationId} /> : null}
+        {tenant.role === 'owner' ? <DangerZone organizationId={tenant.organizationId} isDefaultProject={tenant.organizationId === tenant.projects.find(project => project.id === tenant.organizationId)!.defaultProjectId} /> : null}
       </div>
     </main>
   );

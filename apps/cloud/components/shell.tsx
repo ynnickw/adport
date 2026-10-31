@@ -9,6 +9,7 @@ export interface ShellTenant {
   userName: string;
   email: string;
   role: string;
+  projectSwitcher?: React.ReactNode;
 }
 
 export function Shell({ tenant, pendingApprovals = 0, children }: { tenant: ShellTenant; pendingApprovals?: number; children: React.ReactNode }) {
@@ -17,7 +18,7 @@ export function Shell({ tenant, pendingApprovals = 0, children }: { tenant: Shel
       <a className="skip-link" href="#content">Skip to content</a>
       <SidebarFrame
         brand={<Link className="brand-lockup" href="/dashboard" prefetch={false} aria-label="Adport overview"><BrandLockup /></Link>}
-        workspace={tenant.organizationName}
+        workspace={tenant.projectSwitcher ?? tenant.organizationName}
       >
         <Nav pendingApprovals={pendingApprovals} />
         <div className="sidebar-lower"><UtilityNav /></div>

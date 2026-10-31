@@ -34,6 +34,8 @@ const PRIMARY_ITEMS: NavItem[] = [
 
 const UTILITY_ITEMS: NavItem[] = [
   { label: 'Agent access', href: '/dashboard/agents', icon: icon.agents },
+  { label: 'Projects', href: '/dashboard/projects', icon: icon.accounts },
+  { label: 'Organization', href: '/dashboard/organization', icon: icon.team },
   { label: 'Policies', href: '/dashboard/policies', icon: icon.policies },
   { label: 'Team', href: '/dashboard/team', icon: icon.team },
   { label: 'Plan', href: '/dashboard/billing', icon: icon.billing },
@@ -69,7 +71,7 @@ export function UtilityNav() {
 }
 
 // On narrow screens the navigation collapses behind a menu button so each page starts with its content.
-export function SidebarFrame({ brand, workspace, children }: { brand: React.ReactNode; workspace: string; children: React.ReactNode }) {
+export function SidebarFrame({ brand, workspace, children }: { brand: React.ReactNode; workspace: React.ReactNode; children: React.ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const current = [...PRIMARY_ITEMS, ...UTILITY_ITEMS].find((item) => isActive(item, pathname))?.label ?? 'Menu';
@@ -86,7 +88,7 @@ export function SidebarFrame({ brand, workspace, children }: { brand: React.Reac
     <aside className="sidebar" data-open={open}>
       <div className="sidebar-head">
         {brand}
-        <div className="workspace"><span className="workspace-name">{workspace}</span></div>
+        <div className="workspace">{typeof workspace === 'string' ? <span className="workspace-name">{workspace}</span> : workspace}</div>
         <button className="menu-toggle" type="button" aria-expanded={open} aria-controls="sidebar-menu" onClick={() => setOpen((value) => !value)}>
           <span className="menu-current">{current}</span>
           <span className="menu-icon" aria-hidden="true" />

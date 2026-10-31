@@ -1,6 +1,7 @@
 import { createMcpAuthorizationCode, getMcpOAuthClient } from '@/lib/cloud/mcp-oauth-repository';
 import { sessionPrincipal } from '@/lib/cloud/auth';
 import { oauthError, validateAuthorizationRequest } from '@/lib/mcp-oauth';
+import { z } from 'zod';
 
 export async function POST(request: Request) {
   try {
@@ -17,7 +18,8 @@ export async function POST(request: Request) {
       target.searchParams.set('error', 'access_denied');
       target.searchParams.set('error_description', 'The resource owner denied the request.');
     } else {
-      const principal = await sessionPrincipal();
+      const projectId = form.get('project_id');
+      const principal = await sessionPrincipal(projectId ? z.string().uuid().parse(projectId) : undefined);
       target.searchParams.set('code', await createMcpAuthorizationCode(principal, authorization));
     }
     if (authorization.state) target.searchParams.set('state', authorization.state);

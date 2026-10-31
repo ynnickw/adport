@@ -164,7 +164,7 @@ describeHttp('running cloud server', () => {
     oauthClientIds.add(registered.client_id);
 
     const verifier = 'h'.repeat(64);
-    const code = await createMcpAuthorizationCode({ organizationId, userId, scopes: [] }, {
+    const code = await createMcpAuthorizationCode({ organizationId, userId, scopes: ['tools:read'] }, {
       clientId: registered.client_id,
       clientName: 'Adport HTTP OAuth test',
       redirectUri: 'http://127.0.0.1:45892/callback',
@@ -224,7 +224,7 @@ describeHttp('running cloud server', () => {
     const registered = await getMcpOAuthClient(information!.client_id);
     expect(registered).toBeDefined();
     const authorization = validateAuthorizationRequest(authorizationUrl!.searchParams, registered!);
-    const code = await createMcpAuthorizationCode({ organizationId, userId, scopes: [] }, authorization);
+    const code = await createMcpAuthorizationCode({ organizationId, userId, scopes: ['tools:read', 'tools:write'] }, authorization);
     await firstTransport.finishAuth(code);
 
     const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), { authProvider: provider });

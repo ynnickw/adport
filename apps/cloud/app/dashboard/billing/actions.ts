@@ -5,6 +5,7 @@ import { sessionPrincipal } from '@/lib/cloud/auth';
 import { stripeClient, stripePriceId } from '@/lib/cloud/billing';
 import { getOrganizationEntitlement, type BillingInterval, type PlanId } from '@/lib/cloud/plans';
 import { env } from '@/lib/env';
+import { requireOrganizationAdmin } from '@/lib/cloud/workspaces';
 
 function requireOwner(role: string | undefined): void {
   if (role !== 'owner') throw new Error('Only the workspace owner can manage billing.');
@@ -16,18 +17,21 @@ export async function startSubscription(plan: PlanId, interval: BillingInterval)
   const principal = await sessionPrincipal();
   requireOwner(principal.role);
   const entitlement = await getOrganizationEntitlement(principal.organizationId);
+  const billingOrganizationId = entitlement.billingOrganizationId ?? principal.organizationId;
+  const organization = await requireOrganizationAdmin(principal.userId!, billingOrganizationId);
+  requireOwner(organization.role);
   if (entitlement.providerSubscriptionId) throw new Error('Manage the existing subscription in the billing portal.');
   const baseUrl = env().ADPORT_CLOUD_BASE_URL;
   const session = await stripeClient().checkout.sessions.create({
     mode: 'subscription',
     customer: entitlement.providerCustomerId ?? undefined,
-    client_reference_id: principal.organizationId,
+    client_reference_id: billingOrganizationId,
     line_items: [{ price: stripePriceId(plan, interval), quantity: 1 }],
     billing_address_collection: 'required',
     allow_promotion_codes: true,
-    metadata: { organizationId: principal.organizationId, plan, interval },
+    metadata: { organizationId: billingOrganizationId, plan, interval },
     subscription_data: {
-      metadata: { organizationId: principal.organizationId, plan, interval },
+      metadata: { organizationId: billingOrganizationId, plan, interval },
       trial_period_days: 7,
     },
     success_url: new URL('/dashboard/billing?checkout=complete', baseUrl).toString(),
@@ -41,6 +45,8 @@ export async function openBillingPortal(): Promise<void> {
   const principal = await sessionPrincipal();
   requireOwner(principal.role);
   const entitlement = await getOrganizationEntitlement(principal.organizationId);
+  const organization = await requireOrganizationAdmin(principal.userId!, entitlement.billingOrganizationId ?? principal.organizationId);
+  requireOwner(organization.role);
   if (!entitlement.providerCustomerId) throw new Error('No billing customer exists for this workspace.');
   const portal = await stripeClient().billingPortal.sessions.create({
     customer: entitlement.providerCustomerId,
