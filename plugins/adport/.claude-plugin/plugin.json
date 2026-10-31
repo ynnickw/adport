@@ -8,6 +8,10 @@
     "url": "https://adport.dev"
   },
   "homepage": "https://adport.dev",
+  "privacyPolicyUrl": "https://adport.dev/privacy",
+  "termsOfServiceUrl": "https://adport.dev/terms",
+  "supportUrl": "https://adport.dev/support",
+  "documentationUrl": "https://github.com/ynnickw/adport#readme",
   "repository": "https://github.com/ynnickw/adport",
   "license": "Apache-2.0",
   "keywords": ["advertising", "paid-media", "google-ads", "meta-ads", "mcp"]
