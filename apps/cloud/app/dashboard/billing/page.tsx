@@ -48,6 +48,8 @@ export default async function BillingPage({
   const editingMembers = await editingMemberCapacity(tenant.organizationId);
   const configured = billingConfigured();
   const canManage = tenant.organizationRole === 'owner';
+  const hasSubscription = Boolean(entitlement.providerSubscriptionId && entitlement.status !== 'canceled');
+  const trialEligible = !entitlement.providerSubscriptionId;
   const interval: BillingInterval = query.billing === 'annual' ? 'annual' : 'monthly';
 
   return (
@@ -67,7 +69,7 @@ export default async function BillingPage({
             <span className="status">{entitlement.status.replaceAll('_', ' ')}</span>
           </div>
           <p>This plan covers every project in your organization. Active accounts and editing members are shared across projects. Read-only client viewers are free.</p>
-          {entitlement.providerSubscriptionId ? <p>Your existing subscription keeps its current price until you choose a change in the billing portal.</p> : null}
+          {hasSubscription ? <p>Your existing subscription keeps its current price until you choose a change in the billing portal.</p> : null}
         </div>
         {entitlement.providerCustomerId && canManage && configured ? (
           <form action={openBillingPortal}><button className="button secondary" type="submit">Manage billing</button></form>
@@ -110,7 +112,7 @@ export default async function BillingPage({
                   <>
                     <strong>€{displayPrice}</strong><span>/ month</span>
                     {annual ? <small>€{plan.annualPriceEur} billed yearly · save €{annualSaving}</small> : <small>Billed monthly</small>}
-                    <small className="plan-trial">7-day free trial · cancel anytime</small>
+                    <small className="plan-trial">{trialEligible ? '7-day free trial · cancel anytime' : 'Cancel anytime'}</small>
                   </>
                 )}
               </div>
@@ -125,14 +127,14 @@ export default async function BillingPage({
               </ul>
               <div className="plan-action">
                 {selected ? <span className="button secondary full disabled">Current plan</span> : null}
-                {!selected && paid && canManage && paidPlanReady && !entitlement.providerSubscriptionId ? (
+                {!selected && paid && canManage && paidPlanReady && !hasSubscription ? (
                   <form action={startSubscription.bind(null, plan.id, interval)}>
-                    <button className="button full" type="submit">Start 7-day free trial</button>
+                    <button className="button full" type="submit">{trialEligible ? 'Start 7-day free trial' : 'Subscribe'}</button>
                   </form>
                 ) : null}
                 {!selected && paid && configured && !paidPlanReady ? <span className="plan-unavailable">Checkout coming soon</span> : null}
                 {!selected && paid && !canManage ? <span className="plan-unavailable">Ask the workspace owner to change plans</span> : null}
-                {!selected && paid && entitlement.providerSubscriptionId ? <span className="plan-unavailable">Manage changes in the billing portal</span> : null}
+                {!selected && paid && hasSubscription ? <span className="plan-unavailable">Manage changes in the billing portal</span> : null}
               </div>
             </section>
           );

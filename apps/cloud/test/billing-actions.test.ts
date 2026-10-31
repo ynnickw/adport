@@ -43,7 +43,7 @@ describe('subscription checkout', () => {
     expect(mocks.checkoutCreate).not.toHaveBeenCalled();
   });
 
-  it('starts Premium annual Checkout with a seven-day trial and organization metadata', async () => {
+  it('starts Growth annual Checkout with a seven-day trial and organization metadata', async () => {
     await expect(startSubscription('premium', 'annual')).rejects.toThrow('redirect:https://checkout.stripe.com/session');
     expect(mocks.stripePriceId).toHaveBeenCalledWith('premium', 'annual');
     expect(mocks.checkoutCreate).toHaveBeenCalledWith(expect.objectContaining({
@@ -56,5 +56,19 @@ describe('subscription checkout', () => {
         trial_period_days: 7,
       },
     }));
+  });
+
+  it('allows a canceled customer to subscribe again without another free trial', async () => {
+    mocks.getOrganizationEntitlement.mockResolvedValue({ providerCustomerId: 'cus_returning', providerSubscriptionId: 'sub_canceled', status: 'canceled' });
+    await expect(startSubscription('premium', 'annual')).rejects.toThrow('redirect:');
+    const checkout = mocks.checkoutCreate.mock.calls[0]![0];
+    expect(checkout.customer).toBe('cus_returning');
+    expect(checkout.subscription_data).not.toHaveProperty('trial_period_days');
+  });
+
+  it.each(['active', 'trialing', 'past_due', 'incomplete', 'unpaid'])('prevents duplicate checkout for a %s subscription', async (status) => {
+    mocks.getOrganizationEntitlement.mockResolvedValue({ providerSubscriptionId: 'sub_existing', status });
+    await expect(startSubscription('premium', 'annual')).rejects.toThrow('billing portal');
+    expect(mocks.checkoutCreate).not.toHaveBeenCalled();
   });
 });

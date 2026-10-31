@@ -21,7 +21,7 @@ export async function startSubscription(plan: PlanId, interval: BillingInterval)
   const billingOrganizationId = entitlement.billingOrganizationId ?? principal.organizationId;
   const organization = await requireOrganizationAdmin(principal.userId!, billingOrganizationId);
   requireOwner(organization.role);
-  if (entitlement.providerSubscriptionId) throw new Error('Manage the existing subscription in the billing portal.');
+  if (entitlement.providerSubscriptionId && entitlement.status !== 'canceled') throw new Error('Manage the existing subscription in the billing portal.');
   const baseUrl = env().ADPORT_CLOUD_BASE_URL;
   const session = await stripeClient().checkout.sessions.create({
     mode: 'subscription',
@@ -33,7 +33,7 @@ export async function startSubscription(plan: PlanId, interval: BillingInterval)
     metadata: { organizationId: billingOrganizationId, plan, interval },
     subscription_data: {
       metadata: { organizationId: billingOrganizationId, plan, interval, analyticsActorUserId: principal.userId! },
-      trial_period_days: 7,
+      ...(entitlement.providerSubscriptionId ? {} : { trial_period_days: 7 }),
     },
     success_url: new URL('/dashboard/billing?checkout=complete', baseUrl).toString(),
     cancel_url: new URL('/dashboard/billing?checkout=canceled', baseUrl).toString(),
