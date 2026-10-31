@@ -3,9 +3,9 @@ import { BrandLockup } from '@/components/logos';
 import { AuthFrame } from '@/components/ui';
 import { getMcpOAuthClient } from '@/lib/cloud/mcp-oauth-repository';
 import { sessionPrincipal } from '@/lib/cloud/auth';
-import { db } from '@/lib/db';
 import { validateAuthorizationRequest } from '@/lib/mcp-oauth';
 import { createClient } from '@/lib/supabase/server';
+import { listProjectAccess } from '@/lib/cloud/workspaces';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,11 +36,9 @@ export default async function AuthorizePage({ searchParams }: {
   const { data } = await supabase.auth.getUser();
   if (!data.user) redirect(`/login?return_to=${encodeURIComponent(`/oauth/authorize?${params.toString()}`)}`);
   const principal = await sessionPrincipal();
+  const projects = await listProjectAccess(data.user.id);
   const credentialScopes = principal.grantedScopes ?? principal.scopes;
   const grantedScopes = authorization.scopes.filter((scope) => credentialScopes.includes(scope));
-  const organization = await db()<Array<{ name: string }>>`
-    select name from public.organizations where id = ${principal.organizationId} limit 1
-  `;
   const redirectHost = new URL(authorization.redirectUri).host;
 
   return (
@@ -48,8 +46,8 @@ export default async function AuthorizePage({ searchParams }: {
       <BrandLockup size="large" />
       <h1>Connect {authorization.clientName}.</h1>
       <p>
-        This gives <strong>{authorization.clientName}</strong> access to the Adport workspace
-        {' '}<strong>{organization[0]?.name ?? 'Workspace'}</strong>. Tokens work only with Adport&apos;s hosted MCP.
+        Choose the organization and project <strong>{authorization.clientName}</strong> can access.
+        Tokens work only with Adport&apos;s hosted MCP. Your role and the organization&apos;s plan are checked on every call.
       </p>
       <div className="callout">
         Return destination: <strong>{redirectHost}</strong>. Only continue if you started this connection there.
@@ -57,15 +55,15 @@ export default async function AuthorizePage({ searchParams }: {
       <dl className="connection-meta oauth-consent-scopes">
         {grantedScopes.includes('tools:read') ? <><dt>Read</dt><dd>Active ad accounts, campaigns, reports, findings, and audit evidence.</dd></> : null}
         {grantedScopes.includes('tools:write') ? <><dt>Propose changes</dt><dd>Create previews and apply only operations that pass Adport&apos;s two-step policy gate.</dd></> : null}
-        {authorization.scopes.includes('tools:write') && principal.entitlement && !principal.entitlement.writeAccess
-          ? <><dt>Current plan</dt><dd>Write tools are authorized but remain blocked until this workspace upgrades to Operator or higher.</dd></>
-          : null}
-        {authorization.scopes.includes('tools:write') && principal.role === 'viewer'
-          ? <><dt>Current role</dt><dd>Viewer access cannot use write tools. Ask a workspace admin to change your role.</dd></>
-          : null}
       </dl>
       <form className="form" method="post" action="/oauth/authorize/consent">
-        {Array.from(params.entries()).map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
+        {Array.from(params.entries()).filter(([name]) => name !== 'project_id').map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
+        <label>Project
+          <select name="project_id" defaultValue={principal.organizationId} required>
+            {projects.map(project => <option key={project.id} value={project.id}>{project.organizationName} / {project.name}</option>)}
+          </select>
+        </label>
+        <p className="auth-switch">This connection stays bound to this project when you switch projects in the dashboard. Connect again to authorize another project.</p>
         <div className="form-actions">
           <button className="button" type="submit" name="decision" value="allow">Authorize</button>
           <button className="button secondary" type="submit" name="decision" value="deny">Cancel</button>

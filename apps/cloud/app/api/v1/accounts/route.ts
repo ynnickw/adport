@@ -6,7 +6,7 @@ export async function GET(request: Request) {
   try {
     const principal = await apiPrincipal(request);
     requireScope(principal, 'tools:read');
-    const runtime = await createTenantRuntime(principal);
+    const runtime = await createTenantRuntime(principal, { surface: 'api' });
     return noStoreJson(await runtime.registry.call('accounts_list', {}, runtime.ctx));
   } catch (error) {
     return apiError(error);

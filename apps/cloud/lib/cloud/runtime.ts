@@ -30,10 +30,12 @@ import {
 import type { ProviderCredentialMap, TenantPrincipal } from './types';
 import { isSyntheticReviewer } from './synthetic-reviewer';
 import { HttpError } from '@/lib/http';
+import { instrumentCloudTools } from './analytics-tools';
 
 export interface TenantRuntimeOptions {
   /** Used only immediately after OAuth exchange to discover provider accounts. */
   enforceAccountScope?: boolean;
+  surface?: 'dashboard' | 'mcp' | 'api';
 }
 
 /**
@@ -138,10 +140,11 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     modules.push({ provider: scopeProvider(provider), tools: redditTools(provider) });
   }
   const engine = new PolicyEngine(policy, new PostgresPendingStore(principal), new PostgresAuditStore(principal));
-  return createContext({
+  const runtime = await createContext({
     providerModules: modules,
     engine,
     authorizeToolCall: enforceAccountScope ? createAccountScopeAuthorizer(enabledAccountIds) : undefined,
     findings: new PostgresFindingsStore(principal.organizationId),
   });
+  return enforceAccountScope ? instrumentCloudTools(runtime, principal, options.surface ?? 'dashboard') : runtime;
 }

@@ -3,7 +3,8 @@ import {
   exchangeMcpRefreshToken,
   getMcpOAuthClient,
 } from '@/lib/cloud/mcp-oauth-repository';
-import { oauthError, validateRedirectUri, validateResource } from '@/lib/mcp-oauth';
+import { oauthError, validateRedirectUri, validateResource, verifyAccessTokenSignature } from '@/lib/mcp-oauth';
+import { captureProductEvent } from '@/lib/cloud/product-analytics';
 
 function tokenResponse(pair: Awaited<ReturnType<typeof exchangeMcpAuthorizationCode>>) {
   return Response.json({
@@ -27,7 +28,8 @@ export async function POST(request: Request) {
     return oauthError('invalid_request', 'Token requests must use form encoding.');
   }
   const clientId = String(form.get('client_id') ?? '');
-  if (!clientId || !(await getMcpOAuthClient(clientId))) return oauthError('invalid_client', 'Unknown client_id.', 401);
+  const client = clientId ? await getMcpOAuthClient(clientId) : undefined;
+  if (!client) return oauthError('invalid_client', 'Unknown client_id.', 401);
   try {
     const resource = validateResource(String(form.get('resource') ?? ''));
     const grantType = String(form.get('grant_type') ?? '');
@@ -37,6 +39,12 @@ export async function POST(request: Request) {
       const redirectUri = validateRedirectUri(String(form.get('redirect_uri') ?? ''));
       if (!code || !codeVerifier) throw new Error('code and code_verifier are required.');
       const pair = await exchangeMcpAuthorizationCode({ clientId, code, codeVerifier, redirectUri, resource });
+      try {
+        const claims = verifyAccessTokenSignature(pair.accessToken);
+        const name = client.clientName.toLowerCase();
+        const agent = name.includes('codex') ? 'codex' : name.includes('chatgpt') ? 'chatgpt' : name.includes('claude') ? 'claude' : name.includes('cursor') ? 'cursor' : 'other';
+        captureProductEvent({ userId: claims.sub, organizationId: claims.organization_id }, { event: 'agent_connected', agent });
+      } catch { /* Analytics must not invalidate an issued authorization grant. */ }
       oauthDiagnostic('authorization_code_exchanged');
       return tokenResponse(pair);
     }
