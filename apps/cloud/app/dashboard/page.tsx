@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Empty, PageHeader, Provider, StatusPill } from '@/components/ui';
 import { providerLabel } from '@/components/logos';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
-import { countAuditEvents, listConnections, listPendingOperations } from '@/lib/cloud/repository';
+import { listConnections, listPendingOperations } from '@/lib/cloud/repository';
 import { LiveData } from './live-data';
 import { isSyntheticReviewer } from '@/lib/cloud/synthetic-reviewer';
 import { SyntheticReviewer } from '@/components/synthetic-reviewer';
@@ -12,10 +12,9 @@ export const metadata = { title: 'Overview' };
 export default async function OverviewPage() {
   const tenant = await requireDashboardTenant();
   if (isSyntheticReviewer(tenant.organizationId)) return <SyntheticReviewer tenant={tenant} />;
-  const [connections, pending, auditCount] = await Promise.all([
+  const [connections, pending] = await Promise.all([
     listConnections(tenant.organizationId),
     listPendingOperations(tenant.organizationId, 5),
-    countAuditEvents(tenant.organizationId),
   ]);
   const connected = connections.filter((connection) => connection.status === 'connected');
   const broken = connections.filter((connection) => connection.status === 'error');
@@ -23,16 +22,16 @@ export default async function OverviewPage() {
     <main className="page">
       <PageHeader
         title="Overview"
-        description="A normalized read across the ad accounts this organization has connected."
-        action={<Link className="button secondary" href="/dashboard/reports" prefetch={false}>Open full report</Link>}
+        description="Performance and activity across this project's ad accounts. Open Reports for the full campaign view."
+        action={connections.length ? <Link className="button secondary" href="/dashboard/reports" prefetch={false}>View report</Link> : undefined}
       />
       {connections.length === 0 ? (
         <div className="card">
           <Empty
-            title="Connect the first ad platform"
-            copy="Authorize Google, Meta, TikTok, Microsoft, or Reddit through their official consent screens. Adport never asks for platform passwords or application secrets."
+            title="Connect your first platform"
+            copy="Bring your ad accounts into this project to see campaign performance and use them with your AI assistant."
             href="/dashboard/connections"
-            action="Open connections"
+            action="Connect a platform"
           />
         </div>
       ) : (
@@ -42,7 +41,7 @@ export default async function OverviewPage() {
               {pending.length ? (
                 <div className="attention-item">
                   <span className="attention-dot" aria-hidden="true" />
-                  <p><strong>{pending.length === 5 ? '5 or more changes' : `${pending.length} ${pending.length === 1 ? 'change' : 'changes'}`} waiting for approval.</strong> Previewed by an agent; nothing runs until it repeats the exact call.</p>
+                  <p><strong>{pending.length === 5 ? '5 or more changes' : `${pending.length} ${pending.length === 1 ? 'change' : 'changes'}`} waiting for approval.</strong></p>
                   <Link className="button small" href="/dashboard/approvals" prefetch={false}>Review approvals</Link>
                 </div>
               ) : null}
@@ -55,10 +54,9 @@ export default async function OverviewPage() {
               ))}
             </section>
           ) : null}
-          <LiveData organizationId={tenant.organizationId} connected={connected.length > 0} />
-          <div className="grid-2" style={{ marginTop: '0.9rem' }}>
-            <section className="card">
-              <div className="card-head"><h2>Connections</h2><Link className="card-note" href="/dashboard/connections" prefetch={false}>Manage</Link></div>
+          <LiveData key={tenant.organizationId} organizationId={tenant.organizationId} connected={connected.length > 0} />
+            <section className="card" style={{ marginTop: '1rem' }}>
+              <div className="card-head"><h2>Platforms</h2><Link className="card-note" href="/dashboard/connections" prefetch={false}>Manage</Link></div>
               <div className="card-body stack">
                 {connections.map((connection) => (
                   <div key={connection.provider} className="connection-top">
@@ -68,16 +66,6 @@ export default async function OverviewPage() {
                 ))}
               </div>
             </section>
-            <section className="card">
-              <div className="card-head"><h2>Governance</h2></div>
-              <div className="card-body">
-                <dl className="connection-meta" style={{ margin: 0 }}>
-                  <div><dt>Awaiting approval</dt><dd><Link href="/dashboard/approvals" prefetch={false}>{pending.length}{pending.length === 5 ? '+' : ''} operation{pending.length === 1 ? '' : 's'}</Link></dd></div>
-                  <div><dt>Audit events</dt><dd><Link href="/dashboard/audit" prefetch={false}>{auditCount}</Link></dd></div>
-                </dl>
-              </div>
-            </section>
-          </div>
         </>
       )}
     </main>

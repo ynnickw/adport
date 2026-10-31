@@ -1,24 +1,26 @@
-import Link from 'next/link';
+'use client';
+
+import { useState, useTransition } from 'react';
 import { selectProjectAction } from '@/app/dashboard/projects/actions';
 import type { ProjectAccess } from '@/lib/cloud/workspaces';
+import { Select } from './select';
 
 export function ProjectSwitcher({ projects, currentProjectId }: { projects: ProjectAccess[]; currentProjectId: string }) {
-  const organizationIds = [...new Set(projects.map(project => project.organizationId))];
   const current = projects.find(project => project.id === currentProjectId);
-  return (
-    <div className="project-switcher">
-      <form action={selectProjectAction}>
-        <label htmlFor="active-project">{current?.organizationName} / project</label>
-        <div className="project-switcher-controls">
-          <select id="active-project" name="projectId" aria-label="Organization / project" defaultValue={currentProjectId}>
-            {organizationIds.map(id => <optgroup key={id} label={projects.find(project => project.organizationId === id)!.organizationName}>
-              {projects.filter(project => project.organizationId === id).map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
-            </optgroup>)}
-          </select>
-          <button className="button secondary small" type="submit">Open</button>
-        </div>
-      </form>
-      <Link href="/dashboard/projects" prefetch={false}>Manage projects</Link>
-    </div>
-  );
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState('');
+  return <div className="project-switcher">
+    <span className="workspace-label">{current?.organizationName}</span>
+    <Select id="active-project" aria-label="Switch project" value={currentProjectId} disabled={pending}
+      options={projects.map(project => ({ value: project.id, label: project.name, group: project.organizationName }))}
+      onValueChange={value => {
+        setError('');
+        const form = new FormData(); form.set('projectId', value);
+        startTransition(async () => { try { await selectProjectAction(form); } catch (reason) {
+          if (reason instanceof Error && reason.message === 'NEXT_REDIRECT') throw reason;
+          setError('Could not switch projects. Please try again.');
+        } });
+      }} />
+    {error ? <span className="field-error" role="alert">{error}</span> : null}
+  </div>;
 }

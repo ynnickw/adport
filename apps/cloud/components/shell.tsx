@@ -1,7 +1,8 @@
+import { Button } from '@/components/controls';
 import Link from 'next/link';
 import { signOut } from '@/app/dashboard/actions';
 import { BrandLockup } from '@/components/logos';
-import { Nav, SidebarFrame, UtilityNav } from '@/components/nav';
+import { ContextNav, Nav, SidebarFrame, UtilityNav } from '@/components/nav';
 import { SupportWidget } from '@/components/support-widget';
 
 export interface ShellTenant {
@@ -27,15 +28,15 @@ export function Shell({ tenant, pendingApprovals = 0, children }: { tenant: Shel
             <span className="avatar" aria-hidden="true">{tenant.userName.slice(0, 1).toUpperCase()}</span>
             <span className="user-text">
               <span className="user-name">{tenant.userName}</span>
-              <span className="user-sub">{tenant.role} · {tenant.email}</span>
+              <span className="user-sub">{tenant.email}</span>
             </span>
           </div>
           <form action={signOut}>
-            <button className="link-button" type="submit">Sign out</button>
+            <Button className="link-button" type="submit">Sign out</Button>
           </form>
         </div>
       </SidebarFrame>
-      <div className="main" id="content" tabIndex={-1}>{children}</div>
+      <div className="main" id="content" tabIndex={-1}><ContextNav projectName={tenant.organizationName} />{children}</div>
       <SupportWidget />
     </div>
   );

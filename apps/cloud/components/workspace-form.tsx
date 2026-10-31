@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/controls';
+
 import { useActionState } from 'react';
 import type { WorkspaceActionState } from '@/app/dashboard/projects/actions';
 
@@ -15,7 +17,7 @@ export function WorkspaceForm({ action, children, label = 'Save changes', danger
       {children}
       {state.error ? <p className="error-callout" role="alert">{state.error}</p> : null}
       {state.success ? <p className="callout success" role="status">{state.success}</p> : null}
-      <div><button className={`button ${danger ? 'danger' : 'secondary'}`} disabled={pending}>{pending ? 'Saving…' : label}</button></div>
+      <div><Button className={`button ${danger ? 'danger' : 'secondary'}`} disabled={pending}>{pending ? 'Saving…' : label}</Button></div>
     </form>
   );
 }

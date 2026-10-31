@@ -1,12 +1,14 @@
 'use client';
 
+import { Button } from '@/components/controls';
+
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { SUPPORT_OPEN_EVENT } from './support-widget';
 import { ANALYTICS_PREFERENCES_EVENT } from './product-analytics';
 
-type NavItem = { label: string; href: string; icon: React.ReactNode; exact?: boolean; badge?: number };
+type NavItem = { label: string; href: string; icon: React.ReactNode; exact?: boolean; badge?: number; paths?: string[] };
 
 const icon = {
   overview: <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6" /><rect x="13.5" y="3.5" width="7" height="7" rx="1.6" /><rect x="3.5" y="13.5" width="7" height="7" rx="1.6" /><rect x="13.5" y="13.5" width="7" height="7" rx="1.6" /></svg>,
@@ -25,24 +27,25 @@ const icon = {
 
 const PRIMARY_ITEMS: NavItem[] = [
   { label: 'Overview', href: '/dashboard', icon: icon.overview, exact: true },
-  { label: 'Connections', href: '/dashboard/connections', icon: icon.connections },
-  { label: 'Accounts', href: '/dashboard/accounts', icon: icon.accounts },
+  { label: 'Accounts', href: '/dashboard/accounts', icon: icon.accounts, paths: ['/dashboard/accounts', '/dashboard/connections'] },
   { label: 'Reports', href: '/dashboard/reports', icon: icon.reports },
   { label: 'Findings', href: '/dashboard/findings', icon: icon.findings },
-  { label: 'Approvals', href: '/dashboard/approvals', icon: icon.approvals },
-  { label: 'Audit log', href: '/dashboard/audit', icon: icon.audit },
+  { label: 'Approvals', href: '/dashboard/approvals', icon: icon.approvals, paths: ['/dashboard/approvals', '/dashboard/audit'] },
+  { label: 'Agent access', href: '/dashboard/agents', icon: icon.agents },
 ];
 
-const UTILITY_ITEMS: NavItem[] = [
-  { label: 'Agent access', href: '/dashboard/agents', icon: icon.agents },
+const SETTINGS_ITEMS: NavItem[] = [
   { label: 'Projects', href: '/dashboard/projects', icon: icon.accounts },
   { label: 'Organization', href: '/dashboard/organization', icon: icon.team },
+  { label: 'Project team', href: '/dashboard/team', icon: icon.team },
   { label: 'Policies', href: '/dashboard/policies', icon: icon.policies },
-  { label: 'Team', href: '/dashboard/team', icon: icon.team },
   { label: 'Plan', href: '/dashboard/billing', icon: icon.billing },
 ];
+const UTILITY_ITEMS: NavItem[] = [
+  { label: 'Settings', href: '/dashboard/organization', icon: icon.policies, paths: SETTINGS_ITEMS.map(item => item.href) },
+];
 
-const isActive = (item: NavItem, pathname: string) => item.exact ? pathname === item.href : pathname.startsWith(item.href);
+const isActive = (item: NavItem, pathname: string) => item.exact ? pathname === item.href : (item.paths ?? [item.href]).some(path => pathname === path || pathname.startsWith(`${path}/`));
 
 function NavLinks({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
@@ -65,18 +68,30 @@ export function Nav({ pendingApprovals = 0 }: { pendingApprovals?: number }) {
 export function UtilityNav() {
   return (
     <nav className="nav utility-nav" aria-label="Workspace and help">
-      <button type="button" onClick={() => window.dispatchEvent(new Event(SUPPORT_OPEN_EVENT))}>{icon.support}Support</button>
       <NavLinks items={UTILITY_ITEMS} />
-      <button type="button" onClick={() => window.dispatchEvent(new Event(ANALYTICS_PREFERENCES_EVENT))}>{icon.policies}Privacy preferences</button>
+      <Button type="button" onClick={() => window.dispatchEvent(new Event(SUPPORT_OPEN_EVENT))}>{icon.support}Help & feedback</Button>
+      <Button type="button" onClick={() => window.dispatchEvent(new Event(ANALYTICS_PREFERENCES_EVENT))}>{icon.policies}Privacy preferences</Button>
     </nav>
   );
+}
+
+export function ContextNav({ projectName }: { projectName: string }) {
+  const pathname = usePathname();
+  const tabs = SETTINGS_ITEMS.some(item => isActive(item, pathname)) ? SETTINGS_ITEMS
+    : ['/dashboard/accounts', '/dashboard/connections'].includes(pathname)
+      ? [{ label: 'Ad accounts', href: '/dashboard/accounts' }, { label: 'Platforms', href: '/dashboard/connections' }]
+      : ['/dashboard/approvals', '/dashboard/audit'].includes(pathname)
+        ? [{ label: 'Pending changes', href: '/dashboard/approvals' }, { label: 'History', href: '/dashboard/audit' }] : [];
+  return <header className="workspace-bar"><span className="workspace-context">{projectName}</span>
+    {tabs.length ? <nav className="section-tabs" aria-label="Section navigation">{tabs.map(item => <Link href={item.href} key={item.href} prefetch={false} aria-current={pathname === item.href ? 'page' : undefined}>{item.label}</Link>)}</nav> : null}
+  </header>;
 }
 
 // On narrow screens the navigation collapses behind a menu button so each page starts with its content.
 export function SidebarFrame({ brand, workspace, children }: { brand: React.ReactNode; workspace: React.ReactNode; children: React.ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const current = [...PRIMARY_ITEMS, ...UTILITY_ITEMS].find((item) => isActive(item, pathname))?.label ?? 'Menu';
+  const current = [...PRIMARY_ITEMS, ...SETTINGS_ITEMS].find((item) => isActive(item, pathname))?.label ?? 'Menu';
 
   useEffect(() => { setOpen(false); }, [pathname]);
   useEffect(() => {
@@ -91,11 +106,11 @@ export function SidebarFrame({ brand, workspace, children }: { brand: React.Reac
       <div className="sidebar-head">
         {brand}
         <div className="workspace">{typeof workspace === 'string' ? <span className="workspace-name">{workspace}</span> : workspace}</div>
-        <button className="menu-toggle" type="button" aria-expanded={open} aria-controls="sidebar-menu" onClick={() => setOpen((value) => !value)}>
+        <Button className="menu-toggle" type="button" aria-expanded={open} aria-controls="sidebar-menu" onClick={() => setOpen((value) => !value)}>
           <span className="menu-current">{current}</span>
           <span className="menu-icon" aria-hidden="true" />
           <span className="sr-only">{open ? 'Close navigation' : 'Open navigation'}</span>
-        </button>
+        </Button>
       </div>
       <div className="sidebar-menu" id="sidebar-menu">{children}</div>
     </aside>

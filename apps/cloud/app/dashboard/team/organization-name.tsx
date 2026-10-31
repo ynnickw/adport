@@ -1,5 +1,7 @@
 'use client';
 
+import { Button, Input } from '@/components/controls';
+
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 
@@ -35,7 +37,7 @@ export function OrganizationName({ organizationId, name, canManage }: {
         {message.error ? <div className="error-callout" role="alert" style={{ marginBottom: 0 }}>{message.error}</div> : null}
         {message.success ? <div className="callout success" role="status">{message.success}</div> : null}
         <form className="form-row" onSubmit={(event) => void save(event)}>
-          <input
+          <Input
             name="name"
             defaultValue={name}
             aria-label="Project name"
@@ -44,7 +46,7 @@ export function OrganizationName({ organizationId, name, canManage }: {
             disabled={!canManage}
             style={{ flex: 1, minWidth: '14rem', width: 'auto' }}
           />
-          {canManage ? <button className="button secondary" disabled={busy}>{busy ? 'Renaming…' : 'Rename'}</button> : null}
+          {canManage ? <Button className="button secondary" disabled={busy}>{busy ? 'Renaming…' : 'Rename'}</Button> : null}
         </form>
         {canManage ? null : <p className="inline-note">Owners and admins can rename the organization.</p>}
       </div>

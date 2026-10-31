@@ -30,6 +30,10 @@ jobs:
           node --test scripts/test-provider-pages.mjs
       - name: Verify pricing matches the cloud catalog
         run: node scripts/build-pricing-page.mjs --check
+      - name: Verify Resources content and links
+        run: |
+          node scripts/build-resource-pages.mjs --check
+          node --test scripts/test-resource-pages.mjs
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm typecheck

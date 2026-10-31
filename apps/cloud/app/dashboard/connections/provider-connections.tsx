@@ -1,11 +1,14 @@
 'use client';
 
+import { Button } from '@/components/controls';
+
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Provider, StatusPill, formatDate } from '@/components/ui';
 import { providerLabel } from '@/lib/cloud/providers';
 import type { OAuthProvider } from '@/lib/cloud/types';
 import { OAuthPopupLink } from '@/components/oauth-popup-link';
+import { useConfirm } from '@/components/use-confirm';
 
 export interface ConnectionView {
   provider: string;
@@ -30,6 +33,7 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
   returnTo?: string;
 }) {
   const router = useRouter();
+  const [confirm, confirmationDialog] = useConfirm();
   const [busy, setBusy] = useState<string>();
   const [notice, setNotice] = useState<Partial<Record<string, { error?: string; success?: string }>>>({});
 
@@ -39,25 +43,31 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
 
   async function disconnect(provider: string, label: string) {
     const prompt = `Disconnect ${label}? Adport will revoke its grant at the provider where the API allows it and delete the encrypted token.`;
-    if (!window.confirm(prompt)) return;
+    if (!await confirm({ title: `Disconnect ${label}?`, description: prompt, confirmLabel: 'Disconnect' })) return;
     setBusy(provider);
     setNotice((current) => ({ ...current, [provider]: {} }));
-    const response = await fetch(`/api/connections/${provider}?organization_id=${organizationId}`, { method: 'DELETE' });
-    const result = await response.json().catch(() => ({})) as { error?: string; providerRevocationRequired?: boolean };
-    if (!response.ok) {
-      setNotice((current) => ({ ...current, [provider]: { error: result.error ?? `Unable to disconnect ${label}. Please retry.` } }));
-    } else {
-      setNotice((current) => ({
-        ...current,
-        [provider]: { success: result.providerRevocationRequired ? `${label} removed. Revoke Adport's access in your ${label} account settings as well.` : `${label} disconnected and its grant revoked.` },
-      }));
-      router.refresh();
+    try {
+      const response = await fetch(`/api/connections/${provider}?organization_id=${organizationId}`, { method: 'DELETE' });
+      const result = await response.json().catch(() => ({})) as { error?: string; providerRevocationRequired?: boolean };
+      if (!response.ok) {
+        setNotice((current) => ({ ...current, [provider]: { error: result.error ?? `Unable to disconnect ${label}. Please retry.` } }));
+      } else {
+        setNotice((current) => ({
+          ...current,
+          [provider]: { success: result.providerRevocationRequired ? `${label} removed. Revoke Adport's access in your ${label} account settings as well.` : `${label} disconnected and its grant revoked.` },
+        }));
+        router.refresh();
+      }
+    } catch {
+      setNotice(current => ({ ...current, [provider]: { error: 'Could not disconnect. Check your connection and try again.' } }));
+    } finally {
+      setBusy(undefined);
     }
-    setBusy(undefined);
   }
 
   return (
     <section aria-label="Provider connections">
+      {confirmationDialog}
       {!canManage ? <p className="inline-note">Owners and admins manage connections.</p> : null}
       <div className="connection-list">
       <div className="connection-list-heading" aria-hidden="true"><span>Platform</span><span>Status</span><span>Accounts</span><span>Actions</span></div>
@@ -87,7 +97,7 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
                 <>
                   {!connection && provider.available ? <OAuthPopupLink className="button" label={`Connect ${providerLabel(provider.id)}`} href={startHref}>Connect</OAuthPopupLink> : null}
                   {connection && provider.available ? <OAuthPopupLink className="button secondary" label={`${connection.status !== 'connected' ? 'Reconnect' : 'Re-authorize'} ${providerLabel(provider.id)}`} href={startHref}>{connection.status !== 'connected' ? 'Reconnect' : 'Re-authorize'}</OAuthPopupLink> : null}
-                  {connection ? <button className="button danger" aria-label={`Disconnect ${providerLabel(provider.id)}`} type="button" disabled={busy === provider.id} onClick={() => void disconnect(provider.id, shortLabel(provider.id))}>{busy === provider.id ? 'Working…' : 'Disconnect'}</button> : null}
+                  {connection ? <Button className="button danger" aria-label={`Disconnect ${providerLabel(provider.id)}`} type="button" disabled={busy === provider.id} onClick={() => void disconnect(provider.id, shortLabel(provider.id))}>{busy === provider.id ? 'Working…' : 'Disconnect'}</Button> : null}
                 </>
               ) : null
             ) : (

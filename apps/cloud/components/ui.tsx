@@ -1,24 +1,28 @@
 import Link from 'next/link';
 import { ProviderLogo, providerLabel } from '@/components/logos';
+import { InfoTooltip } from '@/components/info-tooltip';
 
-export function PageHeader({ title, description, action }: { title: string; description: string; action?: React.ReactNode }) {
+export function PageHeader({ title, description, action, showDescription = false }: { title: string; description: string; action?: React.ReactNode; showDescription?: boolean }) {
   return (
     <div className="page-head">
       <div>
-        <h1>{title}</h1>
-        <p className="subhead">{description}</p>
+        <div className="page-title"><h1>{title}</h1>{!showDescription ? <InfoTooltip label={`About ${title}`}>{description}</InfoTooltip> : null}</div>
+        {showDescription ? <p className="subhead">{description}</p> : null}
       </div>
       {action ? <div className="page-head-actions">{action}</div> : null}
     </div>
   );
 }
 
+export function Field({ label, help, htmlFor, children }: { label: string; help?: React.ReactNode; htmlFor: string; children: React.ReactNode }) {
+  return <div className="field"><div className="field-label"><label htmlFor={htmlFor}>{label}</label>{help ? <InfoTooltip label={`About ${label}`}>{help}</InfoTooltip> : null}</div>{children}</div>;
+}
+
 export function Metric({ label, value, foot }: { label: string; value: string; foot: string }) {
   return (
     <div className="metric">
-      <div className="metric-label">{label}</div>
+        <div className="metric-label">{label}<InfoTooltip label={`About ${label}`}>{foot}</InfoTooltip></div>
       <div className="metric-value">{value}</div>
-      <div className="metric-foot">{foot}</div>
     </div>
   );
 }
@@ -63,7 +67,7 @@ export function AuthFrame({ label, children }: { label: string; children: React.
 
 export function formatNumber(value = 0): string { return new Intl.NumberFormat('en', { maximumFractionDigits: 1 }).format(value); }
 export function formatMoney(value = 0, currency = 'EUR'): string {
-  try { return new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: 2 }).format(value); }
+  try { return new Intl.NumberFormat('en', { style: 'currency', currency }).format(value); }
   catch { return `${formatNumber(value)} ${currency}`; }
 }
 export function formatDate(value: string | Date | null | undefined): string {

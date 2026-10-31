@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/controls';
+
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { analyticsPage } from '@/lib/analytics-pages';
@@ -46,7 +48,7 @@ export function ProductAnalytics() {
     finally { setSaving(false); }
   }
 
-  if (!open) return pathname === '/onboarding' && preference !== undefined ? <button type="button" className="analytics-preferences-link" onClick={() => setOpen(true)}>Privacy preferences</button> : null;
+  if (!open) return pathname === '/onboarding' && preference !== undefined ? <Button type="button" className="analytics-preferences-link" onClick={() => setOpen(true)}>Privacy preferences</Button> : null;
   return (
     <section className="analytics-notice" role="region" aria-label="Optional product analytics">
       <h2>Help us improve Adport</h2>
@@ -55,9 +57,9 @@ export function ProductAnalytics() {
       {!configured ? <p>Product analytics is currently disabled.</p> : null}
       {error ? <p role="alert">{error}</p> : null}
       <div className="analytics-notice-actions">
-        <button type="button" disabled={saving} onClick={() => void save(false)}>Decline analytics</button>
-        <button type="button" disabled={saving || !configured} onClick={() => void save(true)}>Allow analytics</button>
-        {preference !== null && preference !== undefined ? <button type="button" disabled={saving} onClick={() => setOpen(false)}>Close</button> : null}
+        <Button type="button" disabled={saving} onClick={() => void save(false)}>Decline analytics</Button>
+        <Button type="button" disabled={saving || !configured} onClick={() => void save(true)}>Allow analytics</Button>
+        {preference !== null && preference !== undefined ? <Button type="button" disabled={saving} onClick={() => setOpen(false)}>Close</Button> : null}
       </div>
     </section>
   );

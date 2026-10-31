@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/controls';
+
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { Provider } from '@/components/ui';
@@ -69,10 +71,10 @@ export function AccountAccessManager({ organizationId, accounts, canManage, maxA
               <td><span className="status neutral">{account.status ?? 'available'}</span></td>
               <td>
                 {canManage ? (
-                  <button className={`button small ${account.enabled ? 'secondary' : ''}`} type="button" disabled={pending}
+                  <Button className={`button small ${account.enabled ? 'secondary' : ''}`} type="button" disabled={pending}
                     onClick={() => setEnabled(account, !account.enabled)}>
                     {account.enabled ? 'Disable' : 'Enable'}
-                  </button>
+                  </Button>
                 ) : <span className={`status ${account.enabled ? '' : 'neutral'}`}>{account.enabled ? 'active' : 'inactive'}</span>}
               </td>
             </tr>
