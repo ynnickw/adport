@@ -25,8 +25,10 @@
     <link rel="preload" href="/fonts/overpass-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="/site.css" />
     <link rel="stylesheet" href="/home.css" />
+    <link rel="stylesheet" href="/pricing.css" />
     <script src="/site.js" defer></script>
     <script src="/home.js" defer></script>
+    <script src="/pricing.js" defer></script>
   </head>
   <body class="home">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -39,6 +41,7 @@
         <a href="/#setup" data-preview="setup">Setup</a>
         <a href="/providers" data-preview="integrations">Integrations</a>
         <a href="/#rules" data-preview="safety">Safety</a>
+        <a href="/pricing">Pricing</a>
         <a class="github-link" href="https://github.com/ynnickw/adport" rel="noreferrer" data-preview="github"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.65 7.65 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>GitHub</a>
         <a class="header-cta" href="#waitlist">Cloud waitlist</a>
       </div>
@@ -370,6 +373,52 @@
       </section>
 
 
+      <!-- pricing:start -->
+<section class="cloud-pricing" id="pricing" aria-labelledby="pricing-title">
+  <div class="pricing-heading"><p class="pricing-eyebrow">Adport Cloud pricing</p><h2 id="pricing-title">One organization. Every client behind the gate.</h2><p>Unlimited projects. Free read-only client viewers. Fixed pricing with no percentage of ad spend.</p></div>
+  <div class="pricing-billing" aria-label="Billing interval"><button type="button" data-billing="monthly" aria-pressed="true">Monthly</button><button type="button" data-billing="annual" aria-pressed="false">Yearly <span>Save 2 months</span></button></div>
+  <div class="pricing-cards"><article class="pricing-card">
+
+      <p class="pricing-eyebrow">Explore your accounts</p><h3>Free</h3><p class="pricing-description">Reporting across your connected ad accounts. Start without a card.</p>
+      <div class="pricing-amount"><strong data-monthly="0" data-annual="0">€0</strong><span>forever</span></div>
+      <p class="pricing-billing-note" data-monthly="No payment details needed" data-annual="No payment details needed">No payment details needed</p>
+      <ul><li>3 active ad accounts</li><li>1 member, read-only access</li><li>Free read-only client viewers</li><li>Unlimited isolated client projects</li><li>30-day audit history</li><li>Read-only reports and tools</li><li>MCP, CLI, REST, and dashboard</li></ul>
+      <a class="pricing-action" href="https://app.adport.dev/?mode=signup">Start free</a>
+      <p class="pricing-trial-note">No card required</p>
+    </article>
+<article class="pricing-card">
+
+      <p class="pricing-eyebrow">For owners and small teams</p><h3>Pro</h3><p class="pricing-description">Operate your ads with a preview before every change.</p>
+      <div class="pricing-amount"><strong data-monthly="19" data-annual="15.83">€19</strong><span>/ month</span></div>
+      <p class="pricing-billing-note" data-monthly="Billed monthly" data-annual="€190 billed yearly">Billed monthly</p>
+      <ul><li>5 active ad accounts</li><li>2 editing members</li><li>Free read-only client viewers</li><li>Unlimited isolated client projects</li><li>90-day audit history</li><li>Guarded read and write tools</li><li>MCP, CLI, REST, and dashboard</li></ul>
+      <a class="pricing-action" href="https://app.adport.dev/dashboard/billing?plan=operator&billing=monthly" data-plan="operator">Start 7-day free trial</a>
+      <p class="pricing-trial-note">Cancel anytime</p>
+    </article>
+<article class="pricing-card pricing-card-featured">
+      <span class="pricing-recommended">Recommended</span>
+      <p class="pricing-eyebrow">For growing teams</p><h3>Growth</h3><p class="pricing-description">Keep several brands and clients organized in one place.</p>
+      <div class="pricing-amount"><strong data-monthly="39" data-annual="32.50">€39</strong><span>/ month</span></div>
+      <p class="pricing-billing-note" data-monthly="Billed monthly" data-annual="€390 billed yearly">Billed monthly</p>
+      <ul><li>20 active ad accounts</li><li>5 editing members</li><li>Free read-only client viewers</li><li>Unlimited isolated client projects</li><li>365-day audit history</li><li>Guarded read and write tools</li><li>MCP, CLI, REST, and dashboard</li></ul>
+      <a class="pricing-action pricing-action-primary" href="https://app.adport.dev/dashboard/billing?plan=premium&billing=monthly" data-plan="premium">Start 7-day free trial</a>
+      <p class="pricing-trial-note">Cancel anytime</p>
+    </article>
+<article class="pricing-card">
+
+      <p class="pricing-eyebrow">For agencies</p><h3>Agency</h3><p class="pricing-description">Coordinate more client accounts and a larger editing team.</p>
+      <div class="pricing-amount"><strong data-monthly="79" data-annual="65.83">€79</strong><span>/ month</span></div>
+      <p class="pricing-billing-note" data-monthly="Billed monthly" data-annual="€790 billed yearly">Billed monthly</p>
+      <ul><li>60 active ad accounts</li><li>15 editing members</li><li>Free read-only client viewers</li><li>Unlimited isolated client projects</li><li>730-day audit history</li><li>Guarded read and write tools</li><li>MCP, CLI, REST, and dashboard</li></ul>
+      <a class="pricing-action" href="https://app.adport.dev/dashboard/billing?plan=agency&billing=monthly" data-plan="agency">Start 7-day free trial</a>
+      <p class="pricing-trial-note">Cancel anytime</p>
+    </article></div>
+  <p class="pricing-shared-note">Prices are per organization. Active accounts and editing members are shared across its projects. Viewers can report, but cannot change ads. Your AI assistant subscription or model usage is separate.</p>
+  <div class="pricing-enterprise"><div><h3>Need more room?</h3><p>More than 60 active accounts or 15 editing members? We can put together a custom organization plan.</p></div><a class="pricing-action" href="mailto:yannick@adport.dev?subject=Adport%20custom%20plan">Talk to us</a></div>
+  <p class="pricing-local">Prefer to host it yourself? The open-source CLI and local MCP server remain free. <a href="https://github.com/ynnickw/adport">Explore the source</a>.</p>
+</section>
+      <!-- pricing:end -->
+
       <section class="waitlist" id="waitlist" aria-labelledby="waitlist-title">
         <div class="waitlist-copy">
           <h2 id="waitlist-title">Bring your whole team behind the gate.</h2>
@@ -391,7 +440,7 @@
 
     <footer class="site-footer">
       <span>Adport is operated by Yannick Westermann, trading as Yannick Westermann Labs. Open source under Apache-2.0.</span>
-      <nav aria-label="Legal"><a href="/providers">Integrations</a><a href="/support">Support</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/data-deletion">Data deletion</a></nav>
+      <nav aria-label="Legal"><a href="/pricing">Pricing</a><a href="/providers">Integrations</a><a href="/support">Support</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/data-deletion">Data deletion</a></nav>
     </footer>
   </body>
 </html>

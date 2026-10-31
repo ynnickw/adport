@@ -13,7 +13,7 @@ const COPY = {
   members: {
     eyebrow: 'Team limit reached',
     title: 'Give your team governed access',
-    points: ['Invite more workspace members', 'Assign admin, member, and viewer roles', 'Keep every change in the audit log'],
+    points: ['Add more editing members', 'Assign admin, member, and viewer roles', 'Keep every change in the audit log'],
   },
   retention: {
     eyebrow: 'Retention limit reached',
@@ -22,7 +22,7 @@ const COPY = {
   },
 } as const;
 
-const PLAN_NAMES = { operator: 'Operator', premium: 'Premium', agency: 'Agency', enterprise: 'Enterprise' } as const;
+const PLAN_NAMES = { operator: 'Pro', premium: 'Growth', agency: 'Agency', enterprise: 'Enterprise' } as const;
 
 export function PlanLimitModal({ limit, onClose }: { limit?: PlanLimitDetails; onClose: () => void }) {
   const closeButton = useRef<HTMLButtonElement>(null);

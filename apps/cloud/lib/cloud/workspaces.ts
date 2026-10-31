@@ -8,6 +8,7 @@ import { HttpError } from '@/lib/http';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getOrganizationEntitlement } from './plans';
 import type { TenantPrincipal } from './types';
+import { editingMemberCapacity } from './member-capacity';
 
 export type OrganizationRole = NonNullable<TenantPrincipal['role']>;
 export interface ProjectAccess {
@@ -159,8 +160,8 @@ export async function saveOrganizationMember(input: {
     targetUserId = rows[0]?.id ?? undefined;
     if (!targetUserId) {
       const entitlement = await getOrganizationEntitlement(actor.defaultProjectId);
-      const members = await db()<Array<{ count: number }>>`select count(*)::int as count from public.organization_group_memberships where organization_group_id = ${input.organizationId}`;
-      if (entitlement.plan.maxMembers !== null && members[0]!.count >= entitlement.plan.maxMembers) throw new HttpError('Your organization has reached its plan’s member limit.', 409);
+      const members = await editingMemberCapacity(actor.defaultProjectId);
+      if (input.role !== 'viewer' && entitlement.plan.maxMembers !== null && members.count >= entitlement.plan.maxMembers) throw new HttpError('Your organization has reached its editing-member limit. Read-only viewers are free.', 409);
       const result = await createAdminClient().auth.admin.inviteUserByEmail(email, {
         redirectTo: invitationRedirectUrl(env().ADPORT_CLOUD_BASE_URL, projectIds[0] ?? actor.defaultProjectId),
       });
@@ -183,10 +184,9 @@ export async function saveOrganizationMember(input: {
       if (owners[0]!.count <= 1) throw new HttpError('The last organization owner cannot be demoted.', 409);
     }
     const entitlement = await getOrganizationEntitlement(organization.defaultProjectId, sql);
-    const members = await sql<Array<{ count: number }>>`select count(*)::int as count from public.organization_group_memberships
-      where organization_group_id = ${input.organizationId}`;
-    if (!existing.length && entitlement.plan.maxMembers !== null && members[0]!.count >= entitlement.plan.maxMembers) {
-      throw new HttpError('Your organization has reached its plan’s member limit.', 409);
+    const members = await editingMemberCapacity(organization.defaultProjectId, target, sql);
+    if (input.role !== 'viewer' && !members.existing && entitlement.plan.maxMembers !== null && members.count >= entitlement.plan.maxMembers) {
+      throw new HttpError('Your organization has reached its editing-member limit. Read-only viewers are free.', 409);
     }
     const projectIds = [...new Set(input.projectIds)];
     const projects = await sql<Array<{ id: string }>>`select id from public.organizations

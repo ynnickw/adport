@@ -26,9 +26,9 @@ export function stripeClient(): Stripe {
 
 function stripePriceIdOrUndefined(plan: Extract<PlanId, 'operator' | 'premium' | 'agency'>, interval: BillingInterval): string | undefined {
   const value = env();
-  if (plan === 'operator') return interval === 'annual' ? value.STRIPE_OPERATOR_ANNUAL_PRICE_ID : value.STRIPE_OPERATOR_PRICE_ID;
-  if (plan === 'premium') return interval === 'annual' ? value.STRIPE_PREMIUM_ANNUAL_PRICE_ID : value.STRIPE_PREMIUM_PRICE_ID;
-  return interval === 'annual' ? value.STRIPE_AGENCY_ANNUAL_PRICE_ID : value.STRIPE_AGENCY_PRICE_ID;
+  if (plan === 'operator') return interval === 'annual' ? value.STRIPE_PRO_ANNUAL_PRICE_ID : value.STRIPE_PRO_PRICE_ID;
+  if (plan === 'premium') return interval === 'annual' ? value.STRIPE_GROWTH_ANNUAL_PRICE_ID : value.STRIPE_GROWTH_PRICE_ID;
+  return interval === 'annual' ? value.STRIPE_AGENCY_V2_ANNUAL_PRICE_ID : value.STRIPE_AGENCY_V2_PRICE_ID;
 }
 
 export function stripePriceId(plan: Extract<PlanId, 'operator' | 'premium' | 'agency'>, interval: BillingInterval): string {
@@ -37,12 +37,23 @@ export function stripePriceId(plan: Extract<PlanId, 'operator' | 'premium' | 'ag
   return priceId;
 }
 
-function planForPrice(priceId: string | undefined): PlanId | undefined {
+export function planForPrice(priceId: string | undefined): PlanId | undefined {
   if (!priceId) return undefined;
   const value = env();
+  if (priceId === value.STRIPE_PRO_PRICE_ID || priceId === value.STRIPE_PRO_ANNUAL_PRICE_ID) return 'operator';
+  if (priceId === value.STRIPE_GROWTH_PRICE_ID || priceId === value.STRIPE_GROWTH_ANNUAL_PRICE_ID) return 'premium';
+  if (priceId === value.STRIPE_AGENCY_V2_PRICE_ID || priceId === value.STRIPE_AGENCY_V2_ANNUAL_PRICE_ID) return 'agency';
   if (priceId === value.STRIPE_OPERATOR_PRICE_ID || priceId === value.STRIPE_OPERATOR_ANNUAL_PRICE_ID) return 'operator';
   if (priceId === value.STRIPE_PREMIUM_PRICE_ID || priceId === value.STRIPE_PREMIUM_ANNUAL_PRICE_ID) return 'premium';
   if (priceId === value.STRIPE_AGENCY_PRICE_ID || priceId === value.STRIPE_AGENCY_ANNUAL_PRICE_ID) return 'agency';
+  const legacy = value.STRIPE_LEGACY_PRICE_PLAN_MAP;
+  if (legacy) {
+    const mapping: unknown = JSON.parse(legacy);
+    if (mapping && typeof mapping === 'object' && !Array.isArray(mapping) && Object.hasOwn(mapping, priceId)) {
+      const plan = (mapping as Record<string, unknown>)[priceId];
+      if (plan === 'operator' || plan === 'premium' || plan === 'agency') return plan;
+    }
+  }
   return undefined;
 }
 

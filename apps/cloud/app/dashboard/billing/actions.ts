@@ -13,7 +13,7 @@ function requireOwner(role: string | undefined): void {
 }
 
 export async function startSubscription(plan: PlanId, interval: BillingInterval): Promise<void> {
-  if (plan !== 'operator' && plan !== 'premium' && plan !== 'agency') throw new Error('Choose Operator, Premium, or Agency.');
+  if (plan !== 'operator' && plan !== 'premium' && plan !== 'agency') throw new Error('Choose Pro, Growth, or Agency.');
   if (interval !== 'monthly' && interval !== 'annual') throw new Error('Choose monthly or annual billing.');
   const principal = await sessionPrincipal();
   requireOwner(principal.role);
@@ -52,6 +52,7 @@ export async function openBillingPortal(): Promise<void> {
   if (!entitlement.providerCustomerId) throw new Error('No billing customer exists for this workspace.');
   const portal = await stripeClient().billingPortal.sessions.create({
     customer: entitlement.providerCustomerId,
+    configuration: env().STRIPE_BILLING_PORTAL_CONFIGURATION_ID,
     return_url: new URL('/dashboard/billing', env().ADPORT_CLOUD_BASE_URL).toString(),
   });
   redirect(portal.url);

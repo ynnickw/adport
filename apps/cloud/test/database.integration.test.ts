@@ -214,7 +214,7 @@ describeDatabase('Supabase tenant boundary', () => {
       await setOrganizationAdAccountEnabled({
         principal: { organizationId: firstOrgId, userId: firstUserId, role: 'owner', scopes: [] },
         provider: 'google', accountId: account.accountId, enabled: true, maxActiveAccounts: 4,
-        currentPlan: 'Operator', recommendedPlan: 'premium',
+        currentPlan: 'Pro', recommendedPlan: 'premium',
       });
     }
     const outcome = await processStripeEvent({

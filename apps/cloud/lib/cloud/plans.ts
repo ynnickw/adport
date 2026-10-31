@@ -4,6 +4,7 @@ import type { TenantPrincipal } from './types';
 import type { UpgradePlanId } from './plan-limit';
 import { HttpError } from '@/lib/http';
 import type postgres from 'postgres';
+import catalog from './plan-catalog.json';
 
 export const PLAN_IDS = ['reader', 'operator', 'premium', 'agency', 'enterprise'] as const;
 export type PlanId = (typeof PLAN_IDS)[number];
@@ -16,34 +17,16 @@ export interface PlanDefinition {
   monthlyPriceEur: number | null;
   annualPriceEur: number | null;
   maxActiveAccounts: number | null;
+  /** Owners, admins, and members with editing access. Read-only viewers are free. */
   maxMembers: number | null;
   maxRetentionDays: number;
   writeAccess: boolean;
   clientWorkspaces: boolean;
 }
 
-export const PLANS: Record<PlanId, PlanDefinition> = {
-  reader: {
-    id: 'reader', name: 'Free', monthlyPriceEur: 0, annualPriceEur: 0, maxActiveAccounts: 3, maxMembers: 1,
-    maxRetentionDays: 30, writeAccess: false, clientWorkspaces: true,
-  },
-  operator: {
-    id: 'operator', name: 'Operator', monthlyPriceEur: 19, annualPriceEur: 190, maxActiveAccounts: 5, maxMembers: 2,
-    maxRetentionDays: 90, writeAccess: true, clientWorkspaces: true,
-  },
-  premium: {
-    id: 'premium', name: 'Premium', monthlyPriceEur: 79, annualPriceEur: 790, maxActiveAccounts: 15, maxMembers: 5,
-    maxRetentionDays: 365, writeAccess: true, clientWorkspaces: true,
-  },
-  agency: {
-    id: 'agency', name: 'Agency', monthlyPriceEur: 149, annualPriceEur: 1490, maxActiveAccounts: 40, maxMembers: 15,
-    maxRetentionDays: 730, writeAccess: true, clientWorkspaces: true,
-  },
-  enterprise: {
-    id: 'enterprise', name: 'Enterprise', monthlyPriceEur: null, annualPriceEur: null, maxActiveAccounts: null, maxMembers: null,
-    maxRetentionDays: 3650, writeAccess: true, clientWorkspaces: true,
-  },
-};
+// Public marketing pages are generated from this same catalog.
+// Stable IDs preserve existing subscriptions and OAuth entitlement checks.
+export const PLANS: Record<PlanId, PlanDefinition> = catalog as Record<PlanId, PlanDefinition>;
 
 export interface OrganizationEntitlement {
   billingOrganizationId?: string;
@@ -98,7 +81,18 @@ export async function applyPlanToPrincipal(principal: TenantPrincipal): Promise<
   ]);
   if (principal.userId && !principal.role && !membership.length) throw new HttpError('Project access has been revoked.', 403);
   const role = principal.role ?? membership[0]?.role;
-  const writeAllowed = entitlement.plan.writeAccess && role !== 'viewer';
+  let writeAllowed = entitlement.plan.writeAccess && role !== 'viewer';
+  if (writeAllowed && principal.userId && entitlement.plan.maxMembers !== null) {
+    // A downgrade must not leave more people writing than the paid seat allowance.
+    // Preserve membership/admin rights; extra editors retain read-only ad access.
+    const seats = await db()<Array<{ userId: string }>>`
+      select member.user_id from public.organization_group_memberships member
+      join public.organizations project on project.organization_group_id = member.organization_group_id
+      where project.id = ${principal.organizationId} and member.role <> 'viewer'
+      order by case member.role when 'owner' then 0 when 'admin' then 1 else 2 end, member.created_at, member.user_id
+      limit ${entitlement.plan.maxMembers}`;
+    writeAllowed = seats.some(seat => seat.userId === principal.userId);
+  }
   return {
     ...principal,
     role,

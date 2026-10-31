@@ -9,6 +9,7 @@ import {
   type PlanId,
 } from '@/lib/cloud/plans';
 import { openBillingPortal, startSubscription } from './actions';
+import { editingMemberCapacity } from '@/lib/cloud/member-capacity';
 
 export const metadata = { title: 'Plan' };
 
@@ -25,11 +26,11 @@ const PLAN_COPY: Record<PlanId, { eyebrow: string; description: string }> = {
   },
   premium: {
     eyebrow: 'Grow',
-    description: 'For teams coordinating more ad accounts, collaborators, and a full year of audit evidence.',
+    description: 'For freelancers and growing teams managing several brands or clients.',
   },
   agency: {
     eyebrow: 'Scale',
-    description: 'For teams managing more accounts, collaborators, client workspaces, and longer audit history.',
+    description: 'For agencies coordinating client accounts, editing teams, and two years of audit history.',
   },
   enterprise: {
     eyebrow: 'Customize',
@@ -44,6 +45,7 @@ export default async function BillingPage({
 }) {
   const [tenant, query] = await Promise.all([requireDashboardTenant(), searchParams]);
   const entitlement = await getOrganizationEntitlement(tenant.organizationId);
+  const editingMembers = await editingMemberCapacity(tenant.organizationId);
   const configured = billingConfigured();
   const canManage = tenant.organizationRole === 'owner';
   const interval: BillingInterval = query.billing === 'annual' ? 'annual' : 'monthly';
@@ -64,12 +66,14 @@ export default async function BillingPage({
             <strong>{entitlement.plan.name}</strong>
             <span className="status">{entitlement.status.replaceAll('_', ' ')}</span>
           </div>
-          <p>This plan covers every project in your organization. Account and member allowances are shared across projects.</p>
+          <p>This plan covers every project in your organization. Active accounts and editing members are shared across projects. Read-only client viewers are free.</p>
+          {entitlement.providerSubscriptionId ? <p>Your existing subscription keeps its current price until you choose a change in the billing portal.</p> : null}
         </div>
         {entitlement.providerCustomerId && canManage && configured ? (
           <form action={openBillingPortal}><button className="button secondary" type="submit">Manage billing</button></form>
         ) : null}
       </section>
+      {entitlement.plan.maxMembers !== null && editingMembers.count > entitlement.plan.maxMembers ? <div className="callout plan-notice" role="status">Your organization has {editingMembers.count} editing members and this plan includes {entitlement.plan.maxMembers}. Extra editors have read-only ad access. Set teammates to Viewer in Organization settings or upgrade to restore their editing access.</div> : null}
 
       <div className="plan-toolbar" aria-label="Billing interval">
         <div className="billing-toggle">
@@ -88,7 +92,7 @@ export default async function BillingPage({
             ? billingPlanConfigured(plan.id, interval)
             : false;
           const annual = interval === 'annual' && paid;
-          const displayPrice = annual ? Math.round((plan.annualPriceEur! / 12) * 100) / 100 : plan.monthlyPriceEur;
+          const displayPrice = annual ? (plan.annualPriceEur! / 12).toFixed(2) : plan.monthlyPriceEur;
           const annualSaving = paid ? (plan.monthlyPriceEur! * 12) - plan.annualPriceEur! : 0;
 
           return (
@@ -112,10 +116,12 @@ export default async function BillingPage({
               </div>
               <ul className="plan-features">
                 <li>{formatPlanLimit(plan.maxActiveAccounts, 'active ad accounts')}</li>
-                <li>{formatPlanLimit(plan.maxMembers, 'workspace members')}</li>
+                <li>{formatPlanLimit(plan.maxMembers, plan.writeAccess ? 'editing members' : 'members')}</li>
+                <li>Free read-only client viewers</li>
                 <li>{plan.maxRetentionDays}-day audit history</li>
                 <li>{plan.writeAccess ? 'Guarded read and write tools' : 'Read-only tools across every agent client'}</li>
-                {plan.clientWorkspaces ? <li>Separate client workspaces</li> : null}
+                {plan.clientWorkspaces ? <li>Unlimited isolated client projects</li> : null}
+                <li>MCP, CLI, REST, and dashboard access</li>
               </ul>
               <div className="plan-action">
                 {selected ? <span className="button secondary full disabled">Current plan</span> : null}
@@ -137,10 +143,11 @@ export default async function BillingPage({
         <div>
           <span className="plan-kicker">{PLAN_COPY.enterprise.eyebrow}</span>
           <h2>Enterprise</h2>
-          <p>{PLAN_COPY.enterprise.description} Includes SSO, regional hosting, custom retention, SLA, and dedicated onboarding.</p>
+          <p>Need more than 60 active accounts or 15 editing members? Talk to us about a custom organization plan.</p>
         </div>
         <a className="button secondary" href="mailto:yannick@adport.dev?subject=Adport%20Enterprise">Talk to Adport</a>
       </section>
+      <p className="inline-note" style={{ marginTop: '0.9rem' }}>Fixed pricing per organization. No percentage of ad spend. Your AI assistant subscription or model usage is separate.</p>
       {!configured ? <p className="inline-note" style={{ marginTop: '0.9rem' }}>Online billing is not configured in this environment. Plan entitlements still fail closed to Free.</p> : null}
     </main>
   );

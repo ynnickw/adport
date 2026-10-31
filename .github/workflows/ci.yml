@@ -28,6 +28,8 @@ jobs:
         run: |
           node scripts/build-provider-pages.mjs --check
           node --test scripts/test-provider-pages.mjs
+      - name: Verify pricing matches the cloud catalog
+        run: node scripts/build-pricing-page.mjs --check
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm typecheck

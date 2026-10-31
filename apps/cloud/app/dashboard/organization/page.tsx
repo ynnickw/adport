@@ -21,7 +21,7 @@ export default async function OrganizationPage() {
   </fieldset>;
   const roles = <><option value="member">Member</option><option value="viewer">Viewer</option>{tenant.organizationRole === 'owner' ? <><option value="admin">Admin</option><option value="owner">Owner</option></> : null}</>;
   return <main className="page">
-    <PageHeader title="Organization" description="Manage your agency or company, shared billing, and access to client projects." />
+    <PageHeader title="Organization" description="Manage your agency or company, shared billing, and access to client projects. Owners, admins, and editing members use a plan seat. Read-only client viewers are free." />
     <div className="stack" style={{ maxWidth: '52rem' }}>
       <section className="card"><div className="card-head"><h2>Organization details</h2></div><div className="card-body">
         <WorkspaceForm action={renameCompanyAction}><input type="hidden" name="organizationId" value={tenant.organizationGroupId} /><label>Organization name<input name="name" defaultValue={tenant.organizationGroupName} required maxLength={120} /></label></WorkspaceForm>

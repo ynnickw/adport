@@ -13,7 +13,7 @@ export default async function TeamPage() {
   const members = await listOrganizationMembers(tenant.organizationId);
   return (
     <main className="page">
-      <PageHeader title="Project team" description="Manage access to this project. Organization owners and admins inherit access; members can read and operate, and viewers read only." />
+      <PageHeader title="Project team" description="Manage access to this project. Organization owners and admins inherit access; members can read and operate, and read-only client viewers are free." />
       <p style={{ marginBottom: '1rem' }}><Link href="/dashboard/organization">Manage organization roles and access across projects</Link></p>
       <div className="stack" style={{ maxWidth: '46rem' }}>
         <OrganizationName organizationId={tenant.organizationId} name={tenant.organizationName} canManage={['owner', 'admin'].includes(tenant.role)} />

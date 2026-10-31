@@ -111,7 +111,9 @@ describeDatabase('agency organizations and isolated projects', () => {
 
   it('serializes account activation across projects and enforces organization-wide seats', async () => {
     await db()`update public.organization_subscriptions set plan = 'operator' where organization_id = ${company}`;
-    await expect(saveOrganizationMember({ actorUserId: owner, organizationId: company, userId: outsider, role: 'viewer', projectIds: [firstProject] })).rejects.toThrow('member limit');
+    await saveOrganizationMember({ actorUserId: owner, organizationId: company, userId: client, role: 'member', projectIds: [firstProject] });
+    await expect(saveOrganizationMember({ actorUserId: owner, organizationId: company, userId: outsider, role: 'member', projectIds: [firstProject] })).rejects.toThrow('editing-member limit');
+    await saveOrganizationMember({ actorUserId: owner, organizationId: company, userId: outsider, role: 'viewer', projectIds: [firstProject] });
     for (const projectId of [firstProject, secondProject]) {
       const connections = await db()<Array<{ id: string }>>`select id from public.connections where organization_id = ${projectId} and provider = 'google'`;
       for (let i = 0; i < 3; i++) await db()`insert into public.organization_ad_accounts (organization_id, connection_id, provider, account_id, name)
