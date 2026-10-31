@@ -86,7 +86,11 @@ export function auditTools(): AnyToolDefinition[] {
       input: z.object({ finding_id: z.string() }),
       annotations: { readOnly: false },
       async handler(input, ctx) {
-        const finding = await (ctx.findings ?? new FindingsStore()).setStatus(input.finding_id, 'dismissed');
+        const store = ctx.findings ?? new FindingsStore();
+        if (!await store.get(input.finding_id)) {
+          throw new AdportError('INVALID_INPUT', `Finding not found: ${input.finding_id}`);
+        }
+        const finding = await store.setStatus(input.finding_id, 'dismissed');
         return { finding };
       },
     }),
