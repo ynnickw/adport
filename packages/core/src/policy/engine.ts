@@ -28,13 +28,14 @@ function canonicalize(value: unknown): unknown {
   return value;
 }
 
-export function hashOperation(op: WriteOperation): string {
+export function hashOperation(op: WriteOperation, policy?: Policy): string {
   const canonical = canonicalize({
     tool: op.tool,
     provider: op.provider,
     accountId: op.accountId,
     kind: op.kind,
     payload: op.payload,
+    ...(policy ? { policy: { ...policy, protected_accounts: [...new Set(policy.protected_accounts)].sort() } } : {}),
   });
   return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
 }
@@ -67,7 +68,8 @@ export class PolicyEngine {
     await this.pending.put({
       id,
       provider: provider.id,
-      opHash: hashOperation(op),
+      // Bind the effective policy too: changing limits or coercions requires a new preview.
+      opHash: hashOperation(op, this.policy),
       op,
       preview,
       createdAt: new Date(now).toISOString(),
@@ -101,10 +103,10 @@ export class PolicyEngine {
         `Pending operation ${pendingId} expired at ${pending.expiresAt}. Validate again.`,
       );
     }
-    if (pending.provider !== provider.id || pending.opHash !== hashOperation(op)) {
+    if (pending.provider !== provider.id || pending.opHash !== hashOperation(op, this.policy)) {
       throw new AdportError(
         'PENDING_MISMATCH',
-        'The operation differs from what was validated. Re-validate with the exact arguments you intend to apply.',
+        'The operation or safety policy differs from this preview. Call the tool without pending_operation_id to preview again before applying.',
       );
     }
     // Policy may have changed between validate and apply; re-check.

@@ -3,10 +3,12 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import type { Policy } from '@adport/core';
 import { Button } from '@/components/controls';
 import { BrandLockup } from '@/components/logos';
 import { SupportLauncher } from '@/components/support-widget';
 import { PendingAccountSelections } from '@/components/pending-account-selections';
+import { PolicySummary } from '@/components/policy-summary';
 import { isOAuthProvider, type OAuthProvider } from '@/lib/cloud/types';
 import { providerLabel } from '@/lib/cloud/providers';
 import { ProviderAccountPicker, AccountConnectionProgress, type ProviderAccountSelection } from '../account-selection/provider-account-picker';
@@ -21,9 +23,10 @@ const STEPS = [
   { id: 'agent', label: 'Add your assistant', detail: 'Use the AI you already know' },
 ] as const;
 
-export function OnboardingFlow({ organizationId, projectName, setupKind, projectSwitcher, resuming = false, canManage, initialStep, initialAgent, baseUrl, connectedProvider, pendingSelection, accountsSaved = false, oauthError, providers, connections, accounts, maxActiveAccounts, organizationActiveCount, returnTo }: {
+export function OnboardingFlow({ organizationId, projectName, policy, setupKind, projectSwitcher, resuming = false, canManage, initialStep, initialAgent, baseUrl, connectedProvider, pendingSelection, accountsSaved = false, oauthError, providers, connections, accounts, maxActiveAccounts, organizationActiveCount, returnTo }: {
   organizationId: string;
   projectName: string;
+  policy: Policy;
   setupKind: 'first_project' | 'new_project';
   projectSwitcher?: React.ReactNode;
   resuming?: boolean;
@@ -116,6 +119,7 @@ export function OnboardingFlow({ organizationId, projectName, setupKind, project
             {accounts.length || providerFilter ? <AccountAccessManager key={organizationId} organizationId={organizationId} accounts={accounts.map(account => ({ ...account, connectionStatus: connections.find(connection => connection.provider === account.provider)?.status ?? 'revoked', accountSelectionId: connections.find(connection => connection.provider === account.provider)?.accountSelectionId, accountSelectionUnavailable: connections.find(connection => connection.provider === account.provider)?.accountSelectionUnavailable }))} canManage={canManage} maxActiveAccounts={maxActiveAccounts} providerFilter={providerFilter} organizationActiveCount={organizationActiveCount} /> : !hasPendingSelection ? <div className="card"><div className="empty"><h2>Connect a platform to add accounts</h2><p>You can also set up your assistant now and add accounts later.</p><Button className="button secondary" disabled={busy} onClick={() => void advance('connect')}>Connect a platform</Button></div></div> : null}
           </> : null}
           {step === 'agent' ? <>
+            <PolicySummary policy={policy} settingsHref={'/dashboard/policies?' + new URLSearchParams({ setup: '1', return_to: returnTo })} />
             {!hasEnabledAccounts ? <p className="onboarding-inline-note">You can connect your assistant now. It will see ad data once you enable an account.</p> : null}
             <AgentSetupGuide variant="onboarding" baseUrl={baseUrl} projectName={projectName} initialSelectedId={agent} onSelectionChange={setAgent} />
           </> : null}

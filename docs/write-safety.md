@@ -10,17 +10,20 @@ Every Adport mutation uses the same `ToolRegistry` definition and the same polic
 
 In MCP Apps hosts, the preview widget can show an **Approve and apply** button. It sends the original validated arguments and pending id through the same MCP write tool; it is not a separate or privileged write path. The button shows only after the server returns an eligible pending operation. If the host cannot confirm the result, check the operation status before trying again, since a timed-out write may still have succeeded. Hosts may also impose their own tool-permission prompt, which Adport cannot suppress.
 
-Self-hosted pending operations are file-backed under `${ADPORT_HOME:-~/.config/adport}/pending/`. Cloud pending operations are tenant-scoped Postgres rows. Both expire after the configured TTL (15 minutes by default), and both bind the tool, provider, account, operation kind, and canonicalized payload into the operation hash.
+Self-hosted pending operations are file-backed under `${ADPORT_HOME:-~/.config/adport}/pending/`. Cloud pending operations are tenant-scoped Postgres rows. Both expire after the configured TTL (15 minutes by default), and both bind the tool, provider, account, operation kind, canonicalized payload, and effective safety policy into the operation hash. Changing the safety policy requires a new preview before applying. Tokens issued before policy binding was introduced also require a new preview.
 
 ## Policy controls
 
 Run `adport policy` to see the active values and their source. Current controls include:
 
+- `require_validation`: always `true`; the preview gate cannot be disabled;
 - `protected_accounts`: accounts on which all writes are rejected;
 - `paused_creation`: coerces supported new campaigns to paused and reports the coercion;
 - `max_budget_delta_pct`: limits relative changes where a current budget is known;
 - `max_daily_budget_micros`: limits the resulting daily budget in shared policy units;
 - `pending_ttl_minutes`: limits the approval window.
+
+In the cloud dashboard, optional budget limits have explicit on/off switches. Turning a limit off saves `null`; it does not disable the preview gate. Policies apply to the selected project. New projects start with the built-in defaults, and their current safeguards appear during assistant setup. Local CLI/stdio MCP configuration remains independent of cloud settings.
 
 Provider-native validation is used where available, but a provider dry run is not the approval. The Adport pending id remains required.
 
