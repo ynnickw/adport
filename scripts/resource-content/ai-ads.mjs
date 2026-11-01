@@ -18,8 +18,8 @@ export const aiArticles = [
     ],
   },
   {
-    slug: 'google-ads-with-claude', cluster: 'ai-ad-management', keyword: 'Claude Google Ads',
-    title: 'Use Claude with Google Ads: a reporting and approval workflow',
+    slug: 'google-ads-with-claude', cluster: 'connect-ads-to-claude', keyword: 'connect Google Ads to Claude',
+    title: 'Connect Google Ads to Claude and Claude Code',
     description: 'Connect Google Ads to Claude through Adport, start with a read-only campaign review, and keep changes tied to an explicit approval.',
     summary: 'Connect Claude Code and build a campaign-review habit that produces clear, reviewable changes.',
     marks: ['google', 'claude'], sources: ['claude', 'lag'],

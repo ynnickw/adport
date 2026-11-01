@@ -1,9 +1,12 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
+import { providers } from './website-providers.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const catalog = JSON.parse(await readFile(resolve(root, 'apps/cloud/lib/cloud/plan-catalog.json'), 'utf8'));
+const indexPath = resolve(root, 'website/index.html');
+const index = await readFile(indexPath, 'utf8');
 const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 const money = value => Number.isInteger(value) ? String(value) : value.toFixed(2);
 const copy = {
@@ -12,33 +15,89 @@ const copy = {
   premium: ['For growing teams', 'Keep several brands and clients organized in one place.'],
   agency: ['For agencies', 'Coordinate more client accounts and a larger editing team.'],
 };
-const section = `<section class="cloud-pricing" id="pricing" aria-labelledby="pricing-title">
-  <div class="pricing-heading"><p class="pricing-eyebrow">Adport Cloud pricing</p><h2 id="pricing-title">One organization. Every client behind the gate.</h2><p>Unlimited projects. Free read-only client viewers. Fixed pricing with no percentage of ad spend.</p></div>
+const planIds = ['reader', 'operator', 'premium', 'agency'];
+const paidIds = planIds.filter(id => catalog[id].writeAccess);
+const providerLogo = id => {
+  const svg = index.match(new RegExp(`<svg[^>]*class="${id}-logo"[\\s\\S]*?<\\/svg>`))?.[0];
+  if (!svg) throw new Error(`Provider logo missing: ${id}`);
+  return svg;
+};
+const agentLogo = id => {
+  const markup = index.match(new RegExp(`<span class="agent agent-${id}">[\\s\\S]*?<\\/svg>`))?.[0];
+  if (!markup) throw new Error(`Agent logo missing: ${id}`);
+  return markup.slice(markup.indexOf('<svg')).replace('<svg ', '<svg aria-hidden="true" focusable="false" ');
+};
+const icon = id => `<span class="pricing-provider-logo" aria-hidden="true">${providerLogo(id)}</span>`;
+const connectors = () => `<span class="pricing-connector pricing-connector-chatgpt">${agentLogo('chatgpt')}<span>ChatGPT <small>Plugin</small></span></span><span class="pricing-connector pricing-connector-claude">${agentLogo('claude')}<span>Claude <small>Connector</small></span></span>`;
+const comparisonIntegrations = `<tbody class="comparison-integrations"><tr><th scope="row">Supported ad platforms</th><td colspan="${planIds.length}"><ul class="comparison-platform-list" aria-label="Included in every plan">${providers.map(p => `<li>${icon(p.id)}<span>${escape(p.name)}</span></li>`).join('')}</ul></td></tr><tr><th scope="row">AI plugins &amp; connectors</th><td colspan="${planIds.length}"><div class="comparison-connectors">${connectors()}<span class="comparison-included">Included in every plan</span></div></td></tr></tbody>`;
+const feature = value => `<span class="comparison-check${value ? '' : ' comparison-no'}" role="img" aria-label="${value ? 'Included' : 'Not included'}"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="${value ? 'm5 12 4 4L19 6' : 'm7 7 10 10M17 7 7 17'}" /></svg></span>`;
+const action = (id, label) => `<a class="pricing-action${id === 'premium' ? ' pricing-action-primary' : ''}" href="${catalog[id].writeAccess ? `https://app.adport.dev/dashboard/billing?plan=${id}&billing=monthly` : 'https://app.adport.dev/?mode=signup'}"${catalog[id].writeAccess ? ` data-plan="${id}"` : ''}>${escape(label)}</a>`;
+const amount = id => `<div class="pricing-amount"><strong data-monthly="${catalog[id].monthlyPriceEur}" data-annual="${money(catalog[id].annualPriceEur / 12)}">€${catalog[id].monthlyPriceEur}</strong><span>${catalog[id].writeAccess ? '/ month' : 'forever'}</span></div>`;
+const billingNote = id => `<p class="pricing-billing-note" data-monthly="${catalog[id].writeAccess ? 'Billed monthly' : 'No card required'}" data-annual="${catalog[id].writeAccess ? `€${catalog[id].annualPriceEur} billed yearly` : 'No card required'}">${catalog[id].writeAccess ? 'Billed monthly' : 'No card required'}</p>`;
+
+const ecosystem = `<div class="pricing-ecosystem">
+    <div class="pricing-platforms"><div class="provider-stack" data-provider-tooltip><div class="provider-stack-marks" aria-hidden="true">${providers.slice(0, 4).map(p => icon(p.id)).join('')}</div><button class="provider-more" type="button" aria-label="Show all ${providers.length} ad platforms" aria-expanded="false" aria-controls="pricing-provider-tooltip">+${providers.length - 4}</button><div class="provider-tooltip" id="pricing-provider-tooltip" role="tooltip" hidden><p>${providers.length} ad platform integrations</p><ul>${providers.map(p => `<li>${icon(p.id)}<span>${escape(p.name)}</span></li>`).join('')}</ul><span class="provider-tooltip-note">Provider access depends on your account and API permissions.</span></div></div><span>${providers.length} ad platforms</span></div>
+    <div class="pricing-connectors" aria-label="AI integrations">${connectors()}</div>
+  </div>`;
+
+const comparisonGroups = [
+  { name: 'Plan & limits', theme: 'limits', rows: [
+    ['Active ad accounts', plan => plan.maxActiveAccounts],
+    ['Team members', plan => plan.writeAccess ? `${plan.maxMembers} editors` : `${plan.maxMembers}, read-only`],
+    ['Isolated client projects', () => 'Unlimited'],
+    ['Read-only client viewers', () => 'Unlimited'],
+  ] },
+  { name: 'Reporting & connections', theme: 'connections', rows: [
+    ['Cross-platform reporting', () => true],
+    ['MCP, CLI, REST & dashboard', () => true],
+    ['Project-scoped agent connections', () => true],
+  ] },
+  { name: 'Ad operations', theme: 'operations', rows: [
+    ['Read-only tools & account reports', () => true],
+    ['Preview and apply ad changes', plan => plan.writeAccess],
+    ['Budget caps & protected accounts for writes', plan => plan.writeAccess],
+    ['Campaign creation, paused by policy', plan => plan.writeAccess],
+  ] },
+  { name: 'Audit & collaboration', theme: 'collaboration', rows: [
+    ['Audit history', plan => `${plan.maxRetentionDays} days`],
+    ['Roles & project permissions', () => true],
+    ['Client access without ad changes', () => true],
+  ] },
+];
+function comparison() {
+  return `<section class="pricing-comparison" id="compare-plans" aria-labelledby="compare-title"><div class="pricing-heading"><p class="pricing-eyebrow">The details, side by side</p><h2 id="compare-title">Compare plans.</h2><p>Every plan includes unlimited projects and free read-only client viewers.</p></div><p class="comparison-scroll-hint" id="comparison-hint">Scroll to compare all plans.</p><div class="comparison-scroll" role="region" aria-label="Plan feature comparison" aria-describedby="comparison-hint" tabindex="0"><table class="comparison-table"><caption class="sr-only">Adport Cloud features and limits by plan</caption><thead><tr><th scope="col">Features</th>${planIds.map(id => `<th scope="col" class="${id === 'premium' ? 'comparison-featured' : ''}"><span class="comparison-plan">${escape(catalog[id].name)}</span>${amount(id)}${billingNote(id)}${action(id, catalog[id].writeAccess ? `Choose ${catalog[id].name}` : 'Start free')}</th>`).join('')}</tr></thead>${comparisonIntegrations}${comparisonGroups.map(group => `<tbody><tr class="comparison-group comparison-group-${group.theme}"><th colspan="${planIds.length + 1}" scope="rowgroup"><span>${escape(group.name)}</span></th></tr>${group.rows.map(([label, value]) => `<tr><th scope="row">${escape(label)}</th>${planIds.map(id => { const result = value(catalog[id]); return `<td${id === 'premium' ? ' class="comparison-featured"' : ''}>${typeof result === 'boolean' ? feature(result) : escape(result)}</td>`; }).join('')}</tr>`).join('')}</tbody>`).join('')}</table></div><p class="pricing-shared-note">Operations depend on the connected provider and your account permissions. Ad spend and your AI assistant subscription or model usage are separate.</p></section>`;
+}
+
+function pricingSection(standalone = false) {
+  const heading = standalone ? 'h1' : 'h2';
+  return `<section class="cloud-pricing" id="pricing" aria-labelledby="pricing-title">
+  <div class="pricing-heading"><p class="pricing-eyebrow">Adport Cloud pricing</p><${heading} id="pricing-title">One organization. Every client behind the gate.</${heading}><p>Unlimited projects. Free read-only client viewers. Fixed pricing with no percentage of ad spend.</p></div>
+  ${ecosystem}
   <div class="pricing-billing" aria-label="Billing interval"><button type="button" data-billing="monthly" aria-pressed="true">Monthly</button><button type="button" data-billing="annual" aria-pressed="false">Yearly <span>Save 2 months</span></button></div>
-  <div class="pricing-cards">${['reader', 'operator', 'premium', 'agency'].map(id => {
-    const plan = catalog[id]; const paid = id !== 'reader'; const annualMonthly = plan.annualPriceEur / 12;
-    const href = paid ? `https://app.adport.dev/dashboard/billing?plan=${id}&billing=monthly` : 'https://app.adport.dev/?mode=signup';
+  <div class="pricing-cards">${paidIds.map(id => {
+    const plan = catalog[id];
     return `<article class="pricing-card${id === 'premium' ? ' pricing-card-featured' : ''}">
       ${id === 'premium' ? '<span class="pricing-recommended">Recommended</span>' : ''}
-      <p class="pricing-eyebrow">${escape(copy[id][0])}</p><h3>${escape(plan.name)}</h3><p class="pricing-description">${escape(copy[id][1])}</p>
-      <div class="pricing-amount"><strong data-monthly="${plan.monthlyPriceEur}" data-annual="${money(annualMonthly)}">€${plan.monthlyPriceEur}</strong><span>${paid ? '/ month' : 'forever'}</span></div>
-      <p class="pricing-billing-note" data-monthly="${paid ? 'Billed monthly' : 'No payment details needed'}" data-annual="${paid ? `€${plan.annualPriceEur} billed yearly` : 'No payment details needed'}">${paid ? 'Billed monthly' : 'No payment details needed'}</p>
-      <ul><li>${plan.maxActiveAccounts} active ad accounts</li><li>${plan.maxMembers} ${paid ? 'editing members' : 'member, read-only access'}</li><li>Free read-only client viewers</li><li>Unlimited isolated client projects</li><li>${plan.maxRetentionDays}-day audit history</li><li>${paid ? 'Guarded read and write tools' : 'Read-only reports and tools'}</li><li>MCP, CLI, REST, and dashboard</li></ul>
-      <a class="pricing-action${id === 'premium' ? ' pricing-action-primary' : ''}" href="${href}"${paid ? ` data-plan="${id}"` : ''}>${paid ? 'Start 7-day free trial' : 'Start free'}</a>
-      ${paid ? '<p class="pricing-trial-note">Cancel anytime</p>' : '<p class="pricing-trial-note">No card required</p>'}
+      <header class="pricing-card-header"><p class="pricing-eyebrow">${escape(copy[id][0])}</p><h3>${escape(plan.name)}</h3><p class="pricing-description">${escape(copy[id][1])}</p></header>
+      <div class="pricing-card-body">${amount(id)}${billingNote(id)}<div class="pricing-limits"><span><strong>${plan.maxActiveAccounts}</strong> active ad accounts</span><span><strong>${plan.maxMembers}</strong> editing members</span></div>
+      ${action(id, 'Start 7-day free trial')}<p class="pricing-trial-note">Cancel anytime</p>
+      <p class="pricing-list-title">Included with ${escape(plan.name)}</p><ul class="pricing-features">${['Preview and approve ad changes', 'Budget caps & protected accounts', `${plan.maxRetentionDays}-day audit history`, 'Unlimited isolated client projects', 'Free read-only client viewers', 'MCP, CLI, REST & dashboard'].map(text => `<li>${feature(true)}<span>${escape(text)}</span></li>`).join('')}</ul></div>
     </article>`;
   }).join('\n')}</div>
-  <p class="pricing-shared-note">Prices are per organization. Active accounts and editing members are shared across its projects. Viewers can report, but cannot change ads. Your AI assistant subscription or model usage is separate.</p>
-  <div class="pricing-enterprise"><div><h3>Need more room?</h3><p>More than 60 active accounts or 15 editing members? We can put together a custom organization plan.</p></div><a class="pricing-action" href="mailto:yannick@adport.dev?subject=Adport%20custom%20plan">Talk to us</a></div>
+  <div class="pricing-free"><div><span class="pricing-free-label">Free</span><h3>Start with a read-only view.</h3><p>${catalog.reader.maxActiveAccounts} active ad accounts · ${catalog.reader.maxMembers} member · ${catalog.reader.maxRetentionDays}-day audit history. Unlimited projects and free read-only client viewers.</p></div><div>${amount('reader')}${action('reader', 'Start free')}<span class="pricing-trial-note">No card required</span></div></div>
+  <div class="pricing-next"><a class="pricing-compare-link" href="${standalone ? '#compare-plans' : '/pricing#compare-plans'}">Compare all features <span aria-hidden="true">↓</span></a><a class="pricing-waitlist-link" href="${standalone ? '/#waitlist' : '#waitlist'}">Join the Cloud waitlist <span aria-hidden="true">↗</span></a></div>
+  <p class="pricing-shared-note">Prices are per organization. Active accounts and editing members are shared across its projects. Viewers can report, but cannot change ads.</p>
+  ${standalone ? comparison() : ''}
+  <div class="pricing-enterprise"><div><p class="pricing-eyebrow">Enterprise</p><h3>A little more room for your team.</h3><p>More than ${catalog.agency.maxActiveAccounts} active accounts or ${catalog.agency.maxMembers} editing members? Let’s put together a plan for your organization.</p></div><a class="pricing-action" href="mailto:yannick@adport.dev?subject=Adport%20custom%20plan">Talk to us</a></div>
   <p class="pricing-local">Prefer to host it yourself? The open-source CLI and local MCP server remain free. <a href="https://github.com/ynnickw/adport">Explore the source</a>.</p>
 </section>`.replace(/[ \t]+$/gm, '');
+}
 
-const indexPath = resolve(root, 'website/index.html');
-const index = await readFile(indexPath, 'utf8');
+const section = pricingSection();
 const marker = /<!-- pricing:start -->[\s\S]*?<!-- pricing:end -->/;
 if (!marker.test(index)) throw new Error('Landing pricing markers are missing.');
 const nextIndex = index.replace(marker, `<!-- pricing:start -->\n${section}\n      <!-- pricing:end -->`);
-const pageSection = section.replace('<h2 id="pricing-title">', '<h1 id="pricing-title">').replace('gate.</h2>', 'gate.</h1>');
+const pageSection = pricingSection(true);
 const page = `<!doctype html>
 <!-- Generated by scripts/build-pricing-page.mjs from the shared cloud plan catalog. -->
 <html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
