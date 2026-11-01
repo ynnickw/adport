@@ -4,6 +4,7 @@ import { AccountAccessManager, type AccountAccessItem } from '@/app/dashboard/ac
 import AccountsPage from '@/app/dashboard/accounts/page';
 import { OnboardingFlow } from '@/app/onboarding/onboarding-flow';
 import { OAUTH_PROVIDERS } from '@/lib/cloud/types';
+import { DEFAULT_POLICY } from '@adport/core';
 
 const mocks = vi.hoisted(() => ({ inventory: vi.fn(), connections: vi.fn(), tenant: vi.fn(), selection: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
@@ -71,14 +72,14 @@ describe('provider-specific account picker', () => {
   });
 
   it.each(['google', 'tiktok', undefined])('scopes onboarding after authorizing %s', (connectedProvider) => {
-    const html = renderToStaticMarkup(<OnboardingFlow projectName="Test project" setupKind="first_project" organizationId="org" canManage initialStep="accounts" initialAgent={null} baseUrl="https://app.adport.test" connectedProvider={connectedProvider} providers={[]} connections={[]} accounts={accounts} maxActiveAccounts={3} organizationActiveCount={2} returnTo="/dashboard" />);
+    const html = renderToStaticMarkup(<OnboardingFlow policy={DEFAULT_POLICY} projectName="Test project" setupKind="first_project" organizationId="org" canManage initialStep="accounts" initialAgent={null} baseUrl="https://app.adport.test" connectedProvider={connectedProvider} providers={[]} connections={[]} accounts={accounts} maxActiveAccounts={3} organizationActiveCount={2} returnTo="/dashboard" />);
     for (const account of accounts) {
       if (!connectedProvider || account.provider === connectedProvider) expect(html).toContain(account.name);
       else expect(html).not.toContain(account.name);
     }
   });
   it('keeps pending selection inside the setup step without exposing access switches yet', () => {
-    const html = renderToStaticMarkup(<OnboardingFlow projectName="Client project" setupKind="new_project" organizationId="org" canManage initialStep="accounts" initialAgent={null} baseUrl="https://app.adport.test" providers={[]} connections={[]} accounts={accounts} maxActiveAccounts={3} organizationActiveCount={2} returnTo="/dashboard/agents" pendingSelection={{ id: 'selection', provider: 'google', accounts: [{ provider: 'google', id: 'candidate', name: 'New client account' }] }} />);
+    const html = renderToStaticMarkup(<OnboardingFlow policy={DEFAULT_POLICY} projectName="Client project" setupKind="new_project" organizationId="org" canManage initialStep="accounts" initialAgent={null} baseUrl="https://app.adport.test" providers={[]} connections={[]} accounts={accounts} maxActiveAccounts={3} organizationActiveCount={2} returnTo="/dashboard/agents" pendingSelection={{ id: 'selection', provider: 'google', accounts: [{ provider: 'google', id: 'candidate', name: 'New client account' }] }} />);
     expect(html).toContain('New client account');
     expect(html).toContain('Choose your Google Ads accounts.');
     expect(html).toContain('Continue to enable access');

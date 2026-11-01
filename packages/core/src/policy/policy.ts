@@ -5,8 +5,8 @@ import { z } from 'zod';
 import { adportHome } from '../paths.js';
 
 export const policySchema = z.object({
-  /** Writes must be validated (dry-run) before they can be applied. */
-  require_validation: z.boolean().default(true),
+  /** The preview gate is structural and cannot be disabled. */
+  require_validation: z.literal(true).default(true),
   /** Created campaigns/ad groups/ads are coerced to PAUSED. */
   paused_creation: z.boolean().default(true),
   /** Reject budget changes exceeding this percentage of the current value. null = no cap. */

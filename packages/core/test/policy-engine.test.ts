@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AdportError } from '../src/errors.js';
 import { AuditLog } from '../src/policy/audit.js';
 import { PolicyEngine, hashOperation } from '../src/policy/engine.js';
@@ -112,6 +112,63 @@ describe('PolicyEngine.apply', () => {
     );
   });
 
+  it.each([
+    { max_daily_budget_micros: 11_000_000 },
+    { max_budget_delta_pct: 10 },
+    { pending_ttl_minutes: 5 },
+  ])('requires a new preview after policy changes to %j', async (policy) => {
+    const op = budgetOp('c1', 12_000_000);
+    const { pendingOperationId } = await engine.validate(provider, op);
+    const apply = vi.spyOn(provider, 'applyWrite');
+    engine = makeEngine(policy);
+
+    await expect(engine.apply(provider, op, pendingOperationId)).rejects.toMatchObject({
+      code: 'PENDING_MISMATCH',
+    });
+    expect(apply).not.toHaveBeenCalled();
+    expect(provider.listCampaigns('mock-1').find((c) => c.id === 'c1')?.dailyBudgetMicros).toBe(10_000_000);
+  });
+
+  it.each([true, false])('requires a new preview when paused creation changes from %s', async (paused) => {
+    engine = makeEngine({ paused_creation: paused });
+    const op: WriteOperation = {
+      tool: 'mock_create_campaign', provider: 'mock', accountId: 'mock-1', kind: 'create',
+      payload: { name: 'New', daily_budget_micros: 1_000_000, status: 'ENABLED' },
+    };
+    const { pendingOperationId } = await engine.validate(provider, op);
+    const apply = vi.spyOn(provider, 'applyWrite');
+    engine = makeEngine({ paused_creation: !paused });
+
+    await expect(engine.apply(provider, op, pendingOperationId)).rejects.toMatchObject({ code: 'PENDING_MISMATCH' });
+    expect(apply).not.toHaveBeenCalled();
+    expect(provider.listCampaigns('mock-1').some((c) => c.name === 'New')).toBe(false);
+  });
+
+  it('applies after a new preview under the updated policy', async () => {
+    const op = budgetOp('c1', 12_000_000);
+    const original = await engine.validate(provider, op);
+    engine = makeEngine({ max_budget_delta_pct: 20 });
+    await expect(engine.apply(provider, op, original.pendingOperationId)).rejects.toMatchObject({ code: 'PENDING_MISMATCH' });
+    const refreshed = await engine.validate(provider, op);
+    expect((await engine.apply(provider, op, refreshed.pendingOperationId)).result.applied).toBe(true);
+  });
+
+  it('does not invalidate a preview when protected accounts are reordered', async () => {
+    engine = makeEngine({ protected_accounts: ['other-1', 'other-2'] });
+    const op = budgetOp('c1', 12_000_000);
+    const { pendingOperationId } = await engine.validate(provider, op);
+    engine = makeEngine({ protected_accounts: ['other-2', 'other-1', 'other-1'] });
+    expect((await engine.apply(provider, op, pendingOperationId)).result.applied).toBe(true);
+  });
+
+  it('requires a fresh preview for tokens issued before policy binding', async () => {
+    const op = budgetOp('c1', 12_000_000);
+    const { pendingOperationId } = await engine.validate(provider, op);
+    const stored = (await pending.get(pendingOperationId))!;
+    await pending.put({ ...stored, opHash: hashOperation(op) });
+    await expect(engine.apply(provider, op, pendingOperationId)).rejects.toMatchObject({ code: 'PENDING_MISMATCH' });
+  });
+
   it('rejects expired pending operations', async () => {
     const op = budgetOp('c1', 12_000_000);
     const past = new Date(Date.now() - 60_000).toISOString();
@@ -134,6 +191,10 @@ describe('PolicyEngine.apply', () => {
       engine.apply(provider, budgetOp('c1', 12_000_000), '00000000-0000-0000-0000-000000000000'),
     ).rejects.toBeInstanceOf(AdportError);
   });
+});
+
+it('does not allow the preview gate to be disabled in configuration', () => {
+  expect(policySchema.safeParse({ require_validation: false }).success).toBe(false);
 });
 
 describe('hashOperation', () => {
