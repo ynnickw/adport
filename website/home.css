@@ -15,14 +15,14 @@
 .hero-title { margin-top: 1rem; font-size: clamp(2rem, 9.5cqi, 3.5rem); font-weight: 820; line-height: 1.1; letter-spacing: -0.04em; }
 .hero-lead { display: block; white-space: nowrap; }
 .agent-line { display: flex; align-items: baseline; gap: 0.24em; white-space: nowrap; }
-.ads-word { display: inline-flex; align-items: center; gap: 0.15em; }
+.ads-word { display: inline-flex; align-items: baseline; gap: 0.15em; }
 
 /* Every item shares one grid cell, keeping both headline lines steady as logos rotate. */
 .agent-rotator, .provider-rotator { display: inline-grid; vertical-align: middle; }
 .agent-rotator { color: #ec5f00; }
 .provider-rotator { width: 0.8em; height: 0.8em; }
 .agent, .provider-mark { grid-area: 1 / 1; opacity: 0; visibility: hidden; transform: translateY(0.12em); transition: opacity 220ms ease, transform 220ms var(--ease-out), visibility 220ms; }
-.agent { display: inline-flex; align-items: center; gap: 0.2em; }
+.agent { display: inline-flex; align-items: baseline; gap: 0.2em; }
 .agent svg { display: block; overflow: visible; width: 0.74em; height: 0.74em; flex: none; fill: currentColor; transform: translateY(0.02em); }
 .provider-mark svg { display: block; width: 100%; height: 100%; fill: currentColor; }
 [data-rotate] > .is-active,
