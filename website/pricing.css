@@ -26,7 +26,7 @@
 .provider-tooltip .pricing-provider-logo { width: 2.25rem; height: 2.25rem; border: 1px solid var(--rule); border-radius: .45rem; }
 .provider-tooltip .pricing-provider-logo svg { width: 1.4rem; height: 1.4rem; }
 .provider-tooltip-note { display: block; margin-top: .8rem; padding-top: .7rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: .6875rem; line-height: 1.55; }
-.pricing-connectors { display: flex; align-items: center; gap: .75rem; padding-left: 2rem; border-left: 1px solid var(--rule); }
+.pricing-connectors { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; max-width: 100%; gap: .75rem; padding-left: 2rem; border-left: 1px solid var(--rule); }
 .pricing-connector { display: inline-flex; align-items: center; gap: .7rem; padding: .75rem 1rem; border: 1px solid var(--rule); border-radius: .85rem; background: var(--raised); color: var(--ink); text-align: left; }
 .pricing-connector > svg { flex: none; width: 2.25rem; height: 2.25rem; fill: currentColor; }
 .pricing-connector-claude > svg { color: #d97757; }
