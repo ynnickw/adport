@@ -4,6 +4,7 @@ import { PlanUsage } from '@/components/plan-usage';
 import { getOrganizationUsage } from '@/lib/cloud/usage';
 import Link from 'next/link';
 import { CheckoutStatus } from './checkout-status';
+import { billingStatus } from '@/lib/billing-status';
 import { listOrganizationProjects } from '@/lib/cloud/workspaces';
 import { PageHeader } from '@/components/ui';
 import { billingConfigured, billingPlanConfigured } from '@/lib/cloud/billing';
@@ -12,6 +13,7 @@ import {
   formatPlanLimit,
   getOrganizationEntitlement,
   PLANS,
+  subscriptionEnded,
   type BillingInterval,
   type PlanId,
 } from '@/lib/cloud/plans';
@@ -54,7 +56,8 @@ export default async function BillingPage({
   const usage = await getOrganizationUsage(tenant.organizationId);
   const configured = billingConfigured();
   const canManage = tenant.organizationRole === 'owner';
-  const hasSubscription = Boolean(entitlement.providerSubscriptionId && entitlement.status !== 'canceled');
+  const hasSubscription = Boolean(entitlement.providerSubscriptionId && !subscriptionEnded(entitlement.status));
+  const lifecycle = billingStatus(entitlement);
   const subscriptionReady = hasSubscription && ['active', 'trialing', 'past_due'].includes(entitlement.status);
   const checkoutPending = query.checkout === 'complete' && !subscriptionReady;
   const trialEligible = !entitlement.providerSubscriptionId;
@@ -85,10 +88,10 @@ export default async function BillingPage({
           <span className="plan-kicker">{tenant.organizationGroupName}</span>
           <div className="plan-current-line">
             <strong>{entitlement.plan.name}</strong>
-            <span className={`status${['past_due', 'unpaid', 'incomplete'].includes(entitlement.status) ? ' warn' : entitlement.status === 'canceled' ? ' neutral' : ''}`}>{entitlement.status === 'canceled' ? 'Free access' : entitlement.status.replaceAll('_', ' ')}</span>
+            <span className={`status ${lifecycle.tone}`}>{lifecycle.label}</span>
           </div>
           <p>Shared across every project in your organization.</p>
-          {hasSubscription ? <p>Your existing subscription keeps its current price until you choose a change in the billing portal.</p> : null}
+          {lifecycle.message ? <p role="status">{lifecycle.message}</p> : hasSubscription ? <p>Your existing subscription keeps its current price until you choose a change in the billing portal.</p> : null}
         </div>
         {entitlement.providerCustomerId && canManage && configured ? (
           <BillingForm action={openBillingPortalForm} label="Manage billing" pendingLabel="Opening billing…" className="button secondary" />

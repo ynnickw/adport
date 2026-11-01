@@ -17,6 +17,6 @@ export const productEventSchema = z.discriminatedUnion('event', [
   z.object({ event: z.literal('organization_created') }).strict(),
   z.object({ event: z.literal('project_created') }).strict(),
   z.object({ event: z.literal('checkout_started'), target_plan: plan, interval: z.enum(['monthly', 'annual']) }).strict(),
-  z.object({ event: z.literal('subscription_status_changed'), subscription_status: z.enum(['active', 'trialing', 'past_due', 'unpaid', 'incomplete', 'canceled']), target_plan: plan }).strict(),
+  z.object({ event: z.literal('subscription_status_changed'), subscription_status: z.enum(['active', 'trialing', 'past_due', 'unpaid', 'incomplete', 'canceled', 'paused', 'incomplete_expired']), target_plan: plan }).strict(),
 ]);
 export type ProductEvent = z.infer<typeof productEventSchema>;

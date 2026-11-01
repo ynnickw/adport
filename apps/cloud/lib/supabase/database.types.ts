@@ -553,9 +553,14 @@ export type Database = {
       organization_subscriptions: {
         Row: {
           billing_provider: string | null
+          cancel_at: string | null
           cancel_at_period_end: boolean
+          canceled_at: string | null
+          cancellation_reason: string | null
           created_at: string
           current_period_end: string | null
+          last_reconciliation_attempt_at: string | null
+          last_synced_at: string | null
           organization_id: string
           plan: Database["public"]["Enums"]["cloud_plan"]
           provider_customer_id: string | null
@@ -565,9 +570,14 @@ export type Database = {
         }
         Insert: {
           billing_provider?: string | null
+          cancel_at?: string | null
           cancel_at_period_end?: boolean
+          canceled_at?: string | null
+          cancellation_reason?: string | null
           created_at?: string
           current_period_end?: string | null
+          last_reconciliation_attempt_at?: string | null
+          last_synced_at?: string | null
           organization_id: string
           plan?: Database["public"]["Enums"]["cloud_plan"]
           provider_customer_id?: string | null
@@ -577,9 +587,14 @@ export type Database = {
         }
         Update: {
           billing_provider?: string | null
+          cancel_at?: string | null
           cancel_at_period_end?: boolean
+          canceled_at?: string | null
+          cancellation_reason?: string | null
           created_at?: string
           current_period_end?: string | null
+          last_reconciliation_attempt_at?: string | null
+          last_synced_at?: string | null
           organization_id?: string
           plan?: Database["public"]["Enums"]["cloud_plan"]
           provider_customer_id?: string | null
