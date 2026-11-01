@@ -77,7 +77,7 @@ export async function getAccountSelection(principal: TenantPrincipal, id: string
   `;
   const row = rows[0];
   if (!row) return undefined;
-  return { id: row.id, provider: row.provider, ...discovery(row.ciphertext, principal.organizationId, id) };
+  return { id: row.id, provider: row.provider, returnPath: safeReturnPath(row.returnPath), ...discovery(row.ciphertext, principal.organizationId, id) };
 }
 
 /** Commit a subset atomically, then destroy the full discovery snapshot. */

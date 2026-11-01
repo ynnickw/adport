@@ -1,17 +1,35 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Account } from '@adport/core';
 import { Provider } from '@/components/ui';
-import { safeReturnPath } from '@/lib/return-path';
+import { accountSelectionSavedPath } from '@/lib/account-selection-path';
 import { Button, Checkbox, Input } from '@/components/controls';
 import { InfoTooltip } from '@/components/info-tooltip';
 
-export function ProviderAccountPicker({ organizationId, selectionId, provider, accounts, initialSelectedIds, pages }: {
+export interface ProviderAccountSelection {
+  id: string;
+  provider: string;
+  accounts: Account[];
+  pages?: Array<{ id: string; name: string; category?: string }>;
+}
+
+export function AccountConnectionProgress({ stage = 'choose' }: { stage?: 'choose' | 'enable' }) {
+  return <ol className="account-connection-progress" aria-label="Account connection progress">
+    <li data-complete="true"><span aria-hidden="true">✓</span><span>Platform connected</span></li>
+    <li data-complete={stage === 'enable'} aria-current={stage === 'choose' ? 'step' : undefined}><span aria-hidden="true">{stage === 'enable' ? '✓' : '•'}</span><span>Choose accounts</span></li>
+    <li aria-current={stage === 'enable' ? 'step' : undefined}><span aria-hidden="true">•</span><span>Enable access</span></li>
+  </ol>;
+}
+
+export function ProviderAccountPicker({ organizationId, selectionId, provider, accounts, initialSelectedIds, pages, backHref = '/dashboard/connections', nextPath }: {
   organizationId: string; selectionId: string; provider: string;
   accounts: Account[]; initialSelectedIds: string[];
   pages?: Array<{ id: string; name: string; category?: string }>;
+  backHref?: string;
+  nextPath?: string;
 }) {
   const router = useRouter();
   const singleAccount = accounts.length === 1;
@@ -34,22 +52,22 @@ export function ProviderAccountPicker({ organizationId, selectionId, provider, a
         });
         const body = await response.json() as { error?: string; returnPath?: string };
         if (!response.ok) { setError(body.error ?? 'Could not save account selection.'); return; }
-        router.replace(safeReturnPath(body.returnPath ?? '/dashboard/accounts'));
+        router.replace(accountSelectionSavedPath(nextPath ?? body.returnPath ?? '/dashboard/accounts', provider));
         router.refresh();
       } catch { setError('Could not save account selection. Check your connection and try again.'); }
     });
   }
 
-  return <section className="card">
+  return <div className="account-selection-step"><AccountConnectionProgress /><section className="card account-selection-card">
     <div className="card-head"><h2><Provider name={provider} /></h2><span className="card-note" aria-live="polite">{singleAccount ? '1 account available' : `${selected.size} of ${accounts.length} selected`}</span></div>
     {!singleAccount && accounts.length > 0 ? <div className="account-picker-toolbar">
       <label className="account-picker-search">Search accounts<Input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Account name or ID" /></label>
-      <Button type="button" className="button secondary small" disabled={pending || !accounts.length} onClick={() => setSelected(new Set(accounts.map(account => account.id)))}>Select all</Button>
+      <Button type="button" className="button secondary small" disabled={pending || !visible.length} onClick={() => setSelected(current => new Set([...current, ...visible.map(account => account.id)]))}>{query.trim() ? 'Select matching' : 'Select all'}</Button>
       <Button type="button" className="button secondary small" disabled={pending || !selected.size} onClick={() => setSelected(new Set())}>Clear selection</Button>
     </div> : null}
     {error ? <div role="alert" className="error-callout">{error}</div> : null}
-    {visible.length ? <div className="table-wrap"><table className="stack-on-mobile">
-      <thead><tr>{!singleAccount ? <th>Add</th> : null}<th>Account</th><th>Currency</th><th>Status</th></tr></thead>
+    {visible.length ? <div className="table-wrap"><table className="stack-on-mobile account-picker-table">
+      <thead><tr>{!singleAccount ? <th>Add</th> : null}<th>Account</th><th>Currency</th><th>Platform status</th></tr></thead>
       <tbody>{visible.map(account => <tr key={account.id}>
         {!singleAccount ? <td data-label="Add"><Checkbox aria-label={`Add ${account.name} (${account.id})`} checked={selected.has(account.id)} disabled={pending} onChange={event => {
           const checked = event.target.checked;
@@ -73,9 +91,9 @@ export function ProviderAccountPicker({ organizationId, selectionId, provider, a
       {!selectedPages.size ? <p className="inline-note" style={{ padding: '0 1.5rem' }}>No Pages selected. Page tools will have no access; ad-account access is managed separately.</p> : null}
     </section> : null}
     <div className="account-picker-footer">
-      <p className="inline-note">New accounts stay disabled until you enable access next. Existing enabled accounts keep their access.</p>
-      {!singleAccount && !selected.size && accounts.length ? <p className="inline-note">Saving with nothing selected removes this provider’s accounts from Adport, without changing them at the provider.</p> : null}
-      <Button type="button" className="button" disabled={pending} onClick={() => save(singleAccount ? accounts.map(account => account.id) : [...selected])}>{pending ? 'Saving…' : provider === 'meta' && pages !== undefined ? 'Save accounts and Pages' : singleAccount ? 'Add account' : selected.size ? `Save ${selected.size} selected account${selected.size === 1 ? '' : 's'}` : 'Continue without accounts'}</Button>
+      <p className="inline-note">New accounts start disabled. Enable access next.</p>
+      {!singleAccount && !selected.size && initialSelectedIds.length ? <p className="inline-note">Saving with nothing selected removes this provider’s accounts from Adport, without changing them at the provider.</p> : null}
+      <div className="account-picker-actions"><Link className="button secondary" href={backHref} aria-disabled={pending} onClick={event => { if (pending) event.preventDefault(); }}>Back to platforms</Link><Button type="button" className="button" disabled={pending} onClick={() => save(singleAccount ? accounts.map(account => account.id) : [...selected])}>{pending ? 'Saving…' : singleAccount || selected.size ? 'Continue to enable access' : selectedPages.size ? 'Save Pages and continue' : 'Continue without accounts'}</Button></div>
     </div>
-  </section>;
+  </section></div>;
 }

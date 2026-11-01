@@ -1,7 +1,11 @@
 import Link from 'next/link';
+import { z } from 'zod';
+import { getAccountSelection } from '@/lib/cloud/account-selection';
+import { ProviderAccountPicker, AccountConnectionProgress } from '@/app/account-selection/provider-account-picker';
 import { getOrganizationUsage } from '@/lib/cloud/usage';
 import { Empty, PageHeader } from '@/components/ui';
 import { PendingAccountSelections } from '@/components/pending-account-selections';
+import { SupportLauncher } from '@/components/support-widget';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { getOrganizationEntitlement } from '@/lib/cloud/plans';
 import { listConnections, listOrganizationAdAccounts } from '@/lib/cloud/repository';
@@ -13,7 +17,7 @@ import { SyntheticReviewer } from '@/components/synthetic-reviewer';
 
 export const metadata = { title: 'Accounts' };
 
-export default async function AccountsPage({ searchParams }: { searchParams: Promise<{ connected?: string; accounts_saved?: string; error?: string; select_provider?: string }> }) {
+export default async function AccountsPage({ searchParams }: { searchParams: Promise<{ connected?: string; accounts_saved?: string; error?: string; select_provider?: string; selection_id?: string; selection_unavailable?: string }> }) {
   const tenant = await requireDashboardTenant();
   if (isSyntheticReviewer(tenant.organizationId)) return <SyntheticReviewer tenant={tenant} />;
   const [connections, inventory, entitlement, params, usage] = await Promise.all([
@@ -23,16 +27,27 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
     searchParams,
     getOrganizationUsage(tenant.organizationId),
   ]);
-  const requestedProvider = params.select_provider ?? params.connected;
+  const requestedProvider = params.select_provider ?? params.accounts_saved ?? params.connected;
   const providerFilter = requestedProvider && isOAuthProvider(requestedProvider) ? requestedProvider : undefined;
   const pendingConnections = connections.filter(connection => connection.accountSelectionId && connection.status === 'connected' && (!providerFilter || connection.provider === providerFilter));
   const canManage = ['owner', 'admin'].includes(tenant.role);
+  const selectionId = z.string().uuid().safeParse(params.selection_id);
+  const selection = canManage && selectionId.success ? await getAccountSelection({ ...tenant, scopes: [] }, selectionId.data) : undefined;
+  if (selection) return <main className="page">
+    <div className="selection-back-row"><Link className="selection-back" href="/dashboard/accounts">← Accounts</Link><SupportLauncher className="support-inline" /></div>
+    <PageHeader title={`Add ${providerLabel(selection.provider)} accounts`} showDescription description={`Choose the accounts to add to ${tenant.organizationName}. You'll enable assistant access next.`} />
+    <ProviderAccountPicker organizationId={tenant.organizationId} selectionId={selection.id} provider={selection.provider}
+      accounts={selection.accounts} pages={selection.pages} nextPath={'/dashboard/accounts?select_provider=' + selection.provider}
+      initialSelectedIds={inventory.filter(account => account.provider === selection.provider).map(account => account.accountId)} />
+  </main>;
   return (
     <main className="page">
       <PageHeader title={providerFilter ? `${providerLabel(providerFilter)} accounts` : 'Accounts'} description="Choose which accounts Adport and your connected assistants can use. This does not change campaign status at the advertising platform." action={['owner', 'admin'].includes(tenant.role) ? <Link className="button" href={providerFilter ? '/dashboard/connections#platform-' + providerFilter : '/dashboard/connections'}>Add or change accounts</Link> : undefined} />
       {providerFilter ? <Link className="button secondary small" href="/dashboard/accounts" style={{ marginBottom: '1rem' }}>View all providers’ accounts</Link> : null}
       {params.connected ? <div className="callout success" role="status" style={{ marginBottom: '1rem' }}>{providerLabel(params.connected)} is connected. Select the specific accounts agents may access below.</div> : null}
-      {params.accounts_saved ? <div className="callout success" role="status" style={{ marginBottom: '1rem' }}>Account selection saved. Unselected accounts are no longer listed or available to Adport. Enable newly added accounts below when ready.</div> : null}
+      {params.selection_id || params.selection_unavailable ? <div className="error-callout" role="alert">This account selection is no longer available. It may have expired, been saved, or belong to another admin. {canManage ? <Link href="/dashboard/connections">Reconnect the platform to choose accounts again.</Link> : 'Ask a project owner or admin to restart the connection.'}</div> : null}
+      {params.accounts_saved ? <AccountConnectionProgress stage="enable" /> : null}
+      {params.accounts_saved ? <div className="callout success" role="status" style={{ marginBottom: '1rem' }}>Accounts updated. Enable access for any newly added accounts below.</div> : null}
       {params.error ? <div className="error-callout" role="alert">{params.error}</div> : null}
       <PendingAccountSelections connections={pendingConnections} canManage={['owner', 'admin'].includes(tenant.role)} />
       {inventory.length === 0 && pendingConnections.length ? null : inventory.length === 0 && !providerFilter ? <section className="card">
