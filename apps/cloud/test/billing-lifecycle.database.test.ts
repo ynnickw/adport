@@ -153,6 +153,25 @@ describeDatabase('Stripe lifecycle with real Postgres transactions', () => {
     await expect(processStripeEvent(event('wrong_customer', snapshot({ customer: 'cus_other' })))).rejects.toThrow('customer does not match');
     expect((await getOrganizationEntitlement(organization)).plan.id).toBe('agency');
   });
+  it('preserves a detached manual grant when an unseen old Stripe cancellation arrives', async () => {
+    await db()`update public.organization_subscriptions set billing_provider = null, provider_customer_id = null,
+      provider_subscription_id = null where organization_id = ${organization}`;
+    current = [snapshot({ status: 'canceled' })];
+    await processStripeEvent(event('detached_manual', current[0], 'customer.subscription.deleted'));
+    expect(await getOrganizationEntitlement(organization)).toMatchObject({ plan: { id: 'agency' }, status: 'active', providerCustomerId: null, providerSubscriptionId: null });
+    expect(stripe.list).not.toHaveBeenCalled(); expect((await audits())[0]?.count).toBe(0);
+  });
+  it('keeps manual access during incomplete checkout, then activates the explicitly chosen subscription', async () => {
+    current = [];
+    await db()`update public.organization_subscriptions set billing_provider = null, provider_customer_id = null,
+      provider_subscription_id = null where organization_id = ${organization}`;
+    await subscriptionCheckoutUrl(organization, owner, 'operator', 'monthly');
+    current = [snapshot({ status: 'incomplete' })]; await processStripeEvent(event('manual_pending', current[0], 'customer.subscription.created'));
+    expect((await getOrganizationEntitlement(organization)).plan.id).toBe('agency');
+    current = [snapshot({ status: 'trialing', items: { data: [{ price: { id: 'price_pro_billing_fixture' }, current_period_end: periodEnd }] } })];
+    await processStripeEvent(event('manual_confirmed', current[0]));
+    expect(await getOrganizationEntitlement(organization)).toMatchObject({ plan: { id: 'operator' }, status: 'trialing', providerSubscriptionId: subscriptionId });
+  });
 
   async function freeCustomer() {
     current = [];

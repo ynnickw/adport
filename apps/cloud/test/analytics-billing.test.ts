@@ -17,7 +17,7 @@ beforeEach(() => {
     const query = strings.join('?');
     if (query.includes('insert into private.billing_events')) { const id = String(values[0]); if (seen.has(id)) return []; seen.add(id); return [{ eventId: id }]; }
     if (query.includes('select id from public.organization_groups')) return [{ id: 'company' }];
-    if (query.includes('select plan, status')) return [{ plan: 'operator', status, providerCustomerId: 'cus_test', providerSubscriptionId: 'sub_test' }];
+    if (query.includes('select billing_provider, plan, status')) return [{ billingProvider: 'stripe', plan: 'operator', status, providerCustomerId: 'cus_test', providerSubscriptionId: 'sub_test' }];
     if (query.includes('select status')) return [{ status }];
     if (query.includes('update public.organization_subscriptions')) status = String(values[1]);
     return [];
