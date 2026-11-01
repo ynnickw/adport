@@ -82,7 +82,7 @@ test('hubs, sitemap and related guides make every article discoverable', () => {
     const html = pages.find(([file]) => file === `resources/${a.slug}.html`)[1];
     assert(html.includes('resource-related'), a.slug);
     assert(html.includes('href="/pricing"'), a.slug);
-    assert(html.includes('href="https://app.adport.dev/?mode=signup"'), a.slug);
+    assert(html.includes('href="/#waitlist"'), a.slug);
   }
   assert(home.includes('href="/resources"'));
   assert(home.includes('id="resources-title"'));

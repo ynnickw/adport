@@ -42,3 +42,23 @@ test('the public form uses a same-origin endpoint and a documented reply email',
   assert(privacy.includes('id="support-messages"'));
   assert(privacy.includes('Resend'));
 });
+
+test('public pages send Cloud visitors to the waitlist until launch', async () => {
+  for (const file of files) {
+    const html = await readFile(path.join(site, file), 'utf8');
+    for (const [, href] of html.matchAll(/href="([^"]+)"/g)) {
+      const target = new URL(href.replaceAll('&amp;', '&'), 'https://www.adport.dev');
+      assert.notEqual(target.hostname, 'app.adport.dev', `${file}: private Cloud link ${href}`);
+    }
+    if (file === 'index.html' || file === 'pricing.html') {
+      const actions = [...html.matchAll(/<a class="pricing-action\b[^"]*" href="([^"]+)"[^>]*>([^<]+)<\/a>/g)]
+        .filter(([, href]) => !href.startsWith('mailto:'));
+      assert.equal(actions.length, file === 'index.html' ? 4 : 8, file);
+      for (const [, href, label] of actions) {
+        assert.equal(href, '/#waitlist', file);
+        assert.equal(label, 'Join the waitlist', file);
+      }
+      assert(!html.includes('data-plan='), `${file}: pricing must not rewrite waitlist links`);
+    }
+  }
+});
