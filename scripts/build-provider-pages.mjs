@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { providers } from './website-providers.mjs';
 import { agentSetups, mcpBaseUrl, cursorInstallUrl } from './website-agent-setups.mjs';
+import { claudeGuideForProvider } from './resource-content/claude-connections.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const site = path.join(root, 'website');
@@ -167,7 +168,8 @@ function providerPage(p) {
 
     <section class="p-section p-faq" aria-labelledby="faq-title"><div class="section-intro"><h2 id="faq-title">${escape(p.name)} MCP questions</h2></div>
       <div class="p-faq-list">
-        <details open><summary>${escape(p.faq[0])}</summary><p>${escape(p.faq[1])}</p></details>
+        <details open><summary>${escape(p.faq[0])}</summary><p>${escape(p.faq[1])}</p></details>${claudeGuideForProvider[p.id] ? `
+        <details><summary>How do I connect ${escape(p.name)} to Claude or Claude Code?</summary><p>Follow the <a href="/resources/${claudeGuideForProvider[p.id]}">${escape(p.name)} and Claude setup guide</a> for account authorization, MCP commands, a first report, and platform-specific reporting details. Choose the hosted connection offered in your workspace or the local setup with your own provider credentials.</p></details>` : ''}
         <details><summary>Can I use ${escape(p.name)} locally without Adport Cloud?</summary><p>Yes. Install Adport from npm, connect your own ${escape(p.name)} credentials, and register the local MCP server with a stdio-compatible agent such as Claude Code or Cursor. Your provider may have its own approval, access, or billing requirements.</p></details>
         <details><summary>Why can I connect an account but not read a report or apply a change?</summary><p>Account discovery, reporting, and mutations can require different permissions. Check the requested account, provider app scopes, advertiser eligibility, and environment. Start with <code>adport doctor</code> and the connection guide above. Do not bypass a denied operation by sharing secrets with the agent.</p></details>
       </div>
@@ -191,7 +193,7 @@ output.set('providers.html', document({ title: 'Ads MCP integrations for Claude,
     <section aria-label="Advertising integrations"><ul class="platform-grid p-directory p-directory-all">${providers.map(card).join('')}<li class="platform-request"><a href="https://github.com/ynnickw/adport/issues" rel="noreferrer"><span class="request-plus" aria-hidden="true"></span><span class="pg-text"><span class="pg-name">Request a platform</span><span class="pg-label">Tell us which ad platform your agent should reach next.</span></span></a></li></ul></section>
     <section class="p-section p-boundary" aria-labelledby="boundary-title">
       <div class="section-intro"><h2 id="boundary-title">One protocol. Platform-specific details.</h2></div>
-      <div><p>Each provider has its own account permissions, reporting definitions, API approval process, and supported operations. These guides explain what the connector can do and what you need before connecting. Adport uses the Model Context Protocol (MCP) to expose the same guarded tools to compatible agents.</p><p>Local integrations are included in the npm package. HTTP MCP clients use the same workspace-scoped OAuth connection. No connection method bypasses platform approval.</p></div>
+      <div><p>Each provider has its own account permissions, reporting definitions, API approval process, and supported operations. These guides explain what the connector can do and what you need before connecting. Adport uses the Model Context Protocol (MCP) to expose the same guarded tools to compatible agents.</p><p>Local integrations are included in the npm package. HTTP MCP clients use the same workspace-scoped OAuth connection. No connection method bypasses platform approval.</p><p>Looking for a specific assistant? <a href="/resources/connect-ads-to-claude">Connect your ad accounts to Claude</a> with platform-specific guides and a shared Claude Code setup.</p></div>
     </section>
   </main>` }));
 

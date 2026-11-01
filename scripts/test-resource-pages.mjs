@@ -11,8 +11,8 @@ const home = await readFile(path.join(site, 'index.html'), 'utf8');
 const files = ['resources.html', ...clusters.map(c => `resources/${c.slug}.html`), ...articles.map(a => `resources/${a.slug}.html`)];
 const pages = await Promise.all(files.map(async file => [file, await readFile(path.join(site, file), 'utf8')]));
 
-test('three distinct topic clusters have ten original, source-linked guides', () => {
-  assert.equal(clusters.length, 3);
+test('distinct topic clusters have original, source-linked guides', () => {
+  assert.equal(clusters.length, 4);
   assert(articles.length >= 10);
   assert.equal(new Set(articles.map(a => a.slug)).size, articles.length);
   assert.equal(new Set(articles.map(a => a.title)).size, articles.length);
