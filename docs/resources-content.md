@@ -1,14 +1,22 @@
 # Resources content and dashboard UI
 
-The Resources hub, three topic hubs, ten articles, and landing section are generated from `scripts/website-resources.mjs` and `scripts/resource-content/`. The articles contain about 7,200 words of original operating guidance, with provider documentation linked beside platform-specific claims and listed at the end.
+The Resources hub, five topic hubs, twenty-two articles, and landing section are generated from `scripts/website-resources.mjs` and `scripts/resource-content/`. The articles contain original operating guidance, with provider documentation linked beside platform-specific claims and listed at the end.
 
 | Cluster | Search intent | Initial articles |
 | --- | --- | --- |
+| Connect ads to Claude | Set up Claude or Claude Code for a specific ad provider | Shared MCP setup; Google; Meta; TikTok; Snapchat; LinkedIn; Microsoft |
+| Connect ads to ChatGPT | Install a ChatGPT MCP plugin and review a specific provider | Shared plugin/OAuth setup; Google; Meta; TikTok; Snapchat; LinkedIn; Microsoft |
 | AI ad management | Connect an AI client to real Google Ads data | Google Ads MCP server; Claude; ChatGPT; Codex |
 | Google Ads optimization | Investigate a concrete account issue | Audit checklist; negative keywords; budget pacing |
 | Agency operations | Organize clients, permissions, and reporting | Multi-client management; client viewers; CPA vs ROAS |
 
 These are intent-led priorities. Ahrefs keyword-metric requests returned `Insufficient plan` in both available connections, so no volume, difficulty, traffic forecast, or ranking claims were used. Review Search Console data after publication to choose subsequent articles. Publication and sitemap inclusion do not establish indexing or traffic gains.
+
+The ChatGPT cluster targets connection and reporting intent, rather than buying ad placements inside ChatGPT. The shared setup guide covers plugin installation, project-scoped OAuth, selection in a conversation, and connection troubleshooting. Provider articles add their own reporting questions, measurement context, and verification workflow; they are not Claude articles with the assistant name replaced.
+
+Keep one URL for each provider/client intent. Facebook and Instagram variants belong on the Meta guide; Microsoft and Bing belong on the Microsoft guide. The existing `/resources/google-ads-with-chatgpt` URL stays canonical and appears in both the ChatGPT hub and AI ad management hub. `relatedClusters` supports that cross-listing without publishing a second article. Each substantive guide has its own canonical URL, original metadata, Article data, internal links, and a sitemap entry.
+
+Google's [spam policies](https://developers.google.com/search/docs/essentials/spam-policies) address substantially similar doorway pages and scaled, low-value content. The purpose of this cluster is to complete a different client setup and a provider-specific investigation. Shared navigation and setup facts do not replace useful article content. After publication, inspect queries and landing pages together for overlapping intent before adding more variants.
 
 Article setup instructions were checked against current official OpenAI and Anthropic documentation. Google negative matching was checked against the current source: casing and misspellings are covered automatically, while singular/plural and synonyms need separate consideration. Worked performance figures are explicitly illustrative. Articles preserve currencies, distinguish attribution from business outcomes, and never present ratios averaged across campaigns as account totals.
 

@@ -3,8 +3,10 @@ import { readFile, access } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import test from 'node:test';
-import { articles, clusters, sources } from './website-resources.mjs';
+import { articles, articlesInCluster, clusters, sources } from './website-resources.mjs';
 import { escape } from './resource-content/shared.mjs';
+import { chatgptGuideForProvider } from './resource-content/chatgpt-connections.mjs';
+import { agentSetups, mcpBaseUrl } from './website-agent-setups.mjs';
 const site = fileURLToPath(new URL('../website/', import.meta.url));
 const sitemap = await readFile(path.join(site, 'sitemap.xml'), 'utf8');
 const home = await readFile(path.join(site, 'index.html'), 'utf8');
@@ -12,12 +14,12 @@ const files = ['resources.html', ...clusters.map(c => `resources/${c.slug}.html`
 const pages = await Promise.all(files.map(async file => [file, await readFile(path.join(site, file), 'utf8')]));
 
 test('distinct topic clusters have original, source-linked guides', () => {
-  assert.equal(clusters.length, 4);
+  assert.equal(new Set(clusters.map(c => c.slug)).size, clusters.length);
   assert(articles.length >= 10);
   assert.equal(new Set(articles.map(a => a.slug)).size, articles.length);
   assert.equal(new Set(articles.map(a => a.title)).size, articles.length);
   assert.equal(new Set(articles.map(a => a.description)).size, articles.length);
-  for (const c of clusters) assert(articles.filter(a => a.cluster === c.slug).length >= 3, c.slug);
+  for (const c of clusters) assert(articlesInCluster(c.slug).length >= 3, c.slug);
   for (const a of articles) {
     assert(clusters.some(c => c.slug === a.cluster), a.slug);
     assert(a.sections.length >= 5, a.slug);
@@ -26,6 +28,30 @@ test('distinct topic clusters have original, source-linked guides', () => {
     assert.equal(new Set(a.sections.map(s => s.id)).size, a.sections.length, a.slug);
     assert(!/—|guaranteed (rank|traffic|results)/i.test(a.sections.map(s => s.html).join(' ')), a.slug);
   }
+});
+
+test('ChatGPT setup matches the shared client flow and reuses one Google guide URL', async () => {
+  const guides = articlesInCluster('connect-ads-to-chatgpt');
+  const setup = guides.find(a => a.slug === 'connect-ads-to-chatgpt-mcp');
+  const setupHtml = setup.sections.map(s => s.html).join('');
+  const client = agentSetups.find(a => a.id === 'chatgpt');
+  assert(setupHtml.includes(client.instructions));
+  assert(setupHtml.includes(client.nextStep));
+  assert(setupHtml.includes(client.command(mcpBaseUrl)));
+  assert.equal(articles.filter(a => a.slug === 'google-ads-with-chatgpt').length, 1);
+  assert(articlesInCluster('ai-ad-management').some(a => a.slug === 'google-ads-with-chatgpt'));
+  for (const [provider, slug] of Object.entries(chatgptGuideForProvider)) {
+    const guide = guides.find(a => a.slug === slug);
+    assert(guide, slug);
+    assert(guide.marks.includes(provider) && guide.marks.includes('chatgpt'), slug);
+    const body = guide.sections.map(s => s.html).join('');
+    assert(!/claude mcp add|adport mcp --http/.test(body), slug);
+    assert(body.includes('/resources/connect-ads-to-chatgpt-mcp'), slug);
+    const integration = await readFile(path.join(site, `providers/${provider}-ads.html`), 'utf8');
+    assert(integration.includes(`href="/resources/${slug}"`), slug);
+  }
+  assert(home.includes('id="chatgpt-guides-title"'));
+  assert(home.includes('href="/resources/connect-ads-to-chatgpt"'));
 });
 
 test('each guide has one heading, canonical and article data that describes its visible content', () => {
