@@ -6,7 +6,7 @@ import { POST } from '@/app/api/account-selection/route';
 import { OAUTH_PROVIDERS } from '@/lib/cloud/types';
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), save: vi.fn(), inventory: vi.fn(), session: vi.fn(), tenant: vi.fn() }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }) }));
+vi.mock('next/navigation', () => ({ redirect: (path: string) => { throw new Error('REDIRECT:' + path); }, useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }) }));
 vi.mock('@/lib/cloud/account-selection', () => ({ getAccountSelection: mocks.get, saveAccountSelection: mocks.save }));
 vi.mock('@/lib/cloud/repository', () => ({ listOrganizationAdAccounts: mocks.inventory }));
 vi.mock('@/lib/cloud/auth', () => ({ sessionPrincipal: mocks.session }));
@@ -19,7 +19,7 @@ const request = (body: unknown) => new Request('https://app.adport.test/api/acco
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.tenant.mockResolvedValue(tenant); mocks.session.mockResolvedValue({ ...tenant, scopes: [] }); mocks.inventory.mockResolvedValue([]);
-  mocks.get.mockResolvedValue({ id: selectionId, provider: 'google', accounts: [{ provider: 'google', id: 'a', name: 'Candidate account' }] });
+  mocks.get.mockResolvedValue({ id: selectionId, provider: 'google', returnPath: '/dashboard/accounts?select_provider=google', accounts: [{ provider: 'google', id: 'a', name: 'Candidate account' }] });
   mocks.save.mockResolvedValue({ count: 1, returnPath: '/dashboard/accounts?accounts_saved=google' });
 });
 
@@ -30,7 +30,7 @@ describe('one-time account picker', () => {
       pages={[{ id: '123', name: 'Managed Page', category: 'Software' }]} />);
     expect(html).toContain('Facebook Pages'); expect(html).toContain('Allow Page Managed Page (123)');
     expect(html).toContain('0 of 1 selected'); expect(html).not.toContain('checked=""');
-    expect(html).toContain('Save accounts and Pages'); expect(html).toContain('About Page access');
+    expect(html).toContain('Continue to enable access'); expect(html).toContain('About Page access');
   });
 
   it('explains that an empty Page selection grants no Page access', () => {
@@ -54,29 +54,34 @@ describe('one-time account picker', () => {
   it.each(OAUTH_PROVIDERS)('offers explicit confirmation without checkboxes for one %s account', provider => {
     const html = renderToStaticMarkup(<ProviderAccountPicker organizationId={organizationId} selectionId={selectionId} provider={provider}
       accounts={[{ provider, id: 'a', name: 'Only account', currency: 'EUR' }]} initialSelectedIds={[]} />);
-    expect(html).toContain('Only account'); expect(html).toContain('EUR'); expect(html).toContain('Add account');
+    expect(html).toContain('Only account'); expect(html).toContain('EUR'); expect(html).toContain('Continue to enable access');
     expect(html).not.toContain('type="checkbox"'); expect(html).not.toContain('Select all'); expect(html).not.toContain('Search accounts');
-    expect(html).toContain('stay disabled'); expect(mocks.save).not.toHaveBeenCalled();
+    expect(html).toContain('start disabled'); expect(mocks.save).not.toHaveBeenCalled();
   });
 
-  it('allows new users to select accounts before onboarding is completed', async () => {
-    const html = renderToStaticMarkup(await SelectAccountsPage({ searchParams: Promise.resolve({ selection_id: selectionId }) }));
-    expect(html).toContain('Candidate account'); expect(html).toContain('Add Google Ads accounts');
+  it('keeps new-user selection inside onboarding before setup is completed', async () => {
+    await expect(SelectAccountsPage({ searchParams: Promise.resolve({ selection_id: selectionId }) })).rejects.toThrow('REDIRECT:/onboarding?selection_id=' + selectionId + '&resume=1&return_to=');
+    expect(mocks.get).toHaveBeenCalledWith({ ...tenant, scopes: [] }, selectionId);
+  });
+
+  it('keeps an existing project in its Accounts page', async () => {
+    mocks.tenant.mockResolvedValue({ ...tenant, onboardingCompletedAt: new Date() });
+    await expect(SelectAccountsPage({ searchParams: Promise.resolve({ selection_id: selectionId }) })).rejects.toThrow('REDIRECT:/dashboard/accounts?selection_id=' + selectionId);
   });
 
   it('does not load a discovery snapshot for read-only members or invalid IDs', async () => {
     mocks.tenant.mockResolvedValue({ ...tenant, role: 'viewer' });
-    expect(renderToStaticMarkup(await SelectAccountsPage({ searchParams: Promise.resolve({ selection_id: selectionId }) }))).toContain('Account selection unavailable');
+    await expect(SelectAccountsPage({ searchParams: Promise.resolve({ selection_id: selectionId }) })).rejects.toThrow('REDIRECT:');
     mocks.tenant.mockResolvedValue(tenant);
-    await SelectAccountsPage({ searchParams: Promise.resolve({ selection_id: 'invalid' }) });
+    await expect(SelectAccountsPage({ searchParams: Promise.resolve({ selection_id: 'invalid' }) })).rejects.toThrow('REDIRECT:');
     expect(mocks.get).not.toHaveBeenCalled(); expect(mocks.inventory).not.toHaveBeenCalled();
   });
 
-  it('shows an unavailable state for an expired or consumed picker', async () => {
+  it('returns an expired picker to the existing flow with a recovery message', async () => {
     mocks.get.mockResolvedValue(undefined);
-    const html = renderToStaticMarkup(await SelectAccountsPage({ searchParams: Promise.resolve({ selection_id: selectionId }) }));
-    expect(html).toContain('Account selection unavailable'); expect(html).not.toContain('Candidate account');
+    await expect(SelectAccountsPage({ searchParams: Promise.resolve({ selection_id: selectionId }) })).rejects.toThrow('selection_unavailable=1');
   });
+
 });
 
 describe('account selection API', () => {

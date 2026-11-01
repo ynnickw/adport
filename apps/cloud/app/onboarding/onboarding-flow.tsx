@@ -9,6 +9,7 @@ import { SupportLauncher } from '@/components/support-widget';
 import { PendingAccountSelections } from '@/components/pending-account-selections';
 import { isOAuthProvider, type OAuthProvider } from '@/lib/cloud/types';
 import { providerLabel } from '@/lib/cloud/providers';
+import { ProviderAccountPicker, AccountConnectionProgress, type ProviderAccountSelection } from '../account-selection/provider-account-picker';
 import { AccountAccessManager, type AccountAccessItem } from '../dashboard/accounts/account-access-manager';
 import { AgentSetupGuide } from '../dashboard/agents/agent-setup-guide';
 import { ProviderConnections, type ConnectionView, type OAuthProviderView } from '../dashboard/connections/provider-connections';
@@ -16,11 +17,11 @@ import { ProviderConnections, type ConnectionView, type OAuthProviderView } from
 type Step = 'welcome' | 'connect' | 'accounts' | 'agent' | 'complete';
 const STEPS = [
   { id: 'connect', label: 'Connect a platform', detail: 'Use your existing ad login' },
-  { id: 'accounts', label: 'Enable accounts', detail: 'Choose what Adport can access' },
+  { id: 'accounts', label: 'Add your accounts', detail: 'Choose accounts and enable access' },
   { id: 'agent', label: 'Add your assistant', detail: 'Use the AI you already know' },
 ] as const;
 
-export function OnboardingFlow({ organizationId, projectName, setupKind, projectSwitcher, resuming = false, canManage, initialStep, initialAgent, baseUrl, connectedProvider, oauthError, providers, connections, accounts, maxActiveAccounts, organizationActiveCount, returnTo }: {
+export function OnboardingFlow({ organizationId, projectName, setupKind, projectSwitcher, resuming = false, canManage, initialStep, initialAgent, baseUrl, connectedProvider, pendingSelection, accountsSaved = false, oauthError, providers, connections, accounts, maxActiveAccounts, organizationActiveCount, returnTo }: {
   organizationId: string;
   projectName: string;
   setupKind: 'first_project' | 'new_project';
@@ -31,6 +32,8 @@ export function OnboardingFlow({ organizationId, projectName, setupKind, project
   initialAgent: string | null;
   baseUrl: string;
   connectedProvider?: string;
+  pendingSelection?: ProviderAccountSelection;
+  accountsSaved?: boolean;
   oauthError?: string;
   providers: OAuthProviderView[];
   connections: ConnectionView[];
@@ -75,6 +78,7 @@ export function OnboardingFlow({ organizationId, projectName, setupKind, project
     finally { setBusy(false); }
   }
 
+  const selectingAccounts = step === 'accounts' && Boolean(pendingSelection);
   const skip = () => void advance(step, { skip: true });
   return <>
     <header className="onboarding-head">
@@ -100,12 +104,13 @@ export function OnboardingFlow({ organizationId, projectName, setupKind, project
           return <li key={item.id} data-active={step === item.id} data-complete={done}><Button type="button" disabled={busy} aria-current={step === item.id ? 'step' : undefined} onClick={() => void advance(item.id)}><span className="onboarding-step-number" aria-hidden="true">{done ? '✓' : index + 1}</span><span><strong>{item.label}</strong><small>{done ? item.id === 'connect' ? 'Platform connected' : 'Accounts enabled' : item.detail}</small></span></Button></li>;
         })}</ol></nav><p className="onboarding-sidebar-note">Only enabled accounts use your plan’s account allowance. Projects are unlimited.</p></aside>
         <div className="onboarding-stage">
-          <div className="onboarding-title"><span className="plan-kicker">Step {activeIndex + 1} of 3</span><h1>{step === 'connect' ? 'Where do you run ads?' : step === 'accounts' ? 'Enable the accounts you need.' : 'Connect your AI assistant.'}</h1><p>{step === 'connect' ? 'Connect one platform to start. You’ll choose which accounts to add next.' : step === 'accounts' ? 'Enabled accounts appear in your reports and are available to your assistant. You can change access anytime.' : <>Choose your assistant below. When Adport asks which project to authorize, select <strong>{projectName}</strong>.</>}</p></div>
+          <div className="onboarding-title"><span className="plan-kicker">Step {activeIndex + 1} of 3</span><h1>{step === 'connect' ? 'Where do you run ads?' : step === 'accounts' ? selectingAccounts ? `Choose your ${providerLabel(pendingSelection!.provider)} accounts.` : 'Enable the accounts you need.' : 'Connect your AI assistant.'}</h1><p>{step === 'connect' ? 'Connect one platform to start. You’ll choose which accounts to add next.' : step === 'accounts' ? selectingAccounts ? `Choose the accounts to add to ${projectName}. You’ll enable assistant access next.` : 'Enabled accounts appear in your reports and are available to your assistant. You can change access anytime.' : <>Choose your assistant below. When Adport asks which project to authorize, select <strong>{projectName}</strong>.</>}</p></div>
           {step === 'connect' ? <>
             <ProviderConnections variant="onboarding" organizationId={organizationId} canManage={canManage} connections={connections} oauthProviders={providers} returnTo={onboardingPath} />
             <p className="onboarding-reassurance">Your existing campaigns keep running as they are. Every change through Adport requires your approval.</p>
           </> : null}
-          {step === 'accounts' ? <>
+          {step === 'accounts' ? pendingSelection ? <ProviderAccountPicker organizationId={organizationId} selectionId={pendingSelection.id} provider={pendingSelection.provider} accounts={pendingSelection.accounts} pages={pendingSelection.pages} initialSelectedIds={accounts.filter(account => account.provider === pendingSelection.provider).map(account => account.accountId)} backHref={onboardingPath + '&step=connect'} nextPath={onboardingPath} /> : <>
+            {accountsSaved ? <AccountConnectionProgress stage="enable" /> : null}
             <PendingAccountSelections connections={connections} canManage={canManage} setupReturnTo={returnTo} setupResume={resuming} />
             {providerFilter ? <Button className="link-button" onClick={() => setProviderFilter(undefined)}>View all platforms’ accounts</Button> : null}
             {accounts.length || providerFilter ? <AccountAccessManager key={organizationId} organizationId={organizationId} accounts={accounts.map(account => ({ ...account, connectionStatus: connections.find(connection => connection.provider === account.provider)?.status ?? 'revoked', accountSelectionId: connections.find(connection => connection.provider === account.provider)?.accountSelectionId, accountSelectionUnavailable: connections.find(connection => connection.provider === account.provider)?.accountSelectionUnavailable }))} canManage={canManage} maxActiveAccounts={maxActiveAccounts} providerFilter={providerFilter} organizationActiveCount={organizationActiveCount} /> : !hasPendingSelection ? <div className="card"><div className="empty"><h2>Connect a platform to add accounts</h2><p>You can also set up your assistant now and add accounts later.</p><Button className="button secondary" disabled={busy} onClick={() => void advance('connect')}>Connect a platform</Button></div></div> : null}
@@ -114,10 +119,10 @@ export function OnboardingFlow({ organizationId, projectName, setupKind, project
             {!hasEnabledAccounts ? <p className="onboarding-inline-note">You can connect your assistant now. It will see ad data once you enable an account.</p> : null}
             <AgentSetupGuide variant="onboarding" baseUrl={baseUrl} projectName={projectName} initialSelectedId={agent} onSelectionChange={setAgent} />
           </> : null}
-          <div className="onboarding-actions">
+          {!selectingAccounts ? <div className="onboarding-actions">
             <Button className="button secondary" disabled={busy} onClick={() => void advance(step === 'connect' ? 'welcome' : step === 'accounts' ? 'connect' : accounts.length || hasPendingSelection ? 'accounts' : 'connect')}>Back</Button>
-            {step === 'connect' && !connected && !accounts.length ? <Button className="link-button" disabled={busy} onClick={() => void advance('agent')}>Set up an assistant instead →</Button> : <Button className="button" disabled={busy} onClick={() => void advance(step === 'connect' ? accounts.length || hasPendingSelection ? 'accounts' : 'agent' : step === 'accounts' ? 'agent' : 'complete', { complete: step === 'agent' })}>{step === 'agent' ? 'Open dashboard' : step === 'connect' ? 'Continue to accounts' : hasEnabledAccounts ? 'Set up my assistant' : 'Continue without accounts'}</Button>}
-          </div>
+            {step === 'connect' && !connected && !accounts.length ? <Button className="link-button" disabled={busy} onClick={() => void advance('agent')}>Set up an assistant instead →</Button> : <Button className="button" disabled={busy} onClick={() => void advance(step === 'connect' ? accounts.length || hasPendingSelection ? 'accounts' : 'agent' : step === 'accounts' ? 'agent' : 'complete', { complete: step === 'agent' })}>{step === 'agent' ? 'Open dashboard' : step === 'connect' ? 'Continue to accounts' : hasEnabledAccounts ? 'Set up my assistant' : accounts.length ? 'Enable access later' : 'Continue without accounts'}</Button>}
+          </div> : null}
         </div>
       </div>}
     </div>
