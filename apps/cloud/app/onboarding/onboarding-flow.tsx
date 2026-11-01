@@ -112,7 +112,7 @@ export function OnboardingFlow({ organizationId, projectName, setupKind, project
           </> : null}
           {step === 'agent' ? <>
             {!hasEnabledAccounts ? <p className="onboarding-inline-note">You can connect your assistant now. It will see ad data once you enable an account.</p> : null}
-            <AgentSetupGuide variant="onboarding" baseUrl={baseUrl} initialSelectedId={agent} onSelectionChange={setAgent} />
+            <AgentSetupGuide variant="onboarding" baseUrl={baseUrl} projectName={projectName} initialSelectedId={agent} onSelectionChange={setAgent} />
           </> : null}
           <div className="onboarding-actions">
             <Button className="button secondary" disabled={busy} onClick={() => void advance(step === 'connect' ? 'welcome' : step === 'accounts' ? 'connect' : accounts.length || hasPendingSelection ? 'accounts' : 'connect')}>Back</Button>

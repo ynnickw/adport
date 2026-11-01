@@ -37,7 +37,7 @@ export function Shell({ tenant, pendingApprovals = 0, children }: { tenant: Shel
           </form>
         </div>
       </SidebarFrame>
-      <div className="main" id="content" tabIndex={-1}><ContextNav projectName={tenant.organizationName} />{children}</div>
+      <div className="main" id="content" tabIndex={-1}><ContextNav />{children}</div>
       <SupportWidget />
     </div>
   );

@@ -1,9 +1,8 @@
 'use client';
 
-import { Button } from '@/components/controls';
-
+import { Button, Disclosure } from '@/components/controls';
 import { useState } from 'react';
-import { SiAnthropic, SiCursor, SiModelcontextprotocol } from 'react-icons/si';
+import { SiClaude, SiCursor, SiModelcontextprotocol } from 'react-icons/si';
 
 type Setup = {
   id: string;
@@ -12,46 +11,68 @@ type Setup = {
   label: string;
   instructions: string;
   nextStep: string;
+  docsUrl: string;
   command: (baseUrl: string) => string;
+  open?: { label: string; href: string };
 };
 
+// Keep the client-specific setup shared by the dashboard and onboarding.
 export const AGENT_SETUPS: Setup[] = [
   {
-    id: 'chatgpt', name: 'ChatGPT', provider: 'openai', label: 'Custom plugin',
-    instructions: 'In Plugins, add a custom MCP server and name it Adport. Choose OAuth, then enter the address below.',
-    nextStep: 'Create the plugin, finish Adport authorization, install it, then select it with @ in your chat.',
-    command: (baseUrl) => `${baseUrl}/mcp`,
+    id: 'chatgpt', name: 'ChatGPT', provider: 'openai', label: 'Web',
+    instructions: 'Open Plugins, choose +, then Add custom MCP server. Name it Adport, paste this server URL, and choose OAuth.',
+    nextStep: 'Create the plugin, sign in to Adport, and install it. In a new chat, type @ and select Adport before asking your first question.',
+    command: baseUrl => `${baseUrl}/mcp`,
+    open: { label: 'Open ChatGPT Plugins', href: 'https://chatgpt.com/plugins' },
+    docsUrl: 'https://developers.openai.com/api/docs/guides/custom-mcp-server',
   },
   {
-    id: 'codex', name: 'Codex', provider: 'openai', label: 'CLI',
-    instructions: 'Register Adport with this command. Complete the browser authorization if prompted.',
-    nextStep: 'If sign-in has not started, run “codex mcp login adport”, then use “codex mcp list” to check the connection.',
-    command: (baseUrl) => `codex mcp add adport --url ${baseUrl}/mcp`,
-  },
-  {
-    id: 'claude-code', name: 'Claude Code', provider: 'anthropic', label: 'CLI',
-    instructions: 'Add Adport at user scope so it is available across your local projects.',
-    nextStep: 'Run /mcp inside Claude Code if the browser authorization does not open automatically.',
-    command: (baseUrl) => `claude mcp add --transport http --scope user adport ${baseUrl}/mcp`,
+    id: 'codex', name: 'Codex', provider: 'openai', label: 'App, CLI & IDE',
+    instructions: 'Run this command in your terminal. It adds Adport to the MCP configuration shared by your local Codex clients.',
+    nextStep: 'Complete the browser sign-in when prompted. If sign-in has not started, run the command below.',
+    command: baseUrl => `codex mcp add adport --url ${baseUrl}/mcp`,
+    docsUrl: 'https://developers.openai.com/codex/mcp/',
   },
   {
     id: 'claude', name: 'Claude', provider: 'anthropic', label: 'Web & Desktop',
-    instructions: 'Open Customize → Connectors → Add custom connector. Name it Adport and use the endpoint below.',
-    nextStep: 'Select Connect, approve the workspace, then enable Adport from the + menu in a conversation.',
-    command: (baseUrl) => `${baseUrl}/mcp`,
+    instructions: 'Open Customize → Connectors, choose + Add, then Add custom connector. Name it Adport and paste this server URL.',
+    nextStep: 'Keep sign-in enabled and finish connecting to Adport. In your conversation, open + → Connectors and enable Adport.',
+    command: baseUrl => `${baseUrl}/mcp`,
+    open: { label: 'Open Claude Connectors', href: 'https://claude.ai/customize/connectors' },
+    docsUrl: 'https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp',
   },
   {
-    id: 'cursor', name: 'Cursor', provider: 'cursor', label: 'Global MCP',
-    instructions: 'Add this server to ~/.cursor/mcp.json, then restart Cursor.',
-    nextStep: 'Approve the browser sign-in when prompted. Cursor will keep the OAuth session refreshed.',
-    command: (baseUrl) => JSON.stringify({ mcpServers: { adport: { url: `${baseUrl}/mcp` } } }, null, 2),
+    id: 'claude-code', name: 'Claude Code', provider: 'anthropic', label: 'Terminal',
+    instructions: 'Run this command in your terminal. User scope makes Adport available across your local Claude Code projects.',
+    nextStep: 'Open Claude Code and run /mcp. Select Adport and follow the browser sign-in.',
+    command: baseUrl => `claude mcp add --transport http --scope user adport ${baseUrl}/mcp`,
+    docsUrl: 'https://code.claude.com/docs/en/mcp',
   },
   {
-    id: 'mcp', name: 'Any MCP client', provider: 'mcp', label: 'Remote MCP',
-    instructions: 'Add a remote MCP server in your client, name it Adport, and use the endpoint below. Choose OAuth or streamable HTTP if your client asks.',
-    nextStep: 'Approve the browser sign-in when prompted. For a client without MCP OAuth, create an API key under Agent access instead.',
-    command: (baseUrl) => `${baseUrl}/mcp`,
+    id: 'cursor', name: 'Cursor', provider: 'cursor', label: 'Editor',
+    instructions: 'Open the install link and confirm Add in Cursor. Adport uses browser sign-in, so no API key is needed.',
+    nextStep: 'Complete the sign-in from Cursor’s MCP settings, then start a conversation with Agent.',
+    command: baseUrl => JSON.stringify({ mcpServers: { adport: { url: `${baseUrl}/mcp` } } }, null, 2),
+    docsUrl: 'https://cursor.com/docs/mcp',
   },
+  {
+    id: 'mcp', name: 'Other assistant', provider: 'mcp', label: 'Any MCP client',
+    instructions: 'Add a remote MCP server in your assistant. Name it Adport, paste this URL, and choose Streamable HTTP with OAuth.',
+    nextStep: 'Follow your assistant’s sign-in prompt. If it does not support OAuth, an admin can create an API key under Advanced on the AI assistants page.',
+    command: baseUrl => `${baseUrl}/mcp`,
+    docsUrl: 'https://modelcontextprotocol.io/docs/develop/connect-remote-servers',
+  },
+];
+
+export function cursorInstallUrl(baseUrl: string) {
+  const config = btoa(JSON.stringify({ url: new URL('/mcp', baseUrl).href }));
+  return `cursor://anysphere.cursor-deeplink/mcp/install?name=adport&config=${encodeURIComponent(config)}`;
+}
+
+export const STARTER_PROMPTS = [
+  { label: 'Performance', text: 'Use Adport to summarize my ad performance over the last 7 days. Show spend, conversions, and the biggest change to investigate. Do not make any changes.' },
+  { label: 'Find wasted spend', text: 'Use Adport to find where my ad budget may be wasted. Explain the evidence and suggest what to review first. Do not make any changes.' },
+  { label: 'Audit my accounts', text: 'Run an Adport audit of my enabled ad accounts. Explain the most important findings and recommended next steps. Do not apply any changes.' },
 ];
 
 function OpenAiLogo() {
@@ -64,80 +85,58 @@ function OpenAiLogo() {
 
 function AgentLogo({ provider }: { provider: Setup['provider'] }) {
   if (provider === 'openai') return <OpenAiLogo />;
-  if (provider === 'anthropic') return <SiAnthropic aria-hidden="true" />;
+  if (provider === 'anthropic') return <SiClaude aria-hidden="true" />;
   if (provider === 'cursor') return <SiCursor aria-hidden="true" />;
   return <SiModelcontextprotocol aria-hidden="true" />;
 }
 
-function CopyButton({ value, label, prompt = false }: { value: string; label: string; prompt?: boolean }) {
-  const [copied, setCopied] = useState(false);
-  const [failed, setFailed] = useState(false);
-
-  async function copy() {
-    setFailed(false);
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
-    } catch { setFailed(true); }
-  }
-
-  return (
-    <Button className="setup-copy" type="button" onClick={() => void copy()} aria-label={prompt ? 'Copy first prompt' : `Copy ${label} setup`}>
-      {failed ? 'Select text to copy' : copied ? 'Copied' : prompt ? 'Copy prompt' : 'Copy setup'}
-    </Button>
-  );
+export function AgentIdentityLogo({ name }: { name: string }) {
+  const setup = AGENT_SETUPS.find(item => item.name.toLowerCase() === name.toLowerCase());
+  return <span className={`agent-logo ${setup?.provider ?? 'mcp'}`} aria-hidden="true">{setup ? <AgentLogo provider={setup.provider} /> : name.slice(0, 1).toUpperCase()}</span>;
 }
 
-export function AgentSetupGuide({ baseUrl, initialSelectedId, onSelectionChange, variant = 'default' }: { baseUrl: string; initialSelectedId?: string; onSelectionChange?: (id: string) => void; variant?: 'default' | 'onboarding' }) {
+function CopyButton({ value, label, className = '' }: { value: string; label: string; className?: string }) {
+  const [status, setStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  async function copy() {
+    try { await navigator.clipboard.writeText(value); setStatus('copied'); }
+    catch { setStatus('failed'); }
+  }
+  return <Button className={'button secondary small ' + className} type="button" onClick={() => void copy()} aria-label={label}><span aria-live="polite">{status === 'failed' ? 'Select text to copy' : status === 'copied' ? 'Copied ✓' : label}</span></Button>;
+}
+
+export function AgentSetupGuide({ baseUrl, projectName, initialSelectedId, onSelectionChange, canCheckConnection = false, hasConnections = false, variant = 'default' }: { baseUrl: string; projectName?: string; initialSelectedId?: string; onSelectionChange?: (id: string) => void; canCheckConnection?: boolean; hasConnections?: boolean; variant?: 'default' | 'onboarding' }) {
   const [selectedId, setSelectedId] = useState(initialSelectedId ?? AGENT_SETUPS[0]!.id);
-  const selected = AGENT_SETUPS.find((setup) => setup.id === selectedId) ?? AGENT_SETUPS[0]!;
+  const [promptIndex, setPromptIndex] = useState(0);
+  const selected = AGENT_SETUPS.find(setup => setup.id === selectedId) ?? AGENT_SETUPS[0]!;
   const command = selected.command(baseUrl);
+  const isCommand = selected.id === 'codex' || selected.id === 'claude-code';
+  const prompt = STARTER_PROMPTS[promptIndex]!;
+  const instructionId = `assistant-instructions-${variant}`;
 
-  return (
-    <section className={'card agent-setup-card' + (variant === 'onboarding' ? ' onboarding-agent-setup' : '')}>
-      <div className="card-head">
-        <div>
-          <h2>{variant === 'onboarding' ? 'Which assistant do you use?' : 'Connect your agent'}</h2>
-          <p className="card-kicker">Choose a client. Only its recommended setup is shown.</p>
-        </div>
-        <span className="status">OAuth recommended</span>
+  return <section className={'card assistant-setup' + (variant === 'onboarding' ? ' onboarding-agent-setup' : '')} aria-label="Connect an AI assistant">
+    <div className="card-head"><div><h2>{hasConnections ? 'Connect another assistant' : 'Which assistant do you use?'}</h2><p className="card-kicker">Connect with your Adport login. No API key needed.</p></div></div>
+    <div className="assistant-picker" role="group" aria-label="Choose an assistant">{AGENT_SETUPS.map(setup => <Button className="assistant-choice" data-active={setup.id === selected.id} key={setup.id} type="button" onClick={() => { setSelectedId(setup.id); onSelectionChange?.(setup.id); }} aria-pressed={setup.id === selected.id} aria-controls={instructionId}>
+      <span className={`agent-logo ${setup.provider}`}><AgentLogo provider={setup.provider} /></span><span><strong>{setup.name}</strong><small>{setup.label}</small></span><span className="assistant-choice-check" aria-hidden="true">{setup.id === selected.id ? '✓' : ''}</span>
+    </Button>)}</div>
+    <div className="assistant-guide" id={instructionId}>
+      <div className="assistant-instructions" key={selected.id}>
+        <div className="assistant-guide-title"><span className={`agent-logo large ${selected.provider}`}><AgentLogo provider={selected.provider} /></span><h3>Connect {selected.name}</h3><a href={selected.docsUrl} target="_blank" rel="noreferrer">Official guide ↗</a></div>
+        <ol className="assistant-steps">
+          <li><span className="assistant-step-number" aria-hidden="true">1</span><div><h4>{isCommand ? 'Add Adport' : selected.id === 'cursor' ? 'Add Adport to Cursor' : 'Add the Adport connection'}</h4><p>{selected.instructions}</p>
+            {selected.open ? <a className="button small" href={selected.open.href} target="_blank" rel="noreferrer">{selected.open.label} ↗</a> : null}
+            {selected.id === 'cursor' ? <><a className="button small" href={cursorInstallUrl(baseUrl)}>Add to Cursor ↗</a><Disclosure label="Install manually instead"><p>Add this to ~/.cursor/mcp.json.</p><div className="assistant-code"><pre><code>{command}</code></pre><CopyButton value={command} label="Copy Cursor configuration" /></div></Disclosure></> : <div className={'assistant-code' + (isCommand ? ' is-command' : '')}><span>{isCommand ? 'Terminal' : 'Server URL'}</span><pre><code>{command}</code></pre><CopyButton value={command} label={isCommand ? `Copy ${selected.name} setup` : 'Copy server URL'} /></div>}
+          </div></li>
+          <li><span className="assistant-step-number" aria-hidden="true">2</span><div><h4>Sign in and choose your project</h4><p>{selected.nextStep}</p><div className="assistant-project"><span>Project to authorize</span><strong>{projectName ?? 'Your current Adport project'}</strong></div>
+            {selected.id === 'codex' ? <div className="assistant-code is-command"><pre><code>codex mcp login adport</code></pre><CopyButton value="codex mcp login adport" label="Copy sign-in command" /></div> : null}
+          </div></li>
+        </ol>
       </div>
-
-      <div className="agent-tabs" aria-label="Choose an agent">
-        {AGENT_SETUPS.map((setup) => (
-          <Button className="agent-tab" data-active={setup.id === selected.id} key={setup.id} type="button" onClick={() => { setSelectedId(setup.id); onSelectionChange?.(setup.id); }} aria-pressed={setup.id === selected.id}>
-            <span className={`agent-logo ${setup.provider}`}><AgentLogo provider={setup.provider} /></span>
-            <span>{setup.name}</span>
-          </Button>
-        ))}
-      </div>
-
-      <div className="card-body agent-setup-body">
-        <article className="agent-panel" aria-live="polite">
-          <div className="agent-panel-copy">
-            <div className="agent-panel-title">
-              <span className={`agent-logo large ${selected.provider}`}><AgentLogo provider={selected.provider} /></span>
-              <div><h3>{selected.name}</h3><p>{selected.label}</p></div>
-            </div>
-            <p className="agent-instruction">{selected.instructions}</p>
-            <p className="agent-next"><strong>Then:</strong> {selected.nextStep}</p>
-          </div>
-          <div className="setup-code-wrap">
-            <pre className="setup-code"><code>{command}</code></pre>
-            <CopyButton key={selected.id} value={command} label={selected.name} />
-          </div>
-        </article>
-
-        <aside className="setup-practice">
-          <div><strong>Your first question</strong><p>“List my accessible ad accounts and summarize the last 7 days. Do not make any changes.”</p>{variant === 'onboarding' ? <CopyButton prompt value="List my accessible ad accounts and summarize the last 7 days. Do not make any changes." label="first prompt" /> : null}</div>
-          <ul>
-            <li>Prefer OAuth MCP; never paste platform secrets into a chat.</li>
-            <li>Review the exact preview before applying any write.</li>
-            <li>New campaigns remain paused by policy.</li>
-          </ul>
-        </aside>
-      </div>
-    </section>
-  );
+      <aside className="assistant-first-answer"><span className="plan-kicker">3 · Get your first answer</span><h3>Put your ad data to work.</h3><p>Open a conversation in {selected.id === 'mcp' ? 'your assistant' : selected.name}, then try one of these.</p>
+        <div className="assistant-prompt-options" role="group" aria-label="Choose a first question">{STARTER_PROMPTS.map((item, index) => <Button type="button" key={item.label} aria-pressed={index === promptIndex} onClick={() => setPromptIndex(index)}>{item.label}</Button>)}</div>
+        <blockquote>{prompt.text}</blockquote><CopyButton key={promptIndex} value={prompt.text} label="Copy first prompt" />
+        <p className="assistant-confirmation">{variant === 'onboarding' || !canCheckConnection ? 'Once connected, your assistant can use the accounts you enabled for this project.' : <>After trying your prompt, <a href="#connected-assistants">refresh connection status</a> to see when Adport was last used.</>}</p>
+      </aside>
+    </div>
+    <div className="assistant-footer"><p>Every ad change starts with a preview for you to approve. Connecting an assistant won’t change your campaigns.</p><Disclosure label="Having trouble connecting?"><p>{selected.id === 'codex' ? 'Run codex mcp list to check the server, then start a new Codex conversation.' : selected.id === 'claude-code' ? 'Run /mcp in Claude Code to check Adport’s status and finish authentication.' : selected.id === 'chatgpt' ? 'Check that the plugin is installed and selected with @ in your conversation. Workspace settings can restrict custom plugins.' : selected.id === 'claude' ? 'Check that Adport is connected and enabled in this conversation. Team and Enterprise workspaces may need an owner to add the connector first.' : selected.id === 'cursor' ? 'Open Cursor’s MCP settings and check that Adport is enabled and signed in.' : 'Check that your client supports remote MCP with OAuth. Use the server URL shown above.'} If the wrong project is available, reconnect and choose the project shown in step 2.</p><a href={selected.docsUrl} target="_blank" rel="noreferrer">Read the setup guide ↗</a></Disclosure></div>
+  </section>;
 }
