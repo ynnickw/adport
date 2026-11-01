@@ -15,7 +15,7 @@ Before 1.0, security fixes target the latest release. Upgrade to the latest patc
 ## Security boundaries
 
 - Local credentials are stored under `${ADPORT_HOME:-~/.config/adport}/credentials.json` with mode `0600`. The local CLI and stdio MCP runtime communicate directly with configured providers and contain no telemetry.
-- Cloud uses hosted OAuth, encrypted tenant credentials, account-scoped access, and persistent approvals and audit records. Its data handling is described in the [deployment model](docs/deployment-model.md) and [privacy policy](https://adport.dev/privacy).
+- Cloud uses hosted OAuth, encrypted tenant credentials, account-scoped access, and persistent approvals and audit records. Its data handling is described in the [deployment model](docs/cloud/deployment-model.md) and [privacy policy](https://adport.dev/privacy).
 - Advertising mutations use the shared preview/apply policy gate. Argument mismatch, expired approvals, protected accounts, and budget-cap violations must fail closed. See [write safety](docs/write-safety.md).
 - Default tests use mocked provider APIs. Security testing must not change real campaigns, spend, provider permissions, or another tenant's data without explicit authorization.
 

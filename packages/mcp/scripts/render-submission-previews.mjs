@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(here, '..');
 const repositoryRoot = resolve(packageRoot, '../..');
-const outputDirectory = join(repositoryRoot, 'docs/submissions/assets');
+const outputDirectory = join(repositoryRoot, 'artifacts', 'connectors', 'previews');
 const temporaryDirectory = join(packageRoot, '.submission-previews');
 const prepareOnly = process.argv.includes('--prepare-only');
 const chrome = [

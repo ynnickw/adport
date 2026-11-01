@@ -14,19 +14,19 @@
 
 Hosted access is currently offered through the [waitlist](https://adport.dev/#waitlist). Source availability and provider module implementation do not imply public access or provider-app approval.
 
-- [Local Cloud development](cloud-local-development.md)
-- [Deployment model](deployment-model.md)
+- [Local Cloud development](cloud/local-development.md)
+- [Deployment model](cloud/deployment-model.md)
 - [Hosted provider onboarding](providers/cloud-onboarding.md)
-- [Account selection](cloud-account-selection.md) and [Meta Page selection](cloud-meta-page-selection.md)
-- [Organizations and projects](organizations-and-projects.md)
-- [Cloud pricing](cloud-pricing.md), [waitlist](cloud-waitlist.md), and [product analytics](cloud-product-analytics.md)
+- [Account selection](cloud/account-selection.md) and [Meta Page selection](cloud/meta-page-selection.md)
+- [Organizations and projects](cloud/organizations-and-projects.md)
+- [Cloud pricing](cloud/pricing.md), [waitlist](cloud/waitlist.md), and [product analytics](cloud/product-analytics.md)
 
 ## Contribute and maintain
 
-- [Contributing](../CONTRIBUTING.md)
-- [Release process](releasing.md)
+- [Contributing](../CONTRIBUTING.md) and [repository structure](maintainers/repository-structure.md)
+- [Release process](maintainers/releasing.md)
 - [GitHub releases and changelog](https://github.com/ynnickw/adport/releases)
-- [Provider brand assets](provider-brand-assets.md)
-- [Generated provider pages](provider-landing-pages.md) and [resource content](resources-content.md)
+- [Provider brand assets](maintainers/provider-brand-assets.md)
+- [Generated provider pages](maintainers/website/provider-landing-pages.md) and [resource content](maintainers/website/resources-content.md)
 
-Provider and connector validation records under `submissions/` are dated evidence logs. They can contain superseded observations; they are not installation instructions or claims that a provider or marketplace has approved an integration.
+Connector review guides live under [maintainers/connectors](maintainers/connectors/README.md). Dated test logs and original host captures are kept in its [archive](maintainers/connectors/archive/README.md), separately from current setup instructions. Generated screenshots and icon exports belong in ignored `artifacts/`.

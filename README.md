@@ -118,7 +118,7 @@ Provider application approval, account access, and available metrics depend on t
 | Approvals and audit | Local pending operations and JSONL log | Persistent tenant-scoped approvals and audit events |
 | Policy and tools | Shared core and provider modules | Same core and provider modules |
 
-The Cloud source is in `apps/cloud`. See [local Cloud development](docs/cloud-local-development.md), [hosted onboarding](docs/providers/cloud-onboarding.md), and the [deployment model](docs/deployment-model.md).
+The Cloud source is in `apps/cloud`. See [local Cloud development](docs/cloud/local-development.md), [hosted onboarding](docs/providers/cloud-onboarding.md), and the [deployment model](docs/cloud/deployment-model.md).
 
 ## Development
 
@@ -133,7 +133,7 @@ pnpm test
 pnpm typecheck
 ```
 
-The repository pins pnpm in `package.json`. Advertising credentials are unnecessary for the default build and tests. Optional database and HTTP integration checks are documented in the [Cloud development guide](docs/cloud-local-development.md).
+The repository pins pnpm in `package.json`. Advertising credentials are unnecessary for the default build and tests. Optional database and HTTP integration checks are documented in the [Cloud development guide](docs/cloud/local-development.md).
 
 | Path | Purpose |
 | --- | --- |
@@ -146,9 +146,11 @@ The repository pins pnpm in `package.json`. Advertising credentials are unnecess
 | `plugins/adport` | Agent plugin manifests and skill |
 | `docs` | User guides, operations, release and validation records |
 
+See the [repository structure guide](docs/maintainers/repository-structure.md) for file ownership, generated assets, and directory conventions.
+
 ## Contributing and support
 
-Bug fixes, documentation, provider tests, and practical feedback from advertisers are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md); commits require a DCO sign-off (`git commit -s`). The [release guide](docs/releasing.md) explains versioning, verification, and publishing.
+Bug fixes, documentation, provider tests, and practical feedback from advertisers are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md); commits require a DCO sign-off (`git commit -s`). The [release guide](docs/maintainers/releasing.md) explains versioning, verification, and publishing.
 
 Use [GitHub issues](https://github.com/ynnickw/adport/issues/new/choose) for reproducible bugs and feature proposals. See [SUPPORT.md](SUPPORT.md) for help, [SECURITY.md](SECURITY.md) for private vulnerability reports, and the [Code of Conduct](CODE_OF_CONDUCT.md) for community expectations.
 

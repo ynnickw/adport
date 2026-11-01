@@ -89,12 +89,12 @@ jobs:
       - name: Publish missing public packages in dependency order
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: node scripts/publish-packages.mjs
+        run: node scripts/release/publish-packages.mjs
       - name: Verify the public npm install before announcing the release
         shell: bash
         run: |
           for attempt in 1 2 3; do
-            if node scripts/verify-published.mjs "${RELEASE_TAG#v}"; then
+            if node scripts/release/verify-published.mjs "${RELEASE_TAG#v}"; then
               exit 0
             fi
             if [ "$attempt" -lt 3 ]; then sleep 15; fi

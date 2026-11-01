@@ -46,7 +46,7 @@ jobs:
         env:
           DCO_BASE: ${{ github.event.pull_request.base.sha }}
           DCO_HEAD: ${{ github.event.pull_request.head.sha }}
-        run: node scripts/check-dco.mjs
+        run: node scripts/repository/check-dco.mjs
 
   build-test:
     runs-on: ubuntu-latest

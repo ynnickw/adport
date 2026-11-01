@@ -1,7 +1,7 @@
 // adport.dev behaviour shared by every page: header state, tabs, copy buttons,
 // and the waitlist forms. Page-specific scripts (home.js) load alongside.
 
-// Read lazily: this file also runs in a window-less test sandbox (scripts/test-provider-pages.mjs).
+// Read lazily: this file also runs in a window-less test sandbox (scripts/website/test-provider-pages.mjs).
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const header = document.querySelector(".site-header");
