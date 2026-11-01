@@ -243,6 +243,8 @@ describeDatabase('Supabase tenant boundary', () => {
         },
       },
     } as unknown as Parameters<typeof processStripeEvent>[0];
+    const stripeSubscription = billingEvent.data.object as import('stripe').default.Subscription;
+    await db()`update public.organization_subscriptions set billing_provider = 'stripe', provider_customer_id = ${String(stripeSubscription.customer)}, provider_subscription_id = ${stripeSubscription.id} where organization_id = ${stripeSubscription.metadata.organizationId!}`;
     const canonical = vi.spyOn(stripeClient().subscriptions, 'list').mockResolvedValue({ data: [billingEvent.data.object], has_more: false } as never);
     const outcome = await processStripeEvent(billingEvent);
     canonical.mockRestore();

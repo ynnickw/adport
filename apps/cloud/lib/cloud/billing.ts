@@ -90,6 +90,7 @@ export async function currentStripeSubscription(customerId: string, organization
 }
 
 interface StoredSubscription {
+  billingProvider: string | null;
   plan: PlanId;
   status: SubscriptionStatus;
   providerCustomerId: string | null;
@@ -106,14 +107,21 @@ const time = (value: Date | null | undefined) => value?.getTime() ?? null;
 
 async function syncLockedSubscription(sql: BillingSql, organizationId: string, customerId: string, eventId?: string) {
   const [previous] = await sql<StoredSubscription[]>`
-    select plan, status, provider_customer_id, provider_subscription_id, current_period_end,
+    select billing_provider, plan, status, provider_customer_id, provider_subscription_id, current_period_end,
       cancel_at_period_end, cancel_at, canceled_at, cancellation_reason
     from public.organization_subscriptions where organization_id = ${organizationId} for update
   `;
   if (!previous) throw new Error('Billing subscription record not found.');
+  const manualGrant = previous.billingProvider !== 'stripe' && !previous.providerSubscriptionId
+    && previous.plan !== 'reader' && subscriptionHasAccess(previous.status);
+  // Administrators can detach a canceled Stripe customer to grant beta access.
+  // A new checkout reserves its customer explicitly before Stripe can notify us.
+  if (manualGrant && !previous.providerCustomerId) return { updated: false };
   if (previous.providerCustomerId && previous.providerCustomerId !== customerId) throw new Error('Stripe customer does not match this organization.');
   const subscription = await currentStripeSubscription(customerId, organizationId, previous.providerSubscriptionId);
   if (!subscription) throw new Error('Stripe subscription not found; access was left unchanged.');
+  // A pending or failed payment must not remove an existing manual grant.
+  if (manualGrant && !subscriptionHasAccess(subscription.status)) return { updated: false };
   const item = subscription.items.data[0];
   const mappedPlan = planForPrice(item?.price.id);
   if (!mappedPlan && !subscriptionEnded(subscription.status)) throw new Error('Stripe subscription price is not mapped to an Adport plan.');

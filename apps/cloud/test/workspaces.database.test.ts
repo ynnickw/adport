@@ -168,6 +168,8 @@ describeDatabase('agency organizations and isolated projects', () => {
       id: `sub_local_${randomUUID()}`, customer: `cus_local_${randomUUID()}`, metadata: { organizationId: company },
       items: { data: [{ price: { id: 'price_agency_local_operator' } }] }, status: 'canceled', cancel_at_period_end: false,
     } } } as unknown as Parameters<typeof processStripeEvent>[0];
+    const subscription = billingEvent.data.object as import('stripe').default.Subscription;
+    await db()`update public.organization_subscriptions set billing_provider = 'stripe', provider_customer_id = ${String(subscription.customer)}, provider_subscription_id = ${subscription.id} where organization_id = ${subscription.metadata.organizationId!}`;
     const canonical = vi.spyOn(stripeClient().subscriptions, 'list').mockResolvedValue({ data: [billingEvent.data.object], has_more: false } as never);
     await processStripeEvent(billingEvent);
     canonical.mockRestore();
