@@ -72,7 +72,7 @@
 .guide-sources li > span { display: block; color: var(--muted); font-size: .75rem; }
 .resource-related { margin-top: 4rem; padding-top: 2.5rem; border-top: 1px solid var(--rule); }
 .landing-resources { width: min(1240px, calc(100% - 48px)); margin: 4rem auto 6rem; padding-top: 2.5rem; border-top: 1px solid var(--rule); }
-.landing-claude-guides { margin-top: 3.5rem; padding-top: 2.5rem; border-top: 1px solid var(--rule); }
+.landing-claude-guides, .landing-chatgpt-guides { margin-top: 3.5rem; padding-top: 2.5rem; border-top: 1px solid var(--rule); }
 .resource-card a:focus-visible, .resource-topics a:focus-visible, .resource-primary:focus-visible, .resource-section-head a:focus-visible, .guide-prompt button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
 @media (max-width: 1000px) {
   .guide-header { margin-left: 0; }
