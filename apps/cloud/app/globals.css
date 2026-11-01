@@ -823,6 +823,10 @@ input:disabled, textarea:disabled { background: rgba(245, 245, 247, 0.8); color:
 .assistant-connections-empty { padding: 1.25rem; }
 .assistant-connections-empty strong { font-size: .875rem; }
 .assistant-connections-empty p { color: var(--muted); font-size: .8125rem; line-height: 1.6; margin: .5rem 0 0; max-width: 36rem; }
+.assistant-connections .assistant-connection-group { border: 0; border-top: 1px solid var(--line-soft); border-radius: 0; }
+.assistant-connections .assistant-connection-group > summary { padding: 1rem 1.25rem; font-size: .8125rem; }
+.assistant-connection-group > .disclosure-content { padding: 0; }
+.assistant-history-note { margin: 0; padding: 0 1.25rem .75rem; color: var(--muted); font-size: .75rem; }
 .assistant-checked { margin: 0; padding: .8rem 1.25rem; color: var(--muted); border-top: 1px solid var(--line-soft); font-size: .6875rem; }
 .assistant-advanced .form-row { margin-top: 1rem; }
 .assistant-advanced .form-row input { flex: 1; min-width: min(14rem, 100%); }
