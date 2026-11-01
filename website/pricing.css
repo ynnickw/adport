@@ -10,10 +10,10 @@
 .pricing-platforms > span { color: var(--ink-soft); font-size: .8125rem; font-weight: 600; }
 .provider-stack { position: relative; display: flex; align-items: center; isolation: isolate; }
 .provider-stack-marks { display: flex; align-items: center; }
-.pricing-provider-logo { display: inline-grid; flex: none; width: 2.6rem; height: 2.6rem; place-items: center; border: 2px solid var(--paper); border-radius: 50%; background: var(--raised); }
-.pricing-provider-logo svg { display: block; width: 1.35rem; height: 1.35rem; }
+.pricing-provider-logo { display: inline-grid; flex: none; width: 3.25rem; height: 3.25rem; place-items: center; border: 2px solid var(--paper); border-radius: 50%; background: var(--raised); }
+.pricing-provider-logo svg { display: block; width: 1.9rem; height: 1.9rem; fill: currentColor; }
 .provider-stack-marks .pricing-provider-logo + .pricing-provider-logo { margin-left: -.6rem; }
-.provider-more { display: grid; flex: none; width: 2.7rem; height: 2.7rem; margin-left: -.6rem; place-items: center; border: 2px solid var(--paper); border-radius: 50%; background: var(--ink); color: var(--raised); font: 650 .75rem var(--sans); cursor: pointer; transition: background 160ms; }
+.provider-more { display: grid; flex: none; width: 3.3rem; height: 3.3rem; margin-left: -.6rem; place-items: center; border: 2px solid var(--paper); border-radius: 50%; background: var(--ink); color: var(--raised); font: 650 .875rem var(--sans); cursor: pointer; transition: background 160ms; }
 .provider-more:hover, .provider-more[aria-expanded="true"] { background: var(--signal-ink); }
 .provider-more:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
 .provider-tooltip { position: absolute; z-index: 30; top: calc(100% + .8rem); left: 50%; width: min(22rem, calc(100vw - 3rem)); padding: 1.1rem; border: 1px solid var(--rule); border-radius: .95rem; background: var(--raised); color: var(--ink); box-shadow: 0 12px 40px #1d1d1f1a, 0 2px 8px #1d1d1f0a; transform: translateX(-50%); }
@@ -23,14 +23,15 @@
 .provider-tooltip > p { margin: 0 0 .7rem; font-size: .8125rem; font-weight: 750; }
 .provider-tooltip ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem .65rem; padding: 0; margin: 0; list-style: none; }
 .provider-tooltip li { display: flex; align-items: center; gap: .5rem; min-width: 0; font-size: .75rem; line-height: 1.4; }
-.provider-tooltip .pricing-provider-logo { width: 1.9rem; height: 1.9rem; border: 1px solid var(--rule); border-radius: .45rem; }
-.provider-tooltip .pricing-provider-logo svg { width: 1.1rem; height: 1.1rem; }
+.provider-tooltip .pricing-provider-logo { width: 2.25rem; height: 2.25rem; border: 1px solid var(--rule); border-radius: .45rem; }
+.provider-tooltip .pricing-provider-logo svg { width: 1.4rem; height: 1.4rem; }
 .provider-tooltip-note { display: block; margin-top: .8rem; padding-top: .7rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: .6875rem; line-height: 1.55; }
-.pricing-connectors { display: flex; align-items: center; gap: 1.25rem; padding-left: 2.5rem; border-left: 1px solid var(--rule); }
-.pricing-connector { display: inline-flex; align-items: center; gap: .55rem; color: var(--ink); }
-.pricing-connector > svg { width: 1.75rem; height: 1.75rem; fill: currentColor; }
-.pricing-connector > span { display: grid; gap: .1rem; font-size: .8125rem; font-weight: 700; line-height: 1.35; }
-.pricing-connector small { color: var(--muted); font-size: .6875rem; font-weight: 500; }
+.pricing-connectors { display: flex; align-items: center; gap: .75rem; padding-left: 2rem; border-left: 1px solid var(--rule); }
+.pricing-connector { display: inline-flex; align-items: center; gap: .7rem; padding: .75rem 1rem; border: 1px solid var(--rule); border-radius: .85rem; background: var(--raised); color: var(--ink); text-align: left; }
+.pricing-connector > svg { flex: none; width: 2.25rem; height: 2.25rem; fill: currentColor; }
+.pricing-connector-claude > svg { color: #d97757; }
+.pricing-connector > span { display: grid; gap: .1rem; font-size: 1rem; font-weight: 700; line-height: 1.35; }
+.pricing-connector small { color: var(--muted); font-size: .75rem; font-weight: 500; }
 
 /* Three paid plans, with the free entry point directly underneath. */
 .pricing-billing { display: flex; justify-content: center; gap: .3rem; width: fit-content; margin: 2rem auto 3rem; padding: .35rem; border: 1px solid var(--rule); border-radius: 999px; background: var(--raised); }
@@ -98,6 +99,12 @@
 .comparison-table tbody th[scope="row"] { padding-left: 1.5rem; text-align: left; color: var(--ink-soft); font-weight: 500; }
 .comparison-table .comparison-featured { background: #fffaf5; }
 .comparison-table thead .comparison-featured { background: #fff2e8; }
+.comparison-platform-list { display: flex; justify-content: center; align-items: flex-start; flex-wrap: wrap; gap: 1rem .75rem; padding: 0; margin: .5rem 0; list-style: none; }
+.comparison-platform-list li { display: grid; justify-items: center; gap: .35rem; width: 3.5rem; font-size: .625rem; line-height: 1.35; color: var(--ink-soft); }
+.comparison-platform-list .pricing-provider-logo { width: 3rem; height: 3rem; border: 0; background: transparent; }
+.comparison-platform-list svg { width: 2.3rem; height: 2.3rem; }
+.comparison-connectors { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: .75rem; }
+.comparison-included { flex-basis: 100%; color: var(--muted); font-size: .75rem; }
 .comparison-group th { padding: .7rem 1.5rem; color: #36559a; background: #f0f4ff; text-align: left; text-transform: uppercase; letter-spacing: .06em; font-size: .6875rem; font-weight: 800; }
 .comparison-group th > span { position: sticky; left: 1rem; }
 .comparison-group-connections th { color: #6b45a6; background: #f6f1ff; }
