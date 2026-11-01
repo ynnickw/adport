@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { closeDbForTests, db } from '@/lib/db';
 import { createContext, DEFAULT_POLICY, PolicyEngine } from '@adport/core';
 import {
@@ -20,7 +20,7 @@ import {
   upsertProviderConnection,
 } from '@/lib/cloud/repository';
 import { createTenantRuntime } from '@/lib/cloud/runtime';
-import { processStripeEvent } from '@/lib/cloud/billing';
+import { processStripeEvent, stripeClient } from '@/lib/cloud/billing';
 import { getOnboardingState, updateOnboardingState } from '@/lib/cloud/onboarding';
 import { createFeedbackMessage } from '@/lib/cloud/support';
 import { resetEnvForTests } from '@/lib/env';
@@ -229,7 +229,7 @@ describeDatabase('Supabase tenant boundary', () => {
         currentPlan: 'Pro', recommendedPlan: 'premium',
       });
     }
-    const outcome = await processStripeEvent({
+    const billingEvent = {
       id: `evt_${randomUUID()}`,
       type: 'customer.subscription.deleted',
       data: {
@@ -242,7 +242,10 @@ describeDatabase('Supabase tenant boundary', () => {
           cancel_at_period_end: false,
         },
       },
-    } as unknown as Parameters<typeof processStripeEvent>[0]);
+    } as unknown as Parameters<typeof processStripeEvent>[0];
+    const canonical = vi.spyOn(stripeClient().subscriptions, 'list').mockResolvedValue({ data: [billingEvent.data.object], has_more: false } as never);
+    const outcome = await processStripeEvent(billingEvent);
+    canonical.mockRestore();
     expect(outcome).toBe('processed');
     expect((await listOrganizationAdAccounts(firstOrgId)).filter((account) => account.enabled)).toHaveLength(3);
     const subscription = await db()<Array<{ plan: string; status: string }>>`

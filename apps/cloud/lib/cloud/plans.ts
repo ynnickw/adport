@@ -9,7 +9,15 @@ import catalog from './plan-catalog.json';
 export const PLAN_IDS = ['reader', 'operator', 'premium', 'agency', 'enterprise'] as const;
 export type PlanId = (typeof PLAN_IDS)[number];
 export type BillingInterval = 'monthly' | 'annual';
-export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled' | 'incomplete' | 'unpaid';
+export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled' | 'incomplete' | 'unpaid' | 'paused' | 'incomplete_expired';
+
+export function subscriptionHasAccess(status: string): boolean {
+  return ['active', 'trialing', 'past_due'].includes(status);
+}
+
+export function subscriptionEnded(status: string): boolean {
+  return status === 'canceled' || status === 'incomplete_expired';
+}
 
 export interface PlanDefinition {
   id: PlanId;
@@ -36,6 +44,9 @@ export interface OrganizationEntitlement {
   providerSubscriptionId: string | null;
   currentPeriodEnd: Date | null;
   cancelAtPeriodEnd: boolean;
+  cancelAt?: Date | null;
+  canceledAt?: Date | null;
+  cancellationReason?: string | null;
 }
 
 export async function getOrganizationEntitlement(organizationId: string, sql: postgres.Sql | postgres.TransactionSql = db()): Promise<OrganizationEntitlement> {
@@ -46,10 +57,14 @@ export async function getOrganizationEntitlement(organizationId: string, sql: po
     providerSubscriptionId: string | null;
     currentPeriodEnd: Date | null;
     cancelAtPeriodEnd: boolean;
+    cancelAt: Date | null;
+    canceledAt: Date | null;
+    cancellationReason: string | null;
     billingOrganizationId: string;
   }>>`
     select subscription.plan, subscription.status, subscription.provider_customer_id, subscription.provider_subscription_id,
-      subscription.current_period_end, subscription.cancel_at_period_end, company.default_project_id as billing_organization_id
+      subscription.current_period_end, subscription.cancel_at_period_end, subscription.cancel_at,
+      subscription.canceled_at, subscription.cancellation_reason, company.default_project_id as billing_organization_id
     from public.organizations project
     join public.organization_groups company on company.id = project.organization_group_id
     join public.organization_subscriptions subscription on subscription.organization_id = company.default_project_id
@@ -64,7 +79,7 @@ export async function getOrganizationEntitlement(organizationId: string, sql: po
     currentPeriodEnd: null,
     cancelAtPeriodEnd: false,
   };
-  const entitledPlan = ['active', 'trialing', 'past_due'].includes(subscription.status) ? subscription.plan : 'reader';
+  const entitledPlan = subscriptionHasAccess(subscription.status) ? subscription.plan : 'reader';
   return { ...subscription, plan: PLANS[entitledPlan] };
 }
 

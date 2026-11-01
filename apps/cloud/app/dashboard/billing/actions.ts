@@ -3,7 +3,8 @@
 import { captureProductEvent } from '@/lib/cloud/product-analytics';
 import { redirect } from 'next/navigation';
 import { sessionPrincipal } from '@/lib/cloud/auth';
-import { stripeClient, stripePriceId } from '@/lib/cloud/billing';
+import { stripeClient } from '@/lib/cloud/billing';
+import { subscriptionCheckoutUrl } from '@/lib/cloud/billing-checkout';
 import { getOrganizationEntitlement, type BillingInterval, type PlanId } from '@/lib/cloud/plans';
 import { env } from '@/lib/env';
 import { requireOrganizationAdmin } from '@/lib/cloud/workspaces';
@@ -23,26 +24,9 @@ async function checkoutUrl(plan: PlanId, interval: BillingInterval): Promise<str
   const billingOrganizationId = entitlement.billingOrganizationId ?? principal.organizationId;
   const organization = await requireOrganizationAdmin(principal.userId!, billingOrganizationId);
   requireOwner(organization.role);
-  if (entitlement.providerSubscriptionId && entitlement.status !== 'canceled') throw new Error('Manage the existing subscription in the billing portal.');
-  const baseUrl = env().ADPORT_CLOUD_BASE_URL;
-  const session = await stripeClient().checkout.sessions.create({
-    mode: 'subscription',
-    customer: entitlement.providerCustomerId ?? undefined,
-    client_reference_id: billingOrganizationId,
-    line_items: [{ price: stripePriceId(plan, interval), quantity: 1 }],
-    billing_address_collection: 'required',
-    allow_promotion_codes: true,
-    metadata: { organizationId: billingOrganizationId, plan, interval },
-    subscription_data: {
-      metadata: { organizationId: billingOrganizationId, plan, interval, analyticsActorUserId: principal.userId! },
-      ...(entitlement.providerSubscriptionId ? {} : { trial_period_days: 7 }),
-    },
-    success_url: new URL('/dashboard/billing?checkout=complete', baseUrl).toString(),
-    cancel_url: new URL('/dashboard/billing?' + new URLSearchParams({ checkout: 'canceled', plan, billing: interval, compare: '1' }), baseUrl).toString(),
-  });
-  if (!session.url) throw new Error('Stripe did not return a checkout URL.');
+  const url = await subscriptionCheckoutUrl(billingOrganizationId, principal.userId!, plan, interval);
   captureProductEvent(principal, { event: 'checkout_started', target_plan: plan, interval });
-  return session.url;
+  return url;
 }
 
 export async function startSubscription(plan: PlanId, interval: BillingInterval): Promise<void> {

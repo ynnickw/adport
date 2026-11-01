@@ -14,6 +14,7 @@ const schema = z.object({
   ADPORT_MCP_OAUTH_SIGNING_KEY: z.string().min(40),
   STRIPE_SECRET_KEY: z.string().regex(/^(?:sk|rk)_(?:test|live)_/).optional(),
   STRIPE_WEBHOOK_SECRET: z.string().startsWith('whsec_').optional(),
+  CRON_SECRET: z.string().min(32).optional(),
   STRIPE_BILLING_PORTAL_CONFIGURATION_ID: z.string().startsWith('bpc_').optional(),
   STRIPE_OPERATOR_PRICE_ID: z.string().startsWith('price_').optional(),
   STRIPE_OPERATOR_ANNUAL_PRICE_ID: z.string().startsWith('price_').optional(),

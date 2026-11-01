@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { db, closeDbForTests } from '@/lib/db';
 import { createOrganization, createProject, listProjectAccess, saveOrganizationMember, removeCompanyMember, updateProject } from '@/lib/cloud/workspaces';
 import { resolveMembership, createApiKey, authenticateApiKey, upsertGoogleConnection, setOrganizationAdAccountEnabled, PostgresPendingStore, listConnections } from '@/lib/cloud/repository';
@@ -8,7 +8,7 @@ import { stageAccountSelection } from '@/lib/cloud/account-selection';
 import { getOrganizationEntitlement, applyPlanToPrincipal } from '@/lib/cloud/plans';
 import { registerMcpOAuthClient, createMcpAuthorizationCode, exchangeMcpAuthorizationCode, exchangeMcpRefreshToken, authenticateMcpOAuthAccessToken } from '@/lib/cloud/mcp-oauth-repository';
 import { mcpResourceUrl, pkceChallenge } from '@/lib/mcp-oauth';
-import { processStripeEvent } from '@/lib/cloud/billing';
+import { processStripeEvent, stripeClient } from '@/lib/cloud/billing';
 import { resetEnvForTests } from '@/lib/env';
 import { getOrganizationUsage } from '@/lib/cloud/usage';
 
@@ -164,10 +164,13 @@ describeDatabase('agency organizations and isolated projects', () => {
   it('downscales the shared account allowance across every project on cancellation', async () => {
     process.env.STRIPE_OPERATOR_PRICE_ID = 'price_agency_local_operator';
     resetEnvForTests();
-    await processStripeEvent({ id: `evt_local_${randomUUID()}`, type: 'customer.subscription.deleted', data: { object: {
+    const billingEvent = { id: `evt_local_${randomUUID()}`, type: 'customer.subscription.deleted', data: { object: {
       id: `sub_local_${randomUUID()}`, customer: `cus_local_${randomUUID()}`, metadata: { organizationId: company },
       items: { data: [{ price: { id: 'price_agency_local_operator' } }] }, status: 'canceled', cancel_at_period_end: false,
-    } } } as unknown as Parameters<typeof processStripeEvent>[0]);
+    } } } as unknown as Parameters<typeof processStripeEvent>[0];
+    const canonical = vi.spyOn(stripeClient().subscriptions, 'list').mockResolvedValue({ data: [billingEvent.data.object], has_more: false } as never);
+    await processStripeEvent(billingEvent);
+    canonical.mockRestore();
     const enabled = await db()<Array<{ count: number }>>`select count(*)::int as count from public.organization_ad_accounts where organization_id in ${db()([firstProject, secondProject])} and enabled`;
     expect(enabled[0]?.count).toBe(3);
     expect((await getOrganizationEntitlement(secondProject)).plan.id).toBe('reader');

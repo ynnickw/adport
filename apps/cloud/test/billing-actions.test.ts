@@ -1,88 +1,57 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
 const mocks = vi.hoisted(() => ({
-  checkoutCreate: vi.fn(),
-  redirect: vi.fn((url: string): never => { throw new Error(`redirect:${url}`); }),
-  sessionPrincipal: vi.fn(),
-  getOrganizationEntitlement: vi.fn(),
-  stripePriceId: vi.fn(),
-  requireOrganizationAdmin: vi.fn(),
+  checkout: vi.fn(), portal: vi.fn(), redirect: vi.fn((url: string): never => { throw new Error(`redirect:${url}`); }),
+  sessionPrincipal: vi.fn(), entitlement: vi.fn(), organization: vi.fn(),
 }));
-
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }));
-vi.mock('@/lib/env', () => ({ env: () => ({ ADPORT_CLOUD_BASE_URL: 'https://app.adport.dev' }) }));
+vi.mock('@/lib/cloud/product-analytics', () => ({ captureProductEvent: vi.fn() }));
+vi.mock('@/lib/env', () => ({ env: () => ({ ADPORT_CLOUD_BASE_URL: 'https://app.adport.dev', STRIPE_BILLING_PORTAL_CONFIGURATION_ID: 'bpc_expected' }) }));
 vi.mock('@/lib/cloud/auth', () => ({ sessionPrincipal: mocks.sessionPrincipal }));
-vi.mock('@/lib/cloud/plans', () => ({ getOrganizationEntitlement: mocks.getOrganizationEntitlement }));
-vi.mock('@/lib/cloud/workspaces', () => ({ requireOrganizationAdmin: mocks.requireOrganizationAdmin }));
-vi.mock('@/lib/cloud/billing', () => ({
-  stripePriceId: mocks.stripePriceId,
-  stripeClient: () => ({ checkout: { sessions: { create: mocks.checkoutCreate } } }),
-}));
+vi.mock('@/lib/cloud/plans', () => ({ getOrganizationEntitlement: mocks.entitlement }));
+vi.mock('@/lib/cloud/workspaces', () => ({ requireOrganizationAdmin: mocks.organization }));
+vi.mock('@/lib/cloud/billing-checkout', () => ({ subscriptionCheckoutUrl: mocks.checkout }));
+vi.mock('@/lib/cloud/billing', () => ({ stripeClient: () => ({ billingPortal: { sessions: { create: mocks.portal } } }) }));
+import { startSubscription, startSubscriptionForm, openBillingPortalForm } from '@/app/dashboard/billing/actions';
 
-import { startSubscription, startSubscriptionForm } from '@/app/dashboard/billing/actions';
-
-describe('subscription checkout', () => {
+describe('billing actions and ownership', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.sessionPrincipal.mockResolvedValue({ organizationId: '00000000-0000-4000-8000-000000000001', role: 'owner' });
-    mocks.getOrganizationEntitlement.mockResolvedValue({ providerCustomerId: null, providerSubscriptionId: null });
-    mocks.stripePriceId.mockReturnValue('price_premium_annual');
-    mocks.checkoutCreate.mockResolvedValue({ url: 'https://checkout.stripe.com/session' });
-    mocks.requireOrganizationAdmin.mockResolvedValue({ role: 'owner' });
+    mocks.sessionPrincipal.mockResolvedValue({ organizationId: 'client-project', userId: 'owner', role: 'owner' });
+    mocks.entitlement.mockResolvedValue({ billingOrganizationId: 'shared-company', providerCustomerId: 'cus_existing' });
+    mocks.organization.mockResolvedValue({ role: 'owner' });
+    mocks.checkout.mockResolvedValue('https://checkout.stripe.com/session');
+    mocks.portal.mockResolvedValue({ url: 'https://billing.stripe.com/session' });
   });
-
-  it('bills the shared organization anchor when checkout starts inside a client project', async () => {
-    mocks.getOrganizationEntitlement.mockResolvedValue({ billingOrganizationId: 'shared-company', providerCustomerId: null, providerSubscriptionId: null });
-    await expect(startSubscription('operator', 'monthly')).rejects.toThrow('redirect:');
-    expect(mocks.checkoutCreate).toHaveBeenCalledWith(expect.objectContaining({ client_reference_id: 'shared-company', metadata: { organizationId: 'shared-company', plan: 'operator', interval: 'monthly' } }));
+  it('uses the shared billing organization when checkout starts inside a project', async () => {
+    await expect(startSubscription('premium', 'annual')).rejects.toThrow('redirect:');
+    expect(mocks.checkout).toHaveBeenCalledWith('shared-company', 'owner', 'premium', 'annual');
   });
-
-  it('does not let a project owner manage billing without organization ownership', async () => {
-    mocks.requireOrganizationAdmin.mockResolvedValue({ role: 'admin' });
+  it('checks organization ownership in addition to project ownership', async () => {
+    mocks.organization.mockResolvedValue({ role: 'admin' });
     await expect(startSubscription('operator', 'monthly')).rejects.toThrow('Only the workspace owner');
-    expect(mocks.checkoutCreate).not.toHaveBeenCalled();
+    expect(mocks.checkout).not.toHaveBeenCalled();
   });
-
-  it('starts Growth annual Checkout with a seven-day trial and organization metadata', async () => {
-    await expect(startSubscription('premium', 'annual')).rejects.toThrow('redirect:https://checkout.stripe.com/session');
-    expect(mocks.stripePriceId).toHaveBeenCalledWith('premium', 'annual');
-    expect(mocks.checkoutCreate).toHaveBeenCalledWith(expect.objectContaining({
-      mode: 'subscription',
-      line_items: [{ price: 'price_premium_annual', quantity: 1 }],
-      billing_address_collection: 'required',
-      metadata: expect.objectContaining({ plan: 'premium', interval: 'annual' }),
-      subscription_data: {
-        metadata: expect.objectContaining({ plan: 'premium', interval: 'annual' }),
-        trial_period_days: 7,
-      },
-    }));
-    const cancel = new URL(mocks.checkoutCreate.mock.calls[0]![0].cancel_url);
-    expect(cancel.searchParams.get('plan')).toBe('premium');
-    expect(cancel.searchParams.get('billing')).toBe('annual');
-    expect(cancel.searchParams.get('compare')).toBe('1');
+  it('rejects non-owners before starting checkout or a portal session', async () => {
+    mocks.sessionPrincipal.mockResolvedValue({ role: 'member' });
+    await expect(startSubscription('operator', 'monthly')).rejects.toThrow('Only the workspace owner');
+    await openBillingPortalForm({}, new FormData());
+    expect(mocks.checkout).not.toHaveBeenCalled(); expect(mocks.portal).not.toHaveBeenCalled();
   });
-
-  it('returns a retryable checkout error without exposing a provider error', async () => {
-    mocks.checkoutCreate.mockRejectedValueOnce(new Error('internal billing credential detail'));
+  it('validates the plan and interval before requesting checkout', async () => {
+    await expect(startSubscription('reader', 'monthly')).rejects.toThrow('Choose Pro');
+    await expect(startSubscription('operator', 'invalid' as never)).rejects.toThrow('Choose monthly');
+    expect(mocks.checkout).not.toHaveBeenCalled();
+  });
+  it('keeps provider errors private and permits retrying the form', async () => {
+    mocks.checkout.mockRejectedValueOnce(new Error('private provider detail'));
     expect(await startSubscriptionForm('premium', 'annual', {}, new FormData())).toEqual({ error: 'Checkout could not be opened. Please try again or contact support.' });
     expect(mocks.redirect).not.toHaveBeenCalled();
   });
-
-  it('keeps successful form checkout redirects outside error handling', async () => {
+  it('keeps successful redirects outside form error handling', async () => {
     await expect(startSubscriptionForm('premium', 'annual', {}, new FormData())).rejects.toThrow('redirect:https://checkout.stripe.com/session');
   });
-
-  it('allows a canceled customer to subscribe again without another free trial', async () => {
-    mocks.getOrganizationEntitlement.mockResolvedValue({ providerCustomerId: 'cus_returning', providerSubscriptionId: 'sub_canceled', status: 'canceled' });
-    await expect(startSubscription('premium', 'annual')).rejects.toThrow('redirect:');
-    const checkout = mocks.checkoutCreate.mock.calls[0]![0];
-    expect(checkout.customer).toBe('cus_returning');
-    expect(checkout.subscription_data).not.toHaveProperty('trial_period_days');
-  });
-
-  it.each(['active', 'trialing', 'past_due', 'incomplete', 'unpaid'])('prevents duplicate checkout for a %s subscription', async (status) => {
-    mocks.getOrganizationEntitlement.mockResolvedValue({ providerSubscriptionId: 'sub_existing', status });
-    await expect(startSubscription('premium', 'annual')).rejects.toThrow('billing portal');
-    expect(mocks.checkoutCreate).not.toHaveBeenCalled();
+  it('opens the configured portal for the billing customer', async () => {
+    await expect(openBillingPortalForm({}, new FormData())).rejects.toThrow('redirect:https://billing.stripe.com/session');
+    expect(mocks.portal).toHaveBeenCalledWith({ customer: 'cus_existing', configuration: 'bpc_expected', return_url: 'https://app.adport.dev/dashboard/billing' });
   });
 });
