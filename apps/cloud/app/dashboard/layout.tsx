@@ -16,7 +16,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const tenant = await requireDashboardTenant();
   if (!tenant.onboardingCompletedAt && ['owner', 'admin'].includes(tenant.role)) {
     const destination = safeDashboardReturnPath((await headers()).get(REQUEST_PATH_HEADER));
-    if (new URL(destination, 'https://adport.invalid').pathname !== '/dashboard/billing') {
+    if (!['/dashboard/billing', '/dashboard/preferences'].includes(new URL(destination, 'https://adport.invalid').pathname)) {
       redirect('/onboarding?return_to=' + encodeURIComponent(destination));
     }
   }

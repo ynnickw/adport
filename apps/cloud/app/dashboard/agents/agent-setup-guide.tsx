@@ -69,32 +69,36 @@ function AgentLogo({ provider }: { provider: Setup['provider'] }) {
   return <SiModelcontextprotocol aria-hidden="true" />;
 }
 
-function CopyButton({ value, label }: { value: string; label: string }) {
+function CopyButton({ value, label, prompt = false }: { value: string; label: string; prompt?: boolean }) {
   const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   async function copy() {
-    await navigator.clipboard.writeText(value);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1800);
+    setFailed(false);
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch { setFailed(true); }
   }
 
   return (
-    <Button className="setup-copy" type="button" onClick={copy} aria-label={`Copy ${label} setup`}>
-      {copied ? 'Copied' : 'Copy setup'}
+    <Button className="setup-copy" type="button" onClick={() => void copy()} aria-label={prompt ? 'Copy first prompt' : `Copy ${label} setup`}>
+      {failed ? 'Select text to copy' : copied ? 'Copied' : prompt ? 'Copy prompt' : 'Copy setup'}
     </Button>
   );
 }
 
-export function AgentSetupGuide({ baseUrl, initialSelectedId, onSelectionChange }: { baseUrl: string; initialSelectedId?: string; onSelectionChange?: (id: string) => void }) {
+export function AgentSetupGuide({ baseUrl, initialSelectedId, onSelectionChange, variant = 'default' }: { baseUrl: string; initialSelectedId?: string; onSelectionChange?: (id: string) => void; variant?: 'default' | 'onboarding' }) {
   const [selectedId, setSelectedId] = useState(initialSelectedId ?? AGENT_SETUPS[0]!.id);
   const selected = AGENT_SETUPS.find((setup) => setup.id === selectedId) ?? AGENT_SETUPS[0]!;
   const command = selected.command(baseUrl);
 
   return (
-    <section className="card agent-setup-card">
+    <section className={'card agent-setup-card' + (variant === 'onboarding' ? ' onboarding-agent-setup' : '')}>
       <div className="card-head">
         <div>
-          <h2>Connect your agent</h2>
+          <h2>{variant === 'onboarding' ? 'Which assistant do you use?' : 'Connect your agent'}</h2>
           <p className="card-kicker">Choose a client. Only its recommended setup is shown.</p>
         </div>
         <span className="status">OAuth recommended</span>
@@ -121,12 +125,12 @@ export function AgentSetupGuide({ baseUrl, initialSelectedId, onSelectionChange 
           </div>
           <div className="setup-code-wrap">
             <pre className="setup-code"><code>{command}</code></pre>
-            <CopyButton value={command} label={selected.name} />
+            <CopyButton key={selected.id} value={command} label={selected.name} />
           </div>
         </article>
 
         <aside className="setup-practice">
-          <div><strong>Safe first prompt</strong><p>“List my accessible ad accounts and summarize the last 7 days. Do not make any changes.”</p></div>
+          <div><strong>Your first question</strong><p>“List my accessible ad accounts and summarize the last 7 days. Do not make any changes.”</p>{variant === 'onboarding' ? <CopyButton prompt value="List my accessible ad accounts and summarize the last 7 days. Do not make any changes." label="first prompt" /> : null}</div>
           <ul>
             <li>Prefer OAuth MCP; never paste platform secrets into a chat.</li>
             <li>Review the exact preview before applying any write.</li>

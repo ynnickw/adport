@@ -10,6 +10,7 @@ export function Dialog({ title, children, onClose, className = '' }: { title: st
     const previous = document.activeElement as HTMLElement | null;
     const dialog = ref.current;
     dialog?.showModal();
+    dialog?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
     return () => { dialog?.close(); previous?.focus(); };
   }, []);
   return <dialog ref={ref} className={`app-dialog ${className}`} aria-labelledby={titleId}

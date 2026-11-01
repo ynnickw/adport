@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation';
-import { BrandLockup } from '@/components/logos';
 import { canAdminister, requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { getOnboardingState } from '@/lib/cloud/onboarding';
 import { getOrganizationEntitlement } from '@/lib/cloud/plans';
@@ -13,11 +12,12 @@ import { ProjectSwitcher } from '@/components/project-switcher';
 import { ProductAnalytics } from '@/components/product-analytics';
 import { getOrganizationUsage } from '@/lib/cloud/usage';
 import { safeDashboardReturnPath } from '@/lib/return-path';
+import { SupportWidget } from '@/components/support-widget';
 
 export const metadata = { title: 'Set up Adport' };
 export const dynamic = 'force-dynamic';
 
-export default async function OnboardingPage({ searchParams }: { searchParams: Promise<{ connected?: string; accounts_saved?: string; error?: string; return_to?: string; step?: string }> }) {
+export default async function OnboardingPage({ searchParams }: { searchParams: Promise<{ connected?: string; accounts_saved?: string; error?: string; return_to?: string; step?: string; resume?: string }> }) {
   const tenant = await requireDashboardTenant();
   const [state, connections, accounts, entitlement, params, usage] = await Promise.all([
     getOnboardingState(tenant.organizationId),
@@ -28,16 +28,18 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
     getOrganizationUsage(tenant.organizationId),
   ]);
   const returnTo = safeDashboardReturnPath(params.return_to ?? null);
-  if (state.completedAt || !canAdminister(tenant)) redirect(returnTo);
+  if ((state.completedAt && params.resume !== '1') || !canAdminister(tenant)) redirect(returnTo);
   const availability = oauthAvailability(tenant.organizationId);
   const providers: OAuthProviderView[] = OAUTH_PROVIDERS.map((id) => ({ id, available: availability[id] }));
   return (
     <main className="onboarding-page">
       <ProductAnalytics key={`${tenant.userId}:${tenant.organizationId}`} />
-      <header className="onboarding-head"><BrandLockup /><span>{tenant.organizationName}</span></header>
-      {tenant.projects.length > 1 ? <div className="onboarding-stage"><ProjectSwitcher projects={tenant.projects} currentProjectId={tenant.organizationId} /></div> : null}
       <OnboardingFlow key={tenant.organizationId + ':' + (params.step === 'connect' ? 'connect' : '')}
         organizationId={tenant.organizationId}
+        projectName={tenant.organizationName}
+        setupKind={usage.projects > 1 ? 'new_project' : 'first_project'}
+        projectSwitcher={tenant.projects.length > 1 ? <ProjectSwitcher projects={tenant.projects} currentProjectId={tenant.organizationId} /> : undefined}
+        resuming={params.resume === '1'}
         canManage={canAdminister(tenant)}
         initialStep={params.step === 'connect' ? 'connect' : state.currentStep}
         initialAgent={state.selectedAgent}
@@ -60,6 +62,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
         organizationActiveCount={usage.enabledAccounts}
         returnTo={returnTo}
       />
+      <SupportWidget />
     </main>
   );
 }

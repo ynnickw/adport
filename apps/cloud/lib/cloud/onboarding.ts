@@ -32,7 +32,7 @@ function requireOnboardingAdmin(principal: TenantPrincipal): void {
 
 export async function updateOnboardingState(
   principal: TenantPrincipal,
-  input: { currentStep: OnboardingStep; selectedAgent?: OnboardingAgent; complete?: boolean },
+  input: { currentStep: OnboardingStep; selectedAgent?: OnboardingAgent; complete?: boolean; skip?: boolean },
 ): Promise<void> {
   requireOnboardingAdmin(principal);
   try {
@@ -47,14 +47,14 @@ export async function updateOnboardingState(
 
 async function saveOnboardingState(
   organizationId: string,
-  input: { currentStep: OnboardingStep; selectedAgent?: OnboardingAgent; complete?: boolean },
+  input: { currentStep: OnboardingStep; selectedAgent?: OnboardingAgent; complete?: boolean; skip?: boolean },
 ): Promise<void> {
   await db()`
     insert into public.organization_onboarding (organization_id, current_step, selected_agent, completed_at)
-    values (${organizationId}, ${input.currentStep}, ${input.selectedAgent ?? null}, ${input.complete ? new Date() : null})
+    values (${organizationId}, ${input.currentStep}, ${input.selectedAgent ?? null}, ${input.complete || input.skip ? new Date() : null})
     on conflict (organization_id) do update set
       current_step = excluded.current_step,
       selected_agent = coalesce(excluded.selected_agent, organization_onboarding.selected_agent),
-      completed_at = case when ${input.complete ?? false} then now() else organization_onboarding.completed_at end
+      completed_at = case when ${Boolean(input.complete || input.skip)} then now() else organization_onboarding.completed_at end
   `;
 }

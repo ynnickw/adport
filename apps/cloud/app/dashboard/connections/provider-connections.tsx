@@ -27,12 +27,13 @@ export interface OAuthProviderView {
   available: boolean;
 }
 
-export function ProviderConnections({ organizationId, canManage, connections, oauthProviders, returnTo }: {
+export function ProviderConnections({ organizationId, canManage, connections, oauthProviders, returnTo, variant = 'settings' }: {
   organizationId: string;
   canManage: boolean;
   connections: ConnectionView[];
   oauthProviders: OAuthProviderView[];
   returnTo?: string;
+  variant?: 'settings' | 'onboarding';
 }) {
   const router = useRouter();
   const [confirm, confirmationDialog] = useConfirm();
@@ -69,7 +70,7 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
   }
 
   return (
-    <section aria-label="Provider connections">
+    <section aria-label="Provider connections" className={variant === 'onboarding' ? 'onboarding-platforms' : undefined}>
       {confirmationDialog}
       {!canManage ? <p className="inline-note">Owners and admins manage connections.</p> : null}
       {!visibleProviders.length ? <div className="card"><div className="empty"><h2>Platform connections are temporarily unavailable</h2><p>{canManage ? 'You can finish setup now and connect your accounts later. Contact support if this continues.' : 'Ask your organization owner or an admin to connect an ad platform.'}</p></div></div> : <>
@@ -81,7 +82,7 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
         const message = notice[provider.id];
         const startHref = `/api/oauth/${provider.id}/start?organization_id=${organizationId}${returnTo ? `&return_to=${encodeURIComponent(returnTo)}` : ''}`;
         return (
-          <li className="connection-row" id={'platform-' + provider.id} key={provider.id} aria-label={providerLabel(provider.id)}>
+          <li className="connection-row" data-connected={Boolean(connection)} id={'platform-' + provider.id} key={provider.id} aria-label={providerLabel(provider.id)}>
             <Provider name={provider.id} />
             <div className="connection-status">
               {connection?.accountSelectionId && connection.status === 'connected' ? <span className={'status ' + (connection.accountSelectionUnavailable ? 'warn' : 'neutral')}>{connection.accountSelectionUnavailable ? 'Restart selection' : 'Choose accounts'}</span> : connection ? <StatusPill status={connection.status} /> : <span className="status neutral">{provider.available ? 'Not connected' : 'Unavailable'}</span>}
@@ -103,7 +104,7 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
                   {!connection && provider.available ? <OAuthPopupLink className="button" label={`Connect ${providerLabel(provider.id)}`} href={startHref}>Connect</OAuthPopupLink> : null}
                   {connection?.accountSelectionId && connection.status === 'connected' && !connection.accountSelectionUnavailable ? <a className="button secondary" href={'/account-selection?selection_id=' + connection.accountSelectionId}>Choose accounts</a>
                     : connection && provider.available ? <OAuthPopupLink className="button secondary" label={`${connection.status !== 'connected' ? 'Reconnect' : connection.accountSelectionUnavailable ? 'Restart selection for' : 'Change accounts for'} ${providerLabel(provider.id)}`} href={startHref}>{connection.status !== 'connected' ? 'Reconnect' : connection.accountSelectionUnavailable ? 'Restart selection' : 'Change accounts'}</OAuthPopupLink> : null}
-                  {connection ? <Button className="button secondary small" aria-label={`Disconnect ${providerLabel(provider.id)}`} type="button" disabled={busy === provider.id} onClick={() => void disconnect(provider.id, shortLabel(provider.id))}>{busy === provider.id ? 'Disconnecting…' : 'Disconnect'}</Button> : null}
+                  {connection && variant !== 'onboarding' ? <Button className="button secondary small" aria-label={`Disconnect ${providerLabel(provider.id)}`} type="button" disabled={busy === provider.id} onClick={() => void disconnect(provider.id, shortLabel(provider.id))}>{busy === provider.id ? 'Disconnecting…' : 'Disconnect'}</Button> : null}
                 </>
               ) : null
             ) : (

@@ -6,7 +6,7 @@ const plan = z.enum(['reader', 'operator', 'premium', 'agency', 'enterprise']);
 export const productEventSchema = z.discriminatedUnion('event', [
   z.object({ event: z.literal('analytics_enabled') }).strict(),
   z.object({ event: z.literal('dashboard_viewed'), page: z.enum(ANALYTICS_PAGES) }).strict(),
-  z.object({ event: z.literal('onboarding_progressed'), step: z.enum(['welcome', 'connect', 'accounts', 'agent', 'complete']), complete: z.boolean(), agent: z.enum(['chatgpt', 'codex', 'claude-code', 'claude', 'cursor', 'mcp']).optional() }).strict(),
+  z.object({ event: z.literal('onboarding_progressed'), step: z.enum(['welcome', 'connect', 'accounts', 'agent', 'complete']), complete: z.boolean(), skipped: z.boolean().optional(), setup_kind: z.enum(['first_project', 'new_project']).optional(), agent: z.enum(['chatgpt', 'codex', 'claude-code', 'claude', 'cursor', 'mcp']).optional() }).strict(),
   z.object({ event: z.literal('provider_connection_started'), provider }).strict(),
   z.object({ event: z.literal('provider_connection_verified'), provider }).strict(),
   z.object({ event: z.literal('provider_connection_failed'), provider, stage: z.enum(['authorization', 'verification']) }).strict(),
