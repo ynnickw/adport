@@ -22,6 +22,15 @@ export interface OAuthGrantSummary {
   status: 'active' | 'rotated' | 'revoked' | 'expired';
 }
 
+function AssistantConnection({ grant, checkedAt }: { grant: OAuthGrantSummary; checkedAt: number }) {
+  return <div className="row-item assistant-connection">
+    <AgentIdentityLogo name={grant.clientName} /><div className="assistant-connection-details">
+      <div className="agent-identity"><strong>{grant.clientName}</strong><span className={'status' + (grant.status === 'active' && grant.lastUsedAt ? '' : ' neutral')}>{grant.status === 'active' ? grant.lastUsedAt ? 'In use' : 'Authorized' : grant.status === 'revoked' ? 'Disconnected' : 'Sign in again'}</span><InfoTooltip label={`Connection details for ${grant.clientName}`}>Access: {grant.scopes.includes('tools:write') ? 'Read and propose changes' : 'Read only'}. Authorized {formatDate(grant.createdAt)}. Sign-in expires {formatDate(grant.expiresAt)}.</InfoTooltip></div>
+      <p className="cell-sub">{grant.status === 'active' ? grant.lastUsedAt ? `Last reached Adport ${formatRelative(grant.lastUsedAt, checkedAt)}` : 'Authorized, waiting for its first request.' : 'Reconnect from your assistant to authorize this project again.'}</p>
+    </div>
+  </div>;
+}
+
 export function ApiKeyManager({ organizationId, canManage, baseUrl, initialGrants, initialCheckedAt, setup }: { organizationId: string; canManage: boolean; baseUrl: string; initialGrants: OAuthGrantSummary[]; initialCheckedAt: number; setup: ReactNode }) {
   const [checking, setChecking] = useState(false);
   const [checkedAt, setCheckedAt] = useState(initialCheckedAt);
@@ -97,20 +106,26 @@ export function ApiKeyManager({ organizationId, canManage, baseUrl, initialGrant
     catch { setError('Could not copy the key. Use Show key to copy it manually.'); }
   }
 
+  const activeGrants = oauthGrants.filter(grant => grant.status === 'active').sort((a, b) =>
+    Number(Boolean(b.lastUsedAt)) - Number(Boolean(a.lastUsedAt)) || Date.parse(b.lastUsedAt ?? b.createdAt) - Date.parse(a.lastUsedAt ?? a.createdAt));
+  const previousGrants = oauthGrants.filter(grant => grant.status !== 'active').sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  const connectionRows = (grants: OAuthGrantSummary[]) => grants.map(grant => <AssistantConnection key={`${grant.clientId}:${grant.userId}:${grant.resource}`} grant={grant} checkedAt={checkedAt} />);
+
   const connectionPanel = (
     <section className="card assistant-connections" id="connected-assistants" aria-label="Connected assistants">
       <div className="card-head"><div><h2>Connected assistants</h2><p className="card-kicker">Connections authorized for this project.</p></div><Button type="button" className="button secondary small" disabled={checking || busy} onClick={() => void load()}>{checking ? 'Checking…' : 'Refresh status'}</Button></div>
       {connectionError ? <div className="card-body"><div className="error-callout" role="alert">{connectionError}</div></div> : null}
       <div className="row-list">
-        {!connectionError && oauthGrants === undefined ? <div className="row-item"><span className="inline-note">Checking your connections…</span></div> : null}
-        {oauthGrants?.length === 0 ? <div className="assistant-connections-empty"><strong>No assistant connected yet</strong><p>Follow the setup above, then refresh here. Your assistant appears after you sign in and authorize Adport.</p></div> : null}
-        {oauthGrants?.map(grant => <div className="row-item assistant-connection" key={`${grant.clientId}:${grant.userId}:${grant.resource}`}>
-          <AgentIdentityLogo name={grant.clientName} /><div className="assistant-connection-details">
-            <div className="agent-identity"><strong>{grant.clientName}</strong><span className={'status' + (grant.status === 'active' && grant.lastUsedAt ? '' : ' neutral')}>{grant.status === 'active' ? grant.lastUsedAt ? 'In use' : 'Authorized' : grant.status === 'revoked' ? 'Disconnected' : 'Sign in again'}</span><InfoTooltip label={`Connection details for ${grant.clientName}`}>Access: {grant.scopes.includes('tools:write') ? 'Read and propose changes' : 'Read only'}. Authorized {formatDate(grant.createdAt)}. Sign-in expires {formatDate(grant.expiresAt)}.</InfoTooltip></div>
-            <p className="cell-sub">{grant.status === 'active' ? grant.lastUsedAt ? `Last reached Adport ${formatRelative(grant.lastUsedAt, checkedAt)}` : 'Authorized, waiting for its first request.' : 'Reconnect from your assistant to authorize this project again.'}</p>
-          </div>
-        </div>)}
+        {!activeGrants.length ? <div className="assistant-connections-empty"><strong>{oauthGrants.length ? 'No active assistant connections' : 'No assistant connected yet'}</strong><p>{oauthGrants.length ? 'Reconnect from your assistant, or follow the setup above to connect again.' : 'Follow the setup above, then refresh here. Your assistant appears after you sign in and authorize Adport.'}</p></div> : null}
+        {connectionRows(activeGrants.slice(0, 3))}
       </div>
+      {activeGrants.length > 3 ? <Disclosure className="assistant-connection-group" label={`More current connections (${activeGrants.length - 3})`}>
+        <div className="row-list">{connectionRows(activeGrants.slice(3))}</div>
+      </Disclosure> : null}
+      {previousGrants.length ? <Disclosure className="assistant-connection-group" label={`Previous connections (${previousGrants.length})`}>
+        <p className="assistant-history-note">Expired, replaced, or disconnected sign-ins.</p>
+        <div className="row-list">{connectionRows(previousGrants)}</div>
+      </Disclosure> : null}
       <p className="assistant-checked" role="status">Last checked {formatDate(new Date(checkedAt))}. Refreshes when you return to this tab.</p>
     </section>
   );
