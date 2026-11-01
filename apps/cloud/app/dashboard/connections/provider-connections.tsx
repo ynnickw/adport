@@ -9,6 +9,7 @@ import { providerLabel } from '@/lib/cloud/providers';
 import type { OAuthProvider } from '@/lib/cloud/types';
 import { OAuthPopupLink } from '@/components/oauth-popup-link';
 import { useConfirm } from '@/components/use-confirm';
+import { InfoTooltip } from '@/components/info-tooltip';
 
 export interface ConnectionView {
   provider: string;
@@ -18,6 +19,7 @@ export interface ConnectionView {
   connectedAt: string;
   lastVerifiedAt: string | null;
   accountSelectionId?: string | null;
+  accountSelectionUnavailable?: boolean;
 }
 
 export interface OAuthProviderView {
@@ -36,13 +38,14 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
   const [confirm, confirmationDialog] = useConfirm();
   const [busy, setBusy] = useState<string>();
   const [notice, setNotice] = useState<Partial<Record<string, { error?: string; success?: string }>>>({});
+  const visibleProviders = oauthProviders.filter(provider => provider.available || find(provider.id)).sort((a, b) => Number(!find(a.id)) - Number(!find(b.id)));
 
   function find(provider: string): ConnectionView | undefined {
     return connections.find((connection) => connection.provider === provider);
   }
 
   async function disconnect(provider: string, label: string) {
-    const prompt = `Disconnect ${label}? Adport will revoke its grant at the provider where the API allows it and delete the encrypted token.`;
+    const prompt = `Remove ${label} and its accounts from this project? Adport and connected assistants will lose access. Your campaigns keep running. You can reconnect later.`;
     if (!await confirm({ title: `Disconnect ${label}?`, description: prompt, confirmLabel: 'Disconnect' })) return;
     setBusy(provider);
     setNotice((current) => ({ ...current, [provider]: {} }));
@@ -69,22 +72,24 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
     <section aria-label="Provider connections">
       {confirmationDialog}
       {!canManage ? <p className="inline-note">Owners and admins manage connections.</p> : null}
+      {!visibleProviders.length ? <div className="card"><div className="empty"><h2>Platform connections are temporarily unavailable</h2><p>{canManage ? 'You can finish setup now and connect your accounts later. Contact support if this continues.' : 'Ask your organization owner or an admin to connect an ad platform.'}</p></div></div> : <>
       <div className="connection-list">
       <div className="connection-list-heading" aria-hidden="true"><span>Platform</span><span>Status</span><span>Accounts</span><span>Actions</span></div>
       <ul className="connection-rows" role="list">
-      {oauthProviders.map((provider) => {
+      {visibleProviders.map((provider) => {
         const connection = find(provider.id);
         const message = notice[provider.id];
         const startHref = `/api/oauth/${provider.id}/start?organization_id=${organizationId}${returnTo ? `&return_to=${encodeURIComponent(returnTo)}` : ''}`;
         return (
-          <li className="connection-row" key={provider.id} aria-label={providerLabel(provider.id)}>
+          <li className="connection-row" id={'platform-' + provider.id} key={provider.id} aria-label={providerLabel(provider.id)}>
             <Provider name={provider.id} />
-            <div className="connection-status" title={connection ? `Last verified: ${formatDate(connection.lastVerifiedAt ?? connection.connectedAt)}` : undefined}>
-              {connection?.accountSelectionId && connection.status === 'connected' ? <span className="status neutral">Choose accounts</span> : connection ? <StatusPill status={connection.status} /> : <span className="status neutral">{provider.available ? 'Not connected' : 'Unavailable'}</span>}
+            <div className="connection-status">
+              {connection?.accountSelectionId && connection.status === 'connected' ? <span className={'status ' + (connection.accountSelectionUnavailable ? 'warn' : 'neutral')}>{connection.accountSelectionUnavailable ? 'Restart selection' : 'Choose accounts'}</span> : connection ? <StatusPill status={connection.status} /> : <span className="status neutral">{provider.available ? 'Not connected' : 'Unavailable'}</span>}
+              {connection ? <InfoTooltip label={'Connection details for ' + providerLabel(provider.id)}>Last verified {formatDate(connection.lastVerifiedAt ?? connection.connectedAt)}. Connecting a platform and enabling individual accounts are separate steps.</InfoTooltip> : null}
             </div>
             <div className="connection-accounts">
               {connection?.accountSelectionId && connection.status === 'connected' ? (
-                canManage ? <a href={`/account-selection?selection_id=${connection.accountSelectionId}`}>Finish selection</a> : <span>Selection pending</span>
+                canManage && !connection.accountSelectionUnavailable ? <a href={`/account-selection?selection_id=${connection.accountSelectionId}`}>Finish selection</a> : <span>{connection.accountSelectionUnavailable ? 'New authorization needed' : 'Selection pending'}</span>
               ) : connection?.status === 'connected' ? (
                 <a href={`/dashboard/accounts?select_provider=${provider.id}`} aria-label={`View ${providerLabel(provider.id)} accounts`}>
                   {accountSummary(connection.externalLabel)}
@@ -96,8 +101,9 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
               connection || provider.available ? (
                 <>
                   {!connection && provider.available ? <OAuthPopupLink className="button" label={`Connect ${providerLabel(provider.id)}`} href={startHref}>Connect</OAuthPopupLink> : null}
-                  {connection && provider.available ? <OAuthPopupLink className="button secondary" label={`${connection.status !== 'connected' ? 'Reconnect' : 'Re-authorize'} ${providerLabel(provider.id)}`} href={startHref}>{connection.status !== 'connected' ? 'Reconnect' : 'Re-authorize'}</OAuthPopupLink> : null}
-                  {connection ? <Button className="button danger" aria-label={`Disconnect ${providerLabel(provider.id)}`} type="button" disabled={busy === provider.id} onClick={() => void disconnect(provider.id, shortLabel(provider.id))}>{busy === provider.id ? 'Working…' : 'Disconnect'}</Button> : null}
+                  {connection?.accountSelectionId && connection.status === 'connected' && !connection.accountSelectionUnavailable ? <a className="button secondary" href={'/account-selection?selection_id=' + connection.accountSelectionId}>Choose accounts</a>
+                    : connection && provider.available ? <OAuthPopupLink className="button secondary" label={`${connection.status !== 'connected' ? 'Reconnect' : connection.accountSelectionUnavailable ? 'Restart selection for' : 'Change accounts for'} ${providerLabel(provider.id)}`} href={startHref}>{connection.status !== 'connected' ? 'Reconnect' : connection.accountSelectionUnavailable ? 'Restart selection' : 'Change accounts'}</OAuthPopupLink> : null}
+                  {connection ? <Button className="button secondary small" aria-label={`Disconnect ${providerLabel(provider.id)}`} type="button" disabled={busy === provider.id} onClick={() => void disconnect(provider.id, shortLabel(provider.id))}>{busy === provider.id ? 'Disconnecting…' : 'Disconnect'}</Button> : null}
                 </>
               ) : null
             ) : (
@@ -105,6 +111,7 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
             )}
             </div>
             {connection?.status === 'error' ? <div className="error-callout connection-feedback" role="alert">{connection.lastError ?? 'Verification failed. Reconnect to retry.'}</div> : null}
+            {connection?.accountSelectionUnavailable && !provider.available ? <div className="error-callout connection-feedback" role="alert">This platform connection needs to be restarted, but new authorization is currently unavailable. Contact support.</div> : null}
             {message?.error ? <div className="error-callout connection-feedback" role="alert">{message.error}</div> : null}
             {message?.success ? <div className="callout success connection-feedback" role="status">{message.success}</div> : null}
           </li>
@@ -112,6 +119,7 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
       })}
       </ul>
       </div>
+      </>}
     </section>
   );
 }

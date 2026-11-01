@@ -30,7 +30,7 @@ describe('one-time account picker', () => {
       pages={[{ id: '123', name: 'Managed Page', category: 'Software' }]} />);
     expect(html).toContain('Facebook Pages'); expect(html).toContain('Allow Page Managed Page (123)');
     expect(html).toContain('0 of 1 selected'); expect(html).not.toContain('checked=""');
-    expect(html).toContain('Save accounts and Pages'); expect(html).toContain('does not link');
+    expect(html).toContain('Save accounts and Pages'); expect(html).toContain('About Page access');
   });
 
   it('explains that an empty Page selection grants no Page access', () => {
@@ -56,7 +56,7 @@ describe('one-time account picker', () => {
       accounts={[{ provider, id: 'a', name: 'Only account', currency: 'EUR' }]} initialSelectedIds={[]} />);
     expect(html).toContain('Only account'); expect(html).toContain('EUR'); expect(html).toContain('Add account');
     expect(html).not.toContain('type="checkbox"'); expect(html).not.toContain('Select all'); expect(html).not.toContain('Search accounts');
-    expect(html).toContain('stay inactive'); expect(mocks.save).not.toHaveBeenCalled();
+    expect(html).toContain('stay disabled'); expect(mocks.save).not.toHaveBeenCalled();
   });
 
   it('allows new users to select accounts before onboarding is completed', async () => {

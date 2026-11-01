@@ -10,7 +10,16 @@ export async function GET(request: Request) {
   if (code) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) return NextResponse.redirect(new URL('/login?error=Authentication+link+is+invalid+or+expired', env().ADPORT_CLOUD_BASE_URL));
+    if (error) {
+      const target = new URL(returnTo, env().ADPORT_CLOUD_BASE_URL);
+      if (target.pathname === '/auth/reset-password') {
+        target.searchParams.set('error', 'invalid');
+        return NextResponse.redirect(target);
+      }
+      const query = new URLSearchParams({ error: 'Authentication link is invalid or expired' });
+      if (returnTo !== '/dashboard') query.set('return_to', returnTo);
+      return NextResponse.redirect(new URL('/login?' + query, env().ADPORT_CLOUD_BASE_URL));
+    }
   }
   return NextResponse.redirect(new URL(returnTo, env().ADPORT_CLOUD_BASE_URL));
 }

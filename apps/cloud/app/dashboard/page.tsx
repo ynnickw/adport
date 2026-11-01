@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { Empty, PageHeader, Provider, StatusPill } from '@/components/ui';
 import { providerLabel } from '@/components/logos';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
-import { listConnections, listPendingOperations } from '@/lib/cloud/repository';
+import { listConnections, listPendingOperations, listOrganizationAdAccounts } from '@/lib/cloud/repository';
+import { PendingAccountSelections } from '@/components/pending-account-selections';
 import { LiveData } from './live-data';
 import { isSyntheticReviewer } from '@/lib/cloud/synthetic-reviewer';
 import { SyntheticReviewer } from '@/components/synthetic-reviewer';
@@ -12,12 +13,16 @@ export const metadata = { title: 'Overview' };
 export default async function OverviewPage() {
   const tenant = await requireDashboardTenant();
   if (isSyntheticReviewer(tenant.organizationId)) return <SyntheticReviewer tenant={tenant} />;
-  const [connections, pending] = await Promise.all([
-    listConnections(tenant.organizationId),
+  const [connections, pending, accounts] = await Promise.all([
+    listConnections(tenant.organizationId, tenant.userId),
     listPendingOperations(tenant.organizationId, 5),
+    listOrganizationAdAccounts(tenant.organizationId),
   ]);
   const connected = connections.filter((connection) => connection.status === 'connected');
   const broken = connections.filter((connection) => connection.status === 'error');
+  const usableAccounts = accounts.filter(account => account.enabled && connected.some(connection => connection.provider === account.provider && !connection.accountSelectionId));
+  const selectionPending = connected.some(connection => connection.accountSelectionId);
+  const canManage = ['owner', 'admin'].includes(tenant.role);
   return (
     <main className="page">
       <PageHeader
@@ -29,9 +34,9 @@ export default async function OverviewPage() {
         <div className="card">
           <Empty
             title="Connect your first platform"
-            copy="Bring your ad accounts into this project to see campaign performance and use them with your AI assistant."
-            href="/dashboard/connections"
-            action="Connect a platform"
+            copy={canManage ? 'Bring your ad accounts into this project to see campaign performance and use them with your AI assistant.' : 'A project owner or admin needs to connect the first ad platform.'}
+            href={canManage ? '/dashboard/connections' : undefined}
+            action={canManage ? 'Connect a platform' : undefined}
           />
         </div>
       ) : (
@@ -54,7 +59,12 @@ export default async function OverviewPage() {
               ))}
             </section>
           ) : null}
-          <LiveData key={tenant.organizationId} organizationId={tenant.organizationId} connected={connected.length > 0} />
+          <PendingAccountSelections connections={connections} canManage={canManage} />
+          {!usableAccounts.length && !selectionPending ? <section className="setup-next-step">
+            <div><strong>{accounts.length ? 'Enable account access to get started' : 'Choose your ad accounts'}</strong><p>{canManage ? accounts.length ? 'Your platforms are connected. Choose which accounts Adport can use.' : 'The connection is ready. Add the accounts you want to use in this project.' : 'Ask a project owner or admin to make accounts available.'}</p></div>
+            <Link className="button secondary small" href={accounts.length ? '/dashboard/accounts' : '/dashboard/connections'}>{accounts.length ? 'Open accounts' : 'Choose accounts'}</Link>
+          </section> : null}
+          {usableAccounts.length ? <LiveData key={tenant.organizationId} organizationId={tenant.organizationId} connected /> : null}
             <section className="card" style={{ marginTop: '1rem' }}>
               <div className="card-head"><h2>Platforms</h2><Link className="card-note" href="/dashboard/connections" prefetch={false}>Manage</Link></div>
               <div className="card-body stack">

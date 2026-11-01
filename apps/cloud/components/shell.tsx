@@ -11,6 +11,7 @@ export interface ShellTenant {
   email: string;
   role: string;
   projectSwitcher?: React.ReactNode;
+  planUsage?: React.ReactNode;
 }
 
 export function Shell({ tenant, pendingApprovals = 0, children }: { tenant: ShellTenant; pendingApprovals?: number; children: React.ReactNode }) {
@@ -22,7 +23,7 @@ export function Shell({ tenant, pendingApprovals = 0, children }: { tenant: Shel
         workspace={tenant.projectSwitcher ?? tenant.organizationName}
       >
         <Nav pendingApprovals={pendingApprovals} />
-        <div className="sidebar-lower"><UtilityNav /></div>
+        <div className="sidebar-lower">{tenant.planUsage}<UtilityNav /></div>
         <div className="sidebar-foot">
           <div className="user">
             <span className="avatar" aria-hidden="true">{tenant.userName.slice(0, 1).toUpperCase()}</span>

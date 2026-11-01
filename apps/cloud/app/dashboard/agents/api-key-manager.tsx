@@ -28,6 +28,9 @@ export function ApiKeyManager({ organizationId, canManage }: { organizationId: s
   const [name, setName] = useState('');
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<string>();
+  const [copied, setCopied] = useState(false);
+  const [revealed, setRevealed] = useState(false);
   const [confirm, confirmationDialog] = useConfirm();
 
   async function load() {
@@ -47,6 +50,7 @@ export function ApiKeyManager({ organizationId, canManage }: { organizationId: s
 
   async function create() {
     setBusy(true);
+    setBusyAction('create'); setCopied(false); setRevealed(false);
     setError(undefined);
     try {
       const response = await fetch('/api/api-keys', {
@@ -61,18 +65,25 @@ export function ApiKeyManager({ organizationId, canManage }: { organizationId: s
       setError('Could not create the key. Check your connection and try again.');
     } finally {
       setBusy(false);
+      setBusyAction(undefined);
     }
   }
 
   async function revoke(id: string) {
     if (!await confirm({ title: 'Revoke API key?', description: 'Connected agents lose access immediately.', confirmLabel: 'Revoke key' })) return;
-    setBusy(true); setError(undefined);
+    setBusy(true); setBusyAction(id); setError(undefined);
     try {
       const response = await fetch(`/api/api-keys/${id}?organization_id=${organizationId}`, { method: 'DELETE' });
       if (!response.ok) setError('Unable to revoke API key.');
       else await load();
     } catch { setError('Could not revoke the key. Check your connection and try again.'); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setBusyAction(undefined); }
+  }
+
+  async function copyKey() {
+    if (!createdKey) return;
+    try { await navigator.clipboard.writeText(createdKey); setCopied(true); }
+    catch { setError('Could not copy the key. Use Show key to copy it manually.'); }
   }
 
   return (
@@ -81,7 +92,8 @@ export function ApiKeyManager({ organizationId, canManage }: { organizationId: s
       {createdKey ? (
         <div className="card-body" style={{ paddingBottom: 0 }}>
           <div className="callout success" role="status">Copy this key now. It is shown only once.</div>
-          <div className="code secret-reveal">{createdKey}</div>
+          <Input type={revealed ? 'text' : 'password'} value={createdKey} readOnly aria-label="New API key" autoComplete="off" />
+          <div className="row-actions secret-key-actions"><Button type="button" className="button secondary small" onClick={() => void copyKey()}>{copied ? 'Copied' : 'Copy key'}</Button><Button type="button" className="link-button" onClick={() => setRevealed(value => !value)}>{revealed ? 'Hide key' : 'Show key'}</Button><Button type="button" className="link-button" onClick={() => { setCreatedKey(undefined); setCopied(false); setRevealed(false); }}>Done</Button></div>
         </div>
       ) : null}
       {error ? <div className="card-body" style={{ paddingBottom: 0 }}><div className="error-callout" role="alert" style={{ marginBottom: 0 }}>{error} <Button type="button" className="button secondary small" disabled={busy} onClick={() => void load()}>Retry list</Button></div></div> : null}
@@ -104,7 +116,7 @@ export function ApiKeyManager({ organizationId, canManage }: { organizationId: s
               <strong>{key.name}</strong>
               <div className="cell-sub">{key.keyPrefix}… · created {formatDate(key.createdAt)} · {key.lastUsedAt ? `last used ${formatDate(key.lastUsedAt)}` : 'never used'}</div>
             </div>
-            {canManage ? <Button className="button danger small" disabled={busy} onClick={() => void revoke(key.id)}>Revoke</Button> : null}
+            {canManage ? <Button className="button danger small" disabled={busy} onClick={() => void revoke(key.id)}>{busyAction === key.id ? 'Revoking…' : 'Revoke'}</Button> : null}
           </div>
         ))}
       </div>
@@ -112,7 +124,7 @@ export function ApiKeyManager({ organizationId, canManage }: { organizationId: s
         <div className="card-body" style={{ borderTop: '1px solid var(--line-soft)' }}>
           <div className="form-row">
             <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Key name, e.g. Claude Desktop" aria-label="Key name" style={{ flex: 1, minWidth: '14rem' }} />
-            <Button className="button" disabled={busy} onClick={() => void create()}>{busy ? 'Creating…' : 'Create key'}</Button>
+            <Button className="button" disabled={busy} onClick={() => void create()}>{busyAction === 'create' ? 'Creating…' : 'Create key'}</Button>
           </div>
         </div>
       ) : null}

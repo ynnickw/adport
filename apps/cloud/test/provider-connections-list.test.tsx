@@ -26,7 +26,7 @@ describe('compact provider connection list', () => {
     expect(html).not.toContain('>Flow<');
     expect(html).toContain('2 accounts');
     expect(html).toContain('/dashboard/accounts?select_provider=google');
-    expect(html).toContain('Last verified:');
+    expect(html).toContain('Connection details for Google Ads');
   });
 
   it.each([['0', '0 accounts'], ['1', '1 account'], ['12', '12 accounts']])('shows an accurate %s-account summary', (count, expected) => {
@@ -59,6 +59,13 @@ describe('compact provider connection list', () => {
     expect(html).toContain('Reconnect to verify');
   });
 
+  it('restarts an unavailable selection instead of sending users back to an expired link', () => {
+    const html = render({ connections: [{ ...connection, accountSelectionId: 'expired-fixture', accountSelectionUnavailable: true }] });
+    expect(html).toContain('Restart selection for Google Ads');
+    expect(html).toContain('/api/oauth/google/start?organization_id=org');
+    expect(html).not.toContain('/account-selection?selection_id=expired-fixture');
+  });
+
   it('does not expose management actions to members', () => {
     const html = render({ canManage: false });
     expect(html).not.toContain('/api/oauth/');
@@ -66,10 +73,18 @@ describe('compact provider connection list', () => {
     expect(html.match(/Owners and admins manage connections/g)).toHaveLength(1);
   });
 
-  it('does not offer OAuth when a provider is unavailable, but permits disconnect', () => {
+  it('hides unavailable unconnected platforms while retaining existing connections and disconnect', () => {
     const html = render({ available: false });
-    expect(html).toContain('Unavailable');
+    expect(html).not.toContain('LinkedIn Ads');
+    expect(html).toContain('Google Ads');
     expect(html).not.toContain('/api/oauth/');
     expect(html).toContain('>Disconnect</button>');
+  });
+
+  it('explains how to continue when no platforms can be connected', () => {
+    const html = render({ available: false, connections: [] });
+    expect(html).toContain('Platform connections are temporarily unavailable');
+    expect(html).toContain('finish setup now');
+    expect(html).not.toContain('connection-list-heading');
   });
 });

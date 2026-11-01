@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { organizationActiveAccounts } from '@/lib/cloud/workspaces';
-import { Empty, PageHeader, Provider } from '@/components/ui';
+import { getOrganizationUsage } from '@/lib/cloud/usage';
+import { Empty, PageHeader } from '@/components/ui';
+import { PendingAccountSelections } from '@/components/pending-account-selections';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { getOrganizationEntitlement } from '@/lib/cloud/plans';
 import { listConnections, listOrganizationAdAccounts } from '@/lib/cloud/repository';
@@ -14,57 +15,43 @@ export const metadata = { title: 'Accounts' };
 
 export default async function AccountsPage({ searchParams }: { searchParams: Promise<{ connected?: string; accounts_saved?: string; error?: string; select_provider?: string }> }) {
   const tenant = await requireDashboardTenant();
-  const sharedActive = ['owner', 'admin'].includes(tenant.organizationRole) ? await organizationActiveAccounts(tenant.organizationId) : undefined;
   if (isSyntheticReviewer(tenant.organizationId)) return <SyntheticReviewer tenant={tenant} />;
-  const [connections, inventory, entitlement, params] = await Promise.all([
-    listConnections(tenant.organizationId),
+  const [connections, inventory, entitlement, params, usage] = await Promise.all([
+    listConnections(tenant.organizationId, tenant.userId),
     listOrganizationAdAccounts(tenant.organizationId),
     getOrganizationEntitlement(tenant.organizationId),
     searchParams,
+    getOrganizationUsage(tenant.organizationId),
   ]);
   const requestedProvider = params.select_provider ?? params.connected;
   const providerFilter = requestedProvider && isOAuthProvider(requestedProvider) ? requestedProvider : undefined;
   const pendingConnections = connections.filter(connection => connection.accountSelectionId && connection.status === 'connected' && (!providerFilter || connection.provider === providerFilter));
+  const canManage = ['owner', 'admin'].includes(tenant.role);
   return (
     <main className="page">
-      <PageHeader title={providerFilter ? `${providerLabel(providerFilter)} accounts` : 'Accounts'} description="Only accounts you added appear here. Enable agent access when ready. To add other accounts, re-authorize their provider in Connections." />
+      <PageHeader title={providerFilter ? `${providerLabel(providerFilter)} accounts` : 'Accounts'} description="Choose which accounts Adport and your connected assistants can use. This does not change campaign status at the advertising platform." action={['owner', 'admin'].includes(tenant.role) ? <Link className="button" href={providerFilter ? '/dashboard/connections#platform-' + providerFilter : '/dashboard/connections'}>Add or change accounts</Link> : undefined} />
       {providerFilter ? <Link className="button secondary small" href="/dashboard/accounts" style={{ marginBottom: '1rem' }}>View all providers’ accounts</Link> : null}
       {params.connected ? <div className="callout success" role="status" style={{ marginBottom: '1rem' }}>{providerLabel(params.connected)} is connected. Select the specific accounts agents may access below.</div> : null}
       {params.accounts_saved ? <div className="callout success" role="status" style={{ marginBottom: '1rem' }}>Account selection saved. Unselected accounts are no longer listed or available to Adport. Enable newly added accounts below when ready.</div> : null}
       {params.error ? <div className="error-callout" role="alert">{params.error}</div> : null}
-      {inventory.length === 0 && !providerFilter ? <section className="card">
+      <PendingAccountSelections connections={pendingConnections} canManage={['owner', 'admin'].includes(tenant.role)} />
+      {inventory.length === 0 && pendingConnections.length ? null : inventory.length === 0 && !providerFilter ? <section className="card">
         <Empty
           title="No accounts added yet"
-          copy="Connect or re-authorize a provider, then save the accounts you want to add."
-          href="/dashboard/connections"
-          action="Open connections"
+          copy={canManage ? 'Connect a platform, choose the accounts for this project, then enable Adport access.' : 'Ask a project owner or admin to add accounts.'}
+          href={canManage ? '/dashboard/connections' : undefined}
+          action={canManage ? 'Connect a platform' : undefined}
         />
       </section> : (
-        <AccountAccessManager
+        <AccountAccessManager key={tenant.organizationId}
           organizationId={tenant.organizationId}
-          accounts={inventory}
+          accounts={inventory.map(account => ({ ...account, connectionStatus: connections.find(connection => connection.provider === account.provider)?.status ?? 'revoked', accountSelectionId: connections.find(connection => connection.provider === account.provider)?.accountSelectionId, accountSelectionUnavailable: connections.find(connection => connection.provider === account.provider)?.accountSelectionUnavailable }))}
           canManage={['owner', 'admin'].includes(tenant.role)}
           maxActiveAccounts={entitlement.plan.maxActiveAccounts}
-          organizationActiveCount={sharedActive}
+          organizationActiveCount={usage.enabledAccounts}
           providerFilter={providerFilter}
         />
       )}
-      {pendingConnections.length > 0 ? (
-        <section className="card" style={{ marginTop: '0.9rem' }}>
-          <div className="card-head"><h2>Finish account selection</h2><span className="card-note">agent access paused</span></div>
-          <div className="row-list">
-            {pendingConnections.map((connection) => (
-              <div className="row-item" key={connection.provider}>
-                <div>
-                  <Provider name={connection.provider} />
-                  <div className="cell-sub">Save your account selection to finish this authorization.</div>
-                </div>
-                <Link className="button secondary small" href={`/account-selection?selection_id=${connection.accountSelectionId}`}>Choose accounts</Link>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
     </main>
   );
 }

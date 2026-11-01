@@ -510,14 +510,22 @@ export interface ConnectionSummary {
   connectedAt: Date;
   lastVerifiedAt: Date | null;
   accountSelectionId: string | null;
+  accountSelectionUnavailable?: boolean;
 }
 
-export async function listConnections(organizationId: string): Promise<ConnectionSummary[]> {
+export async function listConnections(organizationId: string, selectionUserId?: string): Promise<ConnectionSummary[]> {
   return db()<ConnectionSummary[]>`
-    select id, provider, status, external_label, last_error, scopes, connected_at, last_verified_at, account_selection_id
-    from public.connections
-    where organization_id = ${organizationId}
-    order by connected_at asc
+    select connection.id, connection.provider, connection.status, connection.external_label, connection.last_error,
+      connection.scopes, connection.connected_at, connection.last_verified_at, connection.account_selection_id,
+      connection.account_selection_id is not null and not exists (
+        select 1 from private.provider_account_selections selection
+        where selection.id = connection.account_selection_id and selection.connection_id = connection.id
+          and selection.organization_id = connection.organization_id and selection.expires_at > now()
+          and (${selectionUserId ?? null}::uuid is null or selection.user_id = ${selectionUserId ?? null}::uuid)
+      ) as account_selection_unavailable
+    from public.connections connection
+    where connection.organization_id = ${organizationId}
+    order by connection.connected_at asc
   `;
 }
 

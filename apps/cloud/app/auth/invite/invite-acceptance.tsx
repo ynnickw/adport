@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/browser';
 import { invitationTokens } from '@/lib/invitations';
 import { selectProjectAction } from '@/app/dashboard/projects/actions';
+import { Button, Input } from '@/components/controls';
 
 export function InviteAcceptance({ projectId }: { projectId: string }) {
   const started = useRef(false);
@@ -40,11 +41,15 @@ export function InviteAcceptance({ projectId }: { projectId: string }) {
         setError('Use a password of at least 12 characters and enter it twice.');
         return;
       }
-      const result = await createClient().auth.updateUser({ password });
-      if (result.error) { setError('Your password could not be saved. Please try again.'); return; }
-      const selection = new FormData(); selection.set('projectId', projectId);
-      try { await selectProjectAction(selection); }
-      catch { setError('Your project access could not be confirmed. Ask your organization admin to check your invitation.'); }
+      try {
+        const result = await createClient().auth.updateUser({ password });
+        if (result.error) { setError('Your password could not be saved. Please try again.'); return; }
+        const selection = new FormData(); selection.set('projectId', projectId);
+        await selectProjectAction(selection);
+      } catch (reason) {
+        if (reason instanceof Error && reason.message === 'NEXT_REDIRECT') throw reason;
+        setError('Your project access could not be confirmed. Check your connection or ask an organization admin to review your invitation.');
+      }
     });
   }
 
@@ -52,9 +57,9 @@ export function InviteAcceptance({ projectId }: { projectId: string }) {
     {email ? <p>Signed in as <strong>{email}</strong>. Create a password to finish joining your project.</p> : !error ? <p role="status">Verifying your invitation…</p> : null}
     {error ? <div className="error-callout" role="alert">{error}</div> : null}
     {email ? <form action={finish} className="form">
-      <label>Password<input type="password" name="password" autoComplete="new-password" minLength={12} required /></label>
-      <label>Confirm password<input type="password" name="confirmation" autoComplete="new-password" minLength={12} required /></label>
-      <button className="button" disabled={pending}>{pending ? 'Joining…' : 'Join project'}</button>
+      <label>Password<Input type="password" name="password" autoComplete="new-password" minLength={12} required /></label>
+      <label>Confirm password<Input type="password" name="confirmation" autoComplete="new-password" minLength={12} required /></label>
+      <Button className="button" disabled={pending}>{pending ? 'Joining…' : 'Join project'}</Button>
     </form> : null}
     <p className="auth-switch"><Link href="/login">Back to sign in</Link></p>
   </>;

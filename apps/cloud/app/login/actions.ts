@@ -44,9 +44,15 @@ export async function signUp(formData: FormData) {
       emailRedirectTo: `${env().ADPORT_CLOUD_BASE_URL}/auth/callback${returnTo === '/dashboard' ? '' : `?return_to=${encodeURIComponent(returnTo)}`}`,
     },
   });
-  if (error) redirect(`/login?mode=signup&error=${encodeURIComponent(error.message)}`);
+  if (error) {
+    const query = new URLSearchParams({ mode: 'signup', error: error.message });
+    if (returnTo !== '/dashboard') query.set('return_to', returnTo);
+    redirect('/login?' + query);
+  }
   if (data.session) redirect(returnTo);
-  redirect('/login?message=Check+your+email+to+confirm+your+account');
+  const query = new URLSearchParams({ message: 'Check your email to confirm your account' });
+  if (returnTo !== '/dashboard') query.set('return_to', returnTo);
+  redirect('/login?' + query);
 }
 
 export async function signInWithSocialProvider(formData: FormData) {

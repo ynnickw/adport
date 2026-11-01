@@ -3,12 +3,14 @@ import { createClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { db, closeDbForTests } from '@/lib/db';
 import { createOrganization, createProject, listProjectAccess, saveOrganizationMember, removeCompanyMember, updateProject } from '@/lib/cloud/workspaces';
-import { resolveMembership, createApiKey, authenticateApiKey, upsertGoogleConnection, setOrganizationAdAccountEnabled, PostgresPendingStore } from '@/lib/cloud/repository';
+import { resolveMembership, createApiKey, authenticateApiKey, upsertGoogleConnection, setOrganizationAdAccountEnabled, PostgresPendingStore, listConnections } from '@/lib/cloud/repository';
+import { stageAccountSelection } from '@/lib/cloud/account-selection';
 import { getOrganizationEntitlement, applyPlanToPrincipal } from '@/lib/cloud/plans';
 import { registerMcpOAuthClient, createMcpAuthorizationCode, exchangeMcpAuthorizationCode, exchangeMcpRefreshToken, authenticateMcpOAuthAccessToken } from '@/lib/cloud/mcp-oauth-repository';
 import { mcpResourceUrl, pkceChallenge } from '@/lib/mcp-oauth';
 import { processStripeEvent } from '@/lib/cloud/billing';
 import { resetEnvForTests } from '@/lib/env';
+import { getOrganizationUsage } from '@/lib/cloud/usage';
 
 const describeDatabase = process.env.ADPORT_RUN_DATABASE_TESTS === '1' ? describe : describe.skip;
 
@@ -109,6 +111,22 @@ describeDatabase('agency organizations and isolated projects', () => {
     await saveOrganizationMember({ actorUserId: owner, organizationId: company, userId: client, role: 'viewer', projectIds: [secondProject] });
   });
 
+  it('detects expired or differently bound account selections without exposing the snapshot', async () => {
+    const [connection] = await db()<Array<{ id: string }>>`select id from public.connections where organization_id = ${firstProject} and provider = 'google'`;
+    const selectionId = randomUUID();
+    await db()`update public.connections set account_selection_id = ${selectionId} where id = ${connection!.id}`;
+    try {
+      await stageAccountSelection({ principal: { organizationId: firstProject, userId: owner, role: 'owner', scopes: [] }, id: selectionId, connectionId: connection!.id, provider: 'google', accounts: [], returnPath: '/dashboard/accounts' });
+      expect((await listConnections(firstProject, owner))[0]?.accountSelectionUnavailable).toBe(false);
+      expect((await listConnections(firstProject, client))[0]?.accountSelectionUnavailable).toBe(true);
+      await db()`update private.provider_account_selections set expires_at = now() - interval '1 minute' where id = ${selectionId}`;
+      expect((await listConnections(firstProject, owner))[0]?.accountSelectionUnavailable).toBe(true);
+    } finally {
+      await db()`update public.connections set account_selection_id = null where id = ${connection!.id}`;
+      await db()`delete from private.provider_account_selections where id = ${selectionId}`;
+    }
+  });
+
   it('serializes account activation across projects and enforces organization-wide seats', async () => {
     await db()`update public.organization_subscriptions set plan = 'operator' where organization_id = ${company}`;
     await saveOrganizationMember({ actorUserId: owner, organizationId: company, userId: client, role: 'member', projectIds: [firstProject] });
@@ -130,6 +148,17 @@ describeDatabase('agency organizations and isolated projects', () => {
       from public.organization_ad_accounts where organization_id in ${db()([firstProject, secondProject])} and not enabled limit 1`;
     await expect(db()`update public.organization_ad_accounts set enabled = true
       where organization_id = ${inactive[0]!.organizationId} and account_id = ${inactive[0]!.accountId}`).rejects.toThrow('Organization active account limit');
+  });
+
+  it('shows the same organization usage from each client project and excludes another business', async () => {
+    const separate = await createOrganization(outsider, 'Usage other business');
+    await upsertGoogleConnection({ organizationId: separate, userId: outsider, refreshToken: 'local-usage-only', accessibleCustomerIds: ['other-business'] });
+    const [connection] = await db()<Array<{ id: string }>>`select id from public.connections where organization_id = ${separate} and provider = 'google'`;
+    await db()`insert into public.organization_ad_accounts (organization_id, connection_id, provider, account_id, name, enabled)
+      values (${separate}, ${connection!.id}, 'google', 'other-business', 'Other business account', true)`;
+    expect(await getOrganizationUsage(firstProject)).toEqual({ enabledAccounts: 5, editingMembers: 2, projects: 3, viewers: 1 });
+    expect(await getOrganizationUsage(secondProject)).toEqual(await getOrganizationUsage(firstProject));
+    expect(await getOrganizationUsage(separate)).toEqual({ enabledAccounts: 1, editingMembers: 1, projects: 1, viewers: 0 });
   });
 
   it('downscales the shared account allowance across every project on cancellation', async () => {

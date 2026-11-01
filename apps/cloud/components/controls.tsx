@@ -12,6 +12,10 @@ export function Checkbox({ className = '', ...props }: Omit<ComponentProps<'inpu
   return <input {...props} type="checkbox" className={`control-checkbox ${className}`} />;
 }
 
+export function Switch({ checked, className = '', ...props }: Omit<ComponentProps<'button'>, 'role' | 'aria-checked'> & { checked: boolean }) {
+  return <Button {...props} type="button" role="switch" aria-checked={checked} className={'control-switch ' + className}><span className="switch-track"><span className="switch-thumb" /></span></Button>;
+}
+
 export function Textarea({ className = '', ...props }: ComponentProps<'textarea'>) {
   return <textarea {...props} className={`control-textarea ${className}`} />;
 }

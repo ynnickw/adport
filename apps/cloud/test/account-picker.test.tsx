@@ -10,6 +10,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: 
 vi.mock('@/lib/cloud/dashboard', () => ({ requireDashboardTenant: async () => ({ organizationId: 'org', role: 'owner' }) }));
 vi.mock('@/lib/cloud/repository', () => ({ listOrganizationAdAccounts: mocks.inventory, listConnections: mocks.connections }));
 vi.mock('@/lib/cloud/plans', () => ({ getOrganizationEntitlement: async () => ({ plan: { maxActiveAccounts: 3 } }) }));
+vi.mock('@/lib/cloud/usage', () => ({ getOrganizationUsage: async () => ({ enabledAccounts: 2, editingMembers: 1, projects: 1, viewers: 0 }) }));
 vi.mock('@/app/dashboard/agents/agent-setup-guide', () => ({ AgentSetupGuide: () => null }));
 
 const accounts: AccountAccessItem[] = OAUTH_PROVIDERS.map((provider, index) => ({
@@ -26,7 +27,9 @@ describe('provider-specific account picker', () => {
     const html = renderToStaticMarkup(<AccountAccessManager organizationId="org" accounts={accounts} canManage maxActiveAccounts={3} providerFilter={providerFilter} />);
     expect(html).toContain(`${providerFilter} unique account`);
     for (const other of accounts.filter((account) => account.provider !== providerFilter)) expect(html).not.toContain(other.name);
-    expect(html).toContain('2 active in project · organization limit 3');
+    expect(html).toContain('Organization allowance: 3 accounts');
+    expect(html).toContain('role="switch"');
+    expect(html).toContain('aria-checked="' + String(accounts.find(account => account.provider === providerFilter)!.enabled) + '"');
   });
 
   it('shows all accounts during ordinary account management', async () => {
@@ -60,10 +63,11 @@ describe('provider-specific account picker', () => {
     expect(html).toContain('google unique account');
     expect(html).not.toContain('>Disable</button>');
     expect(html).not.toContain('>Enable</button>');
+    expect(html).not.toContain('role="switch"');
   });
 
   it.each(['google', 'tiktok', undefined])('scopes onboarding after authorizing %s', (connectedProvider) => {
-    const html = renderToStaticMarkup(<OnboardingFlow organizationId="org" canManage initialStep="accounts" initialAgent={null} baseUrl="https://app.adport.test" connectedProvider={connectedProvider} providers={[]} connections={[]} accounts={accounts} maxActiveAccounts={3} />);
+    const html = renderToStaticMarkup(<OnboardingFlow organizationId="org" canManage initialStep="accounts" initialAgent={null} baseUrl="https://app.adport.test" connectedProvider={connectedProvider} providers={[]} connections={[]} accounts={accounts} maxActiveAccounts={3} organizationActiveCount={2} returnTo="/dashboard" />);
     for (const account of accounts) {
       if (!connectedProvider || account.provider === connectedProvider) expect(html).toContain(account.name);
       else expect(html).not.toContain(account.name);
