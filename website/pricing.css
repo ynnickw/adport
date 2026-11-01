@@ -63,6 +63,17 @@
 .pricing-list-title { margin: 1.65rem 0 .9rem; font-size: .8125rem; font-weight: 750; }
 .pricing-features { display: grid; gap: .85rem; padding: 0; margin: 0; list-style: none; }
 .pricing-features li { display: flex; align-items: flex-start; gap: .6rem; color: var(--ink-soft); font-size: .875rem; line-height: 1.6; }
+.pricing-card:has(.provider-more[aria-expanded="true"]) { z-index: 2; }
+.pricing-features .pricing-platform-feature { flex-direction: column; gap: .7rem; }
+.pricing-platform-label { display: flex; align-items: center; gap: .6rem; }
+.provider-stack.provider-stack-card { position: relative; isolation: auto; box-sizing: border-box; width: 100%; padding-left: 2.2rem; }
+.provider-stack-card .provider-stack-marks .pricing-provider-logo { width: 2.5rem; height: 2.5rem; }
+.provider-stack-card .provider-stack-marks svg { width: 1.5rem; height: 1.5rem; }
+.provider-stack-card .provider-more { width: 2.5rem; height: 2.5rem; font-size: .75rem; }
+.provider-stack-card .provider-tooltip { position: fixed; top: 0; left: 0; bottom: auto; overflow-y: auto; overscroll-behavior: contain; transform: none; }
+.provider-stack-card .provider-tooltip:not([hidden]) { animation: none; }
+.provider-stack-card .provider-tooltip::before { display: none; }
+.pricing-features .provider-tooltip li { align-items: center; gap: .5rem; font-size: .75rem; line-height: 1.4; }
 .comparison-check { display: inline-grid; flex: none; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: 50%; background: var(--go-wash); color: var(--go); }
 .comparison-check svg { width: 1rem; height: 1rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .comparison-no { background: #f1f1f3; color: #a3a3a8; }
