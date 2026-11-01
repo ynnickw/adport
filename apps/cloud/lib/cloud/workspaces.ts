@@ -105,8 +105,10 @@ export async function updateProject(userId: string, projectId: string, input: { 
 
 export async function listOrganizationProjects(userId: string, organizationId: string) {
   await requireOrganizationAdmin(userId, organizationId);
-  return db()<Array<{ id: string; name: string; archivedAt: Date | null }>>`
-    select id, name, archived_at from public.organizations where organization_group_id = ${organizationId} order by created_at, id
+  return db()<Array<{ id: string; name: string; archivedAt: Date | null; enabledAccounts: number }>>`
+    select project.id, project.name, project.archived_at,
+      (select count(*)::int from public.organization_ad_accounts account where account.organization_id = project.id and account.enabled) as enabled_accounts
+    from public.organizations project where project.organization_group_id = ${organizationId} order by project.created_at, project.id
   `;
 }
 

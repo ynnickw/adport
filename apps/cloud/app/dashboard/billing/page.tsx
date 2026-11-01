@@ -1,4 +1,10 @@
-import { Button } from '@/components/controls';
+import { Disclosure } from '@/components/controls';
+import { BillingForm } from './billing-form';
+import { PlanUsage } from '@/components/plan-usage';
+import { getOrganizationUsage } from '@/lib/cloud/usage';
+import Link from 'next/link';
+import { CheckoutStatus } from './checkout-status';
+import { listOrganizationProjects } from '@/lib/cloud/workspaces';
 import { PageHeader } from '@/components/ui';
 import { billingConfigured, billingPlanConfigured } from '@/lib/cloud/billing';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
@@ -9,8 +15,7 @@ import {
   type BillingInterval,
   type PlanId,
 } from '@/lib/cloud/plans';
-import { openBillingPortal, startSubscription } from './actions';
-import { editingMemberCapacity } from '@/lib/cloud/member-capacity';
+import { openBillingPortalForm, startSubscriptionForm } from './actions';
 
 export const metadata = { title: 'Plan' };
 
@@ -42,25 +47,38 @@ const PLAN_COPY: Record<PlanId, { eyebrow: string; description: string }> = {
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ checkout?: string; billing?: string }>;
+  searchParams: Promise<{ checkout?: string; billing?: string; plan?: string; intent?: string; compare?: string }>;
 }) {
   const [tenant, query] = await Promise.all([requireDashboardTenant(), searchParams]);
   const entitlement = await getOrganizationEntitlement(tenant.organizationId);
-  const editingMembers = await editingMemberCapacity(tenant.organizationId);
+  const usage = await getOrganizationUsage(tenant.organizationId);
   const configured = billingConfigured();
   const canManage = tenant.organizationRole === 'owner';
   const hasSubscription = Boolean(entitlement.providerSubscriptionId && entitlement.status !== 'canceled');
+  const subscriptionReady = hasSubscription && ['active', 'trialing', 'past_due'].includes(entitlement.status);
+  const checkoutPending = query.checkout === 'complete' && !subscriptionReady;
   const trialEligible = !entitlement.providerSubscriptionId;
   const interval: BillingInterval = query.billing === 'annual' ? 'annual' : 'monthly';
+  const requestedPlan = (['operator', 'premium', 'agency'] as const).find(id => id === query.plan);
+  const compareOpen = Boolean(query.intent || query.compare === '1');
+  const setupDestination = requestedPlan && !hasSubscription ? '/dashboard/billing?' + new URLSearchParams({ plan: requestedPlan, billing: interval }) : '/dashboard';
+  const requested = requestedPlan ? PLANS[requestedPlan] : undefined;
+  const canManageOrganization = ['owner', 'admin'].includes(tenant.organizationRole);
+  const projectUsage = canManageOrganization ? (await listOrganizationProjects(tenant.userId, tenant.organizationGroupId)).filter(project => !project.archivedAt) : undefined;
 
   return (
     <main className="page plan-page">
       <PageHeader
         title="Plan & billing"
         description="One subscription covers every project in your organization. Active accounts and editing-member allowances are shared across projects. Read-only viewers are free."
+        action={!tenant.onboardingCompletedAt && canManage ? <Link className="button secondary" href={'/onboarding?return_to=' + encodeURIComponent(setupDestination)}>Continue setup</Link> : undefined}
       />
-      {query.checkout === 'complete' ? <div className="callout success plan-notice" role="status">Checkout complete. Your plan is being updated.</div> : null}
+      {query.checkout === 'complete' ? <CheckoutStatus ready={subscriptionReady} planName={entitlement.plan.name} /> : null}
       {query.checkout === 'canceled' ? <div className="callout plan-notice">Checkout was canceled. Your current plan is unchanged.</div> : null}
+      {requested && requestedPlan && entitlement.plan.id !== requestedPlan ? <section className="requested-subscription" aria-label="Selected subscription">
+        <div><span className="plan-kicker">{query.intent ? 'Recommended plan' : 'Your choice'}</span><h2>{requested.name} <span>{interval === 'annual' ? '€' + requested.annualPriceEur + ' / year' : '€' + requested.monthlyPriceEur + ' / month'}</span></h2><p>{requested.maxActiveAccounts} enabled accounts · {requested.maxMembers} team seats · Unlimited projects</p>{!hasSubscription && trialEligible ? <small>7-day free trial, then {interval === 'annual' ? 'yearly' : 'monthly'} billing</small> : null}</div>
+        {canManage && billingPlanConfigured(requestedPlan, interval) && !checkoutPending ? <BillingForm action={hasSubscription ? openBillingPortalForm : startSubscriptionForm.bind(null, requestedPlan, interval)} label={hasSubscription ? 'Manage billing' : 'Continue with ' + requested.name} pendingLabel={hasSubscription ? 'Opening billing…' : 'Opening checkout…'} className="button" /> : !canManage ? <span className="inline-note">Only your organization owner can confirm this plan.</span> : null}
+      </section> : null}
 
       <section className="plan-summary">
         <div>
@@ -73,16 +91,18 @@ export default async function BillingPage({
           {hasSubscription ? <p>Your existing subscription keeps its current price until you choose a change in the billing portal.</p> : null}
         </div>
         {entitlement.providerCustomerId && canManage && configured ? (
-          <form action={openBillingPortal}><Button className="button secondary" type="submit">Manage billing</Button></form>
+          <BillingForm action={openBillingPortalForm} label="Manage billing" pendingLabel="Opening billing…" className="button secondary" />
         ) : null}
       </section>
       {!canManage ? <p className="inline-note">Only the organization owner can change plans.</p> : null}
-      {entitlement.plan.maxMembers !== null && editingMembers.count > entitlement.plan.maxMembers ? <div className="callout plan-notice" role="status">Your organization has {editingMembers.count} editing members and this plan includes {entitlement.plan.maxMembers}. Extra editors have read-only ad access. Set teammates to Viewer in Organization settings or upgrade to restore their editing access.</div> : null}
+      <PlanUsage plan={entitlement.plan} usage={usage} organizationName={tenant.organizationGroupName} canManage={canManageOrganization} projectUsage={projectUsage} currentProjectId={tenant.organizationId} />
+      {entitlement.plan.maxMembers !== null && usage.editingMembers > entitlement.plan.maxMembers ? <div className="callout plan-notice" role="status">Your organization has {usage.editingMembers} editing members and this plan includes {entitlement.plan.maxMembers}. Extra editors have read-only ad access. Set teammates to Viewer in Organization settings or upgrade to restore their editing access.</div> : null}
 
+      <Disclosure label="Compare plans" open={compareOpen} className="plan-comparison" key={String(compareOpen)}>
       <div className="plan-toolbar" aria-label="Billing interval">
         <div className="billing-toggle">
-          <a className={interval === 'monthly' ? 'active' : ''} href="?billing=monthly">Monthly</a>
-          <a className={interval === 'annual' ? 'active' : ''} href="?billing=annual">Yearly</a>
+          <a className={interval === 'monthly' ? 'active' : ''} href={'?billing=monthly&compare=1' + (requestedPlan ? '&plan=' + requestedPlan : '')}>Monthly</a>
+          <a className={interval === 'annual' ? 'active' : ''} href={'?billing=annual&compare=1' + (requestedPlan ? '&plan=' + requestedPlan : '')}>Yearly</a>
         </div>
         <span className="annual-saving">Yearly includes two months free</span>
       </div>
@@ -100,10 +120,10 @@ export default async function BillingPage({
           const annualSaving = paid ? (plan.monthlyPriceEur! * 12) - plan.annualPriceEur! : 0;
 
           return (
-            <section className={`plan-card${plan.id === 'premium' ? ' featured' : ''}${selected ? ' selected' : ''}`} key={plan.id}>
+            <section className={`plan-card${plan.id === 'premium' ? ' featured' : ''}${selected ? ' selected' : ''}${requestedPlan === plan.id ? ' requested' : ''}`} key={plan.id}>
               <div className="plan-card-top">
                 <span className="plan-kicker">{PLAN_COPY[plan.id].eyebrow}</span>
-                {selected ? <span className="plan-badge neutral">Current plan</span> : plan.id === 'premium' ? <span className="plan-badge">Best value</span> : null}
+                {selected ? <span className="plan-badge neutral">Current plan</span> : requestedPlan === plan.id ? <span className="plan-badge">Your choice</span> : plan.id === 'premium' ? <span className="plan-badge">Best value</span> : null}
                 <h2>{plan.name}</h2>
                 <p>{PLAN_COPY[plan.id].description}</p>
               </div>
@@ -126,10 +146,8 @@ export default async function BillingPage({
               </ul>
               <div className="plan-action">
                 {selected ? <span className="button secondary full disabled">Current plan</span> : null}
-                {!selected && paid && canManage && paidPlanReady && !hasSubscription ? (
-                  <form action={startSubscription.bind(null, plan.id, interval)}>
-                    <Button className="button full" type="submit">{trialEligible ? 'Start 7-day free trial' : 'Subscribe'}</Button>
-                  </form>
+                {!selected && paid && canManage && paidPlanReady && !hasSubscription && !checkoutPending ? (
+                  <BillingForm action={startSubscriptionForm.bind(null, plan.id, interval)} label={requestedPlan === plan.id ? 'Continue with ' + plan.name : trialEligible ? 'Start 7-day free trial' : 'Subscribe'} pendingLabel="Opening checkout…" className="button full" />
                 ) : null}
                 {!selected && paid && configured && !paidPlanReady ? <span className="plan-unavailable">Checkout coming soon</span> : null}
                 {!selected && paid && canManage && hasSubscription ? <span className="plan-unavailable">Change plans in Manage billing</span> : null}
@@ -149,6 +167,7 @@ export default async function BillingPage({
         <a className="button secondary" href="mailto:yannick@adport.dev?subject=Adport%20Enterprise">Talk to Adport</a>
       </section>
       <p className="inline-note" style={{ marginTop: '0.9rem' }}>Fixed pricing per organization. No percentage of ad spend. Your AI assistant subscription or model usage is separate.</p>
+      </Disclosure>
       {!configured ? <p className="inline-note" style={{ marginTop: '0.9rem' }}>Online billing is currently unavailable. Contact support to change plans.</p> : null}
     </main>
   );

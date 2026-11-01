@@ -4,22 +4,27 @@ import { env } from '@/lib/env';
 import { AgentSetupGuide } from './agent-setup-guide';
 import { ApiKeyManager } from './api-key-manager';
 import { Disclosure } from '@/components/controls';
+import Link from 'next/link';
+import { listOrganizationAdAccounts } from '@/lib/cloud/repository';
 
 export const metadata = { title: 'Agent access' };
 
 export default async function AgentsPage() {
   const tenant = await requireDashboardTenant();
   const baseUrl = env().ADPORT_CLOUD_BASE_URL.replace(/\/$/, '');
+  const accounts = await listOrganizationAdAccounts(tenant.organizationId);
+  const active = accounts.filter(account => account.enabled).length;
   return (
     <main className="page">
       <PageHeader title="Agent access" description="Connect an MCP client with Adport OAuth. Grants are scoped to this workspace and every write still passes the same policy gate." />
       <div className="stack agent-access-stack">
+        {!active ? <section className="setup-next-step"><div><strong>{canAdminister(tenant) ? accounts.length ? 'Enable an account first' : 'Add your first ad account' : 'No accounts available yet'}</strong><p>{canAdminister(tenant) ? 'Your assistant can connect now, but it will have no ad accounts to read.' : 'Ask a project owner or admin to enable account access for your assistant.'}</p></div><Link className="button secondary small" href={canAdminister(tenant) && !accounts.length ? '/dashboard/connections' : '/dashboard/accounts'}>{canAdminister(tenant) && !accounts.length ? 'Connect a platform' : 'View accounts'}</Link></section> : null}
         <AgentSetupGuide baseUrl={baseUrl} />
         <Disclosure label="Advanced connection options"><div className="grid-2">
           <section className="card">
             <div className="card-head"><h2>Connection details</h2><span className="card-note">Streamable HTTP</span></div>
             <div className="card-body stack">
-              <p className="subhead">Use this endpoint for any other OAuth-capable MCP client. Authorization is scoped to this workspace and can be revoked below.</p>
+              <p className="subhead">Use this endpoint for any other OAuth-capable MCP client. Authorization stays scoped to this project.</p>
               <div className="code"><span>MCP</span>{baseUrl}/mcp</div>
               <p className="inline-note">No API key is required. The MCP client receives short-lived, audience-bound access tokens and refreshes them automatically.</p>
             </div>
@@ -33,10 +38,10 @@ export default async function AgentsPage() {
             </div>
           </section>
         </div></Disclosure>
-        <section className="card">
+        {canAdminister(tenant) ? <section className="card">
           <div className="card-head"><h2>Connected agents & keys</h2></div>
           <ApiKeyManager key={tenant.organizationId} organizationId={tenant.organizationId} canManage={canAdminister(tenant)} />
-        </section>
+        </section> : null}
       </div>
     </main>
   );

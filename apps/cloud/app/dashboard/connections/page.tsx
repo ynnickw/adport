@@ -8,18 +8,18 @@ import { ProviderConnections, type OAuthProviderView } from './provider-connecti
 import { isSyntheticReviewer } from '@/lib/cloud/synthetic-reviewer';
 import { SyntheticReviewer } from '@/components/synthetic-reviewer';
 
-export const metadata = { title: 'Connections' };
+export const metadata = { title: 'Platforms' };
 
 export default async function ConnectionsPage({ searchParams }: { searchParams: Promise<{ connected?: string; error?: string }> }) {
   const tenant = await requireDashboardTenant();
   if (isSyntheticReviewer(tenant.organizationId)) return <SyntheticReviewer tenant={tenant} />;
-  const [connections, params] = await Promise.all([listConnections(tenant.organizationId), searchParams]);
+  const [connections, params] = await Promise.all([listConnections(tenant.organizationId, tenant.userId), searchParams]);
   const availability = oauthAvailability(tenant.organizationId);
   const oauthProviders: OAuthProviderView[] = OAUTH_PROVIDERS.map((id) => ({ id, available: availability[id] }));
   return (
     <main className="page">
       <PageHeader
-        title="Connections"
+        title="Platforms"
         description="Connect your ad platforms and manage account access."
       />
       <div className="stack" style={{ marginBottom: '0.9rem' }}>
@@ -33,6 +33,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
           provider: connection.provider,
           status: connection.status,
           accountSelectionId: connection.accountSelectionId,
+          accountSelectionUnavailable: connection.accountSelectionUnavailable,
           externalLabel: connection.externalLabel,
           lastError: connection.lastError,
           connectedAt: connection.connectedAt.toISOString(),

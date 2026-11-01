@@ -12,7 +12,9 @@ function requireOwner(role: string | undefined): void {
   if (role !== 'owner') throw new Error('Only the workspace owner can manage billing.');
 }
 
-export async function startSubscription(plan: PlanId, interval: BillingInterval): Promise<void> {
+export interface BillingActionState { error?: string; }
+
+async function checkoutUrl(plan: PlanId, interval: BillingInterval): Promise<string> {
   if (plan !== 'operator' && plan !== 'premium' && plan !== 'agency') throw new Error('Choose Pro, Growth, or Agency.');
   if (interval !== 'monthly' && interval !== 'annual') throw new Error('Choose monthly or annual billing.');
   const principal = await sessionPrincipal();
@@ -36,14 +38,25 @@ export async function startSubscription(plan: PlanId, interval: BillingInterval)
       ...(entitlement.providerSubscriptionId ? {} : { trial_period_days: 7 }),
     },
     success_url: new URL('/dashboard/billing?checkout=complete', baseUrl).toString(),
-    cancel_url: new URL('/dashboard/billing?checkout=canceled', baseUrl).toString(),
+    cancel_url: new URL('/dashboard/billing?' + new URLSearchParams({ checkout: 'canceled', plan, billing: interval, compare: '1' }), baseUrl).toString(),
   });
   if (!session.url) throw new Error('Stripe did not return a checkout URL.');
   captureProductEvent(principal, { event: 'checkout_started', target_plan: plan, interval });
-  redirect(session.url);
+  return session.url;
 }
 
-export async function openBillingPortal(): Promise<void> {
+export async function startSubscription(plan: PlanId, interval: BillingInterval): Promise<void> {
+  redirect(await checkoutUrl(plan, interval));
+}
+
+export async function startSubscriptionForm(plan: PlanId, interval: BillingInterval, _state: BillingActionState, _form: FormData): Promise<BillingActionState> {
+  let url: string;
+  try { url = await checkoutUrl(plan, interval); }
+  catch { return { error: 'Checkout could not be opened. Please try again or contact support.' }; }
+  redirect(url);
+}
+
+async function billingPortalUrl(): Promise<string> {
   const principal = await sessionPrincipal();
   requireOwner(principal.role);
   const entitlement = await getOrganizationEntitlement(principal.organizationId);
@@ -55,5 +68,16 @@ export async function openBillingPortal(): Promise<void> {
     configuration: env().STRIPE_BILLING_PORTAL_CONFIGURATION_ID,
     return_url: new URL('/dashboard/billing', env().ADPORT_CLOUD_BASE_URL).toString(),
   });
-  redirect(portal.url);
+  return portal.url;
+}
+
+export async function openBillingPortal(): Promise<void> {
+  redirect(await billingPortalUrl());
+}
+
+export async function openBillingPortalForm(_state: BillingActionState, _form: FormData): Promise<BillingActionState> {
+  let url: string;
+  try { url = await billingPortalUrl(); }
+  catch { return { error: 'Billing could not be opened. Please try again or contact support.' }; }
+  redirect(url);
 }

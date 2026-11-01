@@ -4,7 +4,8 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { db } from '@/lib/db';
 import type { TenantPrincipal } from './types';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
+import { REQUEST_PATH_HEADER, safeReturnPath } from '@/lib/return-path';
 import { PROJECT_COOKIE } from './auth';
 import { listProjectAccess, type ProjectAccess } from './workspaces';
 
@@ -30,7 +31,7 @@ export interface DashboardTenant {
 export const requireDashboardTenant = cache(async (): Promise<DashboardTenant> => {
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) redirect('/');
+  if (!auth.user) redirect('/?return_to=' + encodeURIComponent(safeReturnPath((await headers()).get(REQUEST_PATH_HEADER))));
   const projects = await listProjectAccess(auth.user.id);
   const selected = (await cookies()).get(PROJECT_COOKIE)?.value;
   const project = projects.find(project => project.id === selected) ?? projects[0];

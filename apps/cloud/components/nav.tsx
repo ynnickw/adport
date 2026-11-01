@@ -39,7 +39,7 @@ const SETTINGS_ITEMS: NavItem[] = [
   { label: 'Organization', href: '/dashboard/organization', icon: icon.team },
   { label: 'Project team', href: '/dashboard/team', icon: icon.team },
   { label: 'Policies', href: '/dashboard/policies', icon: icon.policies },
-  { label: 'Plan', href: '/dashboard/billing', icon: icon.billing },
+  { label: 'Plan & usage', href: '/dashboard/billing', icon: icon.billing },
 ];
 const UTILITY_ITEMS: NavItem[] = [
   { label: 'Settings', href: '/dashboard/organization', icon: icon.policies, paths: SETTINGS_ITEMS.map(item => item.href) },

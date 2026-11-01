@@ -17,8 +17,8 @@ export default async function SelectAccountsPage({ searchParams }: { searchParam
   const selection = canAdminister(tenant) && id.success
     ? await getAccountSelection({ ...tenant, scopes: [] }, id.data) : undefined;
   if (!selection) return <main className="page">
-    <PageHeader title="Account selection unavailable" description="This selection was saved, expired, or belongs to another authorization. Re-authorize the provider to choose accounts again." />
-    <Link href="/dashboard/connections" className="button">Open connections</Link>
+    <PageHeader title="Account selection unavailable" showDescription description="This selection was saved, expired, or belongs to another admin. Restart the platform connection to choose accounts again." />
+    <Link href={tenant.onboardingCompletedAt ? '/dashboard/connections' : '/onboarding?step=connect'} className="button">Open platforms</Link>
   </main>;
   const inventory = await listOrganizationAdAccounts(tenant.organizationId);
   return <main className="onboarding-page">

@@ -1,8 +1,9 @@
-import { Button, Input } from '@/components/controls';
+import { Input } from '@/components/controls';
 import Link from 'next/link';
 import { signIn, signInWithSocialProvider, signUp } from '@/app/login/actions';
 import { BrandLockup } from '@/components/logos';
 import { AuthFrame } from '@/components/ui';
+import { PendingButton } from '@/components/pending-button';
 
 export interface AuthScreenProps {
   mode: 'signin' | 'signup';
@@ -16,11 +17,11 @@ export function AuthScreen({ mode, error, message, returnTo }: AuthScreenProps) 
   return (
     <AuthFrame label={signup ? 'create account' : 'sign in'}>
       <BrandLockup size="large" />
-      <h1>{signup ? 'Create your workspace.' : 'Operate ads with evidence.'}</h1>
+      <h1>{signup ? 'Create your Adport account.' : 'Sign in to Adport.'}</h1>
       <p>
         {signup
-          ? 'One account, one organization. Connect ad platforms through their official OAuth consent, then keep every proposed change behind the same policy gate.'
-          : 'Connect accounts, review normalized performance, and keep every proposed change behind the same policy gate.'}
+          ? 'Create an organization, invite your team, and keep each client’s accounts in its own project.'
+          : 'Your projects, ad accounts, and connected assistants in one place.'}
       </p>
       {error ? <div className="error-callout" role="alert">{error}</div> : null}
       {message ? <div className="callout success" role="status">{message}</div> : null}
@@ -29,19 +30,19 @@ export function AuthScreen({ mode, error, message, returnTo }: AuthScreenProps) 
           <input type="hidden" name="provider" value="google" />
           <input type="hidden" name="mode" value={mode} />
           {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
-          <Button className="social-auth-button" type="submit">
+          <PendingButton className="social-auth-button" pendingLabel="Opening Google…">
             <GoogleIcon />
             Continue with Google
-          </Button>
+          </PendingButton>
         </form>
         <form action={signInWithSocialProvider}>
           <input type="hidden" name="provider" value="github" />
           <input type="hidden" name="mode" value={mode} />
           {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
-          <Button className="social-auth-button" type="submit">
+          <PendingButton className="social-auth-button" pendingLabel="Opening GitHub…">
             <GitHubIcon />
             Continue with GitHub
-          </Button>
+          </PendingButton>
         </form>
       </div>
       <div className="auth-divider"><span>or continue with email</span></div>
@@ -61,8 +62,9 @@ export function AuthScreen({ mode, error, message, returnTo }: AuthScreenProps) 
           <span>Password</span>
           <Input name="password" type="password" minLength={12} autoComplete={signup ? 'new-password' : 'current-password'} required placeholder="At least 12 characters" />
         </label>
-        <Button className="button full" type="submit">{signup ? 'Create account' : 'Sign in'}</Button>
+        <PendingButton className="button full" pendingLabel={signup ? 'Creating account…' : 'Signing in…'}>{signup ? 'Create account' : 'Sign in'}</PendingButton>
       </form>
+      {!signup ? <p className="auth-switch"><Link href={'/login/forgot-password' + (returnTo ? '?return_to=' + encodeURIComponent(returnTo) : '')}>Forgot password?</Link></p> : null}
       <p className="auth-switch">
         {signup
           ? <>Already have an account? <Link href={returnTo ? `/login?return_to=${encodeURIComponent(returnTo)}` : '/'}>Sign in</Link></>

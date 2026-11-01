@@ -19,7 +19,7 @@ vi.mock('@/lib/cloud/billing', () => ({
   stripeClient: () => ({ checkout: { sessions: { create: mocks.checkoutCreate } } }),
 }));
 
-import { startSubscription } from '@/app/dashboard/billing/actions';
+import { startSubscription, startSubscriptionForm } from '@/app/dashboard/billing/actions';
 
 describe('subscription checkout', () => {
   beforeEach(() => {
@@ -56,6 +56,20 @@ describe('subscription checkout', () => {
         trial_period_days: 7,
       },
     }));
+    const cancel = new URL(mocks.checkoutCreate.mock.calls[0]![0].cancel_url);
+    expect(cancel.searchParams.get('plan')).toBe('premium');
+    expect(cancel.searchParams.get('billing')).toBe('annual');
+    expect(cancel.searchParams.get('compare')).toBe('1');
+  });
+
+  it('returns a retryable checkout error without exposing a provider error', async () => {
+    mocks.checkoutCreate.mockRejectedValueOnce(new Error('internal billing credential detail'));
+    expect(await startSubscriptionForm('premium', 'annual', {}, new FormData())).toEqual({ error: 'Checkout could not be opened. Please try again or contact support.' });
+    expect(mocks.redirect).not.toHaveBeenCalled();
+  });
+
+  it('keeps successful form checkout redirects outside error handling', async () => {
+    await expect(startSubscriptionForm('premium', 'annual', {}, new FormData())).rejects.toThrow('redirect:https://checkout.stripe.com/session');
   });
 
   it('allows a canceled customer to subscribe again without another free trial', async () => {
