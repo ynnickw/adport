@@ -16,7 +16,7 @@ export function ProjectSwitcher({ projects, currentProjectId }: { projects: Proj
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
   return <div className="project-switcher">
-    <div className="workspace-label-row"><span className="workspace-label">{current?.organizationName}</span>{canManage ? <Button className="project-create-button" type="button" onClick={() => setCreating(true)}><span aria-hidden="true">+</span> New project</Button> : null}</div>
+    <div className="workspace-label-row"><span className="workspace-label">{current?.organizationName}</span>{canManage ? <Button className="project-create-button" type="button" aria-label="New project" title="New project" onClick={() => setCreating(true)}><span aria-hidden="true">+</span></Button> : null}</div>
     <Select id="active-project" aria-label="Switch project" value={currentProjectId} disabled={pending}
       options={[...projects.map(project => ({ value: project.id, label: project.name, group: project.organizationName })), ...(canManage ? [{ value: '__new_project', label: '+ New project', group: 'Workspace' }] : []), { value: '__projects', label: canManage ? 'Manage projects' : 'View projects', group: 'Workspace' }]}
       onValueChange={value => {
