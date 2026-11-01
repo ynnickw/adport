@@ -67,7 +67,7 @@ describe('provider-specific account picker', () => {
   });
 
   it.each(['google', 'tiktok', undefined])('scopes onboarding after authorizing %s', (connectedProvider) => {
-    const html = renderToStaticMarkup(<OnboardingFlow organizationId="org" canManage initialStep="accounts" initialAgent={null} baseUrl="https://app.adport.test" connectedProvider={connectedProvider} providers={[]} connections={[]} accounts={accounts} maxActiveAccounts={3} organizationActiveCount={2} returnTo="/dashboard" />);
+    const html = renderToStaticMarkup(<OnboardingFlow projectName="Test project" setupKind="first_project" organizationId="org" canManage initialStep="accounts" initialAgent={null} baseUrl="https://app.adport.test" connectedProvider={connectedProvider} providers={[]} connections={[]} accounts={accounts} maxActiveAccounts={3} organizationActiveCount={2} returnTo="/dashboard" />);
     for (const account of accounts) {
       if (!connectedProvider || account.provider === connectedProvider) expect(html).toContain(account.name);
       else expect(html).not.toContain(account.name);

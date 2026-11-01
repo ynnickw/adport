@@ -3,10 +3,8 @@
 import { Button } from '@/components/controls';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { SUPPORT_OPEN_EVENT } from './support-widget';
-import { ANALYTICS_PREFERENCES_EVENT } from './product-analytics';
 
 type NavItem = { label: string; href: string; icon: React.ReactNode; exact?: boolean; badge?: number; paths?: string[] };
 
@@ -40,9 +38,10 @@ const SETTINGS_ITEMS: NavItem[] = [
   { label: 'Project team', href: '/dashboard/team', icon: icon.team },
   { label: 'Policies', href: '/dashboard/policies', icon: icon.policies },
   { label: 'Plan & usage', href: '/dashboard/billing', icon: icon.billing },
+  { label: 'Preferences', href: '/dashboard/preferences', icon: icon.policies },
 ];
 const UTILITY_ITEMS: NavItem[] = [
-  { label: 'Settings', href: '/dashboard/organization', icon: icon.policies, paths: SETTINGS_ITEMS.map(item => item.href) },
+  { label: 'Settings', href: '/dashboard/preferences', icon: icon.policies, paths: SETTINGS_ITEMS.map(item => item.href) },
 ];
 
 const isActive = (item: NavItem, pathname: string) => item.exact ? pathname === item.href : (item.paths ?? [item.href]).some(path => pathname === path || pathname.startsWith(`${path}/`));
@@ -69,31 +68,56 @@ export function UtilityNav() {
   return (
     <nav className="nav utility-nav" aria-label="Workspace and help">
       <NavLinks items={UTILITY_ITEMS} />
-      <Button type="button" onClick={() => window.dispatchEvent(new Event(SUPPORT_OPEN_EVENT))}>{icon.support}Help & feedback</Button>
-      <Button type="button" onClick={() => window.dispatchEvent(new Event(ANALYTICS_PREFERENCES_EVENT))}>{icon.policies}Privacy preferences</Button>
     </nav>
   );
 }
 
 export function ContextNav({ projectName }: { projectName: string }) {
   const pathname = usePathname();
+  const navigation = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const nav = navigation.current;
+    const active = nav?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!nav || !active) return;
+    const reveal = () => {
+      const parent = nav.getBoundingClientRect();
+      const item = active.getBoundingClientRect();
+      if (item.left < parent.left) nav.scrollLeft += item.left - parent.left;
+      else if (item.right > parent.right) nav.scrollLeft += item.right - parent.right;
+    };
+    const observer = new ResizeObserver(reveal);
+    observer.observe(nav);
+    reveal();
+    return () => observer.disconnect();
+  }, [pathname]);
   const tabs = SETTINGS_ITEMS.some(item => isActive(item, pathname)) ? SETTINGS_ITEMS
     : ['/dashboard/accounts', '/dashboard/connections'].includes(pathname)
       ? [{ label: 'Ad accounts', href: '/dashboard/accounts' }, { label: 'Platforms', href: '/dashboard/connections' }]
       : ['/dashboard/approvals', '/dashboard/audit'].includes(pathname)
         ? [{ label: 'Pending changes', href: '/dashboard/approvals' }, { label: 'History', href: '/dashboard/audit' }] : [];
   return <header className="workspace-bar"><span className="workspace-context">{projectName}</span>
-    {tabs.length ? <nav className="section-tabs" aria-label="Section navigation">{tabs.map(item => <Link href={item.href} key={item.href} prefetch={false} aria-current={pathname === item.href ? 'page' : undefined}>{item.label}</Link>)}</nav> : null}
+    {tabs.length ? <nav ref={navigation} className="section-tabs" aria-label="Section navigation">{tabs.map(item => <Link href={item.href} key={item.href} prefetch={false} aria-current={pathname === item.href ? 'page' : undefined}>{item.label}</Link>)}</nav> : null}
   </header>;
 }
 
 // On narrow screens the navigation collapses behind a menu button so each page starts with its content.
 export function SidebarFrame({ brand, workspace, children }: { brand: React.ReactNode; workspace: React.ReactNode; children: React.ReactNode }) {
+  const sidebar = useRef<HTMLElement>(null);
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const current = [...PRIMARY_ITEMS, ...SETTINGS_ITEMS].find((item) => isActive(item, pathname))?.label ?? 'Menu';
 
   useEffect(() => { setOpen(false); }, [pathname]);
+  useEffect(() => {
+    const element = sidebar.current;
+    const shell = element?.closest<HTMLElement>('.app-shell');
+    if (!element || !shell || open) return;
+    const measure = () => shell.style.setProperty('--mobile-nav-offset', element.getBoundingClientRect().height + 'px');
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    measure();
+    return () => observer.disconnect();
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false); };
@@ -102,7 +126,7 @@ export function SidebarFrame({ brand, workspace, children }: { brand: React.Reac
   }, [open]);
 
   return (
-    <aside className="sidebar" data-open={open}>
+    <aside ref={sidebar} className="sidebar" data-open={open}>
       <div className="sidebar-head">
         {brand}
         <div className="workspace">{typeof workspace === 'string' ? <span className="workspace-name">{workspace}</span> : workspace}</div>

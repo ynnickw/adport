@@ -107,6 +107,18 @@ describeDatabase('Supabase tenant boundary', () => {
     expect((await getOnboardingState(firstOrgId)).completedAt).toBeInstanceOf(Date);
   });
 
+  it('allows skipping and resuming setup without losing the saved step or affecting other projects', async () => {
+    const principal = { organizationId: secondOrgId, userId: secondUserId, role: 'owner' as const, scopes: [] };
+    await updateOnboardingState(principal, { currentStep: 'accounts', selectedAgent: 'claude', skip: true });
+    const skipped = await getOnboardingState(secondOrgId);
+    expect(skipped).toMatchObject({ currentStep: 'accounts', selectedAgent: 'claude' });
+    expect(skipped.completedAt).toBeInstanceOf(Date);
+    await updateOnboardingState(principal, { currentStep: 'agent' });
+    expect(await getOnboardingState(secondOrgId)).toMatchObject({ currentStep: 'agent', completedAt: skipped.completedAt });
+    expect((await getOnboardingState(firstOrgId)).currentStep).toBe('complete');
+    await expect(updateOnboardingState({ ...principal, role: 'viewer' }, { currentStep: 'welcome', skip: true })).rejects.toThrow('Owner or admin');
+  });
+
   it('encrypts Google refresh tokens and never stores plaintext', async () => {
     await upsertGoogleConnection({
       organizationId: firstOrgId,

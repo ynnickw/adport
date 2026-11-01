@@ -7,16 +7,18 @@ import { PendingAccountSelections } from '@/components/pending-account-selection
 import { LiveData } from './live-data';
 import { isSyntheticReviewer } from '@/lib/cloud/synthetic-reviewer';
 import { SyntheticReviewer } from '@/components/synthetic-reviewer';
+import { getOnboardingState } from '@/lib/cloud/onboarding';
 
 export const metadata = { title: 'Overview' };
 
 export default async function OverviewPage() {
   const tenant = await requireDashboardTenant();
   if (isSyntheticReviewer(tenant.organizationId)) return <SyntheticReviewer tenant={tenant} />;
-  const [connections, pending, accounts] = await Promise.all([
+  const [connections, pending, accounts, onboarding] = await Promise.all([
     listConnections(tenant.organizationId, tenant.userId),
     listPendingOperations(tenant.organizationId, 5),
     listOrganizationAdAccounts(tenant.organizationId),
+    getOnboardingState(tenant.organizationId),
   ]);
   const connected = connections.filter((connection) => connection.status === 'connected');
   const broken = connections.filter((connection) => connection.status === 'error');
@@ -30,6 +32,7 @@ export default async function OverviewPage() {
         description="Performance and activity across this project's ad accounts. Open Reports for the full campaign view."
         action={connections.length ? <Link className="button secondary" href="/dashboard/reports" prefetch={false}>View report</Link> : undefined}
       />
+      {canManage && onboarding.currentStep !== 'complete' ? <section className="setup-resume"><div><span className="plan-kicker">Your project is ready</span><h2>Finish setting up {tenant.organizationName}</h2><p>Pick up where you left off to connect accounts and your AI assistant.</p></div><Link href="/onboarding?resume=1" className="button secondary">Resume setup</Link></section> : null}
       {connections.length === 0 ? (
         <div className="card">
           <Empty

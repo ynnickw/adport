@@ -4,7 +4,8 @@ import { PageHeader } from '@/components/ui';
 import { WorkspaceForm } from '@/components/workspace-form';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { listOrganizationProjects } from '@/lib/cloud/workspaces';
-import { selectProjectAction, createOrganizationAction, createProjectAction, updateProjectAction } from './actions';
+import { selectProjectAction, createOrganizationAction, updateProjectAction } from './actions';
+import { NewProjectButton } from '@/components/new-project-dialog';
 
 export const metadata = { title: 'Projects' };
 
@@ -14,10 +15,9 @@ export default async function ProjectsPage() {
   const projects = canManage ? await listOrganizationProjects(tenant.userId, tenant.organizationGroupId)
     : tenant.projects.filter(project => project.organizationId === tenant.organizationGroupId);
   const defaultProjectId = tenant.projects.find(project => project.id === tenant.organizationId)!.defaultProjectId;
-  const createProject = <WorkspaceForm action={createProjectAction} label="Create project"><input type="hidden" name="organizationId" value={tenant.organizationGroupId} /><label>Client or brand name<Input name="name" required maxLength={120} placeholder="Client or brand" /></label></WorkspaceForm>;
   return <main className="page">
     <PageHeader title="Projects" description={`Clients and brands in ${tenant.organizationGroupName}. Each project keeps its accounts, connections, approvals, and history separate. The organization shares one plan.`}
-      action={canManage ? <DialogTrigger label="New project" title="Create a project" className="button">{createProject}</DialogTrigger> : undefined} />
+      action={canManage ? <NewProjectButton organizationId={tenant.organizationGroupId} organizationName={tenant.organizationGroupName} /> : undefined} />
     <section className="card"><div className="card-head"><h2>{tenant.organizationGroupName}</h2><span className="card-note">{projects.length} {projects.length === 1 ? 'project' : 'projects'}</span></div>
       <div className="row-list">{projects.map(project => <div className="row-item project-row" key={project.id}>
         <div className="identity"><span className="project-monogram" aria-hidden="true">{project.name.slice(0, 1).toUpperCase()}</span><div><strong>{project.name}</strong><div className="cell-sub">{project.archivedAt ? 'Archived' : project.id === defaultProjectId ? 'Default project' : 'Client project'}{'enabledAccounts' in project ? ' · ' + project.enabledAccounts + ' enabled accounts' : ''}</div></div></div>
