@@ -18,3 +18,13 @@ coverage/
 .vercel
 /.local-test/
 packages/mcp/.submission-previews/
+
+# Local runtime data, generated artifacts, and personal agent configuration.
+!/apps/cloud/.env.example
+**/.data/
+/output/
+/tmp/
+/artifacts/
+*.tgz
+/.mcp.json
+/.claude/settings.local.json

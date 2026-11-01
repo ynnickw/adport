@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 const nextRequire = createRequire(require.resolve('next/package.json'));
 const sharp = nextRequire('sharp');
 const source = await readFile(new URL('../app/icon.svg', import.meta.url));
-const output = new URL('../../../docs/submissions/assets/icons/', import.meta.url);
+const output = new URL('../../../artifacts/connectors/icons/', import.meta.url);
 await mkdir(output, { recursive: true });
 
 for (const [name, size] of [['directory', 512], ['composer', 128]]) {

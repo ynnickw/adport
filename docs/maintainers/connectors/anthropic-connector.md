@@ -1,0 +1,115 @@
+# Anthropic connector directory submission — Adport
+
+This file is the copy-and-checklist source for the Claude Connector Directory submission. Keep reviewer credentials and customer data out of the repository.
+
+**Submission hold — production only:** Follow the [production release gate](production-readiness.md).
+Synthetic tests/media below are historical regression evidence, not final
+native-provider acceptance. Do not list demo tools as the production connector.
+
+## Directory listing
+
+- **Name:** Adport
+- **Description:** Connect your advertising accounts once, then analyze performance and safely preview or apply governed changes from Claude.
+- **MCP endpoint:** `https://app.adport.dev/mcp`
+- **Transport:** Streamable HTTP
+- **Authentication:** OAuth 2.1 authorization code with PKCE and dynamic client registration
+- **OAuth callback support:** Claude's remote MCP callback must be accepted by the dynamic registration flow.
+- **Developer:** Yannick Westermann Labs
+- **Website:** `https://adport.dev`
+- **Support:** `https://adport.dev/support`
+- **Privacy:** `https://adport.dev/privacy`
+- **Terms:** `https://adport.dev/terms`
+
+## Three primary use cases
+
+1. **Scoped inventory:** `List every ad account this Adport workspace can access, grouped by provider.`
+2. **Cross-provider reporting:** `Compare campaign spend, clicks, conversions, and ROAS for the last 7 days. Call out currency or attribution limitations.`
+3. **Governed optimization:** `Find the strongest budget opportunity and create a preview only. Explain every policy coercion and do not apply it.`
+
+Additional reviewer prompt:
+
+4. `Show open recommendations, then explain which evidence supports the highest-priority one.`
+
+## Expected Claude experience
+
+Adport implements the open MCP Apps extension. Compatible Claude surfaces render the same inline Adport account, performance, recommendation, and guarded-change cards used in ChatGPT. Hosts without MCP Apps support receive complete JSON text plus structured content; all tools remain independently useful without the view.
+
+The view never directly calls an advertising provider. It renders the result of an already-authorized Adport tool, so account scoping and the policy engine remain authoritative.
+
+## Submission media
+
+Sanitized visual baselines generated from the exact MCP App resource:
+
+- Scoped account inventory: `artifacts/connectors/previews/mcp-accounts.png`
+- Cross-provider performance: `artifacts/connectors/previews/mcp-report.png`
+- Policy-gated operation preview: `artifacts/connectors/previews/mcp-operation.png`
+
+Regenerate with `pnpm --filter @adport/mcp render:submission-previews`. Replace or supplement these with an in-Claude capture before the final directory submission.
+
+## Reviewer account
+
+The former [synthetic reviewer workspace](archive/synthetic-reviewer.md) is retired
+and denied by the production runtime after PR #65. Do not supply that login or
+promise fictional tools, campaigns or recommendations to reviewers.
+
+Provision a dedicated review workspace with isolated, provider-supported test
+resources and the same native tools as production. Keep resources non-spending
+and preserve the preview/exact-apply gate. Do not share the owner's credentials
+or attach customer accounts as a shortcut. Run the native acceptance cases in
+[the OpenAI guide](openai-plugin.md#native-acceptance-cases) separately in Claude;
+ChatGPT success does not establish Claude behavior.
+
+On September 7 the owner explicitly authorized replacing the AppLaunchFlow
+custom connector. Adport now connects in that Claude Free account through OAuth,
+using the isolated native reviewer workspace. Claude discovered 20 common/native
+tools; this is the review workspace's current catalog, not all-provider coverage.
+Account and empty-report cards render after the host-domain fix in PR #70
+(production commit `78ae595`). A fresh account-list call also rendered correctly.
+The real paused test campaign was then read through `meta_api_read`, followed by
+a `meta_set_campaign_status` preview without a pending token. Claude rendered
+the before/after table (PAUSED to PAUSED) with `Preview · Not applied`. The actual
+tool response confirmed `pending_validation`, `applied=false`,
+`serverValidated=true` and no budget deltas. No apply was requested in this test.
+The Free-account connection proves testing access, not directory-submission access.
+
+Share dedicated credentials only through the private review field. Never put
+passwords, tokens or customer data in source, screenshots or public documentation.
+
+## Policy mapping
+
+- Tool names, titles, descriptions, and input schemas are explicit and narrow.
+- `readOnlyHint`, `destructiveHint`, and `openWorldHint` reflect runtime behavior.
+- Advertising mutations pass the policy engine; the reviewer workspace must explicitly use preview-required policy. Findings/audit persistence is a separate mutation class.
+- Adport owns and operates the submitted endpoint and public domain.
+- Public privacy, support, terms, and deletion instructions are available.
+- The MCP App declares an empty external network CSP and requests no device permissions.
+- The connector does not advertise an approval, provider capability, or account access that the runtime cannot verify.
+
+## Final submission checklist
+
+- [ ] Production release gate passes: native catalog parity, verified release providers, real reviewer workflows, no demo tools.
+- [x] Fresh Claude Web connection completes OAuth and discovers tools (September 7, native reviewer).
+- [ ] Fresh Claude Code connection completes OAuth and refreshes successfully.
+- [ ] The three required directory prompts work with the reviewer account.
+- [x] Account and empty-report MCP Apps cards render in Claude Web (PR #70); other views and fallback coverage remain separate checks.
+- [x] Native paused-campaign preview returns `applied=false` and renders as not applied in Claude Web.
+- [ ] An apply test uses only an isolated paused/non-spending native test resource.
+- [ ] Tool annotations and descriptions match actual behavior.
+- [ ] Support, privacy, terms, and deletion paths are reachable without login.
+- [ ] All required evidence and reviewer access pass before the authorized submission.
+
+## Current portal and asset requirements
+
+Rechecked September 7, 2026: remote MCP submissions use Claude's organization
+submission portal and require Team/Enterprise plus directory-management access
+(Owner on Team). Switching the existing Free account's custom connector would
+enable a test, not directory submission. Interactive listings require 3–5 PNG
+screenshots, at least 1000px wide, cropped to the app response, with prompts
+supplied separately. Do not purchase a plan or assume portal access is already
+available. See [Anthropic's submission guide](https://claude.com/docs/connectors/building/submission).
+
+The current [pre-submission checklist](https://claude.com/docs/connectors/building/review-criteria) also calls for testing every tool in MCP Inspector and Claude, populated reviewer credentials, explicit annotations, and API references for freeform queries. Its wording requires `destructiveHint=true` for modifying tools. The shared registry now defaults modifying tools to that hint, including preview-first tools that can apply changes; an SDK scanner regression checks every registered modifying tool. Do not mask a modifying tool as read-only just because its first call previews. This annotation check does not establish complete functional tool coverage in Claude.
+
+The checked-in synthetic screenshots are regression baselines, not final review
+assets. Dedicated native reviewer access, actual Claude execution, OAuth refresh
+and complete tool coverage remain open; see [validation status](archive/validation-status.md).

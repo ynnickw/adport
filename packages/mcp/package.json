@@ -15,7 +15,9 @@
   "bin": {
     "adport-mcp": "./dist/bin.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup src/index.ts src/bin.ts --format esm --dts --sourcemap --clean",
     "render:submission-previews": "node scripts/render-submission-previews.mjs",
@@ -45,5 +47,20 @@
     "tsup": "^8.3.0",
     "typescript": "^5.8.0",
     "vitest": "^4.1.10"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ynnickw/adport.git",
+    "directory": "packages/mcp"
+  },
+  "homepage": "https://github.com/ynnickw/adport#readme",
+  "bugs": {
+    "url": "https://github.com/ynnickw/adport/issues"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

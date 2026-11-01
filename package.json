@@ -12,8 +12,15 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
-    "check:public-tree": "node scripts/check-public-tree.mjs",
-    "clean": "turbo run clean && rm -rf node_modules/.cache"
+    "check:public-tree": "node scripts/repository/check-public-tree.mjs",
+    "clean": "turbo run clean && rm -rf node_modules/.cache",
+    "check": "pnpm check:public-tree && pnpm check:docs && pnpm check:release && pnpm check:website && pnpm test:tooling",
+    "check:docs": "node scripts/repository/check-docs.mjs",
+    "check:release": "node scripts/release/check-release.mjs",
+    "check:website": "node scripts/website/build-support-widget.mjs --check && node --check website/support.js && node scripts/website/build-provider-pages.mjs --check && node scripts/website/build-pricing-page.mjs --check && node scripts/website/build-resource-pages.mjs --check",
+    "test:tooling": "node --test scripts/*/test-*.mjs",
+    "check:packages": "node scripts/release/check-packages.mjs",
+    "release:prepare": "node scripts/release/prepare-release.mjs"
   },
   "devDependencies": {
     "turbo": "^2.5.0"

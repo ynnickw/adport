@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to adport. Format loosely follows [Keep a Changelog](https://keepachangelog.com/); pre-1.0, minor versions may break.
+Current release notes are maintained in [GitHub Releases](https://github.com/ynnickw/adport/releases). This file preserves the historical changelog through v0.5.2; v0.6.0 and later are recorded on GitHub. See the [release process](docs/maintainers/releasing.md) for preparing a new version.
 
 ## 0.5.2 — 2026-08-15
 

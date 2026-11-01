@@ -1,0 +1,49 @@
+name: Bug report
+description: Report a reproducible problem with Adport.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing issues first. Report vulnerabilities privately using [SECURITY.md](https://github.com/ynnickw/adport/security/policy).
+        Remove tokens, credentials, account identifiers, and private request data from all output.
+  - type: input
+    id: version
+    attributes:
+      label: Adport version
+      description: Run adport --version, or provide a source commit.
+    validations:
+      required: true
+  - type: dropdown
+    id: interface
+    attributes:
+      label: Interface
+      options: [Local CLI, Local stdio MCP, Cloud dashboard, Hosted MCP or REST, Website, Other]
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, Node.js version, MCP client if applicable, and provider (or demo).
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include the minimal command or tool call using synthetic identifiers.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and sanitized output
+    validations:
+      required: true

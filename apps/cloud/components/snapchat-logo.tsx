@@ -1,4 +1,4 @@
-/** Official Ghost artwork served by Snapchat for Business; see docs/provider-brand-assets.md. */
+/** Official Ghost artwork served by Snapchat for Business; see docs/maintainers/provider-brand-assets.md. */
 export function SnapchatLogo() {
   return (
     <svg className="snapchat-logo" viewBox="0 0 1024 1024" aria-hidden="true">
