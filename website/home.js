@@ -5,46 +5,63 @@
 const gate = document.getElementById("console");
 if (gate) initGate(gate);
 
-// The poster is a plain YouTube link without JavaScript. With JavaScript the hero video starts
-// muted and looping (browsers only autoplay muted video); people who prefer reduced motion keep
-// the poster until they press play. Frames come from youtube-nocookie.com only (see the CSP).
-function loadVideo(current, { muted }) {
-  const id = current.dataset.videoId;
-  const player = document.createElement("iframe");
-  const params = new URLSearchParams({ autoplay: "1", mute: muted ? "1" : "0", rel: "0", playsinline: "1" });
-  if (muted) { params.set("loop", "1"); params.set("playlist", id); }
-  player.src = `https://www.youtube-nocookie.com/embed/${id}?${params}`;
-  player.title = current.dataset.videoTitle;
-  player.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
-  player.allowFullscreen = true;
-  player.referrerPolicy = "strict-origin-when-cross-origin";
-  player.dataset.videoId = id;
-  player.dataset.videoTitle = current.dataset.videoTitle;
-  current.replaceWith(player);
-  return player;
+// Keep the headline still for reduced motion and while someone is reading it with the pointer.
+const heroMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+document.querySelectorAll("[data-rotate]").forEach((rotator, group) => {
+  const items = [...rotator.children];
+  let active = 0;
+  const show = () => items.forEach((item, index) => item.classList.toggle("is-active", index === active));
+  show();
+  rotator.dataset.ready = "true";
+  heroMotion.addEventListener("change", () => { active = 0; show(); });
+  window.setInterval(() => {
+    if (heroMotion.matches || document.hidden || rotator.closest("h1").matches(":hover, :focus-within")) return;
+    active = (active + 1) % items.length;
+    show();
+  }, group === 0 ? 3200 : 4000);
+});
+
+// Native controls work without JavaScript. The muted preview adds just a small pause button;
+// the full controls and audio appear only when someone chooses to watch the demo.
+const demo = document.querySelector(".demo-video");
+if (demo) {
+  const toggle = document.querySelector(".video-toggle");
+  const fallback = document.querySelector(".video-fallback");
+  const syncToggle = () => {
+    const label = demo.paused ? "Play demo" : "Pause demo";
+    toggle.dataset.state = demo.paused ? "paused" : "playing";
+    toggle.setAttribute("aria-label", label);
+    toggle.querySelector("span").textContent = label;
+  };
+  const play = () => demo.play().catch(syncToggle);
+  demo.controls = false;
+  toggle.hidden = false;
+  demo.addEventListener("play", syncToggle);
+  demo.addEventListener("pause", syncToggle);
+  const showFallback = () => { toggle.hidden = true; fallback.hidden = false; };
+  demo.addEventListener("error", showFallback);
+  demo.querySelector("source").addEventListener("error", showFallback);
+  if (demo.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) showFallback();
+  toggle.addEventListener("click", () => demo.paused ? play() : demo.pause());
+  heroMotion.addEventListener("change", () => { if (heroMotion.matches) demo.pause(); });
+  syncToggle();
+  if (!heroMotion.matches) play();
+
+  document.querySelectorAll("[data-play-video]").forEach((link) => {
+    link.addEventListener("click", (event) => {
+      if (!fallback.hidden || demo.error || event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+      event.preventDefault();
+      demo.scrollIntoView({ behavior: heroMotion.matches ? "auto" : "smooth", block: "center" });
+      demo.currentTime = 0;
+      demo.muted = false;
+      demo.loop = false;
+      demo.controls = true;
+      toggle.hidden = true;
+      demo.focus({ preventScroll: true });
+      play();
+    });
+  });
 }
-
-document.querySelectorAll(".video-facade").forEach((facade) => {
-  facade.addEventListener("click", (event) => {
-    if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
-    event.preventDefault();
-    loadVideo(facade, { muted: false }).focus();
-  });
-  if (facade.hasAttribute("data-autoplay") && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    loadVideo(facade, { muted: true });
-  }
-});
-
-// "Watch the demo" plays the hero video with sound, from the poster or from the muted autoplay.
-document.querySelectorAll("[data-play-video]").forEach((link) => {
-  link.addEventListener("click", (event) => {
-    const current = document.querySelector(".hero-video .video-facade, .hero-video iframe");
-    if (!current || event.metaKey || event.ctrlKey || event.shiftKey) return;
-    event.preventDefault();
-    current.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
-    loadVideo(current, { muted: false }).focus({ preventScroll: true });
-  });
-});
 
 function initGate(root) {
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
