@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { articles, clusters, published, sources } from './website-resources.mjs';
 import { escape } from './resource-content/shared.mjs';
+import { providers } from './website-providers.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const site = path.join(root, 'website');
@@ -17,7 +18,7 @@ const words = article => (article.intro + ' ' + article.sections.map(section => 
 const minutes = article => Math.ceil(words(article) / 200);
 const mark = id => {
   let svg;
-  if (id === 'google' || id === 'meta') svg = home.match(new RegExp(`<svg[^>]*class="${id}-logo"[\\s\\S]*?<\\/svg>`))?.[0];
+  if (providers.some(provider => provider.id === id)) svg = home.match(new RegExp(`<svg[^>]*class="${id}-logo"[\\s\\S]*?<\\/svg>`))?.[0];
   else if (id === 'mcp') svg = home.match(/<svg class="agent-brand-logo agent-brand-mcp"[\s\S]*?<\/svg>/)?.[0];
   else { const source = home.match(new RegExp(`<span class="agent agent-${id}">[\\s\\S]*?<\\/svg>`))?.[0]; svg = source?.slice(source.indexOf('<svg')); }
   if (!svg) throw new Error(`Real brand asset missing: ${id}`);
@@ -50,7 +51,7 @@ function document({ title, description, pathname, content, article, cluster }) {
 <main id="main" class="resources-main">${content}${cta}</main>${footer}</body></html>\n`;
 }
 const output = new Map();
-output.set('resources.html', document({ title: 'Adport resources | AI ads, Google Ads & agency guides', description: 'Practical guides for connecting AI to Google Ads, auditing campaigns, and organizing agency clients. Setup steps, worked examples, and original-source links.', pathname: '/resources', content: `${breadcrumbs()}<section class="resources-hero"><p class="resource-eyebrow">The Adport field guide</p><h1>Useful guides for people who run ads.</h1><p>Set up your AI tools, review campaign performance, and build a repeatable workflow for every client.</p><nav class="resource-topics" aria-label="Guide topics">${clusters.map(c => `<a href="#${c.slug}">${escape(c.title)}<span>${articles.filter(a => a.cluster === c.slug).length}</span></a>`).join('')}</nav></section>
+output.set('resources.html', document({ title: 'Adport resources | Claude, ads MCP & campaign guides', description: 'Connect Claude to Google, Meta, TikTok, Snapchat, and other ad platforms. Explore MCP setup guides, campaign reviews, and agency workflows.', pathname: '/resources', content: `${breadcrumbs()}<section class="resources-hero"><p class="resource-eyebrow">The Adport field guide</p><h1>Useful guides for people who run ads.</h1><p>Set up your AI tools, review campaign performance, and build a repeatable workflow for every client.</p><nav class="resource-topics" aria-label="Guide topics">${clusters.map(c => `<a href="#${c.slug}">${escape(c.title)}<span>${articles.filter(a => a.cluster === c.slug).length}</span></a>`).join('')}</nav></section>
 ${clusters.map(c => `<section class="resource-cluster" id="${c.slug}" aria-labelledby="${c.slug}-title"><div class="resource-section-head"><div><h2 id="${c.slug}-title">${escape(c.title)}</h2><p>${escape(c.description)}</p></div><a href="/resources/${c.slug}">Explore topic <span aria-hidden="true">↗</span></a></div><div class="resource-grid">${articles.filter(a => a.cluster === c.slug).map(card).join('\n')}</div></section>`).join('\n')}` }));
 for (const cluster of clusters) {
   output.set(`resources/${cluster.slug}.html`, document({ title: `${cluster.title} guides | Adport`, description: cluster.description, pathname: `/resources/${cluster.slug}`, cluster,
@@ -64,7 +65,8 @@ for (const article of articles) {
 <section class="resource-related"><div class="resource-section-head"><h2>Keep reading</h2><a href="/resources/${cluster.slug}">${escape(cluster.title)} <span aria-hidden="true">↗</span></a></div><div class="resource-grid">${articles.filter(a => a.cluster === cluster.slug && a.slug !== article.slug).slice(0, 3).map(card).join('')}</div></section>` }));
 }
 const featured = ['google-ads-mcp-server', 'google-ads-audit-checklist', 'agency-multi-client-ad-management'].map(slug => articles.find(a => a.slug === slug));
-const landing = `<!-- resources:start -->\n<section class="landing-resources" aria-labelledby="resources-title"><div class="resource-section-head"><div><p class="resource-eyebrow">Resources</p><h2 id="resources-title">Make the next review easier.</h2><p>Practical guides to AI workflows, Google Ads, and client operations.</p></div><a href="/resources">All guides <span aria-hidden="true">↗</span></a></div><div class="resource-grid">${featured.map(card).join('')}</div></section>\n      <!-- resources:end -->`;
+const claudeFeatured = ['meta-ads-with-claude', 'snapchat-ads-with-claude', 'tiktok-ads-with-claude'].map(slug => articles.find(a => a.slug === slug));
+const landing = `<!-- resources:start -->\n<section class="landing-resources" aria-labelledby="resources-title"><div class="resource-section-head"><div><p class="resource-eyebrow">Resources</p><h2 id="resources-title">Make the next review easier.</h2><p>Practical guides to AI workflows, Google Ads, and client operations.</p></div><a href="/resources">All guides <span aria-hidden="true">↗</span></a></div><div class="resource-grid">${featured.map(card).join('')}</div><div class="landing-claude-guides" aria-labelledby="claude-guides-title"><div class="resource-section-head"><div><p class="resource-eyebrow">Connect your ad stack</p><h2 id="claude-guides-title">Your ad accounts, connected to Claude.</h2><p>Pick your platform for setup steps, a useful first report, and the details that matter to your campaigns.</p></div><a href="/resources/connect-ads-to-claude">All Claude setup guides <span aria-hidden="true">↗</span></a></div><div class="resource-grid">${claudeFeatured.map(card).join('')}</div><nav class="resource-topics" aria-label="More Claude setup guides"><a href="/resources/connect-ads-to-claude-code">Claude Code MCP setup</a><a href="/resources/google-ads-with-claude">Google Ads</a><a href="/resources/linkedin-ads-with-claude">LinkedIn Ads</a><a href="/resources/microsoft-ads-with-claude">Microsoft &amp; Bing Ads</a></nav></div></section>\n      <!-- resources:end -->`;
 const marker = /<!-- resources:start -->[\s\S]*?<!-- resources:end -->/;
 if (!marker.test(home)) throw new Error('Homepage resource markers missing.');
 output.set('index.html', home.replace(marker, landing));
