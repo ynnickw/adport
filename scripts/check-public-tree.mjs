@@ -9,6 +9,9 @@ const output = execFileSync(
 const files = output.split('\0').filter(Boolean);
 
 const forbiddenPath = [
+  { test: (file) => /^(output|tmp|artifacts)\//.test(file) || /(^|\/)\.data\//.test(file), reason: 'local runtime or generated data' },
+  { test: (file) => /\.tgz$/.test(file), reason: 'packed npm artifact' },
+  { test: (file) => file === '.mcp.json' || file === '.claude/settings.local.json', reason: 'personal agent configuration' },
   { test: (file) => file === 'private' || file.startsWith('private/'), reason: 'private workspace material' },
   { test: (file) => /(^|\/)\.env($|\.)/.test(file) && !/\.example$/.test(file), reason: 'environment file' },
   { test: (file) => /(^|\/)(credentials|tokens?)\.json$/i.test(file), reason: 'credential/token store' },

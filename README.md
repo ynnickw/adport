@@ -1,79 +1,52 @@
-# adport
+<div align="center">
+  <img src="website/favicon.svg" width="56" height="56" alt="Adport" />
+  <h1>Adport</h1>
+  <p><strong>Manage your ad accounts from the terminal or any AI agent.</strong><br />11 ad providers. One tool registry. Every write previewed first.</p>
+  <p>
+    <a href="https://github.com/ynnickw/adport/actions/workflows/ci.yml"><img src="https://github.com/ynnickw/adport/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+    <a href="https://www.npmjs.com/package/adport"><img src="https://img.shields.io/npm/v/adport" alt="npm version" /></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache 2.0 license" /></a>
+  </p>
+  <p><a href="https://adport.dev">Website</a> · <a href="docs/README.md">Documentation</a> · <a href="https://github.com/ynnickw/adport/releases">Releases</a> · <a href="CONTRIBUTING.md">Contributing</a></p>
+</div>
 
-> The open control plane for paid media. Manage 11 ad providers from the terminal or any AI agent—with every write previewed first.
+Adport is an open-source control plane for paid media. Connect your advertising accounts, inspect performance, investigate audit findings, and preview changes through the CLI or a Model Context Protocol (MCP) client. Claude Code and other MCP clients use the same typed tools and policy engine as the terminal.
 
-I built adport because I wanted an agent to help with ad operations, but I did not want a prompt to be the only thing standing between the agent and an expensive change.
+The local CLI and stdio MCP server run on your machine with your own provider credentials. They require no Adport account and contain no telemetry. [Adport Cloud](https://adport.dev/#waitlist) adds hosted connections and a team dashboard; public access is currently through the waitlist.
 
-adport is an Apache-2.0 CLI, local MCP server, and locally runnable cloud application. It connects to your ad accounts, gives every client the same typed tools, normalizes reporting across providers, and makes every write show a preview before the exact approved change can run. The released CLI remains self-hosted with credentials on your machine and no telemetry; the cloud application is implemented for local verification but is not yet a public production service.
+## Quick start
 
-Google Ads, Apple Ads, and Microsoft Advertising have been exercised against live accounts. Meta and TikTok are implemented, but still need more testing with advertisers who use them day to day. If that is you, I would love to test and improve the integration with you.
-
-## Install
-
-Requires Node.js 22.13 or newer.
+Requires **Node.js 22.13 or newer**. CI tests Node.js 22 and 24.
 
 ```sh
 npm install -g adport
 adport --version
+
+# Try synthetic accounts without credentials or network access to ad platforms
+adport --demo accounts
+adport --demo report --range last_7_days
 ```
 
-Connect a provider and confirm the account is available:
+To use a real account, follow the [provider connection guide](docs/providers.md) to create your own provider application or obtain its required credentials, then connect:
 
 ```sh
 adport connect google
-adport accounts
 adport doctor
-```
-
-Adport fails closed when no provider credentials are available: it exposes the core/audit tool definitions, but account, report, and audit operations return `NOT_CONNECTED`. It never substitutes demo accounts in a normal runtime.
-
-To explore synthetic data explicitly, opt into demo mode:
-
-```sh
-adport --demo accounts
-adport --demo report --range last_7_days
-adport --demo mcp
-```
-
-For an MCP host that configures environment variables instead of arguments, `ADPORT_DEMO=true` enables the same isolated mock provider. Mock tools are always named `mock_*` and never call an advertising platform.
-
-Then pull a normalized report:
-
-```sh
+adport accounts --provider google
 adport report --provider google --metrics spend,clicks,conversions,roas --range last_7_days
 ```
 
-Supported connection commands:
+The same `adport connect <provider>` flow supports all providers below. With no credentials, account and report calls return `NOT_CONNECTED`. Synthetic data is available only through explicit `--demo` or `ADPORT_DEMO=true` opt-in.
 
-```sh
-adport connect google
-adport connect meta
-adport connect tiktok
-adport connect apple
-adport connect microsoft
-adport connect reddit
-adport connect snapchat
-adport connect spotify
-adport connect pinterest
-adport connect linkedin
-adport connect x
-```
+## Connect an AI agent
 
-These are deliberately **local/BYO** connections. You create and own each provider app, developer token, or API key; the CLI talks directly to the provider and writes secrets only to `${ADPORT_HOME:-~/.config/adport}/credentials.json` with mode `0600`. Adport Cloud and its hosted OAuth broker are not involved. Provider review, consent warnings, and tenant policies therefore belong to your provider app. Remove a stored connection with `adport disconnect <provider>`; revoke the credential separately at the provider when necessary.
-
-The cloud application in `apps/cloud` is a separate flow. Its hosted browser-based OAuth broker supports all 11 providers; tenants never paste application secrets. Each provider must be configured and approved for its intended rollout before its connection is enabled. Snapchat, Spotify, Pinterest, LinkedIn and X also support an organization-specific testing allowlist. Apple Ads uses a service-provider authorization-code flow and stores the tenant's encrypted refresh token. Providers share an encrypted tenant vault and the remote REST/MCP runtime. See the [hosted onboarding guide](./docs/providers/cloud-onboarding.md).
-
-The complete credential and authorization checklist is in [docs/providers.md](./docs/providers.md). Never commit provider tokens, app secrets, refresh tokens, or private keys.
-
-## Use it with Claude Code
-
-After installing adport and connecting a provider:
+After installing the CLI and connecting a provider, add the local server to Claude Code:
 
 ```sh
 claude mcp add adport -- adport mcp
 ```
 
-Restart Claude Code, then ask it to list your ad accounts or report campaign performance. The same stdio server works with other MCP clients:
+For other clients that support stdio MCP, use:
 
 ```json
 {
@@ -86,90 +59,66 @@ Restart Claude Code, then ask it to list your ad accounts or report campaign per
 }
 ```
 
-The CLI is not a separate implementation. `adport accounts`, `adport report`, and `adport tools run` use the same tool registry and policy engine exposed through MCP.
+Start with a request such as “Report my campaign performance for the last seven days. Keep currencies separate.” For a change, ask “Preview pausing this campaign and show the before and after.”
 
-## What happens before a write
+The [hosted plugin](plugins/adport/README.md) uses Cloud OAuth and a remote endpoint. Its availability and provider permissions are separate from local MCP setup.
 
-Every mutation uses the same two-step contract:
+## What you can do
 
-1. The first call can only return a dry-run preview.
-2. The preview includes the proposed changes, coercions, budget deltas, and a short-lived `pending_operation_id`.
-3. Applying requires a second call with that ID and identical arguments.
-
-Changed arguments, expired approvals, protected accounts, and budget-cap violations are rejected. New campaigns are created paused, coercions are always reported, and applied changes are written to an append-only local audit log.
-
-Use the CLI to inspect the active policy and audit trail:
+- **Read accounts and performance.** Use provider-native queries or normalized reports with explicit currencies and attribution limits.
+- **Preview and apply changes.** Inspect campaign, budget, status, and other supported mutations before approving the exact operation.
+- **Investigate findings.** Run audit rules for wasted spend, low CTR, CPA outliers, and below-break-even ROAS. Findings carry evidence and an open, dismissed, or applied lifecycle.
+- **Use one interface everywhere.** Provider modules, tool schemas, and policy checks are shared across CLI, MCP, and Cloud.
 
 ```sh
-adport policy
-adport audit show
-```
-
-Policy lives at `~/.config/adport/policy.yaml`; credentials live at `~/.config/adport/credentials.json` with local-only file permissions.
-
-## Provider status
-
-| Provider | Reads | Writes | Provider-side validation | Current validation |
-| --- | --- | --- | --- | --- |
-| Google Ads | GAQL and normalized reports | campaigns, ad groups, keywords, RSAs, budgets, bidding | `validate_only` | exercised against a live account |
-| Meta Ads | Insights and normalized reports | campaigns, ad sets, budgets, status | `execution_options=["validate_only"]` | needs more real-account testing |
-| TikTok Ads | reporting and normalized reports | campaigns, budgets, status | client-side preview; sandbox available | needs sandbox and production testers |
-| Apple Ads | campaign reports and normalized reports | campaigns, budgets, status | client-side preview | exercised against a live account |
-| Microsoft Advertising | asynchronous reports and normalized reports | campaigns, budgets, status | client-side preview; sandbox available | exercised against a live account |
-| Reddit Ads | v3 reports and normalized reports | campaigns, CBO budgets, status | client-side preview | wire schemas verified; needs a real-account tester |
-| [Snapchat Ads](./docs/providers/snapchat.md) | discovery and normalized reports | campaigns, budgets, status | client-side preview | contract tests; cloud discovery and empty report verified |
-| [Spotify Ads](./docs/providers/spotify.md) | discovery and normalized reports | unpublished drafts, campaign status, ad-set budget/delivery | client-side preview | contract tests; cloud discovery returned no accounts |
-| [Pinterest Ads](./docs/providers/pinterest.md) | discovery and normalized reports | campaigns, budgets, status | client-side preview | contract tests; cloud discovery returned no accounts |
-| [LinkedIn Ads](./docs/providers/linkedin.md) | discovery and normalized reports | campaigns, budgets, status | client-side preview | contract tests; cloud approval pending |
-| [X Ads](./docs/providers/x.md) | discovery and normalized reports | campaigns, budgets, status | client-side preview | contract tests; Standard Ads API app access approved |
-
-Apple Campaign Management API v5 sunsets in January 2027. Its client is version-isolated so the future Ads Platform API migration does not leak into the shared tool layer.
-
-## Help test a provider
-
-If you currently run ads on Meta, TikTok, Apple, Microsoft, or Google, practical workflow feedback is more useful than a star.
-
-Start with connection health and reads, or use a provider sandbox where available:
-
-```sh
-adport connect <provider>
-adport doctor
-adport accounts --provider <provider>
-adport report --provider <provider> --range last_7_days
-```
-
-If something fails or a workflow is missing, [open an issue](https://github.com/ynnickw/adport/issues) with the provider, command, expected result, and sanitized error. Do not include credentials, account details, access tokens, or private request data. I am especially interested in working with active advertisers on authentication edge cases, reporting fields, safe write previews, and the first useful provider-specific audit rules.
-
-## Findings instead of an account score
-
-`adport audit run` evaluates pluggable rule packs over normalized campaign data and persists concrete findings such as zero-conversion spend, low CTR, CPA outliers, and below-break-even ROAS.
-
-```sh
+adport tools list
 adport audit run
 adport recommendations list
-```
-
-Recommendations remain open until they are dismissed or applied. Any proposed fix goes through the normal preview-and-approve gate. There is deliberately no account score: a concrete finding with evidence is more useful than a gameable number.
-
-## Reporting and audit semantics
-
-Normalized metric definitions, currency behavior, date boundaries, attribution limits, and safe cross-provider comparison rules are documented in [docs/reporting-semantics.md](./docs/reporting-semantics.md). Provider reporting is not silently currency-converted and does not erase platform attribution differences.
-
-Write-audit entries are append-only JSONL locally. Inspect or export them without changing the source log:
-
-```sh
+adport policy
 adport audit show --limit 50
-adport audit export --format jsonl > adport-audit.jsonl
-adport audit export --format json > adport-audit.json
 ```
 
-The policy contract and audit event schema are documented in [docs/write-safety.md](./docs/write-safety.md).
+## How write approval works
 
-## Self-hosted and cloud modes
+1. Call a write tool with the proposed arguments. The first call returns a preview, budget deltas, policy coercions, and a short-lived `pending_operation_id`.
+2. Review the preview. New campaigns are forced paused, and that coercion is reported.
+3. Repeat the call with identical arguments and the pending ID to apply it.
 
-The CLI and stdio MCP server remain local and BYO. They do not contact Adport Cloud.
+Changed arguments, expired approvals, protected accounts, and budget-cap violations are rejected. Applied provider changes are recorded in an append-only audit trail. Recommendations use this same gate; they cannot bypass it.
 
-The repository now also contains a Next.js/Supabase cloud control center with tenant authentication and roles, RLS, encrypted multi-provider credentials, a hosted OAuth broker for Google, Meta, TikTok, Apple, Microsoft, and Reddit (PKCE where supported, one-time state, revocation or manual-revocation guidance on disconnect), MCP OAuth 2.1 with S256 PKCE and workspace consent, optional scoped API keys, a remote MCP endpoint, persistent pending approvals/audit events, retention, revocation, and organization deletion. It reuses the same provider modules, tool registry, and policy engine; it does not create a second write path. The implementation is local-first and still has explicit production gates. See [docs/deployment-model.md](./docs/deployment-model.md) and [docs/cloud-local-development.md](./docs/cloud-local-development.md).
+Local state lives under `${ADPORT_HOME:-~/.config/adport}`. Credentials are stored in `credentials.json` with mode `0600`; policy is configured in `policy.yaml`. See the [write-safety contract](docs/write-safety.md) for the full behavior, including provider-side validation limits.
+
+## Providers
+
+All 11 providers have local connection commands, normalized reports, and guarded write tools. Coverage varies by provider; implementation and contract tests do not establish approval or successful live execution for every operation.
+
+| Provider | Connection ID | Capabilities and setup |
+| --- | --- | --- |
+| Google Ads | `google` | [GAQL, campaigns, ad groups, keywords, RSAs, budgets, bidding](docs/providers.md#google-ads) |
+| Meta Ads | `meta` | [Insights, account objects, campaigns, ad sets, budgets, status](docs/providers.md#meta-ads) |
+| TikTok Ads | `tiktok` | [Reports, campaigns, budgets, status, sandbox support](docs/providers.md#tiktok-ads) |
+| Apple Ads | `apple` | [Campaigns, ad groups, keywords, creatives, reports](docs/providers.md#apple-ads) |
+| Microsoft Advertising | `microsoft` | [Asynchronous reports, campaigns, budgets, status](docs/providers.md#microsoft-advertising) |
+| Reddit Ads | `reddit` | [Native reports, account resources, campaigns, CBO budgets](docs/providers.md#reddit-ads) |
+| Snapchat Ads | `snapchat` | [Discovery, reports, campaigns, budgets, status](docs/providers/snapchat.md) |
+| Spotify Ads | `spotify` | [Reports, unpublished drafts, campaign status, ad-set delivery](docs/providers/spotify.md) |
+| Pinterest Ads | `pinterest` | [Discovery, reports, campaigns, budgets, status](docs/providers/pinterest.md) |
+| LinkedIn Ads | `linkedin` | [Discovery, reports, campaigns, budgets, status](docs/providers/linkedin.md) |
+| X Ads | `x` | [Discovery, analytics, campaigns, budgets, status](docs/providers/x.md) |
+
+Provider application approval, account access, and available metrics depend on the platform. The [connection guides](docs/providers.md) record prerequisites and testing limits. Reports preserve currency and attribution differences; see [reporting semantics](docs/reporting-semantics.md) before comparing providers.
+
+## Local or Cloud
+
+| | Local CLI and MCP | Adport Cloud |
+| --- | --- | --- |
+| Setup | Install `adport`, bring your own provider applications and credentials | Hosted provider authorization; access through the [waitlist](https://adport.dev/#waitlist) |
+| Runtime | Your machine, stdio MCP | Hosted dashboard, REST, and remote MCP |
+| Credentials | Permission-restricted local file | Encrypted tenant vault |
+| Approvals and audit | Local pending operations and JSONL log | Persistent tenant-scoped approvals and audit events |
+| Policy and tools | Shared core and provider modules | Same core and provider modules |
+
+The Cloud source is in `apps/cloud`. See [local Cloud development](docs/cloud-local-development.md), [hosted onboarding](docs/providers/cloud-onboarding.md), and the [deployment model](docs/deployment-model.md).
 
 ## Development
 
@@ -177,43 +126,32 @@ The repository now also contains a Next.js/Supabase cloud control center with te
 git clone https://github.com/ynnickw/adport.git
 cd adport
 corepack enable
-pnpm install
+pnpm install --frozen-lockfile
+pnpm check
 pnpm build
 pnpm test
 pnpm typecheck
-
-# Optional local cloud stack
-supabase start
-supabase db reset --local --yes
-pnpm --filter @adport/cloud dev
 ```
 
-Repository layout:
+The repository pins pnpm in `package.json`. Advertising credentials are unnecessary for the default build and tests. Optional database and HTTP integration checks are documented in the [Cloud development guide](docs/cloud-local-development.md).
 
-```text
-packages/
-  core/       shared tool registry, policy engine, audit harness, credentials
-  google/     Google Ads provider
-  meta/       Meta Marketing API provider
-  tiktok/     TikTok Business API provider
-  apple/      Apple Ads provider
-  microsoft/  Microsoft Advertising provider
-  reddit/     Reddit Ads API v3 provider
-  snapchat/   Snapchat Marketing API provider
-  spotify/    Spotify Ads API provider
-  pinterest/  Pinterest Ads API provider
-  linkedin/   LinkedIn Marketing API provider
-  x/          X Ads API provider
-  mcp/        stdio MCP adapter over the shared registry
-  cli/        npm CLI over the shared registry
-apps/
-  cloud/      Next.js/Supabase tenant dashboard, OAuth broker, REST, and remote MCP
-supabase/
-  migrations/ tenant schema, RLS, backend grants, retention, and database tests
-```
+| Path | Purpose |
+| --- | --- |
+| `packages/core` | Tool registry, policy engine, credentials, audit rules |
+| `packages/{provider}` | Advertising platform adapters and wire-contract tests |
+| `packages/cli`, `packages/mcp` | CLI and stdio MCP adapters |
+| `apps/cloud` | Hosted dashboard, authorization, REST, remote MCP |
+| `supabase` | Database migrations and tenant-isolation checks |
+| `website`, `scripts` | Public site, generated pages, repository tooling |
+| `plugins/adport` | Agent plugin manifests and skill |
+| `docs` | User guides, operations, release and validation records |
 
-Provider tests assert outgoing API wire formats, unit conversions, headers, and validation behavior. Every new write path must go through the shared policy engine.
+## Contributing and support
+
+Bug fixes, documentation, provider tests, and practical feedback from advertisers are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md); commits require a DCO sign-off (`git commit -s`). The [release guide](docs/releasing.md) explains versioning, verification, and publishing.
+
+Use [GitHub issues](https://github.com/ynnickw/adport/issues/new/choose) for reproducible bugs and feature proposals. See [SUPPORT.md](SUPPORT.md) for help, [SECURITY.md](SECURITY.md) for private vulnerability reports, and the [Code of Conduct](CODE_OF_CONDUCT.md) for community expectations.
 
 ## License
 
-[Apache-2.0](./LICENSE). Contributions require a DCO sign-off (`git commit -s`); see [CONTRIBUTING.md](./CONTRIBUTING.md).
+[Apache License 2.0](LICENSE).

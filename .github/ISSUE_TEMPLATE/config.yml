@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation and setup
+    url: https://github.com/ynnickw/adport/blob/main/docs/README.md
+    about: Start with the provider guides and troubleshooting resources.
+  - name: Report a security vulnerability privately
+    url: https://github.com/ynnickw/adport/security/policy
+    about: Follow the security policy; do not post credentials or vulnerabilities in a public issue.
+  - name: Cloud account support
+    url: https://adport.dev/support
+    about: Get help with your hosted account.

@@ -1,6 +1,6 @@
 # Deployment model
 
-Adport has one shared provider/tool/policy layer and two deployment modes. The self-hosted CLI remains local and bring-your-own-credentials. The managed cloud application is implemented in `apps/cloud` and is currently intended to be run and verified locally before a production deployment.
+Adport has one shared provider/tool/policy layer and two deployment modes. The self-hosted CLI remains local and bring-your-own-credentials. The managed Cloud application is implemented in `apps/cloud`, can also run locally, and is available to hosted users through an invitation-controlled rollout. Public access is offered through the [waitlist](https://adport.dev/#waitlist).
 
 ## Self-hosted mode
 
@@ -23,7 +23,7 @@ The cloud application is a Next.js 16 service backed by Supabase Auth and Postgr
 7. REST and remote MCP call the same `ToolRegistry` and `PolicyEngine` as the CLI. There is no cloud-only mutation path.
 8. Pending approvals and audit events are persisted in Postgres. The exact operation hash, tenant, provider, expiry, and policy are checked again before apply.
 
-The cloud runtime supports Google, Meta, TikTok, Apple, Microsoft, and Reddit providers. Every provider is connected through the hosted browser-based OAuth broker (`/api/oauth/<provider>/start` → provider consent → `/api/oauth/<provider>/callback`) using Adport-owned applications configured in server environment; Google requests only `https://www.googleapis.com/auth/adwords`. Tenants never enter application secrets, and each provider card is disabled until its application is approved and configured. Apple Ads uses Adport's approved service-provider authorization-code flow with the `searchads` scope; the shared ES256 client key remains server-side and only each tenant's encrypted refresh token is stored in the vault. Microsoft and Reddit refresh-token rotations are persisted immediately; disconnect revokes the grant at the provider where an API exists before deleting the encrypted copy.
+The Cloud runtime includes Google, Meta, TikTok, Apple, Microsoft, Reddit, Snapchat, Spotify, Pinterest, LinkedIn, and X provider modules. Availability depends on application configuration, provider approval, and rollout gates; see [hosted onboarding](providers/cloud-onboarding.md). Every provider is connected through the hosted browser-based OAuth broker (`/api/oauth/<provider>/start` → provider consent → `/api/oauth/<provider>/callback`) using Adport-owned applications configured in server environment; Google requests only `https://www.googleapis.com/auth/adwords`. Tenants never enter application secrets, and each provider card is disabled until its application is approved and configured. Apple Ads uses Adport's approved service-provider authorization-code flow with the `searchads` scope; the shared ES256 client key remains server-side and only each tenant's encrypted refresh token is stored in the vault. Microsoft and Reddit refresh-token rotations are persisted immediately; disconnect revokes the grant at the provider where an API exists before deleting the encrypted copy.
 
 ## Tenant and service controls
 
@@ -44,9 +44,9 @@ Local development reads a 256-bit master key from `ADPORT_CLOUD_ENCRYPTION_KEY`.
 
 Before production, provide that value through a managed secret/KMS boundary, restrict decrypt permission to the cloud runtime identity, define rotation and recovery procedures, and record the key version stored with each ciphertext. A production database login should inherit only `adport_backend`; do not run application queries as a database owner. Use TLS for browser, API, database, and provider traffic.
 
-## Production gates
+## Production deployment checklist
 
-The local implementation is not itself authorization to launch publicly. A production rollout still requires:
+For each hosted environment, verify the following before expanding access. This checklist describes deployment requirements; it is not a current approval or completion record:
 
 - a hosted Supabase project and dedicated backend database login;
 - managed secrets/KMS, backup policy, monitoring, alerting, and incident response;

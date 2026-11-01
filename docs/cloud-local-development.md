@@ -26,7 +26,7 @@ openssl rand -base64 32
 
 Use one for `ADPORT_CLOUD_ENCRYPTION_KEY` and the other for `ADPORT_API_KEY_PEPPER`.
 
-All six providers use browser-based OAuth grants. The app never asks a tenant for application secrets: each provider block in `.env.example` (`GOOGLE_ADS_*`, `META_*`, `TIKTOK_*`, `MICROSOFT_ADS_*`, `REDDIT_*`, `APPLE_ADS_*`) holds the Adport-owned application, and the matching Connections card stays disabled ("Awaiting app approval") until that block is fully set. Apple's block belongs to the approved Adport service-provider registration; its ES256 private key stays server-side while tenant refresh tokens are encrypted per organization. Leaving every provider block empty is fine for builds and non-provider tests.
+All 11 provider modules support hosted authorization. The app never asks a tenant for application secrets: each provider block in `.env.example` (`GOOGLE_ADS_*`, `META_*`, `TIKTOK_*`, `MICROSOFT_ADS_*`, `REDDIT_*`, `APPLE_ADS_*`, plus the five additional providers) holds the Adport-owned application, and the matching Connections card stays disabled ("Awaiting app approval") until that block is fully set. Apple's block belongs to the approved Adport service-provider registration; its ES256 private key stays server-side while tenant refresh tokens are encrypted per organization. Leaving every provider block empty is fine for builds and non-provider tests. See the [hosted onboarding guide](providers/cloud-onboarding.md) for the additional providers and organization-specific rollout controls.
 
 ## Run
 
@@ -47,7 +47,7 @@ To enable either provider, create its OAuth application and configure it under *
 
 The Google and GitHub client secrets belong in Supabase Auth, not in the Adport repository or Vercel environment. Google only needs the basic identity scopes supplied by Supabase; it does not reuse the separate Google Ads OAuth application.
 
-Hosted OAuth callbacks are `${ADPORT_CLOUD_BASE_URL}/api/oauth/<provider>/callback` for `google`, `meta`, `tiktok`, `microsoft`, and `reddit`; the shared start route is `/api/oauth/<provider>/start`. If another process owns port 3000, set `ADPORT_CLOUD_BASE_URL` to the actual port and register the same redirect in each development provider app.
+Hosted authorization callbacks are `${ADPORT_CLOUD_BASE_URL}/api/oauth/<provider>/callback` for the configured provider; the shared start route is `/api/oauth/<provider>/start`. If another process owns port 3000, set `ADPORT_CLOUD_BASE_URL` to the actual port and register the same redirect in each development provider app.
 
 For a production-mode local check:
 
@@ -66,12 +66,12 @@ supabase db advisors --local --type security --level info
 supabase db advisors --local --type performance --level warn
 ```
 
-The ordinary test run skips the two live-server cases. Setting `ADPORT_HTTP_TEST_BASE_URL` adds real HTTP authorization, REST, and remote MCP handshake checks.
+The ordinary test run skips tests that require an explicitly configured database or running server. Setting `ADPORT_HTTP_TEST_BASE_URL` adds real HTTP authorization, REST, and remote MCP handshake checks.
 
 The database suite verifies:
 
 - Auth-triggered personal tenants and RLS isolation;
-- encrypted credentials for all six providers with no plaintext in Postgres;
+- encrypted provider credentials with no plaintext in Postgres;
 - hosted OAuth broker consent URLs, PKCE where supported, and application-identity injection for every OAuth provider;
 - browser-safe provider error mapping (no echoed tokens or CLI instructions);
 - API-key digest authentication and revocation;

@@ -4,55 +4,70 @@ on:
   push:
     branches: [main]
   pull_request:
+  merge_group:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  repository:
+    name: Repository checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - run: pnpm check
+
+  dco:
+    name: DCO
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Verify author sign-offs
+        env:
+          DCO_BASE: ${{ github.event.pull_request.base.sha }}
+          DCO_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/check-dco.mjs
+
   build-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         node: [22, 24]
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
-      - name: Verify sitewide support
-        run: |
-          node scripts/build-support-widget.mjs --check
-          node --check website/support.js
-          node --test scripts/test-support-widget.mjs
-      - name: Verify provider landing pages
-        run: |
-          node scripts/build-provider-pages.mjs --check
-          node --test scripts/test-provider-pages.mjs
-      - name: Verify pricing matches the cloud catalog
-        run: node scripts/build-pricing-page.mjs --check
-      - name: Verify Resources content and links
-        run: |
-          node scripts/build-resource-pages.mjs --check
-          node --test scripts/test-resource-pages.mjs
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm test
-      - name: Connector submission catalog guard
-        run: node --test scripts/test-connector-catalog.mjs
-      - name: CLI smoke (fail-closed and explicit demo mode)
-        run: |
-          export ADPORT_HOME="$(mktemp -d)"
-          node packages/cli/dist/index.js tools list
-          if node packages/cli/dist/index.js accounts --json; then
-            echo "Expected accounts to fail without credentials or --demo"
-            exit 1
-          fi
-          node packages/cli/dist/index.js --demo accounts --json
-          node packages/cli/dist/index.js --demo report --metrics spend,clicks,roas
-          node packages/cli/dist/index.js --demo audit run
+      - name: Verify packed packages and isolated CLI installation
+        if: matrix.node == 24
+        run: pnpm check:packages

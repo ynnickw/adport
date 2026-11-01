@@ -12,7 +12,9 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --sourcemap --clean",
     "test": "vitest run",
@@ -28,5 +30,20 @@
     "tsup": "^8.3.0",
     "typescript": "^5.8.0",
     "vitest": "^4.1.10"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ynnickw/adport.git",
+    "directory": "packages/google"
+  },
+  "homepage": "https://github.com/ynnickw/adport#readme",
+  "bugs": {
+    "url": "https://github.com/ynnickw/adport/issues"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

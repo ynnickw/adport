@@ -2,61 +2,116 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to publish
+        description: Existing version tag on main (for example v0.6.2)
         required: true
         type: string
 
 permissions:
-  contents: write
-  id-token: write # npm provenance
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
-  release:
+  validate:
     runs-on: ubuntu-latest
-    env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    timeout-minutes: 25
+    outputs:
+      commit: ${{ steps.source.outputs.commit }}
     steps:
-      - uses: actions/checkout@v7
+      - name: Validate tag input
+        shell: bash
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.(0|[1-9][0-9]*))?$ ]]
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ env.RELEASE_TAG }}
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require a release commit on main
+        id: source
+        run: |
+          git merge-base --is-ancestor HEAD origin/main
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
-          registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm check:release "$RELEASE_TAG"
       - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm test
-      - run: pnpm check:public-tree
-      - name: Create GitHub release
+      - run: pnpm check:packages
+
+  publish:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write # npm provenance
+    steps:
+      - name: Require npm publishing credentials
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release view "$RELEASE_TAG" >/dev/null 2>&1 || gh release create "$RELEASE_TAG" --title "$RELEASE_TAG" --generate-notes
-      - name: Publish missing packages to npm
-        if: ${{ env.NPM_TOKEN != '' }}
-        env:
-          NODE_AUTH_TOKEN: ${{ env.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: "true"
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          pnpm -r --workspace-concurrency=1 exec sh -c '
-            if [ "$(node -p "require(\"./package.json\").private === true")" = "true" ]; then
-              echo "Skipping private workspace"
+          if [ -z "$NPM_TOKEN" ]; then
+            echo 'NPM_TOKEN is missing. No packages or GitHub release will be published.'
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require the tag to still identify the validated commit
+        run: test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:release "$RELEASE_TAG"
+      - run: pnpm --filter './packages/**' build
+      - name: Publish missing public packages in dependency order
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: node scripts/publish-packages.mjs
+      - name: Verify the public npm install before announcing the release
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if node scripts/verify-published.mjs "${RELEASE_TAG#v}"; then
               exit 0
             fi
-            package_name=$(node -p "require(\"./package.json\").name")
-            package_version=$(node -p "require(\"./package.json\").version")
-            # Query anonymously: a package-restricted publish token can return 404
-            # for a newly created package even after the public registry exposes it.
-            if npm view "${package_name}@${package_version}" version --userconfig=/dev/null >/dev/null 2>&1; then
-              echo "Skipping ${package_name}@${package_version}: already published"
-            else
-              pnpm publish --access public --no-git-checks
-            fi
-          '
+            if [ "$attempt" -lt 3 ]; then sleep 15; fi
+          done
+          exit 1
+      - name: Publish GitHub release with reviewed notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          args=(--verify-tag --title "$RELEASE_TAG" --notes-file "docs/releases/$RELEASE_TAG.md")
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            args+=(--prerelease --latest=false)
+          fi
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "GitHub release already exists: $RELEASE_TAG"
+          else
+            gh release create "$RELEASE_TAG" "${args[@]}"
+          fi
