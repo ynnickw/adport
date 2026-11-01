@@ -1,3 +1,4 @@
+import { captureProductEvent } from '@/lib/cloud/product-analytics';
 import { z } from 'zod';
 import { sessionPrincipal } from '@/lib/cloud/auth';
 import { AGENT_IDS, LEGACY_AGENT_IDS, ONBOARDING_STEPS, updateOnboardingState } from '@/lib/cloud/onboarding';
@@ -16,6 +17,7 @@ export async function POST(request: Request) {
     if (input.complete && input.currentStep !== 'complete') throw new Error('Completed onboarding must use the complete step.');
     const principal = await sessionPrincipal();
     await updateOnboardingState(principal, input);
+    captureProductEvent(principal, { event: 'onboarding_progressed', step: input.currentStep, complete: input.complete ?? false, agent: input.selectedAgent });
     return noStoreJson({ updated: true });
   } catch (error) {
     return apiError(error, error instanceof z.ZodError ? 400 : 403);

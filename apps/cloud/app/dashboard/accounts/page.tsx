@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { organizationActiveAccounts } from '@/lib/cloud/workspaces';
 import { Empty, PageHeader, Provider } from '@/components/ui';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { getOrganizationEntitlement } from '@/lib/cloud/plans';
@@ -13,6 +14,7 @@ export const metadata = { title: 'Accounts' };
 
 export default async function AccountsPage({ searchParams }: { searchParams: Promise<{ connected?: string; accounts_saved?: string; error?: string; select_provider?: string }> }) {
   const tenant = await requireDashboardTenant();
+  const sharedActive = ['owner', 'admin'].includes(tenant.organizationRole) ? await organizationActiveAccounts(tenant.organizationId) : undefined;
   if (isSyntheticReviewer(tenant.organizationId)) return <SyntheticReviewer tenant={tenant} />;
   const [connections, inventory, entitlement, params] = await Promise.all([
     listConnections(tenant.organizationId),
@@ -43,6 +45,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
           accounts={inventory}
           canManage={['owner', 'admin'].includes(tenant.role)}
           maxActiveAccounts={entitlement.plan.maxActiveAccounts}
+          organizationActiveCount={sharedActive}
           providerFilter={providerFilter}
         />
       )}

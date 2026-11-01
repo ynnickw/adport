@@ -1,0 +1,7 @@
+{
+  "reader": { "id": "reader", "name": "Free", "monthlyPriceEur": 0, "annualPriceEur": 0, "maxActiveAccounts": 3, "maxMembers": 1, "maxRetentionDays": 30, "writeAccess": false, "clientWorkspaces": true },
+  "operator": { "id": "operator", "name": "Pro", "monthlyPriceEur": 19, "annualPriceEur": 190, "maxActiveAccounts": 5, "maxMembers": 2, "maxRetentionDays": 90, "writeAccess": true, "clientWorkspaces": true },
+  "premium": { "id": "premium", "name": "Growth", "monthlyPriceEur": 39, "annualPriceEur": 390, "maxActiveAccounts": 20, "maxMembers": 5, "maxRetentionDays": 365, "writeAccess": true, "clientWorkspaces": true },
+  "agency": { "id": "agency", "name": "Agency", "monthlyPriceEur": 79, "annualPriceEur": 790, "maxActiveAccounts": 60, "maxMembers": 15, "maxRetentionDays": 730, "writeAccess": true, "clientWorkspaces": true },
+  "enterprise": { "id": "enterprise", "name": "Enterprise", "monthlyPriceEur": null, "annualPriceEur": null, "maxActiveAccounts": null, "maxMembers": null, "maxRetentionDays": 3650, "writeAccess": true, "clientWorkspaces": true }
+}

@@ -3,14 +3,14 @@ export const mcpBaseUrl = 'https://app.adport.dev';
 export const agentSetups = [
   {
     id: 'chatgpt', name: 'ChatGPT', logo: 'chatgpt',
-    instructions: 'Enable developer mode, then open Settings → Apps → Create. Choose OAuth and use the endpoint below.',
-    nextStep: 'Scan the tools, finish Adport authorization, and enable the new app in your chat.',
+    instructions: 'In Plugins, add a custom MCP server and name it Adport. Choose OAuth, then enter the address below.',
+    nextStep: 'Create the plugin, finish Adport authorization, install it, then select it with @ in your chat.',
     command: baseUrl => `${baseUrl}/mcp`,
   },
   {
     id: 'codex', name: 'Codex', logo: 'chatgpt',
-    instructions: 'Run this command once and complete the browser authorization. Codex stores the MCP configuration and starts OAuth automatically.',
-    nextStep: 'Only if authorization did not start or you need to sign in again, run “codex mcp login adport”. Otherwise, check “codex mcp list” and ask Codex to list your ad accounts.',
+    instructions: 'Register Adport with this command. Complete the browser authorization if prompted.',
+    nextStep: 'If sign-in has not started, run “codex mcp login adport”, then use “codex mcp list” to check the connection.',
     command: baseUrl => `codex mcp add adport --url ${baseUrl}/mcp`,
   },
   {

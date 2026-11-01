@@ -32,15 +32,17 @@ export async function resolveMembership(userId: string, requestedOrganizationId?
   const rows = requestedOrganizationId
     ? await sql<MembershipRow[]>`
         select organization_id, role
-        from public.organization_memberships
+        from private.project_memberships
         where user_id = ${userId} and organization_id = ${requestedOrganizationId}
         limit 1
       `
     : await sql<MembershipRow[]>`
-        select organization_id, role
-        from public.organization_memberships
-        where user_id = ${userId}
-        order by created_at asc
+        select access.organization_id, access.role
+        from private.project_memberships access
+        join public.organizations project on project.id = access.organization_id
+        join public.organization_groups company on company.id = project.organization_group_id
+        where access.user_id = ${userId}
+        order by company.created_at, project.created_at, project.id
         limit 1
       `;
   const membership = rows[0];
@@ -322,9 +324,10 @@ export async function authenticateApiKey(key: string): Promise<TenantPrincipal |
     scopes: string[];
     expiresAt: Date | null;
   }>>`
-    select id, organization_id, scopes, expires_at
-    from public.api_keys
-    where secret_hash = ${digestApiKey(key)} and revoked_at is null
+    select key.id, key.organization_id, key.scopes, key.expires_at
+    from public.api_keys key
+    join public.organizations project on project.id = key.organization_id
+    where key.secret_hash = ${digestApiKey(key)} and key.revoked_at is null and project.archived_at is null
     limit 1
   `;
   const found = rows[0];
@@ -638,7 +641,9 @@ export async function setOrganizationAdAccountEnabled(input: {
 }): Promise<void> {
   if (!['owner', 'admin'].includes(input.principal.role ?? '')) throw new Error('Owner or admin access is required.');
   await db().begin(async (sql) => {
-    await sql`select id from public.organizations where id = ${input.principal.organizationId} for update`;
+    await sql`select company.id from public.organization_groups company
+      join public.organizations project on project.organization_group_id = company.id
+      where project.id = ${input.principal.organizationId} for update of company`;
     const connections = await sql<Array<{ accountSelectionId: string | null; status: string }>>`
       select account_selection_id, status from public.connections
       where organization_id = ${input.principal.organizationId} and provider = ${input.provider} for update
@@ -655,8 +660,10 @@ export async function setOrganizationAdAccountEnabled(input: {
     if (!account) throw new Error('Ad account was not found in this organization.');
     if (input.enabled && !account.enabled && input.maxActiveAccounts !== null) {
       const totals = await sql<Array<{ count: number }>>`
-        select count(*)::int as count from public.organization_ad_accounts
-        where organization_id = ${input.principal.organizationId} and enabled = true
+        select count(*)::int as count from public.organization_ad_accounts account
+        join public.organizations project on project.id = account.organization_id
+        where project.organization_group_id = (select organization_group_id from public.organizations where id = ${input.principal.organizationId})
+          and project.archived_at is null and account.enabled = true
       `;
       if ((totals[0]?.count ?? 0) >= input.maxActiveAccounts) {
         throw new PlanLimitError({

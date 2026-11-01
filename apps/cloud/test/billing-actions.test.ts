@@ -6,12 +6,14 @@ const mocks = vi.hoisted(() => ({
   sessionPrincipal: vi.fn(),
   getOrganizationEntitlement: vi.fn(),
   stripePriceId: vi.fn(),
+  requireOrganizationAdmin: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }));
 vi.mock('@/lib/env', () => ({ env: () => ({ ADPORT_CLOUD_BASE_URL: 'https://app.adport.dev' }) }));
 vi.mock('@/lib/cloud/auth', () => ({ sessionPrincipal: mocks.sessionPrincipal }));
 vi.mock('@/lib/cloud/plans', () => ({ getOrganizationEntitlement: mocks.getOrganizationEntitlement }));
+vi.mock('@/lib/cloud/workspaces', () => ({ requireOrganizationAdmin: mocks.requireOrganizationAdmin }));
 vi.mock('@/lib/cloud/billing', () => ({
   stripePriceId: mocks.stripePriceId,
   stripeClient: () => ({ checkout: { sessions: { create: mocks.checkoutCreate } } }),
@@ -26,9 +28,22 @@ describe('subscription checkout', () => {
     mocks.getOrganizationEntitlement.mockResolvedValue({ providerCustomerId: null, providerSubscriptionId: null });
     mocks.stripePriceId.mockReturnValue('price_premium_annual');
     mocks.checkoutCreate.mockResolvedValue({ url: 'https://checkout.stripe.com/session' });
+    mocks.requireOrganizationAdmin.mockResolvedValue({ role: 'owner' });
   });
 
-  it('starts Premium annual Checkout with a seven-day trial and organization metadata', async () => {
+  it('bills the shared organization anchor when checkout starts inside a client project', async () => {
+    mocks.getOrganizationEntitlement.mockResolvedValue({ billingOrganizationId: 'shared-company', providerCustomerId: null, providerSubscriptionId: null });
+    await expect(startSubscription('operator', 'monthly')).rejects.toThrow('redirect:');
+    expect(mocks.checkoutCreate).toHaveBeenCalledWith(expect.objectContaining({ client_reference_id: 'shared-company', metadata: { organizationId: 'shared-company', plan: 'operator', interval: 'monthly' } }));
+  });
+
+  it('does not let a project owner manage billing without organization ownership', async () => {
+    mocks.requireOrganizationAdmin.mockResolvedValue({ role: 'admin' });
+    await expect(startSubscription('operator', 'monthly')).rejects.toThrow('Only the workspace owner');
+    expect(mocks.checkoutCreate).not.toHaveBeenCalled();
+  });
+
+  it('starts Growth annual Checkout with a seven-day trial and organization metadata', async () => {
     await expect(startSubscription('premium', 'annual')).rejects.toThrow('redirect:https://checkout.stripe.com/session');
     expect(mocks.stripePriceId).toHaveBeenCalledWith('premium', 'annual');
     expect(mocks.checkoutCreate).toHaveBeenCalledWith(expect.objectContaining({
@@ -41,5 +56,19 @@ describe('subscription checkout', () => {
         trial_period_days: 7,
       },
     }));
+  });
+
+  it('allows a canceled customer to subscribe again without another free trial', async () => {
+    mocks.getOrganizationEntitlement.mockResolvedValue({ providerCustomerId: 'cus_returning', providerSubscriptionId: 'sub_canceled', status: 'canceled' });
+    await expect(startSubscription('premium', 'annual')).rejects.toThrow('redirect:');
+    const checkout = mocks.checkoutCreate.mock.calls[0]![0];
+    expect(checkout.customer).toBe('cus_returning');
+    expect(checkout.subscription_data).not.toHaveProperty('trial_period_days');
+  });
+
+  it.each(['active', 'trialing', 'past_due', 'incomplete', 'unpaid'])('prevents duplicate checkout for a %s subscription', async (status) => {
+    mocks.getOrganizationEntitlement.mockResolvedValue({ providerSubscriptionId: 'sub_existing', status });
+    await expect(startSubscription('premium', 'annual')).rejects.toThrow('billing portal');
+    expect(mocks.checkoutCreate).not.toHaveBeenCalled();
   });
 });

@@ -5,7 +5,7 @@ import { apiError, noStoreJson } from '@/lib/http';
 export async function POST(request: Request, { params }: { params: Promise<{ tool: string }> }) {
   try {
     const principal = await apiPrincipal(request);
-    const runtime = await createTenantRuntime(principal);
+    const runtime = await createTenantRuntime(principal, { surface: 'api' });
     const { tool } = await params;
     const definition = runtime.registry.get(tool);
     requireScope(principal, definition.annotations.readOnly ? 'tools:read' : 'tools:write');

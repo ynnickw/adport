@@ -20,7 +20,7 @@ suite('one-time provider account selection (local database)', () => {
 
   beforeAll(async () => {
     const url = new URL(databaseUrl!);
-    if (!['localhost', '127.0.0.1'].includes(url.hostname) || url.port !== '55322') throw new Error('Selection tests require the explicit local Adport database on port 55322.');
+    if (!['localhost', '127.0.0.1'].includes(url.hostname) || !['55322', '56322'].includes(url.port)) throw new Error('Selection tests require the explicit local Adport database on port 55322 or isolated port 56322.');
     process.env.SUPABASE_DB_URL = databaseUrl;
     resetEnvForTests();
     admin = postgres(databaseUrl!, { max: 1 });

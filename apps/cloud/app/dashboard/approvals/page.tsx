@@ -14,8 +14,8 @@ function expiresIn(expiresAt: Date, now: number): string {
 }
 
 // Provider summaries count money in micros; show amounts the way people read them.
-function readableSummary(summary: string, currency: string): string {
-  const money = (micros: string) => formatMoney(Number(micros) / 1e6, currency);
+function readableSummary(summary: string, currency?: string): string {
+  const money = (micros: string) => currency ? formatMoney(Number(micros) / 1e6, currency) : `${new Intl.NumberFormat('en', { maximumFractionDigits: 6 }).format(Number(micros) / 1e6)} (currency unavailable)`;
   // Only numbers the summary labels as micros; IDs and counts stay untouched.
   return summary
     .replace(/(\d+) → (\d+) micros\b/g, (_, from: string, to: string) => `${money(from)} → ${money(to)}`)
@@ -26,7 +26,8 @@ function readableSummary(summary: string, currency: string): string {
 function Ticket({ operation, now }: { operation: PendingOperationRow; now: number }) {
   const preview = operation.preview;
   const delta = preview?.budgetDeltas?.[0];
-  const currency = delta?.currency ?? 'USD';
+  const currency = delta?.currency;
+  const budgetAmount = (micros: number) => currency ? formatMoney(micros / 1e6, currency) : new Intl.NumberFormat('en', { maximumFractionDigits: 6 }).format(micros / 1e6);
   const change = delta?.fromMicros ? ((delta.toMicros - delta.fromMicros) / delta.fromMicros) * 100 : null;
   return (
     <article className="ticket" aria-labelledby={`ticket-${operation.id}`}>
@@ -37,8 +38,9 @@ function Ticket({ operation, now }: { operation: PendingOperationRow; now: numbe
       <h2 className="ticket-summary" id={`ticket-${operation.id}`} title={preview?.summary}>{preview ? readableSummary(preview.summary, currency) : operation.operation.tool}</h2>
       {delta ? (
         <p className="ticket-diff">
-          {delta.fromMicros !== undefined ? <><s>{formatMoney(delta.fromMicros / 1e6, currency)}</s><span className="diff-arrow" aria-hidden="true" /><span className="sr-only">to</span></> : null}
-          <strong>{formatMoney(delta.toMicros / 1e6, currency)}</strong>
+          {delta.fromMicros !== undefined ? <><s>{budgetAmount(delta.fromMicros)}</s><span className="diff-arrow" aria-hidden="true" /><span className="sr-only">to</span></> : null}
+          <strong>{budgetAmount(delta.toMicros)}</strong>
+          {!currency ? <span className="status warn">Currency unavailable</span> : null}
           {change !== null ? <span className="diff-delta">{change >= 0 ? '+' : ''}{change.toFixed(1)}%</span> : null}
           <span className="diff-target">{delta.target}</span>
         </p>

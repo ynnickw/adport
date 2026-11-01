@@ -16,4 +16,5 @@ coverage/
 /.codex/
 /.pnpm-store/
 .vercel
+/.local-test/
 packages/mcp/.submission-previews/

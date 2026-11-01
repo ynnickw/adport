@@ -13,8 +13,8 @@ describe('Codex setup shared by onboarding and Agent access', () => {
   it('renders login as a conditional fallback, outside the copied code block', () => {
     const html = renderToStaticMarkup(<AgentSetupGuide baseUrl="https://app.adport.dev" initialSelectedId="codex" />);
     expect(html).toContain('<code>codex mcp add adport --url https://app.adport.dev/mcp</code>');
-    expect(html).toContain('Run this command once');
-    expect(html).toContain('Only if authorization did not start or you need to sign in again');
+    expect(html).toContain('Register Adport with this command');
+    expect(html).toContain('If sign-in has not started');
     expect(html).toContain('codex mcp login adport');
     expect(html).not.toContain('Run these commands once');
     expect(html).toContain('Copy Codex setup');

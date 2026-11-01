@@ -1,4 +1,4 @@
-import { Empty, PageHeader, Provider, formatNumber } from '@/components/ui';
+import { Empty, PageHeader, Provider, formatMoney, formatNumber } from '@/components/ui';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { readReport } from '@/lib/cloud/reads';
 
@@ -10,7 +10,7 @@ export default async function ReportsPage() {
   const rows = result.ok ? result.data.rows : [];
   return (
     <main className="page">
-      <PageHeader title="Campaign report" description="Thirty days, queried through the same cross-platform report tool the REST API and remote MCP endpoint use. Currencies stay provider-specific." />
+      <PageHeader title="Campaign report" description="The last thirty completed days across your enabled accounts. Spend keeps its account currency; conversions use each platform's attribution." />
       {!result.ok ? <div className="error-callout" role="alert">Provider read failed: {result.error}</div> : null}
       {result.warnings.map((warning) => <div className="error-callout" role="alert" key={`${warning.provider}:${warning.message}`}>Partial provider read: {warning.message}</div>)}
       <section className="card">
@@ -32,11 +32,11 @@ export default async function ReportsPage() {
                     <td><strong>{row.entity.name || row.entity.id}</strong><div className="cell-sub">{row.accountId}</div></td>
                     <td><Provider name={row.provider} /></td>
                     <td>{row.entity.status ? <span className={`status ${/paused|disabled|removed/i.test(row.entity.status) ? 'neutral' : ''}`}>{row.entity.status}</span> : '—'}</td>
-                    <td className="numeric">{formatNumber(row.metrics.spend)}</td>
-                    <td className="numeric">{formatNumber(row.metrics.impressions)}</td>
-                    <td className="numeric">{formatNumber(row.metrics.clicks)}</td>
-                    <td className="numeric">{formatNumber(row.metrics.conversions)}</td>
-                    <td className="numeric">{formatNumber(row.metrics.roas)}×</td>
+                  <td className="numeric">{row.metrics.spend == null ? '—' : row.currency ? formatMoney(row.metrics.spend, row.currency) : <>{formatNumber(row.metrics.spend)}<span className="cell-sub">Currency unavailable</span></>}</td>
+                  <td className="numeric">{row.metrics.impressions == null ? '—' : formatNumber(row.metrics.impressions)}</td>
+                  <td className="numeric">{row.metrics.clicks == null ? '—' : formatNumber(row.metrics.clicks)}</td>
+                  <td className="numeric">{row.metrics.conversions == null ? '—' : formatNumber(row.metrics.conversions)}</td>
+                  <td className="numeric">{row.metrics.roas == null ? '—' : `${formatNumber(row.metrics.roas)}×`}</td>
                   </tr>
                 ))}
               </tbody>

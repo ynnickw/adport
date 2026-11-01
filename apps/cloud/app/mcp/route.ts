@@ -11,7 +11,7 @@ import { recommendedUpgradePlan } from '@/lib/cloud/plans';
 async function handle(request: Request): Promise<Response> {
   try {
     const principal = await apiPrincipal(request);
-    const runtime = await createTenantRuntime(principal);
+    const runtime = await createTenantRuntime(principal, { surface: 'mcp' });
     // Each HTTP request has a fresh server, so initialize/clientInfo cannot
     // identify the host on subsequent resources/read requests.
     const oauthClient = principal.oauthTokenId && principal.clientId

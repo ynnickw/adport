@@ -142,6 +142,9 @@ async function issueTokenPair(
   sql: postgres.TransactionSql,
   input: { organizationId: string; userId: string; clientId: string; scopes: McpOAuthScope[]; resource: string },
 ): Promise<McpOAuthTokenPair> {
+  const access = await sql`select role from private.project_memberships
+    where organization_id = ${input.organizationId} and user_id = ${input.userId}`;
+  if (!access.length) throw new Error('Project access has been revoked.');
   const now = Math.floor(Date.now() / 1000);
   const tokenId = randomUUID();
   const refreshToken = `adp_refresh_${randomBytes(40).toString('base64url')}`;

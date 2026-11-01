@@ -1,3 +1,4 @@
+import { Button, Input } from '@/components/controls';
 import Link from 'next/link';
 import { signIn, signInWithSocialProvider, signUp } from '@/app/login/actions';
 import { BrandLockup } from '@/components/logos';
@@ -28,19 +29,19 @@ export function AuthScreen({ mode, error, message, returnTo }: AuthScreenProps) 
           <input type="hidden" name="provider" value="google" />
           <input type="hidden" name="mode" value={mode} />
           {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
-          <button className="social-auth-button" type="submit">
+          <Button className="social-auth-button" type="submit">
             <GoogleIcon />
             Continue with Google
-          </button>
+          </Button>
         </form>
         <form action={signInWithSocialProvider}>
           <input type="hidden" name="provider" value="github" />
           <input type="hidden" name="mode" value={mode} />
           {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
-          <button className="social-auth-button" type="submit">
+          <Button className="social-auth-button" type="submit">
             <GitHubIcon />
             Continue with GitHub
-          </button>
+          </Button>
         </form>
       </div>
       <div className="auth-divider"><span>or continue with email</span></div>
@@ -49,18 +50,18 @@ export function AuthScreen({ mode, error, message, returnTo }: AuthScreenProps) 
         {signup ? (
           <label className="field">
             <span>Name</span>
-            <input name="display_name" autoComplete="name" placeholder="How your team sees you" />
+            <Input name="display_name" autoComplete="name" placeholder="How your team sees you" />
           </label>
         ) : null}
         <label className="field">
           <span>Email</span>
-          <input name="email" type="email" autoComplete="email" required placeholder="you@company.com" />
+          <Input name="email" type="email" autoComplete="email" required placeholder="you@company.com" />
         </label>
         <label className="field">
           <span>Password</span>
-          <input name="password" type="password" minLength={12} autoComplete={signup ? 'new-password' : 'current-password'} required placeholder="At least 12 characters" />
+          <Input name="password" type="password" minLength={12} autoComplete={signup ? 'new-password' : 'current-password'} required placeholder="At least 12 characters" />
         </label>
-        <button className="button full" type="submit">{signup ? 'Create account' : 'Sign in'}</button>
+        <Button className="button full" type="submit">{signup ? 'Create account' : 'Sign in'}</Button>
       </form>
       <p className="auth-switch">
         {signup

@@ -80,10 +80,13 @@ test('all six public setup guides match the Cloud app instructions and commands'
   }
 });
 
-test('MCP setup is not described as waitlist-only and the private app has no navigation links', () => {
+test('MCP setup is not described as waitlist-only and app links lead to signup or billing', () => {
   for (const [file, html] of [['index.html', home], ...pages]) {
     assert(!/hosted MCP is coming|hosted MCP connection is coming|ChatGPT via Cloud waitlist|ChatGPT Cloud waitlist|Hosted access is coming|Hosted MCP for Adport Cloud is on the waitlist/i.test(html), file);
-    assert(!/href="https:\/\/app\.adport\.dev/.test(html), file);
+    for (const [, href] of html.matchAll(/href="(https:\/\/app\.adport\.dev[^\"]*)"/g)) {
+      const url = new URL(href.replaceAll('&amp;', '&'));
+      assert(url.pathname === '/dashboard/billing' || (url.pathname === '/' && url.searchParams.get('mode') === 'signup'), `${file}: unexpected app link ${url.pathname}`);
+    }
     if (file !== 'providers.html') {
       const panel = html.match(/id="agent-panel-chatgpt"[\s\S]*?<\/div>/)?.[0];
       assert(panel?.includes('Choose OAuth'), file);

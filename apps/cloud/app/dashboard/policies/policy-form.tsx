@@ -1,11 +1,14 @@
 'use client';
 
+import { Button, Checkbox, Input } from '@/components/controls';
+
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 import type { Policy } from '@adport/core';
 import { PlanLimitModal } from '@/components/plan-limit-modal';
-import { Provider } from '@/components/ui';
+import { Field, Provider } from '@/components/ui';
+import { InfoTooltip } from '@/components/info-tooltip';
 import { planLimitFromResponse, type PlanLimitDetails } from '@/lib/cloud/plan-limit';
 
 interface PolicyAccount {
@@ -43,92 +46,77 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
     const data = Object.fromEntries(formData.entries());
     const numberOrNull = (value: FormDataEntryValue | undefined) => value === undefined || value === '' ? null : Number(value);
     const maxDailyBudget = numberOrNull(data.maxDailyBudget);
-    const response = await fetch('/api/settings', {
-      method: 'PATCH', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        organizationId,
-        dataRetentionDays: Number(data.dataRetentionDays),
-        policy: {
-          require_validation: true,
-          paused_creation: data.pausedCreation === 'on',
-          max_budget_delta_pct: numberOrNull(data.maxBudgetDeltaPct),
-          max_daily_budget_micros: maxDailyBudget === null ? null : Math.round(maxDailyBudget * 1_000_000),
-          protected_accounts: [...new Set([
-            ...formData.getAll('protectedAccount').map(String),
-            ...String(data.manualProtectedAccounts ?? '').split(',').map((item) => item.trim()).filter(Boolean),
-          ])],
-          pending_ttl_minutes: Number(data.pendingTtlMinutes),
-        },
-      }),
-    });
-    const result = await response.json().catch(() => ({})) as { error?: string };
-    const limit = planLimitFromResponse(result);
-    if (limit) setPlanLimit(limit);
-    else if (!response.ok) setMessage({ error: result.error ?? 'Unable to save settings.' });
-    else { setMessage({ success: 'Safety policy saved.' }); setDirty(false); router.refresh(); }
-    setBusy(false);
+    try {
+      const response = await fetch('/api/settings', {
+        method: 'PATCH', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          organizationId,
+          dataRetentionDays: Number(data.dataRetentionDays),
+          policy: {
+            require_validation: true,
+            paused_creation: data.pausedCreation === 'on',
+            max_budget_delta_pct: numberOrNull(data.maxBudgetDeltaPct),
+            max_daily_budget_micros: maxDailyBudget === null ? null : Math.round(maxDailyBudget * 1_000_000),
+            protected_accounts: [...new Set([
+              ...formData.getAll('protectedAccount').map(String),
+              ...String(data.manualProtectedAccounts ?? '').split(',').map((item) => item.trim()).filter(Boolean),
+            ])],
+            pending_ttl_minutes: Number(data.pendingTtlMinutes),
+          },
+        }),
+      });
+      const result = await response.json().catch(() => ({})) as { error?: string };
+      const limit = planLimitFromResponse(result);
+      if (limit) setPlanLimit(limit);
+      else if (!response.ok) setMessage({ error: result.error ?? 'Unable to save settings.' });
+      else { setMessage({ success: 'Safety policy saved.' }); setDirty(false); router.refresh(); }
+    } catch {
+      setMessage({ error: 'Could not save the policy. Check your connection and try again.' });
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <form className="form" onSubmit={(event) => void save(event)} onChange={() => { setDirty(true); setMessage({}); }}>
       <PlanLimitModal limit={planLimit} onClose={() => setPlanLimit(undefined)} />
-      <fieldset className="form" disabled={!canAdminister} style={{ border: 0, margin: 0, padding: 0 }}>
-        {!writeAccess ? <div className="policy-plan-note"><div><strong>{planName} is read only</strong><p>Your safeguards are saved now and become active automatically when write access is enabled.</p></div><Link className="button secondary small" href="/dashboard/billing">See plans &amp; start free trial</Link></div> : null}
+      <fieldset className="form" style={{ border: 0, margin: 0, padding: 0 }}>
+        {!writeAccess ? <div className="policy-plan-note"><div><strong>{planName} is read only</strong><p>Your safeguards apply when write access is enabled.</p></div><Link className="button secondary small" href="/dashboard/billing">View plans</Link></div> : null}
         <section className="policy-section">
-          <div className="policy-section-copy"><span className="plan-kicker">Approval guard</span><h3>Control how changes reach providers</h3><p>The validation step cannot be disabled. Adport applies only the exact operation that was previewed.</p></div>
+          <div className="policy-section-copy"><h3>Approvals <InfoTooltip>The preview step is always required. Only the exact operation that was previewed can be applied.</InfoTooltip></h3></div>
           <div className="policy-controls">
-            <div><label className="check locked"><input type="checkbox" checked readOnly /> Preview and exact approval required</label><p className="field-hint policy-indent">Structural and always on for every write.</p></div>
-            <label className="check"><input name="pausedCreation" type="checkbox" defaultChecked={policy.paused_creation} /> Force newly created objects to paused</label>
+            <div className="policy-always-on"><span>Preview and exact approval</span><span className="status neutral">Always on</span></div>
+            <label className="check"><Checkbox disabled={!canAdminister} name="pausedCreation" defaultChecked={policy.paused_creation} /> Force newly created objects to paused</label>
           </div>
         </section>
         <section className="policy-section">
-          <div className="policy-section-copy"><span className="plan-kicker">Budget boundaries</span><h3>Cap financial impact</h3><p>Requests outside either ceiling are rejected before the provider applies them.</p></div>
+          <div className="policy-section-copy"><h3>Budget limits <InfoTooltip>Changes above either limit are rejected before they reach the advertising platform.</InfoTooltip></h3></div>
           <div className="field-grid policy-controls">
-            <label className="field">
-              <span>Max budget change (%)</span>
-              <input name="maxBudgetDeltaPct" type="number" min="0.01" step="0.01" defaultValue={policy.max_budget_delta_pct ?? ''} placeholder="No limit" />
-              <span className="field-hint">The largest change a single write may make to any budget.</span>
-            </label>
-            <label className="field">
-              <span>Max daily budget</span>
-              <input name="maxDailyBudget" type="number" min="0.01" step="0.01" defaultValue={policy.max_daily_budget_micros === null || policy.max_daily_budget_micros === undefined ? '' : policy.max_daily_budget_micros / 1_000_000} placeholder="No limit" />
-              <span className="field-hint">In the ad account&apos;s currency. Writes above this ceiling are refused.</span>
-            </label>
+            <Field label="Max budget change (%)" htmlFor="max-budget-change" help="The largest percentage change a single operation may make to any budget."><Input disabled={!canAdminister} id="max-budget-change" name="maxBudgetDeltaPct" type="number" min="0.01" step="0.01" defaultValue={policy.max_budget_delta_pct ?? ''} placeholder="No limit" /></Field>
+            <Field label="Max daily budget" htmlFor="max-daily-budget" help="In the ad account's currency. Changes above this limit are refused."><Input disabled={!canAdminister} id="max-daily-budget" name="maxDailyBudget" type="number" min="0.01" step="0.01" defaultValue={policy.max_daily_budget_micros === null || policy.max_daily_budget_micros === undefined ? '' : policy.max_daily_budget_micros / 1_000_000} placeholder="No limit" /></Field>
           </div>
         </section>
         <section className="policy-section">
-          <div className="policy-section-copy"><span className="plan-kicker">Approval & evidence</span><h3>Set the review window</h3><p>Short approvals reduce stale changes; retention controls how long audit evidence remains available.</p></div>
+          <div className="policy-section-copy"><h3>Review & history <InfoTooltip>Choose how long previews remain valid and how long audit history is kept.</InfoTooltip></h3></div>
           <div className="field-grid policy-controls">
-            <label className="field">
-              <span>Approval lifetime (minutes)</span>
-              <input name="pendingTtlMinutes" type="number" min="1" step="1" defaultValue={policy.pending_ttl_minutes} required />
-              <span className="field-hint">A previewed write expires if it is not applied within this window.</span>
-            </label>
-            <label className="field">
-              <span>Data retention (days)</span>
-              <input name="dataRetentionDays" type="number" min="1" max="3650" step="1" defaultValue={dataRetentionDays} required />
-              <span className="field-hint">{planName} includes up to {maxRetentionDays} days. Choosing more opens upgrade options.</span>
-            </label>
+            <Field label="Approval lifetime (minutes)" htmlFor="approval-lifetime" help="A preview expires if it is not applied within this window."><Input disabled={!canAdminister} id="approval-lifetime" name="pendingTtlMinutes" type="number" min="1" step="1" defaultValue={policy.pending_ttl_minutes} required /></Field>
+            <Field label="Data retention (days)" htmlFor="data-retention" help={`${planName} includes up to ${maxRetentionDays} days. A longer history requires an upgrade.`}><Input disabled={!canAdminister} id="data-retention" name="dataRetentionDays" type="number" min="1" max="3650" step="1" defaultValue={dataRetentionDays} required /></Field>
           </div>
         </section>
         <section className="policy-section protected-section">
-          <div className="policy-section-copy"><span className="plan-kicker">Protected accounts</span><h3>Make selected accounts read only</h3><p>Every write targeting a protected account is refused before any provider call. Reads continue normally.</p></div>
+          <div className="policy-section-copy"><h3>Protected accounts <InfoTooltip>Selected accounts remain readable, but all advertising changes are refused.</InfoTooltip></h3></div>
           <div className="policy-controls">
             {accounts.length > 0 ? <div className="policy-account-list">
               {accounts.map((account) => (
                 <label className="policy-account" key={`${account.provider}:${account.accountId}`}>
-                  <input name="protectedAccount" type="checkbox" value={account.accountId} defaultChecked={policy.protected_accounts.includes(account.accountId)} />
+                  <Checkbox disabled={!canAdminister} name="protectedAccount" value={account.accountId} defaultChecked={policy.protected_accounts.includes(account.accountId)} />
                   <Provider name={account.provider} />
                   <span className="policy-account-copy"><strong>{account.name}</strong><small>{account.accountId}{account.currency ? ` · ${account.currency}` : ''}</small></span>
                   <span className={`status ${account.enabled ? '' : 'neutral'}`}>{account.enabled ? 'active' : 'inactive'}</span>
                 </label>
               ))}
             </div> : <div className="inline-note">No accounts have been discovered yet. Connect a provider to select protected accounts by name.</div>}
-            <label className="field">
-              <span>Other account IDs</span>
-              <input name="manualProtectedAccounts" defaultValue={manualProtectedAccounts.join(', ')} placeholder="Comma-separated account IDs" />
-              <span className="field-hint">Use this for an account that is temporarily absent from discovery.</span>
-            </label>
+            <Field label="Other account IDs" htmlFor="other-account-ids" help="Protect an account that is temporarily absent from the list. Separate IDs with commas."><Input disabled={!canAdminister} id="other-account-ids" name="manualProtectedAccounts" defaultValue={manualProtectedAccounts.join(', ')} placeholder="Comma-separated account IDs" /></Field>
           </div>
         </section>
         {canAdminister ? (
@@ -137,7 +125,7 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
             <p className={`save-state${message.error ? ' is-error' : message.success ? ' is-saved' : dirty ? ' is-dirty' : ''}`} role={message.error ? 'alert' : 'status'}>
               {message.error ?? message.success ?? (dirty ? 'Unsaved changes' : 'All changes saved')}
             </p>
-            <button className="button" disabled={busy || !dirty}>{busy ? 'Saving…' : 'Save policy'}</button>
+            <Button className="button" disabled={busy || !dirty}>{busy ? 'Saving…' : 'Save policy'}</Button>
           </div>
         ) : <p className="inline-note">Owners and admins can change the policy.</p>}
       </fieldset>

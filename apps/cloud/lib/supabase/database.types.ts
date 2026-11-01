@@ -34,6 +34,77 @@ export type Database = {
   }
   public: {
     Tables: {
+      organization_group_memberships: {
+        Row: {
+          created_at: string
+          organization_group_id: string
+          role: Database["public"]['Enums']["organization_role"]
+          user_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          "created_at"?: string
+          organization_group_id: string
+          "role"?: Database["public"]['Enums']["organization_role"]
+          user_id: string
+        }
+        Update: {
+          "created_at"?: string
+          "organization_group_id"?: string
+          "role"?: Database["public"]['Enums']["organization_role"]
+          "user_id"?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_group_memberships_organization_group_id_fkey"
+            columns: [
+              "organization_group_id"
+            ]
+            isOneToOne: false
+            referencedRelation: "organization_groups"
+            referencedColumns: [
+              "id"
+            ]
+          }
+        ]
+      }
+      organization_groups: {
+        Row: {
+          created_at: string
+          created_by: string
+          default_project_id: string
+          id: string
+          name: string
+        }
+        ComputedFields: never
+        Insert: {
+          "created_at"?: string
+          created_by: string
+          default_project_id: string
+          id: string
+          name: string
+        }
+        Update: {
+          "created_at"?: string
+          "created_by"?: string
+          "default_project_id"?: string
+          "id"?: string
+          "name"?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_groups_default_project_id_fkey"
+            columns: [
+              "default_project_id"
+            ]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: [
+              "id"
+            ]
+          }
+        ]
+      }
       api_keys: {
         Row: {
           created_at: string
@@ -528,30 +599,49 @@ export type Database = {
       }
       organizations: {
         Row: {
+          archived_at: string | null
           created_at: string
           created_by: string
           id: string
           name: string
+          organization_group_id: string
           slug: string
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
-          created_at?: string
+          "archived_at"?: string | null
+          "created_at"?: string
           created_by: string
-          id?: string
+          "id"?: string
           name: string
+          organization_group_id: string
           slug: string
-          updated_at?: string
+          "updated_at"?: string
         }
         Update: {
-          created_at?: string
-          created_by?: string
-          id?: string
-          name?: string
-          slug?: string
-          updated_at?: string
+          "archived_at"?: string | null
+          "created_at"?: string
+          "created_by"?: string
+          "id"?: string
+          "name"?: string
+          "organization_group_id"?: string
+          "slug"?: string
+          "updated_at"?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "organizations_organization_group_id_fkey"
+            columns: [
+              "organization_group_id"
+            ]
+            isOneToOne: false
+            referencedRelation: "organization_groups"
+            referencedColumns: [
+              "id"
+            ]
+          }
+        ]
       }
       pending_operations: {
         Row: {

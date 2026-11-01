@@ -9,6 +9,8 @@ import { OAUTH_PROVIDERS } from '@/lib/cloud/types';
 import { env } from '@/lib/env';
 import type { OAuthProviderView } from '../dashboard/connections/provider-connections';
 import { OnboardingFlow } from './onboarding-flow';
+import { ProjectSwitcher } from '@/components/project-switcher';
+import { ProductAnalytics } from '@/components/product-analytics';
 
 export const metadata = { title: 'Set up Adport' };
 export const dynamic = 'force-dynamic';
@@ -22,12 +24,14 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
     getOrganizationEntitlement(tenant.organizationId),
     searchParams,
   ]);
-  if (state.completedAt) redirect('/dashboard');
+  if (state.completedAt || !canAdminister(tenant)) redirect('/dashboard');
   const availability = oauthAvailability(tenant.organizationId);
   const providers: OAuthProviderView[] = OAUTH_PROVIDERS.map((id) => ({ id, available: availability[id] }));
   return (
     <main className="onboarding-page">
+      <ProductAnalytics key={`${tenant.userId}:${tenant.organizationId}`} />
       <header className="onboarding-head"><BrandLockup /><span>{tenant.organizationName}</span></header>
+      {tenant.projects.length > 1 ? <div className="onboarding-stage"><ProjectSwitcher projects={tenant.projects} currentProjectId={tenant.organizationId} /></div> : null}
       <OnboardingFlow
         organizationId={tenant.organizationId}
         canManage={canAdminister(tenant)}

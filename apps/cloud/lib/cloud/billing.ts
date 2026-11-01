@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { PLANS, type BillingInterval, type PlanId, type SubscriptionStatus } from './plans';
+import { captureProductEvent } from './product-analytics';
 
 let client: Stripe | undefined;
 
@@ -25,9 +26,9 @@ export function stripeClient(): Stripe {
 
 function stripePriceIdOrUndefined(plan: Extract<PlanId, 'operator' | 'premium' | 'agency'>, interval: BillingInterval): string | undefined {
   const value = env();
-  if (plan === 'operator') return interval === 'annual' ? value.STRIPE_OPERATOR_ANNUAL_PRICE_ID : value.STRIPE_OPERATOR_PRICE_ID;
-  if (plan === 'premium') return interval === 'annual' ? value.STRIPE_PREMIUM_ANNUAL_PRICE_ID : value.STRIPE_PREMIUM_PRICE_ID;
-  return interval === 'annual' ? value.STRIPE_AGENCY_ANNUAL_PRICE_ID : value.STRIPE_AGENCY_PRICE_ID;
+  if (plan === 'operator') return interval === 'annual' ? value.STRIPE_PRO_ANNUAL_PRICE_ID : value.STRIPE_PRO_PRICE_ID;
+  if (plan === 'premium') return interval === 'annual' ? value.STRIPE_GROWTH_ANNUAL_PRICE_ID : value.STRIPE_GROWTH_PRICE_ID;
+  return interval === 'annual' ? value.STRIPE_AGENCY_V2_ANNUAL_PRICE_ID : value.STRIPE_AGENCY_V2_PRICE_ID;
 }
 
 export function stripePriceId(plan: Extract<PlanId, 'operator' | 'premium' | 'agency'>, interval: BillingInterval): string {
@@ -36,12 +37,23 @@ export function stripePriceId(plan: Extract<PlanId, 'operator' | 'premium' | 'ag
   return priceId;
 }
 
-function planForPrice(priceId: string | undefined): PlanId | undefined {
+export function planForPrice(priceId: string | undefined): PlanId | undefined {
   if (!priceId) return undefined;
   const value = env();
+  if (priceId === value.STRIPE_PRO_PRICE_ID || priceId === value.STRIPE_PRO_ANNUAL_PRICE_ID) return 'operator';
+  if (priceId === value.STRIPE_GROWTH_PRICE_ID || priceId === value.STRIPE_GROWTH_ANNUAL_PRICE_ID) return 'premium';
+  if (priceId === value.STRIPE_AGENCY_V2_PRICE_ID || priceId === value.STRIPE_AGENCY_V2_ANNUAL_PRICE_ID) return 'agency';
   if (priceId === value.STRIPE_OPERATOR_PRICE_ID || priceId === value.STRIPE_OPERATOR_ANNUAL_PRICE_ID) return 'operator';
   if (priceId === value.STRIPE_PREMIUM_PRICE_ID || priceId === value.STRIPE_PREMIUM_ANNUAL_PRICE_ID) return 'premium';
   if (priceId === value.STRIPE_AGENCY_PRICE_ID || priceId === value.STRIPE_AGENCY_ANNUAL_PRICE_ID) return 'agency';
+  const legacy = value.STRIPE_LEGACY_PRICE_PLAN_MAP;
+  if (legacy) {
+    const mapping: unknown = JSON.parse(legacy);
+    if (mapping && typeof mapping === 'object' && !Array.isArray(mapping) && Object.hasOwn(mapping, priceId)) {
+      const plan = (mapping as Record<string, unknown>)[priceId];
+      if (plan === 'operator' || plan === 'premium' || plan === 'agency') return plan;
+    }
+  }
   return undefined;
 }
 
@@ -54,7 +66,7 @@ function subscriptionStatus(status: Stripe.Subscription.Status): SubscriptionSta
   return 'canceled';
 }
 
-async function applySubscription(subscription: Stripe.Subscription): Promise<void> {
+async function applySubscription(subscription: Stripe.Subscription, eventId: string): Promise<void> {
   const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
   const providerSubscriptionId = subscription.id;
   const organizationId = subscription.metadata.organizationId || undefined;
@@ -75,7 +87,9 @@ async function applySubscription(subscription: Stripe.Subscription): Promise<voi
   if (!plan && status !== 'canceled') throw new Error(`Stripe price ${item?.price.id ?? 'unknown'} is not mapped to an Adport plan.`);
 
   const appliedPlan = plan ?? 'reader';
-  await db().begin(async (sql) => {
+  const changed = await db().begin(async (sql) => {
+    await sql`select company.id from public.organization_groups company where company.default_project_id = ${target} for update`;
+    const previous = await sql<Array<{ status: string }>>`select status from public.organization_subscriptions where organization_id = ${target} for update`;
     await sql`
       update public.organization_subscriptions set
         plan = ${appliedPlan},
@@ -89,18 +103,24 @@ async function applySubscription(subscription: Stripe.Subscription): Promise<voi
     `;
 
     const effectivePlan = ['active', 'trialing', 'past_due'].includes(status) ? appliedPlan : 'reader';
+    await sql`update public.organization_settings setting
+      set data_retention_days = least(setting.data_retention_days, ${PLANS[effectivePlan].maxRetentionDays})
+      from public.organizations project join public.organization_groups company on company.id = project.organization_group_id
+      where setting.organization_id = project.id and company.default_project_id = ${target}`;
     const maxActiveAccounts = PLANS[effectivePlan].maxActiveAccounts;
     if (maxActiveAccounts !== null) {
-      const activeAccounts = await sql<Array<{ provider: string; accountId: string }>>`
-        select provider, account_id from public.organization_ad_accounts
-        where organization_id = ${target} and enabled = true
-        order by discovered_at asc, provider asc, account_id asc
-        for update
+      const activeAccounts = await sql<Array<{ organizationId: string; provider: string; accountId: string }>>`
+        select account.organization_id, account.provider, account.account_id from public.organization_ad_accounts account
+        join public.organizations project on project.id = account.organization_id
+        join public.organization_groups company on company.id = project.organization_group_id
+        where company.default_project_id = ${target} and account.enabled = true
+        order by account.discovered_at, account.provider, account.account_id, account.organization_id
+        for update of account
       `;
       for (const account of activeAccounts.slice(maxActiveAccounts)) {
         await sql`
           update public.organization_ad_accounts set enabled = false
-          where organization_id = ${target} and provider = ${account.provider} and account_id = ${account.accountId}
+          where organization_id = ${account.organizationId} and provider = ${account.provider} and account_id = ${account.accountId}
         `;
       }
     }
@@ -113,7 +133,12 @@ async function applySubscription(subscription: Stripe.Subscription): Promise<voi
          ${`Subscription changed to ${effectivePlan} (${status})`},
          ${sql.json({ plan: effectivePlan, status, maxActiveAccounts } as never)})
     `;
+    return previous[0]?.status !== status;
   });
+  const userId = subscription.metadata.analyticsActorUserId;
+  if (changed && userId) captureProductEvent({ organizationId: target, userId }, {
+    event: 'subscription_status_changed', subscription_status: status, target_plan: appliedPlan,
+  }, eventId);
 }
 
 export async function processStripeEvent(event: Stripe.Event): Promise<'processed' | 'duplicate' | 'ignored'> {
@@ -126,7 +151,7 @@ export async function processStripeEvent(event: Stripe.Event): Promise<'processe
   if (event.type === 'customer.subscription.created'
     || event.type === 'customer.subscription.updated'
     || event.type === 'customer.subscription.deleted') {
-    await applySubscription(event.data.object);
+    await applySubscription(event.data.object, event.id);
     handled = true;
   }
   await db()`
