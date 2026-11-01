@@ -26,9 +26,12 @@ Run these after editing shared navigation, catalogs, or content:
 node scripts/build-resource-pages.mjs
 node scripts/build-pricing-page.mjs
 node scripts/build-provider-pages.mjs
+node scripts/build-support-widget.mjs
 ```
 
 Each generator has `--check`; CI also checks resource metadata, structured data, source references, local assets, fragments, and discovery through hubs and the sitemap. Resource sitemap entries are inserted before provider entries so the generators remain stable in any normal verification order. Canonical URLs use `https://www.adport.dev` and Vercel clean URLs.
+
+The public support widget is shared through `scripts/website-support.mjs`. All page generators apply it, and `build-support-widget.mjs` updates the static pages and copies the existing Cloud portrait. The public form uses a same-origin `/api/support` rewrite to Cloud's `/api/public-support`, which validates requests, rate-limits through the existing private bucket helper, and sends to the configured support inbox. The authenticated dashboard support route remains separate.
 
 Existing brand assets are reused directly from the homepage: Google Ads, Meta, Claude, ChatGPT, and MCP marks. No invented customer performance, testimonials, stock dashboard screenshots, or traffic statistics are used.
 

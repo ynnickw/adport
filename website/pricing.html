@@ -3,7 +3,12 @@
 <html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Adport pricing | Free, Pro, Growth &amp; Agency</title><meta name="description" content="Adport Cloud starts free. Pro €19, Growth €39, Agency €79 per month. Unlimited projects, free read-only client viewers, and guarded ad management from any AI agent." />
 <link rel="canonical" href="https://www.adport.dev/pricing" /><meta property="og:title" content="Adport pricing | Plans for owners, teams &amp; agencies" /><meta property="og:description" content="Fixed pricing, unlimited projects, and free read-only client viewers. Start free or try a paid plan for 7 days." /><meta property="og:url" content="https://www.adport.dev/pricing" /><meta property="og:type" content="website" /><meta property="og:image" content="https://www.adport.dev/og-image.png?v=5" />
-<link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" /><link rel="preload" href="/fonts/overpass-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin /><link rel="stylesheet" href="/site.css" /><link rel="stylesheet" href="/pricing.css" /><script src="/pricing.js" defer></script></head>
+<link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" /><link rel="preload" href="/fonts/overpass-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin /><link rel="stylesheet" href="/site.css" /><link rel="stylesheet" href="/pricing.css" /><script src="/pricing.js" defer></script>
+<!-- support-assets:start -->
+<link rel="stylesheet" href="/support.css" />
+<script src="/support.js" defer></script>
+<!-- support-assets:end -->
+</head>
 <body class="pricing-page"><a class="skip-link" href="#main">Skip to content</a><header class="site-header"><a class="brand-lockup" href="/" aria-label="Adport home"><span class="domain-wordmark">adport<span aria-hidden="true">.</span>dev</span></a><nav class="header-meta" aria-label="Main navigation"><a href="/#gate">How it works</a><a href="/providers">Integrations</a><a href="/pricing" aria-current="page">Pricing</a><a href="/resources">Resources</a><a class="header-cta" href="https://app.adport.dev">Sign in</a></nav></header>
 <main id="main"><section class="cloud-pricing" id="pricing" aria-labelledby="pricing-title">
   <div class="pricing-heading"><p class="pricing-eyebrow">Adport Cloud pricing</p><h1 id="pricing-title">One organization. Every client behind the gate.</h1><p>Unlimited projects. Free read-only client viewers. Fixed pricing with no percentage of ad spend.</p></div>
@@ -47,4 +52,22 @@
 <details><summary>How does yearly billing work?</summary><p>Pay once for the year: Pro €190, Growth €390, or Agency €790. The monthly equivalent is shown with the full annual charge. This saves two monthly payments compared with paying each month.</p></details>
 <details><summary>Does this include ad spend or AI model usage?</summary><p>Ad spend is paid to your advertising platforms. Your AI assistant subscription or model usage is separate. Adport does not charge a percentage of your ad spend.</p></details>
 <details><summary>What happens to existing subscriptions?</summary><p>Your subscription keeps its current price until you choose a change in the billing portal. The new account allowances and free read-only viewers apply to the matching plan.</p></details></section></main>
-<footer class="site-footer"><span>Adport is operated by Yannick Westermann, trading as Yannick Westermann Labs.</span><nav aria-label="Legal"><a href="/">Home</a><a href="/pricing">Pricing</a><a href="/resources">Resources</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/support">Support</a></nav></footer></body></html>
+<footer class="site-footer"><span>Adport is operated by Yannick Westermann, trading as Yannick Westermann Labs.</span><nav aria-label="Legal"><a href="/">Home</a><a href="/pricing">Pricing</a><a href="/resources">Resources</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/support">Support</a></nav></footer>
+<!-- support:start -->
+<a class="site-support-launcher" href="mailto:yannick@adport.dev?subject=Adport%20support" aria-label="Need help? Message Yannick" aria-haspopup="dialog" aria-controls="site-support-dialog" aria-expanded="false"><img src="/yannick-support.png" alt="" width="36" height="36" decoding="async" /><span>Need help?</span></a>
+<dialog class="site-support-dialog" id="site-support-dialog" aria-labelledby="site-support-title">
+  <div class="site-support-heading"><h2 id="site-support-title">Message Yannick</h2><button class="site-support-close" type="button" aria-label="Close support"><span aria-hidden="true">×</span></button></div>
+  <div class="site-support-person"><img src="/yannick-support.png" alt="Yannick, Adport founder" width="58" height="58" decoding="async" /><div><strong>Hey, I’m Yannick, the founder.</strong><p>Have a question? Send me a message. I read every one.</p></div></div>
+  <p class="site-support-error" role="alert" hidden></p><p class="site-support-success" role="status" hidden></p>
+  <form class="site-support-form" action="/api/support" method="post">
+    <label for="site-support-email">Your email<input id="site-support-email" name="email" type="email" autocomplete="email" maxlength="254" required placeholder="you@company.com" /></label>
+    <label for="site-support-kind">Message type<select id="site-support-kind" name="kind"><option value="support">Question</option><option value="feedback">Product feedback</option><option value="bug">Bug report</option></select></label>
+    <label for="site-support-message">Your message<textarea id="site-support-message" name="message" rows="4" minlength="10" maxlength="5000" required placeholder="Hi Yannick, I could use a hand with…"></textarea></label>
+    <div class="site-support-honeypot" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off" /></label></div>
+    <button class="site-support-send" type="submit">Send to Yannick</button>
+    <p class="site-support-note">Your email and message are used to reply. <a href="/privacy#support-messages">Privacy</a></p>
+  </form>
+  <a class="site-support-email" href="mailto:yannick@adport.dev?subject=Adport%20support">Prefer email? yannick@adport.dev ↗</a>
+</dialog>
+<!-- support:end -->
+</body></html>

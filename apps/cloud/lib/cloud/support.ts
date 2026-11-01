@@ -50,6 +50,31 @@ function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[character]!);
 }
 
+export async function notifyWebsiteSupportMessage(input: {
+  email: string;
+  kind: FeedbackKind;
+  message: string;
+  pagePath?: string;
+}): Promise<void> {
+  const value = env();
+  if (!value.RESEND_API_KEY || !value.SUPPORT_NOTIFICATION_EMAIL) throw new Error('Support email notifications are not configured.');
+  const subject = input.message.replace(/\s+/g, ' ').slice(0, 160);
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${value.RESEND_API_KEY}`, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      from: 'Adport Support <onboarding@resend.dev>',
+      to: [value.SUPPORT_NOTIFICATION_EMAIL],
+      reply_to: input.email,
+      subject: `[Adport website ${input.kind}] ${subject}`,
+      html: `<div style="font-family:Arial,sans-serif;max-width:640px;margin:auto"><h1 style="font-size:22px">Website ${escapeHtml(input.kind)}</h1><p style="white-space:pre-wrap;line-height:1.6">${escapeHtml(input.message)}</p><hr style="border:0;border-top:1px solid #eee"><p style="color:#666;font-size:13px">Reply to: ${escapeHtml(input.email)}${input.pagePath ? `<br>Page: ${escapeHtml(input.pagePath)}` : ''}</p></div>`,
+    }),
+    cache: 'no-store',
+  });
+  await response.json().catch(() => null);
+  if (!response.ok) throw new Error('Support email delivery failed.');
+}
+
 export async function notifySupportMessage(input: {
   feedback: FeedbackMessage;
   organizationName: string;

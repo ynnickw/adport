@@ -8,7 +8,12 @@
     <title>Privacy — adport.dev</title>
     <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" />
     <link rel="stylesheet" href="/site.css" />
-  </head>
+
+<!-- support-assets:start -->
+<link rel="stylesheet" href="/support.css" />
+<script src="/support.js" defer></script>
+<!-- support-assets:end -->
+</head>
   <body class="legal-page">
     <header class="legal-header">
       <a class="wordmark" href="/">adport<span>.dev</span></a>
@@ -16,12 +21,15 @@
     <main class="legal-content">
       <p class="eyebrow">Legal</p>
       <h1>Privacy Policy</h1>
-      <p class="updated">Effective October 31, 2026</p>
+      <p class="updated">Effective November 1, 2026</p>
 
       <p>Adport is a paid-media control plane operated by Yannick Westermann, trading as Yannick Westermann Labs. It can be used as self-hosted open-source software or through the managed Adport Cloud service. This policy explains both modes and, in particular, how Adport Cloud accesses, uses, stores, protects, retains, and shares Google user data.</p>
 
       <h2>Website and Cloud account data</h2>
       <p>Adport.dev does not use advertising cookies or tracking pixels. Our hosting providers may process standard request data, including IP address, user agent, requested URL, and request time, to deliver and secure the site. If you create an Adport Cloud account, we process your email address, display name, organization membership and role, security settings, connection status, API-key metadata, and service audit events to authenticate you and operate the service. API-key secrets are shown once and stored only as keyed cryptographic digests.</p>
+
+      <h2 id="support-messages">Support messages</h2>
+      <p>If you use the website support form, we process your reply email address, message type, message, and the page path where you contacted us so we can respond. The form sends these details to our support inbox through Resend, our email delivery provider. It does not include URL query parameters or add you to a mailing list. Short-lived, keyed request hashes help limit abuse. Contact <a href="mailto:yannick@adport.dev">yannick@adport.dev</a> to ask about your support messages or request deletion.</p>
 
       <h2 id="product-analytics">Optional Cloud product analytics</h2>
       <p>With your opt-in consent, the hosted dashboard uses PostHog to understand setup progress, feature use, returning use, and subscription conversion so we can improve Adport. This includes dashboard sections viewed, provider connection outcomes, account-access choices, organization and project creation, hosted-agent connection and tool outcomes, role, plan, and subscription status. We use keyed pseudonymous user, organization, and project identifiers. We do not send your name, email address, advertising account identifiers or names, advertising content, reports, spend, tool arguments or results, credentials, raw URLs, or provider error messages to PostHog.</p>
@@ -86,5 +94,23 @@
     <footer class="legal-footer">
       <a href="/">Home</a><span aria-hidden="true">·</span><a href="/terms">Terms</a><span aria-hidden="true">·</span><a href="/data-deletion">Data deletion</a>
     </footer>
-  </body>
+
+<!-- support:start -->
+<a class="site-support-launcher" href="mailto:yannick@adport.dev?subject=Adport%20support" aria-label="Need help? Message Yannick" aria-haspopup="dialog" aria-controls="site-support-dialog" aria-expanded="false"><img src="/yannick-support.png" alt="" width="36" height="36" decoding="async" /><span>Need help?</span></a>
+<dialog class="site-support-dialog" id="site-support-dialog" aria-labelledby="site-support-title">
+  <div class="site-support-heading"><h2 id="site-support-title">Message Yannick</h2><button class="site-support-close" type="button" aria-label="Close support"><span aria-hidden="true">×</span></button></div>
+  <div class="site-support-person"><img src="/yannick-support.png" alt="Yannick, Adport founder" width="58" height="58" decoding="async" /><div><strong>Hey, I’m Yannick, the founder.</strong><p>Have a question? Send me a message. I read every one.</p></div></div>
+  <p class="site-support-error" role="alert" hidden></p><p class="site-support-success" role="status" hidden></p>
+  <form class="site-support-form" action="/api/support" method="post">
+    <label for="site-support-email">Your email<input id="site-support-email" name="email" type="email" autocomplete="email" maxlength="254" required placeholder="you@company.com" /></label>
+    <label for="site-support-kind">Message type<select id="site-support-kind" name="kind"><option value="support">Question</option><option value="feedback">Product feedback</option><option value="bug">Bug report</option></select></label>
+    <label for="site-support-message">Your message<textarea id="site-support-message" name="message" rows="4" minlength="10" maxlength="5000" required placeholder="Hi Yannick, I could use a hand with…"></textarea></label>
+    <div class="site-support-honeypot" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off" /></label></div>
+    <button class="site-support-send" type="submit">Send to Yannick</button>
+    <p class="site-support-note">Your email and message are used to reply. <a href="/privacy#support-messages">Privacy</a></p>
+  </form>
+  <a class="site-support-email" href="mailto:yannick@adport.dev?subject=Adport%20support">Prefer email? yannick@adport.dev ↗</a>
+</dialog>
+<!-- support:end -->
+</body>
 </html>

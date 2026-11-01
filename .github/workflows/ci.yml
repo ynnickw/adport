@@ -24,6 +24,11 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
+      - name: Verify sitewide support
+        run: |
+          node scripts/build-support-widget.mjs --check
+          node --check website/support.js
+          node --test scripts/test-support-widget.mjs
       - name: Verify provider landing pages
         run: |
           node scripts/build-provider-pages.mjs --check
