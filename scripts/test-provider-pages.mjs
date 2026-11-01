@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { runInNewContext } from 'node:vm';
 import { providers } from './website-providers.mjs';
+import { AGENT_SETUPS } from '../apps/cloud/lib/agent-setups.mjs';
 import { agentSetups, mcpBaseUrl } from './website-agent-setups.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -68,9 +69,8 @@ test('provider instruction tabs have matching labels and panels with no-JavaScri
 
 test('all six public setup guides match the Cloud app instructions and commands', async () => {
   const source = await readFile(path.join(root, 'apps/cloud/app/dashboard/agents/agent-setup-guide.tsx'), 'utf8');
-  const definition = source.match(/export const AGENT_SETUPS: Setup\[\] = (\[[\s\S]*?\n\]);/);
-  assert(definition, 'Cloud setup definition changed; review the public guides');
-  const cloudSetups = runInNewContext(`(${definition[1]})`);
+  assert(source.includes("from '@/lib/agent-setups.mjs'"), 'Cloud must use the canonical client setups');
+  const cloudSetups = AGENT_SETUPS;
   assert.equal(agentSetups.length, cloudSetups.length);
   for (const setup of agentSetups) {
     const cloud = cloudSetups.find(item => item.id === setup.id);
@@ -89,7 +89,7 @@ test('MCP setup is not described as waitlist-only and app links lead to signup o
     }
     if (file !== 'providers.html') {
       const panel = html.match(/id="agent-panel-chatgpt"[\s\S]*?<\/div>/)?.[0];
-      assert(panel?.includes('Choose OAuth'), file);
+      assert(panel && /choose OAuth/i.test(panel), file);
       assert(panel.includes(`${mcpBaseUrl}/mcp`), file);
       assert(!/waitlist/i.test(panel), file);
     }
@@ -178,6 +178,14 @@ test('all local links, fragments and assets resolve; forms have unique accessibl
     }
     for (const [, target] of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
       if (/^(https?:|mailto:)/.test(target)) continue;
+      if (target.startsWith('cursor:')) {
+        const link = new URL(target.replaceAll('&amp;', '&'));
+        assert.equal(link.hostname, 'anysphere.cursor-deeplink');
+        assert.equal(link.pathname, '/mcp/install');
+        assert.equal(link.searchParams.get('name'), 'adport');
+        assert.deepEqual(JSON.parse(Buffer.from(link.searchParams.get('config'), 'base64').toString()), { url: `${mcpBaseUrl}/mcp` });
+        continue;
+      }
       if (target.startsWith('#')) { assert(ids.includes(target.slice(1)), `${file}: missing fragment ${target}`); continue; }
       assert(target.startsWith('/'), `${file}: nested page needs root-relative assets: ${target}`);
       const pathname = target.split(/[?#]/)[0];

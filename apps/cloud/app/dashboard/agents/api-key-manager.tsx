@@ -1,14 +1,15 @@
 'use client';
 
-import { Button, Input } from '@/components/controls';
+import { Button, Disclosure, Input } from '@/components/controls';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { formatDate, formatRelative } from '@/components/ui';
 import { InfoTooltip } from '@/components/info-tooltip';
 import { useConfirm } from '@/components/use-confirm';
+import { AgentIdentityLogo } from './agent-setup-guide';
 
 interface KeySummary { id: string; name: string; keyPrefix: string; createdAt: string; lastUsedAt: string | null; }
-interface OAuthGrantSummary {
+export interface OAuthGrantSummary {
   clientId: string;
   userId: string;
   clientName: string;
@@ -21,32 +22,42 @@ interface OAuthGrantSummary {
   status: 'active' | 'rotated' | 'revoked' | 'expired';
 }
 
-export function ApiKeyManager({ organizationId, canManage }: { organizationId: string; canManage: boolean }) {
+export function ApiKeyManager({ organizationId, canManage, baseUrl, initialGrants, initialCheckedAt, setup }: { organizationId: string; canManage: boolean; baseUrl: string; initialGrants: OAuthGrantSummary[]; initialCheckedAt: number; setup: ReactNode }) {
+  const [checking, setChecking] = useState(false);
+  const [checkedAt, setCheckedAt] = useState(initialCheckedAt);
   const [keys, setKeys] = useState<KeySummary[]>();
-  const [oauthGrants, setOauthGrants] = useState<OAuthGrantSummary[]>();
+  const [oauthGrants, setOauthGrants] = useState<OAuthGrantSummary[]>(initialGrants);
   const [createdKey, setCreatedKey] = useState<string>();
   const [name, setName] = useState('');
   const [error, setError] = useState<string>();
+  const [connectionError, setConnectionError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [busyAction, setBusyAction] = useState<string>();
   const [copied, setCopied] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [confirm, confirmationDialog] = useConfirm();
 
-  async function load() {
-    setError(undefined);
+  const load = useCallback(async () => {
+    setChecking(true); setConnectionError(undefined);
     try {
       const response = await fetch(`/api/api-keys?organization_id=${organizationId}`, { cache: 'no-store' });
       const data = await response.json().catch(() => ({})) as { keys?: KeySummary[]; oauthGrants?: OAuthGrantSummary[]; error?: string };
-      if (!response.ok) setError(data.error ?? 'Unable to load API keys.');
+      if (!response.ok) setConnectionError(data.error ?? 'Unable to load assistant connections.');
       else {
         setKeys(data.keys ?? []);
         setOauthGrants(data.oauthGrants ?? []);
+        setCheckedAt(Date.now());
       }
-    } catch { setError('Could not load agent access. Check your connection and try again.'); }
-  }
+    } catch { setConnectionError('Could not load assistant connections. Check your connection and try again.'); }
+    finally { setChecking(false); }
+  }, [organizationId]);
 
-  useEffect(() => { void load(); }, [organizationId]);
+  useEffect(() => {
+    const refresh = () => { void load(); };
+    refresh();
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  }, [load]);
 
   async function create() {
     setBusy(true);
@@ -86,48 +97,41 @@ export function ApiKeyManager({ organizationId, canManage }: { organizationId: s
     catch { setError('Could not copy the key. Use Show key to copy it manually.'); }
   }
 
-  return (
-    <>
-      {confirmationDialog}
-      {createdKey ? (
-        <div className="card-body" style={{ paddingBottom: 0 }}>
-          <div className="callout success" role="status">Copy this key now. It is shown only once.</div>
-          <Input type={revealed ? 'text' : 'password'} value={createdKey} readOnly aria-label="New API key" autoComplete="off" />
-          <div className="row-actions secret-key-actions"><Button type="button" className="button secondary small" onClick={() => void copyKey()}>{copied ? 'Copied' : 'Copy key'}</Button><Button type="button" className="link-button" onClick={() => setRevealed(value => !value)}>{revealed ? 'Hide key' : 'Show key'}</Button><Button type="button" className="link-button" onClick={() => { setCreatedKey(undefined); setCopied(false); setRevealed(false); }}>Done</Button></div>
-        </div>
-      ) : null}
-      {error ? <div className="card-body" style={{ paddingBottom: 0 }}><div className="error-callout" role="alert" style={{ marginBottom: 0 }}>{error} <Button type="button" className="button secondary small" disabled={busy} onClick={() => void load()}>Retry list</Button></div></div> : null}
+  const connectionPanel = (
+    <section className="card assistant-connections" id="connected-assistants" aria-label="Connected assistants">
+      <div className="card-head"><div><h2>Connected assistants</h2><p className="card-kicker">Connections authorized for this project.</p></div><Button type="button" className="button secondary small" disabled={checking || busy} onClick={() => void load()}>{checking ? 'Checking…' : 'Refresh status'}</Button></div>
+      {connectionError ? <div className="card-body"><div className="error-callout" role="alert">{connectionError}</div></div> : null}
       <div className="row-list">
-        {!error && (keys === undefined || oauthGrants === undefined) ? <div className="row-item"><span className="inline-note">Loading agent access…</span></div> : null}
-        {oauthGrants?.map((grant) => (
-          <div className="row-item" key={`${grant.clientId}:${grant.userId}:${grant.resource}`}>
-            <div>
-              <div className="agent-identity"><strong>{grant.clientName}</strong><span className={`status${grant.status === 'active' ? '' : ' neutral'}`}>{grant.status}</span><InfoTooltip label={`Connection details for ${grant.clientName}`}>Requested scopes: {grant.scopes.join(', ')}. Authorized {formatDate(grant.createdAt)}. Refresh grant expires {formatDate(grant.expiresAt)}.</InfoTooltip></div>
-              <div className="cell-sub">
-                OAuth · {grant.lastUsedAt ? `Used ${formatRelative(grant.lastUsedAt)}` : 'Not used yet'}
-              </div>
-            </div>
+        {!connectionError && oauthGrants === undefined ? <div className="row-item"><span className="inline-note">Checking your connections…</span></div> : null}
+        {oauthGrants?.length === 0 ? <div className="assistant-connections-empty"><strong>No assistant connected yet</strong><p>Follow the setup above, then refresh here. Your assistant appears after you sign in and authorize Adport.</p></div> : null}
+        {oauthGrants?.map(grant => <div className="row-item assistant-connection" key={`${grant.clientId}:${grant.userId}:${grant.resource}`}>
+          <AgentIdentityLogo name={grant.clientName} /><div className="assistant-connection-details">
+            <div className="agent-identity"><strong>{grant.clientName}</strong><span className={'status' + (grant.status === 'active' && grant.lastUsedAt ? '' : ' neutral')}>{grant.status === 'active' ? grant.lastUsedAt ? 'In use' : 'Authorized' : grant.status === 'revoked' ? 'Disconnected' : 'Sign in again'}</span><InfoTooltip label={`Connection details for ${grant.clientName}`}>Access: {grant.scopes.includes('tools:write') ? 'Read and propose changes' : 'Read only'}. Authorized {formatDate(grant.createdAt)}. Sign-in expires {formatDate(grant.expiresAt)}.</InfoTooltip></div>
+            <p className="cell-sub">{grant.status === 'active' ? grant.lastUsedAt ? `Last reached Adport ${formatRelative(grant.lastUsedAt, checkedAt)}` : 'Authorized, waiting for its first request.' : 'Reconnect from your assistant to authorize this project again.'}</p>
           </div>
-        ))}
-        {keys?.length === 0 && oauthGrants?.length === 0 ? <div className="row-item"><span className="inline-note">No agent credentials yet. OAuth-capable MCP clients create a grant during authorization; manual REST clients can use a key below.</span></div> : null}
-        {keys?.map((key) => (
-          <div className="row-item" key={key.id}>
-            <div>
-              <strong>{key.name}</strong>
-              <div className="cell-sub">{key.keyPrefix}… · created {formatDate(key.createdAt)} · {key.lastUsedAt ? `last used ${formatDate(key.lastUsedAt)}` : 'never used'}</div>
-            </div>
-            {canManage ? <Button className="button danger small" disabled={busy} onClick={() => void revoke(key.id)}>{busyAction === key.id ? 'Revoking…' : 'Revoke'}</Button> : null}
-          </div>
-        ))}
+        </div>)}
       </div>
-      {canManage ? (
-        <div className="card-body" style={{ borderTop: '1px solid var(--line-soft)' }}>
-          <div className="form-row">
-            <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Key name, e.g. Claude Desktop" aria-label="Key name" style={{ flex: 1, minWidth: '14rem' }} />
-            <Button className="button" disabled={busy} onClick={() => void create()}>{busyAction === 'create' ? 'Creating…' : 'Create key'}</Button>
-          </div>
-        </div>
-      ) : null}
-    </>
+      <p className="assistant-checked" role="status">Last checked {formatDate(new Date(checkedAt))}. Refreshes when you return to this tab.</p>
+    </section>
   );
+
+  return <>
+    {confirmationDialog}
+    {initialGrants.some(grant => grant.status === 'active') ? connectionPanel : null}
+    {setup}
+    {!initialGrants.some(grant => grant.status === 'active') ? connectionPanel : null}
+    {canManage ? <Disclosure label="Advanced: API keys & custom integrations" className="assistant-advanced">
+      <p>For scripts or clients that cannot sign in with OAuth. ChatGPT, Codex, Claude, and Cursor use the setup above.</p>
+      {error ? <div className="error-callout" role="alert">{error}</div> : null}
+      {createdKey ? <div className="stack">
+        <div className="callout success" role="status">Copy this key now. It is shown only once.</div>
+        <Input type={revealed ? 'text' : 'password'} value={createdKey} readOnly aria-label="New API key" autoComplete="off" />
+        <div className="row-actions secret-key-actions"><Button type="button" className="button secondary small" onClick={() => void copyKey()}>{copied ? 'Copied' : 'Copy key'}</Button><Button type="button" className="link-button" onClick={() => setRevealed(value => !value)}>{revealed ? 'Hide key' : 'Show key'}</Button><Button type="button" className="link-button" onClick={() => { setCreatedKey(undefined); setCopied(false); setRevealed(false); }}>Done</Button></div>
+      </div> : null}
+      <div className="row-list">{keys?.map(key => <div className="row-item" key={key.id}><div><strong>{key.name}</strong><div className="cell-sub">{key.keyPrefix}… · created {formatDate(key.createdAt)} · {key.lastUsedAt ? `last used ${formatDate(key.lastUsedAt)}` : 'never used'}</div></div><Button className="button danger small" disabled={busy} onClick={() => void revoke(key.id)}>{busyAction === key.id ? 'Revoking…' : 'Revoke'}</Button></div>)}</div>
+      <div className="form-row"><Input value={name} onChange={event => setName(event.target.value)} placeholder="Key name, e.g. Reporting script" aria-label="Key name" /><Button className="button secondary" disabled={busy} onClick={() => void create()}>{busyAction === 'create' ? 'Creating…' : 'Create key'}</Button></div>
+      <p className="inline-note">Use the key as a bearer token. Changes require a preview and your approval.</p>
+      <div className="assistant-reference"><div><span>MCP server</span><code>{baseUrl}/mcp</code></div><div><span>REST accounts</span><code>GET {baseUrl}/api/v1/accounts</code></div><div><span>REST tools</span><code>POST {baseUrl}/api/v1/tools/&lt;tool&gt;</code></div></div>
+    </Disclosure> : null}
+  </>;
 }

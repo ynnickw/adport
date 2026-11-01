@@ -3,45 +3,28 @@ import { canAdminister, requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { env } from '@/lib/env';
 import { AgentSetupGuide } from './agent-setup-guide';
 import { ApiKeyManager } from './api-key-manager';
-import { Disclosure } from '@/components/controls';
 import Link from 'next/link';
 import { listOrganizationAdAccounts } from '@/lib/cloud/repository';
+import { listMcpOAuthGrants } from '@/lib/cloud/mcp-oauth-repository';
 
-export const metadata = { title: 'Agent access' };
+export const metadata = { title: 'AI assistants' };
 
 export default async function AgentsPage() {
   const tenant = await requireDashboardTenant();
   const baseUrl = env().ADPORT_CLOUD_BASE_URL.replace(/\/$/, '');
-  const accounts = await listOrganizationAdAccounts(tenant.organizationId);
+  const canManage = canAdminister(tenant);
+  const [accounts, grants] = await Promise.all([
+    listOrganizationAdAccounts(tenant.organizationId),
+    canManage ? listMcpOAuthGrants(tenant.organizationId) : Promise.resolve([]),
+  ]);
+  const initialGrants = grants.map(grant => ({ ...grant, createdAt: grant.createdAt.toISOString(), expiresAt: grant.expiresAt.toISOString(), lastUsedAt: grant.lastUsedAt?.toISOString() ?? null }));
   const active = accounts.filter(account => account.enabled).length;
   return (
     <main className="page">
-      <PageHeader title="Agent access" description="Connect an MCP client with Adport OAuth. Grants are scoped to this workspace and every write still passes the same policy gate." />
+      <PageHeader title="AI assistants" description="Connect the AI you use. Ask about performance, find wasted spend, and manage your ads from one conversation." />
       <div className="stack agent-access-stack">
         {!active ? <section className="setup-next-step"><div><strong>{canAdminister(tenant) ? accounts.length ? 'Enable an account first' : 'Add your first ad account' : 'No accounts available yet'}</strong><p>{canAdminister(tenant) ? 'Your assistant can connect now, but it will have no ad accounts to read.' : 'Ask a project owner or admin to enable account access for your assistant.'}</p></div><Link className="button secondary small" href={canAdminister(tenant) && !accounts.length ? '/dashboard/connections' : '/dashboard/accounts'}>{canAdminister(tenant) && !accounts.length ? 'Connect a platform' : 'View accounts'}</Link></section> : null}
-        <AgentSetupGuide baseUrl={baseUrl} />
-        <Disclosure label="Advanced connection options"><div className="grid-2">
-          <section className="card">
-            <div className="card-head"><h2>Connection details</h2><span className="card-note">Streamable HTTP</span></div>
-            <div className="card-body stack">
-              <p className="subhead">Use this endpoint for any other OAuth-capable MCP client. Authorization stays scoped to this project.</p>
-              <div className="code"><span>MCP</span>{baseUrl}/mcp</div>
-              <p className="inline-note">No API key is required. The MCP client receives short-lived, audience-bound access tokens and refreshes them automatically.</p>
-            </div>
-          </section>
-          <section className="card">
-            <div className="card-head"><h2>REST fallback</h2><span className="card-note">Manual key required</span></div>
-            <div className="card-body stack">
-              <div className="code"><span>GET</span>{baseUrl}/api/v1/accounts</div>
-              <div className="code"><span>POST</span>{baseUrl}/api/v1/tools/&lt;tool&gt;</div>
-              <p className="inline-note">Use a manual bearer key only for clients without MCP OAuth. Guarded writes first return a preview; applying requires the matching pending operation.</p>
-            </div>
-          </section>
-        </div></Disclosure>
-        {canAdminister(tenant) ? <section className="card">
-          <div className="card-head"><h2>Connected agents & keys</h2></div>
-          <ApiKeyManager key={tenant.organizationId} organizationId={tenant.organizationId} canManage={canAdminister(tenant)} />
-        </section> : null}
+        {canManage ? <ApiKeyManager key={tenant.organizationId} organizationId={tenant.organizationId} canManage baseUrl={baseUrl} initialGrants={initialGrants} initialCheckedAt={Date.now()} setup={<AgentSetupGuide baseUrl={baseUrl} projectName={tenant.organizationName} canCheckConnection hasConnections={initialGrants.some(grant => grant.status === 'active')} />} /> : <><AgentSetupGuide baseUrl={baseUrl} projectName={tenant.organizationName} /><p className="inline-note">An owner or admin can view this project’s authorized assistants and manage API keys.</p></>}
       </div>
     </main>
   );

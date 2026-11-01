@@ -29,8 +29,8 @@ export default async function OverviewPage() {
     <main className="page">
       <PageHeader
         title="Overview"
-        description="Performance and activity across this project's ad accounts. Open Reports for the full campaign view."
-        action={connections.length ? <Link className="button secondary" href="/dashboard/reports" prefetch={false}>View report</Link> : undefined}
+        description="Your ad accounts, campaign activity, and next steps."
+        action={<Link className="button secondary" href="/dashboard/agents" prefetch={false}>Open AI assistants</Link>}
       />
       {canManage && onboarding.currentStep !== 'complete' ? <section className="setup-resume"><div><span className="plan-kicker">Your project is ready</span><h2>Finish setting up {tenant.organizationName}</h2><p>Pick up where you left off to connect accounts and your AI assistant.</p></div><Link href="/onboarding?resume=1" className="button secondary">Resume setup</Link></section> : null}
       {connections.length === 0 ? (

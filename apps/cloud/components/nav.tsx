@@ -25,11 +25,9 @@ const icon = {
 
 const PRIMARY_ITEMS: NavItem[] = [
   { label: 'Overview', href: '/dashboard', icon: icon.overview, exact: true },
+  { label: 'AI assistants', href: '/dashboard/agents', icon: icon.agents },
   { label: 'Accounts', href: '/dashboard/accounts', icon: icon.accounts, paths: ['/dashboard/accounts', '/dashboard/connections'] },
-  { label: 'Reports', href: '/dashboard/reports', icon: icon.reports },
-  { label: 'Findings', href: '/dashboard/findings', icon: icon.findings },
   { label: 'Approvals', href: '/dashboard/approvals', icon: icon.approvals, paths: ['/dashboard/approvals', '/dashboard/audit'] },
-  { label: 'Agent access', href: '/dashboard/agents', icon: icon.agents },
 ];
 
 const SETTINGS_ITEMS: NavItem[] = [
@@ -72,7 +70,7 @@ export function UtilityNav() {
   );
 }
 
-export function ContextNav({ projectName }: { projectName: string }) {
+export function ContextNav() {
   const pathname = usePathname();
   const navigation = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -95,8 +93,9 @@ export function ContextNav({ projectName }: { projectName: string }) {
       ? [{ label: 'Ad accounts', href: '/dashboard/accounts' }, { label: 'Platforms', href: '/dashboard/connections' }]
       : ['/dashboard/approvals', '/dashboard/audit'].includes(pathname)
         ? [{ label: 'Pending changes', href: '/dashboard/approvals' }, { label: 'History', href: '/dashboard/audit' }] : [];
-  return <header className="workspace-bar"><span className="workspace-context">{projectName}</span>
-    {tabs.length ? <nav ref={navigation} className="section-tabs" aria-label="Section navigation">{tabs.map(item => <Link href={item.href} key={item.href} prefetch={false} aria-current={pathname === item.href ? 'page' : undefined}>{item.label}</Link>)}</nav> : null}
+  if (!tabs.length) return null;
+  return <header className="workspace-bar">
+    <nav ref={navigation} className="section-tabs" aria-label="Section navigation">{tabs.map(item => <Link href={item.href} key={item.href} prefetch={false} aria-current={pathname === item.href ? 'page' : undefined}>{item.label}</Link>)}</nav>
   </header>;
 }
 
