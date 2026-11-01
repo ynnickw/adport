@@ -13,7 +13,7 @@
 .pricing-provider-logo { display: inline-grid; flex: none; width: 3.25rem; height: 3.25rem; place-items: center; border: 2px solid var(--paper); border-radius: 50%; background: var(--raised); }
 .pricing-provider-logo svg { display: block; width: 1.9rem; height: 1.9rem; fill: currentColor; }
 .provider-stack-marks .pricing-provider-logo + .pricing-provider-logo { margin-left: -.6rem; }
-.provider-more { display: grid; flex: none; width: 3.3rem; height: 3.3rem; margin-left: -.6rem; place-items: center; border: 2px solid var(--paper); border-radius: 50%; background: var(--ink); color: var(--raised); font: 650 .875rem var(--sans); cursor: pointer; transition: background 160ms; }
+.provider-more { display: grid; flex: none; padding: 0; width: 3.3rem; height: 3.3rem; margin-left: -.6rem; place-items: center; border: 2px solid var(--paper); border-radius: 50%; background: var(--ink); color: var(--raised); font: 650 .875rem var(--sans); cursor: pointer; transition: background 160ms; }
 .provider-more:hover, .provider-more[aria-expanded="true"] { background: var(--signal-ink); }
 .provider-more:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
 .provider-tooltip { position: absolute; z-index: 30; top: calc(100% + .8rem); left: 50%; width: min(22rem, calc(100vw - 3rem)); padding: 1.1rem; border: 1px solid var(--rule); border-radius: .95rem; background: var(--raised); color: var(--ink); box-shadow: 0 12px 40px #1d1d1f1a, 0 2px 8px #1d1d1f0a; transform: translateX(-50%); }
