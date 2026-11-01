@@ -15,7 +15,7 @@
 .hero-title { margin-top: 1rem; font-size: clamp(2rem, 9.5cqi, 3.5rem); font-weight: 820; line-height: 1.1; letter-spacing: -0.04em; }
 .hero-lead { display: block; white-space: nowrap; }
 .agent-line { display: flex; align-items: baseline; gap: 0.24em; white-space: nowrap; }
-.ads-word { display: inline-flex; align-items: baseline; gap: 0.15em; }
+.ads-word { display: inline-flex; align-items: baseline; gap: 0.15em; margin-inline-start: 0.1em; }
 
 /* Every item shares one grid cell, keeping both headline lines steady as logos rotate. */
 .agent-rotator, .provider-rotator { display: inline-grid; vertical-align: middle; }
