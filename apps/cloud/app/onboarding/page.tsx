@@ -46,7 +46,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
         projectName={tenant.organizationName}
         policy={policy}
         setupKind={usage.projects > 1 ? 'new_project' : 'first_project'}
-        projectSwitcher={tenant.projects.length > 1 ? <ProjectSwitcher projects={tenant.projects} currentProjectId={tenant.organizationId} /> : undefined}
+        projectSwitcher={<ProjectSwitcher projects={tenant.projects} currentProjectId={tenant.organizationId} />}
         resuming={params.resume === '1'}
         canManage={canAdminister(tenant)}
         initialStep={selection ? 'accounts' : params.step === 'connect' || params.step === 'accounts' || params.step === 'agent' ? params.step : state.currentStep}

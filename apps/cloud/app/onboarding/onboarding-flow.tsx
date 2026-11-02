@@ -96,7 +96,7 @@ export function OnboardingFlow({ organizationId, projectName, policy, setupKind,
   return <>
     <header className="onboarding-head">
       <Link href={returnTo} aria-label="Adport dashboard" onClick={event => { event.preventDefault(); skip(); }}><BrandLockup /></Link>
-      <div className="onboarding-project"><span className="setup-project-label">Project</span>{projectSwitcher ?? <span>{projectName}</span>}</div>
+      <div className="onboarding-project">{projectSwitcher ?? <><span className="setup-project-label">Project</span><span>{projectName}</span></>}</div>
       <div className="onboarding-head-actions"><SupportLauncher className="support-inline" /><Button type="button" className="button secondary small" disabled={busy} onClick={skip}>{busy ? 'Saving…' : 'Set up later'}</Button></div>
     </header>
     <div className="onboarding-shell">

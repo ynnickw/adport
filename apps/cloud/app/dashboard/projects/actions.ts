@@ -10,7 +10,7 @@ import { PROJECT_COOKIE } from '@/lib/cloud/auth';
 import { resolveMembership, enforceRateLimit } from '@/lib/cloud/repository';
 import { createOrganization, createProject, updateProject, renameCompany, saveOrganizationMember, removeCompanyMember } from '@/lib/cloud/workspaces';
 import { HttpError } from '@/lib/http';
-import { safeDashboardReturnPath } from '@/lib/return-path';
+import { safeProjectSwitchReturnPath } from '@/lib/return-path';
 
 export interface WorkspaceActionState { error?: string; success?: string; }
 const uuid = z.string().uuid();
@@ -49,7 +49,7 @@ export async function selectProjectAction(form: FormData): Promise<void> {
   const id = uuid.parse(form.get('projectId'));
   await resolveMembership(await userId(), id);
   await setProject(id);
-  redirect(safeDashboardReturnPath(form.get('return_to')));
+  redirect(safeProjectSwitchReturnPath(form.get('return_to')));
 }
 
 export async function createOrganizationAction(_state: WorkspaceActionState, form: FormData): Promise<WorkspaceActionState> {

@@ -33,6 +33,13 @@ describe('policy customization during onboarding', () => {
     expect(mocks.redirect).not.toHaveBeenCalled();
   });
 
+  it.each(['/dashboard/projects', '/dashboard/organization'])('allows workspace management at %s before setup is completed', async path => {
+    mocks.path.mockReturnValue(path);
+    const html = renderToStaticMarkup(await DashboardLayout({ children: <p>Workspace settings</p> }));
+    expect(html).toContain('Workspace settings');
+    expect(mocks.redirect).not.toHaveBeenCalled();
+  });
+
   it('still guides unfinished projects into setup from the dashboard', async () => {
     mocks.path.mockReturnValue('/dashboard');
     await expect(DashboardLayout({ children: null })).rejects.toThrow('redirect');
