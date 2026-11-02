@@ -30,6 +30,8 @@ other projects remain. Archiving projects preserves their audit evidence.
 
 Organization owners and admins see all current and future projects. Members and viewers see only their assigned projects. Within an assigned project, everyone shares its accounts, reports, approvals, and history; the role controls which actions are allowed. Member ad writes also require a paid editing seat and pass through the existing policy engine.
 
+Removing a project member revokes that person’s access tokens, refresh tokens, and unused authorization codes for the project in the same transaction. Adding them back requires a new agent authorization; grants to their other projects remain intact.
+
 Owners manage billing and organization owner/admin roles. Admins manage projects and member/viewer access but cannot promote themselves or change owners/admins. Inherited organization roles are shown in the project team and are managed from Organization settings. Project admins manage the team and settings of their project.
 
 The Organization page shows each person’s project assignments and explains every role when inviting or changing access. Read-only viewers remain free and all existing plan allowances remain unchanged.
