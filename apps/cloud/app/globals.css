@@ -57,7 +57,7 @@ button, select { font: inherit; }
 button { cursor: pointer; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 
-/* ── Brand: the orange dot and adport.dev domain wordmark ─────────────── */
+/* ── Brand: the Adport wordmark and orange dot ─────────────── */
 .brand-lockup { display: inline-flex; align-items: center; gap: 0.55rem; }
 .brand-mark { display: inline-block; width: 0.72rem; height: 0.72rem; flex: 0 0 auto; border-radius: 50%; background: var(--orange); }
 .domain-wordmark { color: var(--ink); font-size: 1.25rem; font-weight: 800; letter-spacing: -0.035em; }
