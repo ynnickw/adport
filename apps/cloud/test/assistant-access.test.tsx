@@ -29,7 +29,7 @@ describe('project assistant access', () => {
   it('puts an existing connection first and shows actual use metadata', async () => {
     const html = renderToStaticMarkup(await AgentsPage());
     expect(mocks.grants).toHaveBeenCalledWith('project');
-    expect(html.indexOf('Connected assistants')).toBeLessThan(html.indexOf('Connect ChatGPT'));
+    expect(html.indexOf('Connected assistants')).toBeLessThan(html.indexOf('<h2>AI assistant</h2>'));
     expect(html).toContain('In use');
     expect(html).toContain('Last reached Adport');
   });
@@ -44,7 +44,7 @@ describe('project assistant access', () => {
   it('starts with setup when no assistant has been authorized', async () => {
     mocks.grants.mockResolvedValue([]);
     const html = renderToStaticMarkup(await AgentsPage());
-    expect(html.indexOf('Connect ChatGPT')).toBeLessThan(html.indexOf('Connected assistants'));
+    expect(html.indexOf('<h2>AI assistant</h2>')).toBeLessThan(html.indexOf('Connected assistants'));
     expect(html).toContain('No assistant connected yet');
   });
 
@@ -52,7 +52,7 @@ describe('project assistant access', () => {
     mocks.tenant.mockResolvedValue({ organizationId: 'project', organizationName: 'Acme', role });
     const html = renderToStaticMarkup(await AgentsPage());
     expect(mocks.grants).not.toHaveBeenCalled();
-    expect(html).toContain('Connect ChatGPT');
+    expect(html).toContain('<h2>AI assistant</h2>');
     expect(html).not.toContain('Refresh status');
     expect(html).not.toContain('Create key');
     expect(html).not.toContain('Connected assistants');

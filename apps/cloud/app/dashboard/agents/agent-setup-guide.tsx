@@ -33,11 +33,11 @@ export function AgentIdentityLogo({ name }: { name: string }) {
   return <span className={`agent-logo ${setup?.provider ?? 'mcp'}`} aria-hidden="true">{setup ? <AgentLogo provider={setup.provider} /> : name.slice(0, 1).toUpperCase()}</span>;
 }
 
-export function CopyButton({ value, label, className = '' }: { value: string; label: string; className?: string }) {
+export function CopyButton({ value, label, className = '', onCopyFailure }: { value: string; label: string; className?: string; onCopyFailure?: () => void }) {
   const [status, setStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   async function copy() {
     try { await navigator.clipboard.writeText(value); setStatus('copied'); }
-    catch { setStatus('failed'); }
+    catch { setStatus('failed'); onCopyFailure?.(); }
   }
   return <Button className={'button secondary small ' + className} type="button" onClick={() => void copy()} aria-label={label}><span aria-live="polite">{status === 'failed' ? 'Select text to copy' : status === 'copied' ? 'Copied ✓' : label}</span></Button>;
 }
