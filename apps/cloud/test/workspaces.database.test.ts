@@ -221,6 +221,30 @@ describeDatabase('company organizations and isolated projects', () => {
     await expect(removeCompanyMember(owner, company, owner)).rejects.toThrow('last organization owner');
   });
 
+  it('permanently revokes project OAuth grants on removal without affecting another project', async () => {
+    await saveOrganizationMember({ actorUserId: owner, organizationId: company, userId: client, role: 'viewer', projectIds: [firstProject, secondProject] });
+    const authorization = {
+      clientId: oauthClientId, clientName: 'Agency project test', redirectUri, scopes: ['tools:read' as const],
+      codeChallenge: pkceChallenge(verifier), resource: mcpResourceUrl(), state: 'project-removal-test',
+    };
+    const principal = { organizationId: firstProject, userId: client, role: 'viewer' as const, scopes: ['tools:read'] };
+    const exchange = (code: string) => exchangeMcpAuthorizationCode({ clientId: oauthClientId, code, codeVerifier: verifier, redirectUri, resource: mcpResourceUrl() });
+    const removedGrant = await exchange(await createMcpAuthorizationCode(principal, authorization));
+    const otherGrant = await exchange(await createMcpAuthorizationCode({ ...principal, organizationId: secondProject }, authorization));
+    const pendingCode = await createMcpAuthorizationCode(principal, authorization);
+
+    await removeOrganizationMember({ organizationId: firstProject, userId: owner, role: 'owner', scopes: [] }, client);
+    expect(await authenticateMcpOAuthAccessToken(removedGrant.accessToken)).toBeUndefined();
+    expect(await authenticateMcpOAuthAccessToken(otherGrant.accessToken)).toBeDefined();
+    expect((await resolveMembership(client, secondProject)).role).toBe('viewer');
+
+    await saveOrganizationMember({ actorUserId: owner, organizationId: company, userId: client, role: 'viewer', projectIds: [firstProject, secondProject] });
+    expect(await authenticateMcpOAuthAccessToken(removedGrant.accessToken)).toBeUndefined();
+    await expect(exchangeMcpRefreshToken({ clientId: oauthClientId, refreshToken: removedGrant.refreshToken, resource: mcpResourceUrl() })).rejects.toThrow('revoked');
+    await expect(exchange(pendingCode)).rejects.toThrow();
+    expect(await authenticateMcpOAuthAccessToken(otherGrant.accessToken)).toBeDefined();
+  });
+
   it('handles more simultaneous team edits than the database pool without waiting for a second connection', async () => {
     await db()`update public.organization_subscriptions set plan = 'operator', status = 'active' where organization_id = ${company}`;
     await Promise.all(Array.from({ length: 12 }, () => saveOrganizationMember({ actorUserId: owner, organizationId: company, userId: client, role: 'viewer', projectIds: [secondProject] })));
