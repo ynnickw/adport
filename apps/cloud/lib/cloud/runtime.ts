@@ -72,7 +72,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
   };
   if (credentials.snapchat && providerAllowedForOrganization('snapchat', principal.organizationId)) {
     const persist = persistTokens('snapchat');
-    const provider = new SnapchatAdsProvider(new SnapchatAdsClient({ ...cloudProviderApp('snapchat'), refreshToken: credentials.snapchat.refreshToken, onRefreshToken: refreshToken => persist({ refreshToken }) }));
+    const provider = new SnapchatAdsProvider(new SnapchatAdsClient({ ...cloudProviderApp('snapchat'), refreshToken: credentials.snapchat.refreshToken, onRefreshToken: refreshToken => persist({ refreshToken }) }), media);
     modules.push({ provider: scopeProvider(provider), tools: snapchatTools(provider) });
   }
   if (credentials.spotify && providerAllowedForOrganization('spotify', principal.organizationId)) {

@@ -18,7 +18,7 @@ The upload process reserves a random object path, signs an upload grant with ove
 }
 ```
 
-Call `meta_upload_image`, `meta_upload_video`, `tiktok_upload_image`, `tiktok_upload_video`, `spotify_upload_asset` or `apple_upload_asset` without a pending token to preview. Review the preview, then repeat the same arguments with its `pending_operation_id` to upload. Apple additionally requires a Business Brand promoted-object ID; Spotify requires a new account-owned asset metadata ID. The provider rechecks the media bytes at both stages.
+Call `meta_upload_image`, `meta_upload_video`, `tiktok_upload_image`, `tiktok_upload_video`, `spotify_upload_asset`, `snapchat_upload_media` or `apple_upload_asset` without a pending token to preview. Review the preview, then repeat the same arguments with its `pending_operation_id` to upload. Apple additionally requires a Business Brand promoted-object ID; Spotify and Snapchat require a new account-owned media container ID. The provider rechecks the media bytes at both stages.
 
 Local CLI/stdio uploads accept an absolute `file_path` and `expected_sha256` instead of `media_id`. Hosted calls reject local file paths. Files are read through one bounded file handle, symbolic links are rejected, and changing file bytes invalidates the approval.
 
@@ -37,6 +37,8 @@ Apple ad-group, keyword and ad statuses can be changed with their named status t
 Spotify's `spotify_ads` and `spotify_assets` render copy and image/video/audio previews. Published ads can stage a draft; draft cards edit copy through the ordinary preview/apply gate. Hierarchy validation and version-bound publication remain separate operations. See [Spotify campaign drafts and media](spotify-campaign-setup.md) for setup, native field semantics and cleanup limits.
 
 Pinterest's `pinterest_ads` reads account ad settings and hydrates only their referenced Pins when the existing connection has boards/pins read access. Its visual actions edit advertiser ad settings through the shared gate. Original shared Pins remain unchanged. See [Pinterest campaign setup](pinterest-campaign-setup.md) for CBO budgets, targeting, native filter encoding and Pin-permission limits.
+
+Snapchat's `snapchat_creatives` displays native copy and image/video media. Copy edits affect all linked ads and trigger review; previews enumerate those ads. Top Snap replacement is restricted to unused creatives. Its media uploader binds the exact file checksum and validates native chunk paths against the approved media ID. See [Snapchat campaign setup](snapchat-campaign-setup.md) for child workflows, audiences and measurement constraints.
 
 Microsoft exposes named ad-group, keyword and responsive search ad workflows, including status changes and partial copy/bid updates. Ad-group creation asks for an explicit language. Reads request the optional `AdGroupType` field to verify RSA compatibility. RSA updates retain positional pinning and omit read-only text-asset IDs. Batch failures report successful resource IDs so callers can reconcile partially applied requests before retrying.
 

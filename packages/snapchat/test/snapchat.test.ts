@@ -174,11 +174,19 @@ describe('Snapchat account discovery and normalized reports', () => {
     expect(result.rows).toHaveLength(1);
     expect(result.truncated).toBe(true);
   });
+  it('keeps account metrics unavailable when the native campaign breakdown is empty', async () => {
+    const { client } = fixture([
+      { path: 'adaccounts/account-1', reply: envelope('adaccounts', 'adaccount', [account]) },
+      { path: 'adaccounts/account-1/stats', reply: envelope('total_stats', 'total_stat', [{ id: account.id, breakdown_stats: { campaign: [] } }]) },
+    ]);
+    const result = await new SnapchatAdsProvider(client).report({ accountIds: [account.id], level: 'account', metrics: ['spend', 'impressions', 'clicks', 'conversions', 'roas'], dateRange: 'last_7_days' });
+    expect(result.rows[0]!.metrics).toEqual({});
+  });
 });
 
 describe('Snapchat guarded writes and module assembly', () => {
   it('previews locally and only sends a paused create after apply', async () => {
-    const { client, calls } = fixture([{ path: 'adaccounts/account-1/campaigns', method: 'POST', reply: envelope('campaigns', 'campaign', [{ ...campaign, status: 'PAUSED' }]) }]);
+    const { client, calls } = fixture([{ path: 'adaccounts/account-1/campaigns', method: 'POST', reply: envelope('campaigns', 'campaign', [{ ...campaign, name: 'New campaign', daily_budget_micro: 50_000_000, status: 'PAUSED' }]) }]);
     const provider = new SnapchatAdsProvider(client);
     const preview = await provider.previewWrite(createOp, guard);
     expect(preview).toMatchObject({ serverValidated: false, coercions: ['status coerced to PAUSED by policy (paused_creation)'], budgetDeltas: [{ toMicros: 50_000_000 }] });
@@ -215,7 +223,7 @@ describe('Snapchat guarded writes and module assembly', () => {
   });
   it('uses the shared exact-argument two-step gate, budget caps, protected accounts and audit log', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'adport-snapchat-test-')); testDirs.push(dir);
-    const { client, calls } = fixture([campaignRoute, { path: `adaccounts/${account.id}/campaigns/${campaign.id}`, method: 'PATCH', reply: envelope('campaigns', 'campaign', [campaign]) }]);
+    const { client, calls } = fixture([campaignRoute, { path: `adaccounts/${account.id}/campaigns/${campaign.id}`, method: 'PATCH', reply: envelope('campaigns', 'campaign', [{ ...campaign, daily_budget_micro: 120_000_000 }]) }]);
     const provider = new SnapchatAdsProvider(client);
     const audit = new AuditLog(path.join(dir, 'audit'));
     const engine = new PolicyEngine(DEFAULT_POLICY, new PendingStore(path.join(dir, 'pending')), audit);
