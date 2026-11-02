@@ -1393,6 +1393,8 @@ input.control-checkbox:disabled { cursor: not-allowed; opacity: .45; }
 .pricing-paywall > .dialog-heading { position: sticky; z-index: 20; top: 0; display: flex; min-height: 4.25rem; gap: 1.5rem; margin: 0; padding: .75rem 1.5rem; border-bottom: 1px solid var(--rule); background: var(--raised); }
 .pricing-paywall > .dialog-heading .icon-button { flex: none; width: 2.5rem; height: 2.5rem; margin-left: auto; border: 1px solid var(--rule); border-radius: 50%; background: var(--raised); }
 .pricing-paywall > .cloud-pricing { padding-block: 2rem 3rem; }
+.pricing-paywall .paywall-context { margin-bottom: 0; }
+.pricing-paywall .pricing-billing { margin-block: 1.25rem 2rem; }
 .pricing-paywall .provider-tooltip { line-height: 1.6; }
 @media (min-width: 881px) { body:has(.app-shell) .pricing-paywall { --paywall-sidebar: 14.5rem; } }
 @media (max-width: 760px) { .app-dialog.pricing-paywall { width: calc(100vw - 1.5rem); max-height: calc(100dvh - 1.5rem); border-radius: 1rem; } .pricing-paywall > .dialog-heading { padding-inline: 1rem; } }

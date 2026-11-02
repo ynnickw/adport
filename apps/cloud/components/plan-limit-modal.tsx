@@ -11,8 +11,6 @@ import { useUpgradeContext } from './upgrade-context';
 import { BillingForm } from '@/app/dashboard/billing/billing-form';
 import { startProjectSubscriptionForm, openProjectBillingPortalForm } from '@/app/dashboard/billing/actions';
 
-const TITLES = { active_accounts: 'Enable more ad accounts', members: 'Make room for your team', retention: 'Keep a longer audit history', write_access: 'Put your ad insights into action' } as const;
-
 export function PlanLimitModal({ limit, onClose }: { limit?: PlanLimitDetails; onClose: () => void }) {
   return limit ? <UpgradePaywall key={`${limit.kind}:${limit.recommendedPlan}:${limit.message}`} limit={limit} onClose={onClose} /> : null;
 }
@@ -45,8 +43,8 @@ function UpgradePaywall({ limit, onClose }: { limit: PlanLimitDetails; onClose: 
     else actions[plan] = <span className="pricing-action pricing-action-current">Checkout unavailable</span>;
     notes[plan] = !canManage ? 'Copy a plan link for your organization owner' : billing?.hasSubscription ? 'Review changes in the billing portal' : billing?.trialEligible ? '7-day free trial · cancel anytime' : 'Cancel anytime';
   }
-  return <Dialog title={TITLES[limit.kind]} onClose={onClose} className="pricing-paywall pricing-surface" portal>
-    <PricingComparison currentPlanId={context.planId} requestedPlan={limit.recommendedPlan} interval={interval} onIntervalChange={value => { setInterval(value); setCopyStatus({ status: 'idle' }); }} actions={actions} notes={notes} canManageBilling={canManage} idPrefix={`paywall-${id}`} freeAction={<Button className="pricing-action" type="button" onClick={onClose}>{context.planId === 'reader' ? 'Continue with Free' : `Keep ${catalog[context.planId].name}`}</Button>} secondaryAction={<Button className="pricing-dismiss" type="button" onClick={onClose}>Not now</Button>}
-      context={<><div className="paywall-context" role="status"><p>{limit.message}</p><p><strong>{catalog[limit.recommendedPlan].name}</strong> is recommended for this request.{!canManage ? ' Your organization owner manages billing. Choose a plan to copy its link for them.' : ''}</p></div>{copyStatus.status === 'failed' ? <p className="field-error" role="alert">Copying is unavailable. <Link href={path(copyStatus.plan)}>Open plan details and share that page’s address.</Link></p> : null}</>} />
+  return <Dialog title="Choose a plan" onClose={onClose} className="pricing-paywall pricing-surface" portal>
+    <PricingComparison showHeading={false} currentPlanId={context.planId} requestedPlan={limit.recommendedPlan} interval={interval} onIntervalChange={value => { setInterval(value); setCopyStatus({ status: 'idle' }); }} actions={actions} notes={notes} canManageBilling={canManage} idPrefix={`paywall-${id}`} freeAction={<Button className="pricing-action" type="button" onClick={onClose}>{context.planId === 'reader' ? 'Continue with Free' : `Keep ${catalog[context.planId].name}`}</Button>} secondaryAction={<Button className="pricing-dismiss" type="button" onClick={onClose}>Not now</Button>}
+      context={<><p className="paywall-context" role="status">{limit.message}</p>{copyStatus.status === 'failed' ? <p className="field-error" role="alert">Copying is unavailable. <Link href={path(copyStatus.plan)}>Open plan details and share that page’s address.</Link></p> : null}</>} />
   </Dialog>;
 }

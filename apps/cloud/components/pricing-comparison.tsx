@@ -9,16 +9,16 @@ import { PricingFeatureTable } from './pricing-feature-table';
 export const PAID_PLAN_IDS = ['operator', 'premium', 'agency'] as const;
 export type PaidPlanId = typeof PAID_PLAN_IDS[number];
 
-export function PricingComparison({ currentPlanId, requestedPlan, interval, billingLinks, onIntervalChange, actions, notes, canManageBilling, freeAction, context, idPrefix = 'billing', secondaryAction }: {
+export function PricingComparison({ currentPlanId, requestedPlan, interval, billingLinks, onIntervalChange, actions, notes, canManageBilling, freeAction, context, idPrefix = 'billing', secondaryAction, showHeading = true }: {
   currentPlanId: PlanId; requestedPlan?: UpgradePlanId; interval: 'monthly' | 'annual';
   billingLinks?: { monthly: string; annual: string }; onIntervalChange?: (interval: 'monthly' | 'annual') => void;
   actions: Partial<Record<PaidPlanId, React.ReactNode>>; notes?: Partial<Record<PaidPlanId, React.ReactNode>>;
   canManageBilling: boolean; freeAction?: React.ReactNode; context?: React.ReactNode;
-  idPrefix?: string; secondaryAction?: React.ReactNode;
+  idPrefix?: string; secondaryAction?: React.ReactNode; showHeading?: boolean;
 }) {
   const free = freeAction ?? (currentPlanId === 'reader' ? <span className="pricing-action pricing-action-current">Current plan</span> : <Link className="pricing-action" href="/dashboard/accounts">View your accounts</Link>);
-  return <section className="cloud-pricing pricing-surface" aria-label="Available plans" aria-labelledby={`${idPrefix}-pricing-title`}>
-    <div className="pricing-heading"><p className="pricing-eyebrow">Adport Cloud pricing</p><h2 id={`${idPrefix}-pricing-title`}>One organization. Your whole team in control.</h2><p>Unlimited projects, free read-only viewers, and fixed pricing with no percentage of ad spend.</p></div>
+  return <section className="cloud-pricing pricing-surface" aria-label="Available plans" aria-labelledby={showHeading ? `${idPrefix}-pricing-title` : undefined}>
+    {showHeading ? <div className="pricing-heading"><p className="pricing-eyebrow">Adport Cloud pricing</p><h2 id={`${idPrefix}-pricing-title`}>One organization. Your whole team in control.</h2><p>Unlimited projects, free read-only viewers, and fixed pricing with no percentage of ad spend.</p></div> : null}
     {context}
     <div className="pricing-billing" aria-label="Billing interval">{billingLinks ? <><Link href={billingLinks.monthly} aria-current={interval === 'monthly' ? 'true' : undefined}>Monthly</Link><Link href={billingLinks.annual} aria-current={interval === 'annual' ? 'true' : undefined}>Yearly <span>Save 2 months</span></Link></> : <><button type="button" aria-pressed={interval === 'monthly'} onClick={() => onIntervalChange?.('monthly')}>Monthly</button><button type="button" aria-pressed={interval === 'annual'} onClick={() => onIntervalChange?.('annual')}>Yearly <span>Save 2 months</span></button></>}</div>
     <div className="pricing-cards">{PAID_PLAN_IDS.map(id => <PlanCard key={id} planId={id} interval={interval} featured={requestedPlan ? requestedPlan === id : id === 'premium'} badge={requestedPlan === id || (!requestedPlan && id === 'premium') ? 'Recommended' : undefined} action={actions[id]} note={notes?.[id]} />)}</div>
