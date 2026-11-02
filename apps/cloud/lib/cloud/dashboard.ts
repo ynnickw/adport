@@ -20,6 +20,7 @@ export interface DashboardTenant {
   onboardingSkippedAt: Date | null;
   organizationGroupId: string;
   organizationGroupName: string;
+  organizationGroupLogoPath: string | null;
   organizationRole: NonNullable<TenantPrincipal['role']>;
   projects: ProjectAccess[];
 }
@@ -67,6 +68,7 @@ export const requireDashboardTenant = cache(async (): Promise<DashboardTenant> =
     onboardingSkippedAt: membership.onboardingSkippedAt,
     organizationGroupId: project.organizationId,
     organizationGroupName: project.organizationName,
+    organizationGroupLogoPath: project.organizationLogoPath,
     organizationRole: project.organizationRole,
     projects,
   };

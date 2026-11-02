@@ -14,8 +14,10 @@ export type OrganizationRole = NonNullable<TenantPrincipal['role']>;
 export interface ProjectAccess {
   id: string;
   name: string;
+  logoPath: string | null;
   organizationId: string;
   organizationName: string;
+  organizationLogoPath: string | null;
   role: OrganizationRole;
   organizationRole: OrganizationRole;
   defaultProjectId: string;
@@ -24,7 +26,7 @@ export interface ProjectAccess {
 
 export async function listProjectAccess(userId: string): Promise<ProjectAccess[]> {
   return db()<ProjectAccess[]>`
-    select project.id, project.name, company.id as organization_id, company.name as organization_name,
+    select project.id, project.name, project.logo_path, company.id as organization_id, company.name as organization_name, company.logo_path as organization_logo_path,
       access.role, member.role as organization_role, company.default_project_id, project.archived_at
     from private.project_memberships access
     join public.organizations project on project.id = access.organization_id
@@ -105,8 +107,8 @@ export async function updateProject(userId: string, projectId: string, input: { 
 
 export async function listOrganizationProjects(userId: string, organizationId: string) {
   await requireOrganizationAdmin(userId, organizationId);
-  return db()<Array<{ id: string; name: string; archivedAt: Date | null; enabledAccounts: number }>>`
-    select project.id, project.name, project.archived_at,
+  return db()<Array<{ id: string; name: string; logoPath: string | null; archivedAt: Date | null; enabledAccounts: number }>>`
+    select project.id, project.name, project.logo_path, project.archived_at,
       (select count(*)::int from public.organization_ad_accounts account where account.organization_id = project.id and account.enabled) as enabled_accounts
     from public.organizations project where project.organization_group_id = ${organizationId} order by project.created_at, project.id
   `;

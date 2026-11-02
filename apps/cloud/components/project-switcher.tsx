@@ -7,6 +7,8 @@ import type { ProjectAccess } from '@/lib/cloud/workspaces';
 import { Button, Input } from './controls';
 import { NewProjectDialog } from './new-project-dialog';
 import { NewOrganizationDialog } from './new-organization-dialog';
+import { WorkspaceLogo } from './workspace-logo';
+import { workspaceLogoUrl } from '@/lib/workspace-logos';
 
 function Chevron({ back = false }: { back?: boolean }) {
   return <svg viewBox="0 0 16 16" aria-hidden="true"><path d={back ? 'm10 4-4 4 4 4' : 'm4 6 4 4 4-4'} /></svg>;
@@ -88,7 +90,7 @@ export function ProjectSwitcher({ projects, currentProjectId }: { projects: Proj
   return <div className="project-switcher">
     <Button ref={trigger} type="button" className="workspace-trigger" popoverTarget={menuId} disabled={pending}
       aria-label={`Switch organization or project. ${current?.organizationName}, ${current?.name}`} aria-haspopup="dialog" aria-expanded={open} aria-controls={menuId}>
-      <span className="workspace-avatar" aria-hidden="true">{current?.organizationName.slice(0, 1).toUpperCase()}</span>
+      <WorkspaceLogo name={current?.organizationName ?? ''} logoUrl={current ? workspaceLogoUrl('organization', current.organizationId, current.organizationLogoPath) : null} className="workspace-avatar" />
       <span className="workspace-trigger-copy"><small title={current?.organizationName}>{current?.organizationName}</small><strong title={current?.name}>{pending ? 'Switching…' : current?.name}</strong></span>
       <Chevron />
     </Button>
@@ -109,14 +111,14 @@ export function ProjectSwitcher({ projects, currentProjectId }: { projects: Proj
       <div className="workspace-menu-list">
         <p className="workspace-menu-label">{view === 'projects' ? 'Projects' : 'Your organizations'}</p>
         {view === 'projects' ? filteredProjects.map(project => <Button type="button" className="workspace-option" key={project.id} aria-current={project.id === currentProjectId ? 'true' : undefined} onClick={() => choose(project.id)}>
-          <span className="workspace-project-icon" aria-hidden="true">{project.name.slice(0, 1).toUpperCase()}</span><span className="workspace-option-copy"><strong>{project.name}</strong><small>{project.id === currentProjectId ? 'Current project' : project.role === 'viewer' ? 'Read-only access' : project.id === project.defaultProjectId ? 'Default project' : 'Project'}</small></span>{project.id === currentProjectId ? <span className="workspace-check" aria-hidden="true">✓</span> : null}
+          <WorkspaceLogo name={project.name} logoUrl={workspaceLogoUrl('project', project.id, project.logoPath)} className="workspace-project-icon" /><span className="workspace-option-copy"><strong>{project.name}</strong><small>{project.id === currentProjectId ? 'Current project' : project.role === 'viewer' ? 'Read-only access' : project.id === project.defaultProjectId ? 'Default project' : 'Project'}</small></span>{project.id === currentProjectId ? <span className="workspace-check" aria-hidden="true">✓</span> : null}
         </Button>) : filteredOrganizations.map(organization => {
           const available = projects.filter(project => project.organizationId === organization.organizationId);
           // A member may not have access to the organization's default project.
           const destination = available.find(project => project.id === organization.defaultProjectId) ?? available[0]!;
           const selected = organization.organizationId === current?.organizationId;
           return <Button type="button" className="workspace-option" key={organization.organizationId} aria-current={selected ? 'true' : undefined} onClick={() => selected ? changeView('projects') : choose(destination.id)}>
-            <span className="workspace-avatar" aria-hidden="true">{organization.organizationName.slice(0, 1).toUpperCase()}</span><span className="workspace-option-copy"><strong>{organization.organizationName}</strong><small>{available.length} {available.length === 1 ? 'project' : 'projects'} · {organization.organizationRole}</small></span>{selected ? <span className="workspace-check" aria-hidden="true">✓</span> : null}
+            <WorkspaceLogo name={organization.organizationName} logoUrl={workspaceLogoUrl('organization', organization.organizationId, organization.organizationLogoPath)} className="workspace-avatar" /><span className="workspace-option-copy"><strong>{organization.organizationName}</strong><small>{available.length} {available.length === 1 ? 'project' : 'projects'} · {organization.organizationRole}</small></span>{selected ? <span className="workspace-check" aria-hidden="true">✓</span> : null}
           </Button>;
         })}
         {(view === 'projects' ? filteredProjects : filteredOrganizations).length === 0 ? <p className="workspace-menu-empty">No {view} match “{query}”.</p> : null}

@@ -36,6 +36,26 @@ Owners manage billing and organization owner/admin roles. Admins manage projects
 
 The Organization page shows each person’s project assignments and explains every role when inviting or changing access. Read-only viewers remain free and all existing plan allowances remain unchanged.
 
+## Logos
+
+Owners and admins can upload, replace, or remove a project logo from its
+Settings dialog on the Projects page, and an organization logo under
+Organization details. PNG, JPG, and WebP images up to 2 MB are supported.
+Logos appear in project lists and the organization/project switcher, falling
+back to initials when no logo is available.
+
+Uploads are decoded, resized to fit within 256 × 256 pixels without cropping,
+and stored as PNG with transparency preserved and metadata removed. The
+`workspace-logos` Storage bucket is private; authenticated image routes
+recheck current membership on every read. Organization owners/admins manage
+logos, including archived projects. Members and viewers can read only logos
+for their assigned active projects and their organizations. Updates are
+recorded in the audit log. Replacing/removing a logo cleans up its old object;
+permanent project deletion also cleans up its logo and, for the default project,
+the organization's logo.
+
+Apply `20261102134510_workspace_logos.sql` before deploying this feature.
+
 ## Compatibility
 
 The existing `public.organizations` rows remain the project tenancy boundary.

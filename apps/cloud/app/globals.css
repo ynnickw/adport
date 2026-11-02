@@ -1043,6 +1043,13 @@ button.workspace-menu-heading:hover { background: #f6f6f3; }
 .identity { display: flex; align-items: center; gap: .75rem; min-width: 0; }
 .identity > div { min-width: 0; overflow-wrap: anywhere; }
 .project-monogram { display: grid; place-items: center; width: 2rem; height: 2rem; flex: none; border: 1px solid var(--line-soft); border-radius: .4rem; background: #f8f8f6; color: var(--muted); font-size: .875rem; font-weight: 700; }
+.workspace-logo { overflow: hidden; }
+.workspace-logo.has-image { background: #fff; }
+.workspace-logo img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.workspace-logo-preview { width: 4rem; height: 4rem; border-radius: .75rem; font-size: 1.5rem; }
+.workspace-logo-editor-row { display: flex; align-items: center; gap: 1rem; }
+.workspace-logo-editor-row > .stack { min-width: 0; gap: .5rem; }
+.workspace-logo-editor h3 { margin: 0; font-size: .875rem; }
 .settings-footer { margin-top: 1.25rem; }
 .info-trigger, .icon-button { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 1.8rem; height: 1.8rem; padding: .3rem; border: 0; border-radius: .3rem; background: transparent; color: var(--faint); font: inherit; }
 .info-trigger:hover, .icon-button:hover { background: #eeeee9; color: var(--ink); }

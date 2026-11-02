@@ -74,6 +74,7 @@ export type Database = {
           created_by: string
           default_project_id: string
           id: string
+          logo_path: string | null
           name: string
         }
         ComputedFields: never
@@ -82,6 +83,7 @@ export type Database = {
           created_by: string
           default_project_id: string
           id: string
+          logo_path?: string | null
           name: string
         }
         Update: {
@@ -89,6 +91,7 @@ export type Database = {
           "created_by"?: string
           "default_project_id"?: string
           "id"?: string
+          logo_path?: string | null
           "name"?: string
         }
         Relationships: [
@@ -624,6 +627,7 @@ export type Database = {
           created_at: string
           created_by: string
           id: string
+          logo_path: string | null
           name: string
           organization_group_id: string
           slug: string
@@ -635,6 +639,7 @@ export type Database = {
           "created_at"?: string
           created_by: string
           "id"?: string
+          logo_path?: string | null
           name: string
           organization_group_id: string
           slug: string
@@ -645,6 +650,7 @@ export type Database = {
           "created_at"?: string
           "created_by"?: string
           "id"?: string
+          logo_path?: string | null
           "name"?: string
           "organization_group_id"?: string
           "slug"?: string
