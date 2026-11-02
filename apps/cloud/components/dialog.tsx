@@ -6,7 +6,7 @@ import { Button } from './controls';
 
 const subscribe = () => () => {};
 
-export function Dialog({ title, children, onClose, className = '', portal = false, headerStart, hideTitle = false }: { title: string; children: React.ReactNode; onClose: () => void; className?: string; portal?: boolean; headerStart?: React.ReactNode; hideTitle?: boolean }) {
+export function Dialog({ title, children, onClose, className = '', portal = false }: { title: string; children: React.ReactNode; onClose: () => void; className?: string; portal?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const hydrated = useSyncExternalStore(subscribe, () => true, () => false);
@@ -27,7 +27,7 @@ export function Dialog({ title, children, onClose, className = '', portal = fals
       const rect = event.currentTarget.getBoundingClientRect();
       if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) onClose();
     }}>
-    <div className="dialog-heading">{headerStart}<h2 id={titleId} className={hideTitle ? 'sr-only' : undefined}>{title}</h2><Button type="button" className="icon-button" aria-label={`Close ${title}`} onClick={onClose}>×</Button></div>
+    <div className="dialog-heading"><h2 id={titleId}>{title}</h2><Button type="button" className="icon-button" aria-label={`Close ${title}`} onClick={onClose}>×</Button></div>
     {children}
   </dialog>;
   return portal ? createPortal(content, document.body) : content;

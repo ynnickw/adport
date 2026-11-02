@@ -4,7 +4,6 @@ import { useEffect, useId, useState } from 'react';
 import Link from 'next/link';
 import { Button } from './controls';
 import { Dialog } from './dialog';
-import { BrandLockup } from './logos';
 import { billingUpgradePath, type PlanLimitDetails } from '@/lib/cloud/plan-limit';
 import catalog from '@/lib/cloud/plan-catalog.json';
 import { PricingComparison, PAID_PLAN_IDS, type PaidPlanId } from './pricing-comparison';
@@ -46,7 +45,7 @@ function UpgradePaywall({ limit, onClose }: { limit: PlanLimitDetails; onClose: 
     else actions[plan] = <span className="pricing-action pricing-action-current">Checkout unavailable</span>;
     notes[plan] = !canManage ? 'Copy a plan link for your organization owner' : billing?.hasSubscription ? 'Review changes in the billing portal' : billing?.trialEligible ? '7-day free trial · cancel anytime' : 'Cancel anytime';
   }
-  return <Dialog title={TITLES[limit.kind]} onClose={onClose} className="pricing-paywall pricing-surface" portal headerStart={<><BrandLockup /><span className="paywall-bar-context">{TITLES[limit.kind]}</span></>} hideTitle>
+  return <Dialog title={TITLES[limit.kind]} onClose={onClose} className="pricing-paywall pricing-surface" portal>
     <PricingComparison currentPlanId={context.planId} requestedPlan={limit.recommendedPlan} interval={interval} onIntervalChange={value => { setInterval(value); setCopyStatus({ status: 'idle' }); }} actions={actions} notes={notes} canManageBilling={canManage} idPrefix={`paywall-${id}`} freeAction={<Button className="pricing-action" type="button" onClick={onClose}>{context.planId === 'reader' ? 'Continue with Free' : `Keep ${catalog[context.planId].name}`}</Button>} secondaryAction={<Button className="pricing-dismiss" type="button" onClick={onClose}>Not now</Button>}
       context={<><div className="paywall-context" role="status"><p>{limit.message}</p><p><strong>{catalog[limit.recommendedPlan].name}</strong> is recommended for this request.{!canManage ? ' Your organization owner manages billing. Choose a plan to copy its link for them.' : ''}</p></div>{copyStatus.status === 'failed' ? <p className="field-error" role="alert">Copying is unavailable. <Link href={path(copyStatus.plan)}>Open plan details and share that page’s address.</Link></p> : null}</>} />
   </Dialog>;
