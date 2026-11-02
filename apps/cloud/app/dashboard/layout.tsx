@@ -10,6 +10,7 @@ import { SidebarPlanUsage } from '@/components/plan-usage';
 import { headers } from 'next/headers';
 import { REQUEST_PATH_HEADER, safeDashboardReturnPath } from '@/lib/return-path';
 import { UpgradeProvider } from '@/components/upgrade-context';
+import { upgradeBillingOptions } from '@/lib/cloud/billing-options';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +28,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     getOrganizationUsage(tenant.organizationId),
   ]);
   return (
-    <UpgradeProvider value={{ planId: entitlement.plan.id, canManageBilling: tenant.organizationRole === 'owner', projectId: tenant.organizationId }}>
+    <UpgradeProvider value={{ planId: entitlement.plan.id, canManageBilling: tenant.organizationRole === 'owner', projectId: tenant.organizationId, billingOptions: upgradeBillingOptions(entitlement) }}>
     <Shell tenant={{ organizationName: tenant.organizationName, userName: tenant.userName, email: tenant.email, role: tenant.role, projectSwitcher: <ProjectSwitcher projects={tenant.projects} currentProjectId={tenant.organizationId} />, planUsage: <SidebarPlanUsage plan={entitlement.plan} usage={usage} /> }} pendingApprovals={pendingApprovals}>
       {children}
       <ProductAnalytics key={`${tenant.userId}:${tenant.organizationId}`} />

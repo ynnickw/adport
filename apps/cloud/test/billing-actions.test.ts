@@ -11,7 +11,7 @@ vi.mock('@/lib/cloud/plans', () => ({ getOrganizationEntitlement: mocks.entitlem
 vi.mock('@/lib/cloud/workspaces', () => ({ requireOrganizationAdmin: mocks.organization }));
 vi.mock('@/lib/cloud/billing-checkout', () => ({ subscriptionCheckoutUrl: mocks.checkout }));
 vi.mock('@/lib/cloud/billing', () => ({ stripeClient: () => ({ billingPortal: { sessions: { create: mocks.portal } } }) }));
-import { startSubscription, startSubscriptionForm, openBillingPortalForm } from '@/app/dashboard/billing/actions';
+import { startSubscription, startSubscriptionForm, openBillingPortalForm, startProjectSubscriptionForm, openProjectBillingPortalForm } from '@/app/dashboard/billing/actions';
 
 describe('billing actions and ownership', () => {
   beforeEach(() => {
@@ -54,4 +54,18 @@ describe('billing actions and ownership', () => {
     await expect(openBillingPortalForm({}, new FormData())).rejects.toThrow('redirect:https://billing.stripe.com/session');
     expect(mocks.portal).toHaveBeenCalledWith({ customer: 'cus_existing', configuration: 'bpc_expected', return_url: 'https://app.adport.dev/dashboard/billing' });
   });
+  it('binds paywall checkout and portal access to the displayed project instead of the active cookie', async () => {
+    await expect(startProjectSubscriptionForm('displayed-project', 'premium', 'annual', {}, new FormData())).rejects.toThrow('redirect:');
+    expect(mocks.sessionPrincipal).toHaveBeenLastCalledWith('displayed-project');
+    expect(mocks.checkout).toHaveBeenCalledWith('shared-company', 'owner', 'premium', 'annual');
+    await expect(openProjectBillingPortalForm('displayed-project', {}, new FormData())).rejects.toThrow('redirect:');
+    expect(mocks.sessionPrincipal).toHaveBeenLastCalledWith('displayed-project');
+  });
+  it('does not create a checkout when membership in the displayed project has been revoked', async () => {
+    mocks.sessionPrincipal.mockRejectedValue(new Error('Project access revoked'));
+    expect(await startProjectSubscriptionForm('revoked-project', 'operator', 'monthly', {}, new FormData())).toHaveProperty('error');
+    expect(mocks.checkout).not.toHaveBeenCalled();
+    expect(mocks.portal).not.toHaveBeenCalled();
+  });
+
 });

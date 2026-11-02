@@ -21,7 +21,7 @@ function OpenAiLogo() {
   );
 }
 
-function AgentLogo({ provider }: { provider: AgentSetup['provider'] }) {
+export function AgentLogo({ provider }: { provider: AgentSetup['provider'] }) {
   if (provider === 'openai') return <OpenAiLogo />;
   if (provider === 'anthropic') return <SiClaude aria-hidden="true" />;
   if (provider === 'cursor') return <SiCursor aria-hidden="true" />;

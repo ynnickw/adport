@@ -11,7 +11,7 @@ import { listOrganizationProjects } from '@/lib/cloud/workspaces';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { getOrganizationEntitlement, PLANS, subscriptionEnded, recommendedUpgradePlan, type BillingInterval } from '@/lib/cloud/plans';
 import type { PlanLimitKind, UpgradePlanId } from '@/lib/cloud/plan-limit';
-import { openBillingPortalForm, startSubscriptionForm } from './actions';
+import { openProjectBillingPortalForm, startProjectSubscriptionForm } from './actions';
 import { selectProjectAction } from '../projects/actions';
 import { Button } from '@/components/controls';
 
@@ -56,20 +56,20 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
     const ready = billingPlanConfigured(id, interval);
     if (selected) actions[id] = <span className="pricing-action pricing-action-current">Current plan</span>;
     else if (!canManage) actions[id] = <span className="pricing-action pricing-action-current">Owner approval needed</span>;
-    else if (hasSubscription && configured) actions[id] = <BillingForm action={openBillingPortalForm} label="Manage billing" pendingLabel="Opening billing…" className={'pricing-action' + (requestedPlan === id || (!requestedPlan && id === 'premium') ? ' pricing-action-primary' : '')} />;
-    else if (ready && !checkoutPending) actions[id] = <BillingForm action={startSubscriptionForm.bind(null, id, interval)} label={requestedPlan === id ? 'Continue with ' + PLANS[id].name : trialEligible ? 'Start 7-day free trial' : 'Subscribe'} pendingLabel="Opening checkout…" className={'pricing-action' + (requestedPlan === id || (!requestedPlan && id === 'premium') ? ' pricing-action-primary' : '')} />;
+    else if (hasSubscription && configured) actions[id] = <BillingForm action={openProjectBillingPortalForm.bind(null, tenant.organizationId)} label="Manage billing" pendingLabel="Opening billing…" className={'pricing-action' + (requestedPlan === id || (!requestedPlan && id === 'premium') ? ' pricing-action-primary' : '')} />;
+    else if (ready && !checkoutPending) actions[id] = <BillingForm action={startProjectSubscriptionForm.bind(null, tenant.organizationId, id, interval)} label={requestedPlan === id ? 'Continue with ' + PLANS[id].name : trialEligible ? 'Start 7-day free trial' : 'Subscribe'} pendingLabel="Opening checkout…" className={'pricing-action' + (requestedPlan === id || (!requestedPlan && id === 'premium') ? ' pricing-action-primary' : '')} />;
     else actions[id] = <span className="pricing-action pricing-action-current">{checkoutPending ? 'Confirming your plan…' : 'Checkout unavailable'}</span>;
     notes[id] = !canManage ? 'Your organization owner can change plans.' : hasSubscription ? 'Review changes in the billing portal.' : trialEligible ? '7-day free trial · cancel anytime' : 'Cancel anytime';
   }
-  const pricing = <>
-    <div className="dashboard-pricing-heading"><p className="pricing-eyebrow">{intent ? 'A plan for your next step' : 'Adport Cloud plans'}</p><h2>{intent ? INTENT_COPY[intent] : 'One organization. Your whole team in control.'}</h2><p>{requestedPlan ? `${PLANS[requestedPlan as UpgradePlanId].name} is highlighted below. ` : ''}Unlimited projects, free read-only viewers, and fixed pricing with no percentage of ad spend.</p></div>
-    <PricingComparison currentPlanId={entitlement.plan.id} requestedPlan={requestedPlan} interval={interval} billingLinks={{ monthly: queryPath('monthly'), annual: queryPath('annual') }} actions={actions} notes={notes} canManageBilling={canManage} />
-  </>;
+  const pricing = <div className="dashboard-pricing">
+    <PricingComparison currentPlanId={entitlement.plan.id} requestedPlan={requestedPlan} interval={interval} billingLinks={{ monthly: queryPath('monthly'), annual: queryPath('annual') }} actions={actions} notes={notes} canManageBilling={canManage}
+      context={intent ? <div className="paywall-context"><p>{INTENT_COPY[intent]} {requestedPlan ? `${PLANS[requestedPlan].name} is recommended for this request.` : ''}</p></div> : undefined} />
+  </div>;
   return <main className="page plan-page">
     <PageHeader title="Plan & billing" description="One subscription covers every project in your organization. Active accounts and editing-member allowances are shared across projects. Read-only viewers are free." action={!tenant.onboardingCompletedAt && canManage ? <Link className="button secondary" href={'/onboarding?resume=1&return_to=' + encodeURIComponent(setupDestination)}>Continue setup</Link> : undefined} />
     {query.checkout === 'complete' ? <CheckoutStatus ready={subscriptionReady} planName={entitlement.plan.name} /> : null}
     {query.checkout === 'canceled' ? <div className="callout plan-notice">Checkout was canceled. Your current plan is unchanged.</div> : null}
-    <section className="plan-summary"><div><span className="plan-kicker">{tenant.organizationGroupName}</span><div className="plan-current-line"><strong>{entitlement.plan.name}</strong><span className={`status ${lifecycle.tone}`}>{lifecycle.label}</span></div><p>Shared across every project in your organization.</p>{lifecycle.message ? <p role="status">{lifecycle.message}</p> : hasSubscription ? <p>Your existing subscription keeps its current price until you choose a change in the billing portal.</p> : null}</div>{entitlement.providerCustomerId && canManage && configured ? <BillingForm action={openBillingPortalForm} label="Manage billing" pendingLabel="Opening billing…" className="button secondary" /> : null}</section>
+    <section className="plan-summary"><div><span className="plan-kicker">{tenant.organizationGroupName}</span><div className="plan-current-line"><strong>{entitlement.plan.name}</strong><span className={`status ${lifecycle.tone}`}>{lifecycle.label}</span></div><p>Shared across every project in your organization.</p>{lifecycle.message ? <p role="status">{lifecycle.message}</p> : hasSubscription ? <p>Your existing subscription keeps its current price until you choose a change in the billing portal.</p> : null}</div>{entitlement.providerCustomerId && canManage && configured ? <BillingForm action={openProjectBillingPortalForm.bind(null, tenant.organizationId)} label="Manage billing" pendingLabel="Opening billing…" className="button secondary" /> : null}</section>
     {!canManage ? <p className="upgrade-owner-note">Only your organization owner can change plans. Share the plan details with them to request an upgrade.</p> : null}
     {intent ? pricing : null}
     <PlanUsage plan={entitlement.plan} usage={usage} organizationName={tenant.organizationGroupName} canManage={canManageOrganization} projectUsage={projectUsage} currentProjectId={tenant.organizationId} />

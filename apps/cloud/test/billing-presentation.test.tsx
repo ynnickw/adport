@@ -8,7 +8,7 @@ vi.mock('@/lib/cloud/plans', async original => ({ ...await original<typeof impor
 vi.mock('@/lib/cloud/usage', () => ({ getOrganizationUsage: async () => ({ activeAccounts: 3, editingMembers: 1 }) }));
 vi.mock('@/lib/cloud/workspaces', () => ({ listOrganizationProjects: async () => [] }));
 vi.mock('@/lib/cloud/billing', () => ({ billingConfigured: () => true, billingPlanConfigured: () => true }));
-vi.mock('@/app/dashboard/billing/actions', () => ({ startSubscriptionForm: () => undefined, openBillingPortalForm: () => undefined }));
+vi.mock('@/app/dashboard/billing/actions', () => ({ startProjectSubscriptionForm: () => undefined, openProjectBillingPortalForm: () => undefined }));
 vi.mock('@/app/dashboard/projects/actions', () => ({ selectProjectAction: () => undefined }));
 vi.mock('@/app/dashboard/billing/billing-form', () => ({ BillingForm: ({ label }: { label: string }) => <button>{label}</button> }));
 vi.mock('@/components/plan-usage', () => ({ PlanUsage: () => <div>Plan usage</div> }));
