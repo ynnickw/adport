@@ -122,7 +122,7 @@ button { font: inherit; color: inherit; }
 .site-header[data-scrolled="true"] { border-bottom-color: var(--rule); }
 .brand-lockup { text-decoration: none; }
 .domain-wordmark { font-size: 1.3rem; font-weight: 800; letter-spacing: -0.035em; }
-.domain-wordmark span { color: var(--signal); }
+.domain-wordmark span { color: var(--signal); font-size: 1.3em; line-height: 0; }
 .header-meta { display: flex; align-items: center; gap: 1.6rem; font-size: 0.9375rem; font-weight: 600; color: var(--ink-soft); }
 .header-meta a { text-decoration: none; transition: color 150ms ease; }
 .header-meta a:hover { color: var(--ink); }
@@ -399,7 +399,7 @@ button { font: inherit; color: inherit; }
 .legal-header, .legal-content, .legal-footer { width: min(100% - 2.5rem, 43rem); margin-inline: auto; }
 .legal-header { padding: 2rem 0 4rem; }
 .legal-header .wordmark { font-size: 1.3rem; font-weight: 800; letter-spacing: -0.035em; text-decoration: none; }
-.legal-header .wordmark span { color: var(--signal); }
+.legal-header .wordmark span { color: var(--signal); font-size: 1.3em; line-height: 0; }
 .legal-content { min-height: calc(100vh - 11rem); padding-bottom: 4rem; }
 .legal-content .eyebrow { margin-bottom: 0.75rem; color: var(--muted); font-size: 0.9375rem; font-weight: 700; }
 .legal-content h1 { font-size: clamp(2.5rem, 8vw, 4.25rem); font-weight: 800; line-height: 1; letter-spacing: -0.035em; }
