@@ -5,6 +5,7 @@ import { AdportError } from '../errors.js';
 import { defineTool, type AnyToolDefinition } from './registry.js';
 import { summarizeReport } from '../report-summary.js';
 import { accountsOutput, reportOutput } from './outputs.js';
+import { canonicalAccountId } from '../account-id.js';
 
 const dateRangeSchema = z.union([
   z.enum(DATE_PRESETS),
@@ -13,12 +14,6 @@ const dateRangeSchema = z.union([
     end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD'),
   }),
 ]);
-
-function canonicalAccountId(provider: string, id: string): string {
-  if (provider === 'google') return id.replaceAll('-', '');
-  if (provider === 'meta') return id.replace(/^act_/, '');
-  return id;
-}
 
 export function builtinTools(): AnyToolDefinition[] {
   return [

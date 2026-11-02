@@ -75,6 +75,20 @@ describe('PolicyEngine.validate', () => {
     });
   });
 
+  it.each([
+    ['google', '1234567890', ' customers/123-456-7890 '],
+    ['google', '123-456-7890', '1234567890'],
+    ['meta', '12345', ' act_12345 '],
+    ['meta', 'act_12345', '12345'],
+    ['apple', '21733490', '00021733490'],
+    ['microsoft', '12345', '0012345'],
+  ])('blocks provider-accepted %s aliases of protected account %s', async (providerId, protectedId, suppliedId) => {
+    engine = makeEngine({ protected_accounts: [protectedId] });
+    const preview = vi.spyOn(provider, 'previewWrite');
+    await expect(engine.validate(provider, { ...budgetOp('c1', 12_000_000), provider: providerId, accountId: suppliedId })).rejects.toMatchObject({ code: 'POLICY_VIOLATION' });
+    expect(preview).not.toHaveBeenCalled();
+  });
+
   it('coerces created campaigns to PAUSED and reports the coercion', async () => {
     const op: WriteOperation = {
       tool: 'mock_create_campaign',
@@ -91,6 +105,27 @@ describe('PolicyEngine.validate', () => {
 });
 
 describe('PolicyEngine.apply', () => {
+  it('rechecks the budget delta cap against changed live state before applying', async () => {
+    const op = budgetOp('c1', 12_000_000);
+    const { pendingOperationId } = await engine.validate(provider, op);
+    await provider.applyWrite(budgetOp('c1', 5_000_000), engine.guard());
+    const apply = vi.spyOn(provider, 'applyWrite');
+    await expect(engine.apply(provider, op, pendingOperationId)).rejects.toMatchObject({ code: 'POLICY_VIOLATION' });
+    expect(apply).not.toHaveBeenCalled();
+    expect(provider.listCampaigns('mock-1').find(c => c.id === 'c1')?.dailyBudgetMicros).toBe(5_000_000);
+    expect((await audit.read()).at(-1)?.event).toBe('rejected');
+  });
+
+  it('requires a new preview if a provider resolves a different proposed amount, even within caps', async () => {
+    const op = budgetOp('c1', 12_000_000);
+    const { pendingOperationId, preview } = await engine.validate(provider, op);
+    vi.spyOn(provider, 'previewWrite').mockResolvedValue({ ...preview, budgetDeltas: [{ ...preview.budgetDeltas[0]!, toMicros: 11_000_000 }] });
+    const apply = vi.spyOn(provider, 'applyWrite');
+    await expect(engine.apply(provider, op, pendingOperationId)).rejects.toMatchObject({ code: 'PENDING_MISMATCH' });
+    expect(apply).not.toHaveBeenCalled();
+    expect((await audit.read()).at(-1)).toMatchObject({ event: 'rejected', pendingId: pendingOperationId });
+  });
+
   it('applies a validated operation and audits it', async () => {
     const op = budgetOp('c1', 12_000_000);
     const { pendingOperationId } = await engine.validate(provider, op);

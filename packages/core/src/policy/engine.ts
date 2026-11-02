@@ -4,6 +4,7 @@ import type { AdProvider, WriteGuard, WriteOperation, WritePreview, WriteResult 
 import { AuditLog, type AuditEntryStore } from './audit.js';
 import { PendingStore, type PendingOperationStore } from './pending.js';
 import type { Policy } from './policy.js';
+import { canonicalAccountId } from '../account-id.js';
 
 export interface ValidationOutcome {
   pendingOperationId: string;
@@ -112,6 +113,17 @@ export class PolicyEngine {
     // Policy may have changed between validate and apply; re-check.
     await this.checkStaticPolicy(op);
 
+    // Provider state can change while an approval is pending. Re-read current
+    // monetary values so relative caps also hold at apply, and do not silently
+    // approve a new amount resolved from a recommendation or shared resource.
+    const preview = await provider.previewWrite(op, this.guard());
+    await this.checkBudgetPolicy(op, preview);
+    const targets = (value: WritePreview) => JSON.stringify(canonicalize(value.budgetDeltas.map(({ target, toMicros, currency }) => ({ target, toMicros, ...(currency ? { currency } : {}) }))));
+    if (targets(preview) !== targets(pending.preview)) {
+      await this.audit.append({ event: 'rejected', provider: provider.id, tool: op.tool, accountId: op.accountId, pendingId, summary: 'The proposed monetary targets changed after preview' });
+      throw new AdportError('PENDING_MISMATCH', 'The proposed monetary targets changed after preview. Request and approve a fresh preview before applying.');
+    }
+
     const result = await provider.applyWrite(op, this.guard());
     await this.audit.append({
       event: 'applied',
@@ -119,15 +131,15 @@ export class PolicyEngine {
       tool: op.tool,
       accountId: op.accountId,
       pendingId,
-      summary: pending.preview.summary,
+      summary: preview.summary,
       details: { resourceIds: result.resourceIds },
     });
     await this.pending.delete(pendingId);
-    return { result, preview: pending.preview };
+    return { result, preview };
   }
 
   private async checkStaticPolicy(op: WriteOperation): Promise<void> {
-    if (this.policy.protected_accounts.includes(op.accountId)) {
+    if (this.policy.protected_accounts.some(id => canonicalAccountId(op.provider, id) === canonicalAccountId(op.provider, op.accountId))) {
       await this.reject(op, `Account ${op.accountId} is protected by policy`);
     }
   }
