@@ -56,6 +56,7 @@ export {
 } from './tools/registry.js';
 export { guardedWriteTool } from './tools/write.js';
 export { builtinTools } from './tools/builtin.js';
+export { withProjectRouting, type AgentProject, type ProjectRouter } from './tools/projects.js';
 export { MockProvider, mockTools } from './testing/mock-provider.js';
 export { SyntheticProvider, syntheticTools, syntheticSeed, syntheticStateSchema, type SyntheticCampaign, type SyntheticStateStore } from './testing/synthetic-provider.js';
 export {

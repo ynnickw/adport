@@ -10,6 +10,7 @@ import { AgentIdentityLogo } from './agent-setup-guide';
 
 interface KeySummary { id: string; name: string; keyPrefix: string; createdAt: string; lastUsedAt: string | null; }
 export interface OAuthGrantSummary {
+  organizationGroupId?: string | null;
   clientId: string;
   userId: string;
   clientName: string;
@@ -26,7 +27,7 @@ function AssistantConnection({ grant, checkedAt }: { grant: OAuthGrantSummary; c
   return <div className="row-item assistant-connection">
     <AgentIdentityLogo name={grant.clientName} /><div className="assistant-connection-details">
       <div className="agent-identity"><strong>{grant.clientName}</strong><span className={'status' + (grant.status === 'active' && grant.lastUsedAt ? '' : ' neutral')}>{grant.status === 'active' ? grant.lastUsedAt ? 'In use' : 'Authorized' : grant.status === 'revoked' ? 'Disconnected' : 'Sign in again'}</span><InfoTooltip label={`Connection details for ${grant.clientName}`}>Access: {grant.scopes.includes('tools:write') ? 'Read and propose changes' : 'Read only'}. Authorized {formatDate(grant.createdAt)}. Sign-in expires {formatDate(grant.expiresAt)}.</InfoTooltip></div>
-      <p className="cell-sub">{grant.status === 'active' ? grant.lastUsedAt ? `Last reached Adport ${formatRelative(grant.lastUsedAt, checkedAt)}` : 'Authorized, waiting for its first request.' : 'Reconnect from your assistant to authorize this project again.'}</p>
+      <p className="cell-sub">{grant.organizationGroupId ? 'All accessible projects · ' : ''}{grant.status === 'active' ? grant.lastUsedAt ? `Last reached Adport ${formatRelative(grant.lastUsedAt, checkedAt)}` : 'Authorized, waiting for its first request.' : 'Reconnect from your assistant to authorize access again.'}</p>
     </div>
   </div>;
 }
@@ -109,7 +110,7 @@ export function ApiKeyManager({ organizationId, canManage, baseUrl, initialGrant
   const activeGrants = oauthGrants.filter(grant => grant.status === 'active').sort((a, b) =>
     Number(Boolean(b.lastUsedAt)) - Number(Boolean(a.lastUsedAt)) || Date.parse(b.lastUsedAt ?? b.createdAt) - Date.parse(a.lastUsedAt ?? a.createdAt));
   const previousGrants = oauthGrants.filter(grant => grant.status !== 'active').sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-  const connectionRows = (grants: OAuthGrantSummary[]) => grants.map(grant => <AssistantConnection key={`${grant.clientId}:${grant.userId}:${grant.resource}`} grant={grant} checkedAt={checkedAt} />);
+  const connectionRows = (grants: OAuthGrantSummary[]) => grants.map(grant => <AssistantConnection key={`${grant.clientId}:${grant.userId}:${grant.resource}:${grant.organizationGroupId ?? 'project'}`} grant={grant} checkedAt={checkedAt} />);
 
   const connectionPanel = (
     <section className="card assistant-connections" id="connected-assistants" aria-label="Connected assistants">

@@ -56,6 +56,8 @@ export async function assembleRuntime(options: AssembleRuntimeOptions = {}): Pro
 
 export interface CreateServerOptions {
   runtime: AdportRuntime;
+  /** Transport-specific context, without redefining any provider tool. */
+  instructions?: string;
   name?: string;
   version?: string;
   /** Brand icons advertised to MCP clients during initialization. */
@@ -85,7 +87,7 @@ export interface ToolScopeDenial {
  * Thin adapter: every tool in the shared registry becomes an MCP tool.
  * No tool logic lives here — see the "one tool-definition layer" principle.
  */
-export function createMcpServer({ runtime, name = 'adport', version = packageJson.version, icons = DEFAULT_MCP_ICONS, scopes, scopeDenials, notConnectedMessage, productionOnly = false, uiDomain = ADPORT_UI_DOMAIN }: CreateServerOptions): McpServer {
+export function createMcpServer({ runtime, instructions, name = 'adport', version = packageJson.version, icons = DEFAULT_MCP_ICONS, scopes, scopeDenials, notConnectedMessage, productionOnly = false, uiDomain = ADPORT_UI_DOMAIN }: CreateServerOptions): McpServer {
   if (productionOnly && (runtime.dataSource === 'synthetic'
     || runtime.ctx.providers.list().some(provider => !PROVIDER_IDS.includes(provider.id as typeof PROVIDER_IDS[number]))
     || runtime.registry.list().some(tool => /^(demo|mock|synthetic)(_|$)/.test(tool.name) || /^(demo|mock|synthetic)$/.test(tool.namespace)))) {
@@ -94,7 +96,7 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
   const provenance = (value: unknown): unknown => runtime.dataSource === 'synthetic'
     ? { ...(value && typeof value === 'object' && !Array.isArray(value) ? value : { value }), data_source: 'synthetic' }
     : value;
-  const server = new McpServer({ name, version, ...(icons ? { icons } : {}) });
+  const server = new McpServer({ name, version, ...(icons ? { icons } : {}) }, { instructions });
   registerAppResource(
     server,
     'Adport insight card',
@@ -187,9 +189,12 @@ export function createMcpServer({ runtime, name = 'adport', version = packageJso
             : tool.output ? { structuredContent: structured as Record<string, unknown> } : {}),
         };
       } catch (err) {
+        const planLimit = err instanceof AdportError && err.code === 'PLAN_LIMIT'
+          && err.details && typeof err.details === 'object' && 'planLimit' in err.details
+          ? err.details.planLimit : undefined;
         const payload = provenance(
           err instanceof AdportError
-            ? { ...err.toJSON(), ...(err.code === 'NOT_CONNECTED' && notConnectedMessage ? { message: notConnectedMessage } : {}) }
+            ? { ...err.toJSON(), ...(planLimit ? { code: 'PLAN_LIMIT', planLimit } : {}), ...(err.code === 'NOT_CONNECTED' && notConnectedMessage ? { message: notConnectedMessage } : {}) }
             : {
               error: 'INTERNAL',
               // Unexpected exceptions can contain credentials or private paths.

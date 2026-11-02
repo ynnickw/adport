@@ -48,7 +48,7 @@ export default async function AuthorizePage({ searchParams }: {
         clientName={authorization.clientName}
         redirectHost={redirectHost}
         scopes={grantedScopes}
-        projects={projects.map(project => ({ id: project.id, name: project.name, organizationName: project.organizationName }))}
+        projects={projects.map(project => ({ id: project.id, name: project.name, organizationId: project.organizationId, organizationName: project.organizationName }))}
         defaultProjectId={principal.organizationId}
         hidden={Array.from(params.entries()).filter(([name]) => name !== 'project_id')}
       />

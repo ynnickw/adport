@@ -1,5 +1,6 @@
 export type AdportErrorCode =
   | 'POLICY_VIOLATION'
+  | 'PLAN_LIMIT'
   | 'PENDING_NOT_FOUND'
   | 'PENDING_EXPIRED'
   | 'PENDING_MISMATCH'

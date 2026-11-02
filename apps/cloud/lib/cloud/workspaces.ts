@@ -207,12 +207,15 @@ export async function saveOrganizationMember(input: {
         values (${projectId}, ${target}, ${input.role})`;
     }
     await sql`update private.mcp_oauth_access_tokens token set revoked_at = now() where token.user_id = ${target}
+      and token.organization_group_id is null
       and token.organization_id in (select id from public.organizations where organization_group_id = ${input.organizationId})
       and not exists (select 1 from private.project_memberships access where access.organization_id = token.organization_id and access.user_id = ${target})`;
     await sql`update private.mcp_oauth_refresh_tokens token set revoked_at = now() where token.user_id = ${target}
+      and token.organization_group_id is null
       and token.organization_id in (select id from public.organizations where organization_group_id = ${input.organizationId})
       and not exists (select 1 from private.project_memberships access where access.organization_id = token.organization_id and access.user_id = ${target})`;
     await sql`update private.mcp_oauth_authorization_codes code set consumed_at = coalesce(consumed_at, now()) where code.user_id = ${target}
+      and code.organization_group_id is null
       and code.organization_id in (select id from public.organizations where organization_group_id = ${input.organizationId})
       and not exists (select 1 from private.project_memberships access where access.organization_id = code.organization_id and access.user_id = ${target})`;
     await sql`insert into public.audit_events (organization_id, actor_user_id, event, provider, tool, account_id, summary, details)
