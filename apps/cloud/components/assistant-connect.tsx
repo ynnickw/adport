@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AGENT_SETUPS, AgentIdentityLogo, CopyButton, cursorInstallUrl } from '@/app/dashboard/agents/agent-setup-guide';
 import type { AssistantConnectionStatus } from '@/lib/cloud/assistant-connection';
 import type { AssistantListings } from '@/lib/assistant-listings';
-import { Button, Disclosure } from './controls';
+import { Button } from './controls';
 import { Dialog } from './dialog';
 import { InfoTooltip } from './info-tooltip';
 import { AssistantPrompt } from './assistant-prompt';
@@ -25,7 +25,6 @@ export function AssistantConnect({ baseUrl, projectName, initialAgent = 'chatgpt
   const [status, setStatus] = useState(EMPTY_STATUS);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string>();
-  const id = useId();
   const selected = AGENT_SETUPS.find(setup => setup.id === agent) ?? AGENT_SETUPS[0]!;
   const command = selected.command(baseUrl);
   const terminal = selected.id === 'codex' || selected.id === 'claude-code';
@@ -57,21 +56,20 @@ export function AssistantConnect({ baseUrl, projectName, initialAgent = 'chatgpt
     <p>{listing ? `Install Adport from the official ${selected.name} listing, then sign in.` : selected.instructions}</p>
     {listing ? <a className="button" href={listing} target="_blank" rel="noreferrer">Add Adport to {selected.name} ↗</a> : selected.id === 'cursor' ? <a className="button small" href={cursorInstallUrl(baseUrl)}>Add to Cursor ↗</a> : selected.open ? <a className="button small" href={selected.open.href} target="_blank" rel="noreferrer">{selected.open.label} ↗</a> : null}
     {!listing && selected.id !== 'cursor' ? <div className="assistant-code"><span>{terminal ? 'Terminal' : 'Server URL'}</span><pre><code>{command}</code></pre><CopyButton value={command} label={terminal ? 'Copy command' : 'Copy URL'} /></div> : null}
-    <p><strong>Sign in to Adport and choose {projectName}.</strong> <InfoTooltip label="About project authorization">Only accounts enabled in this project are available to the assistant. Authorize this same project when the sign-in window opens.</InfoTooltip></p>
+    <p><strong>Sign in to Adport and authorize this project.</strong> <InfoTooltip label="About project authorization">Only accounts enabled in this project are available to the assistant. Authorize the project shown in the toolbar when the sign-in window opens.</InfoTooltip></p>
     {selected.id === 'codex' ? <div className="assistant-code"><pre><code>codex mcp login adport</code></pre><CopyButton value="codex mcp login adport" label="Copy sign-in command" /></div> : <p className="inline-note">{listing ? 'Enable Adport in your conversation after signing in.' : selected.nextStep}</p>}
-    {listing ? <Disclosure label="Set up manually"><p>{selected.instructions}</p><div className="assistant-code"><pre><code>{command}</code></pre><CopyButton value={command} label="Copy server URL" /></div></Disclosure> : null}
   </div>;
 
-  return <section className="card setup-connect" aria-label="Connect an AI assistant">
-    <div className="card-head"><div className="setup-connect-identity"><AgentIdentityLogo name={selected.name} /><h2>{selected.id === 'mcp' ? 'Connect your assistant' : `Connect ${selected.name}`}</h2></div><label className="setup-assistant-select" htmlFor={id}>Assistant<select id={id} value={agent} onChange={event => { setStatus(EMPTY_STATUS); onStatusChange?.(EMPTY_STATUS); setAgent(event.target.value); onSelectionChange?.(event.target.value); }}>{AGENT_SETUPS.map(setup => <option key={setup.id} value={setup.id}>{setup.id === 'mcp' ? 'Other assistant' : setup.name}</option>)}</select></label></div>
-    <div className="card-body stack">
-      <p className="setup-project-scope">Project · <strong>{projectName}</strong></p>
-      {status.authorized ? <Disclosure label="Connection instructions">{instructions}</Disclosure> : instructions}
-      <div className="setup-connection-status" role="status"><span className={'status ' + (status.verified ? 'success' : 'neutral')}>{status.verified ? 'Read verified' : status.authorized ? 'Authorized · waiting for a read' : 'Waiting for sign-in'}</span><InfoTooltip label="About connection verification">Adport checks for a successful account list or nonempty performance report from this assistant in this project. Sign-in alone does not finish setup. Other members’ connections do not count. For an API key or an unrecognized client, choose Other assistant.</InfoTooltip>{status.authorized && status.clientName ? <small>{status.clientName}</small> : null}</div>
-      {status.verified ? <p className="inline-note">Your assistant successfully read this project’s ad data.{!status.hasAccounts ? ' Enable an account to finish setup.' : ' You’re ready to go.'}</p> : !status.authorized ? <p className="inline-note">After sign-in, come back here for your first question. Status updates automatically.</p> : <p className="inline-note">{checking ? 'Checking…' : 'Status updates automatically after a successful read.'}</p>}
+  return <section className="setup-connect" aria-label="Connect an AI assistant">
+    <div className="setup-connect-heading"><h2>AI assistant</h2><div className="setup-connection-status" role="status"><span className={'status ' + (status.verified ? 'success' : 'neutral')}>{status.verified ? 'Read verified' : status.authorized ? 'Waiting for first read' : 'Waiting for sign-in'}</span><InfoTooltip label="About connection verification">Adport checks for a successful account list or nonempty performance report from this assistant in this project. Sign-in alone does not finish setup. Other members’ connections do not count. For an API key or an unrecognized client, choose Other assistant.</InfoTooltip></div></div>
+    <AssistantPicker value={agent} onChange={value => { setStatus(EMPTY_STATUS); onStatusChange?.(EMPTY_STATUS); setAgent(value); onSelectionChange?.(value); }} />
+    <div className="setup-connect-body">
+      {!status.authorized ? instructions : null}
+      {status.authorized && !status.verified ? <p className="inline-note">{checking ? 'Checking connection…' : 'Ask your first question below to verify access. Status updates automatically.'}</p> : null}
       {error ? <p className="error-text" role="alert">{error}</p> : null}
       <AssistantPrompt baseUrl={baseUrl} projectName={projectName} assistantName={selected.name} authorized={status.authorized} verified={status.verified} />
       {!status.hasAccounts ? <p className="inline-note"><Link href="/dashboard/accounts">Enable an ad account</Link> to make its data available to your assistant.</p> : null}
+      <a className="setup-connect-help" href={selected.docsUrl} target="_blank" rel="noreferrer">Connection guide ↗</a>
     </div>
   </section>;
 }
