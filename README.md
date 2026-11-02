@@ -99,7 +99,7 @@ All 11 providers have local connection commands, normalized reports, and guarded
 | TikTok Ads | `tiktok` | [Reports, campaigns, budgets, status, sandbox support](docs/providers.md#tiktok-ads) |
 | Apple Ads | `apple` | [Campaigns, ad groups, keywords, creatives, reports](docs/providers.md#apple-ads) |
 | Microsoft Advertising | `microsoft` | [Detailed reports, campaigns, ad groups, keywords, RSAs, budgets, status](docs/providers.md#microsoft-advertising) |
-| Reddit Ads | `reddit` | [Native reports, account resources, campaigns, CBO budgets](docs/providers.md#reddit-ads) |
+| Reddit Ads | `reddit` | [Campaign children, creative/media, structured posts, targeting, reports](docs/reddit-campaign-setup.md) |
 | Snapchat Ads | `snapchat` | [Campaign hierarchy, creative/media, targeting, audiences, measurement](docs/snapchat-campaign-setup.md) |
 | Spotify Ads | `spotify` | [Reports, unpublished drafts, campaign status, ad-set delivery](docs/providers/spotify.md) |
 | Pinterest Ads | `pinterest` | [Discovery, reports, campaigns, budgets, status](docs/providers/pinterest.md) |

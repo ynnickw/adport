@@ -85,6 +85,18 @@ describe('creative widget editor', () => {
     } finally { dom.window.close(); }
   });
 
+  it('preserves multiline Reddit copy and stages only a project/account-bound preview', async () => {
+    const calls: unknown[][] = [], originalBody = 'First line\n\nSecond line <literal>';
+    const dom = widget(async (...args) => { calls.push(args); return { structuredContent: { status: 'pending_validation', applied: false, pending_operation_id: 'pending', preview: { summary: 'Stage a new post copy', changes: ['Original post and ad reference remain unchanged'], coercions: [], budgetDeltas: [], serverValidated: false } } }; }, { creatives: [{ ...creative, provider: 'reddit', account_id: 'a2_test', actions: [{ label: 'Stage a creative copy', tool: 'reddit_stage_post_copy', arguments: { account_id: 'a2_test', ad_id: 'ad-1', source_post_id: 't3_source', profile_id: 'profile-1' }, fields: [{ key: 'headline', label: 'Headline', type: 'text', value: 'Headline' }, { key: 'body', label: 'Body', type: 'text', value: originalBody }] }] }] });
+    try {
+      const fields = dom.window.document.querySelectorAll('textarea'); expect(fields[1]!.value).toBe(originalBody); fields[0]!.value = 'Edited headline';
+      dom.window.document.querySelector('form')!.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
+      await new Promise(resolve => setTimeout(resolve, 10));
+      expect(calls).toEqual([['reddit_stage_post_copy', { account_id: 'a2_test', ad_id: 'ad-1', source_post_id: 't3_source', profile_id: 'profile-1', project_id: 'project-b', headline: 'Edited headline', body: originalBody }]]);
+      expect(dom.window.document.querySelector('main')?.textContent).toContain('Hold to apply'); expect(dom.window.document.querySelector('main')?.textContent).not.toContain('Applied.');
+    } finally { dom.window.close(); }
+  });
+
   it('keeps a rejected preview editable and never claims it was applied', async () => {
     const dom = widget(async () => ({ isError: true, content: [{ type: 'text', text: JSON.stringify({ error: 'POLICY_VIOLATION', message: 'Protected account' }) }] }));
     try {

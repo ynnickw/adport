@@ -13,7 +13,11 @@ export const mediaSourceFields = {
 
 export interface MediaSource { media_id?: string; file_path?: string; expected_sha256: string }
 export interface VerifiedMedia { bytes: Uint8Array<ArrayBuffer>; name: string; contentType: string; sha256: string }
-export interface MediaResolver { read(source: MediaSource, options?: { maxBytes?: number; contentTypes?: readonly string[] }): Promise<VerifiedMedia> }
+export interface MediaResolver {
+  read(source: MediaSource, options?: { maxBytes?: number; contentTypes?: readonly string[] }): Promise<VerifiedMedia>;
+  /** Optional private staging for providers whose servers pull media over HTTPS. */
+  providerUrl?(source: MediaSource, options?: { maxBytes?: number; contentTypes?: readonly string[] }): Promise<{ url: string; expires_at: string; sha256: string }>;
+}
 export const mediaAssetSchema = z.object({
   id: z.string().uuid(), name: z.string(), content_type: z.string(), byte_length: z.number().int().positive(),
   sha256: z.string().regex(/^[a-f0-9]{64}$/), width: z.number().int().positive().optional(), height: z.number().int().positive().optional(),

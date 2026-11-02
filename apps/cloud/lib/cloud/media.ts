@@ -63,6 +63,16 @@ export class ProjectMediaLibrary implements MediaLibrary {
     return verifyMedia(new Uint8Array(await data.arrayBuffer()), row.name, source.expected_sha256, options);
   }
 
+  /** Called only inside an approved provider mutation; never returned by a read tool. */
+  async providerUrl(source: MediaSource, options: { maxBytes?: number; contentTypes?: readonly string[] } = {}) {
+    requireScope(this.principal, 'tools:write');
+    const file = await this.read(source, options);
+    const row = await this.record(source.media_id!);
+    const { data, error } = await createAdminClient().storage.from(BUCKET).createSignedUrl(row.objectPath, 3600);
+    if (error || !data) throw new HttpError('The provider media source could not be prepared.', 502);
+    return { url: data.signedUrl, expires_at: new Date(Date.now() + 3_600_000).toISOString(), sha256: file.sha256 };
+  }
+
   async list(input: { limit: number; cursor?: string }) {
     const rows = input.cursor
       ? await db()<StoredMedia[]>`select * from private.creative_media where organization_id = ${this.principal.organizationId} and status = 'ready' and id < ${input.cursor} order by id desc limit ${input.limit + 1}`

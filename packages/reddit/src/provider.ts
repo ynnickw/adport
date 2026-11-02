@@ -13,9 +13,11 @@ import {
   type WriteOperation,
   type WritePreview,
   type WriteResult,
+  type MediaResolver,
 } from '@adport/core';
 import { RedditAdsClient, type RedditEnvelope } from './client.js';
 import { createCampaign, redditId, setCampaignBudget, setCampaignStatus } from './schemas.js';
+import { RedditCreativeService } from './creatives.js';
 
 /** Reddit budget, bid, spend, CPC, and CPM fields are integer micros. */
 export const REDDIT_MICROS = 1_000_000;
@@ -47,7 +49,7 @@ interface WritePlan {
   changes: string[];
   coercions: string[];
   budgetDeltas: WritePreview['budgetDeltas'];
-  execute: () => Promise<string[]>;
+  execute: () => Promise<string[] | WriteResult>;
 }
 
 // Reddit v3 request enums are uppercase even though response object keys are lowercase.
@@ -55,8 +57,8 @@ const BREAKDOWN = { account: undefined, campaign: 'CAMPAIGN_ID', ad_group: 'AD_G
 
 export class RedditAdsProvider implements AdProvider {
   readonly id = 'reddit';
-
-  constructor(private readonly client: RedditAdsClient) {}
+  readonly creatives: RedditCreativeService;
+  constructor(private readonly client: RedditAdsClient, media?: MediaResolver) { this.creatives = new RedditCreativeService(client, media); }
 
   capabilities(): ProviderCapabilities {
     return { serverDryRun: false };
@@ -194,7 +196,8 @@ export class RedditAdsProvider implements AdProvider {
 
   async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> {
     const plan = await this.plan(op, guard);
-    return { applied: true, resourceIds: await plan.execute() };
+    const result = await plan.execute();
+    return Array.isArray(result) ? { applied: true, resourceIds: result } : result;
   }
 
   private async fetchReportPages(
@@ -243,6 +246,7 @@ export class RedditAdsProvider implements AdProvider {
   }
 
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
+    if (/^reddit_(?:create_(?:ad_group|ad|post|text_asset)|upload_asset|import_asset_url|stage_post_copy|update_(?:ad_group|ad|targeting)|set_(?:ad_group_budget|ad_group_bidding|ad_group_status|ad_status)|archive_entity|rename_asset|delete_asset)$/.test(op.tool)) return this.creatives.plan(op, guard);
     redditId.parse(op.accountId);
     const expectedKind = op.tool === 'reddit_api_delete' ? 'remove' : op.tool === 'reddit_create_campaign' || op.tool === 'reddit_api_create' ? 'create' : 'update';
     if (op.provider !== this.id || op.kind !== expectedKind) throw new AdportError('INVALID_INPUT', 'reddit: provider or operation kind mismatch');
@@ -362,6 +366,18 @@ export class RedditAdsProvider implements AdProvider {
       const group = (await this.client.get<Record<string, unknown>>(`ad_groups/${encodeURIComponent(body.data.ad_group_id)}`)).data;
       if (!isRecord(group) || group.id !== body.data.ad_group_id || group.ad_account_id !== accountId || typeof group.campaign_id !== 'string') throw new AdportError('INVALID_INPUT', 'reddit: ad-group parent ownership mismatch');
       await this.getOwnedCampaign(accountId, group.campaign_id);
+      if (typeof body.data.post_id === 'string') await this.creatives.assertPostOwned(accountId, body.data.post_id);
+      if (typeof body.data.profile_id === 'string') await this.creatives.assertProfileAvailable(accountId, body.data.profile_id);
+    }
+    if (isRecord(body.data.targeting)) await this.creatives.assertTargetingAvailable(accountId, body.data.targeting);
+    if (path.endsWith('/custom_audiences')) {
+      const config = isRecord(body.data.pixel_audience_config) ? body.data.pixel_audience_config : {};
+      if (Array.isArray(config.pixel_ids)) {
+        const pixels = await this.client.getPaged<Record<string, unknown>>(`ad_accounts/${accountId}/pixels`, {}, 1000), known = new Set(pixels.map(row => row.id));
+        if (config.pixel_ids.some(value => !known.has(value))) throw new AdportError('INVALID_INPUT', 'reddit: retargeting Pixel is not available to this account');
+      }
+      const engagement = isRecord(body.data.engagement_audience_config) ? body.data.engagement_audience_config : {};
+      if (Array.isArray(engagement.campaign_ids)) for (const value of engagement.campaign_ids) await this.getOwnedCampaign(accountId, redditId.parse(value));
     }
     const coercions: string[] = [];
     if (guard.forcePausedCreation) {
@@ -381,11 +397,15 @@ export class RedditAdsProvider implements AdProvider {
     payload: { path: string; body: Record<string, unknown> },
   ): Promise<WritePlan> {
     const path = validateRedditPath(payload.path);
-    await this.assertOwnedResource(path, accountId);
+    const current = await this.assertOwnedResource(path, accountId);
     if (containsMoney(payload.body)) {
       throw new AdportError('INVALID_INPUT', 'reddit: budget, bid, goal, and spend-cap updates require a typed budget tool for policy checks');
     }
     if (!isRecord(payload.body.data)) throw new AdportError('INVALID_INPUT', 'reddit: native update requires one data object');
+    for (const key of ['ad_account_id', 'account_id', 'campaign_id', 'ad_group_id']) if (payload.body.data[key] !== undefined && payload.body.data[key] !== current[key]) throw new AdportError('INVALID_INPUT', 'reddit: parent/account changes require a dedicated tool and cannot be forwarded as generic metadata');
+    if (typeof payload.body.data.post_id === 'string') await this.creatives.assertPostOwned(accountId, payload.body.data.post_id);
+    if (typeof payload.body.data.profile_id === 'string') await this.creatives.assertProfileAvailable(accountId, payload.body.data.profile_id);
+    if (isRecord(payload.body.data.targeting)) await this.creatives.assertTargetingAvailable(accountId, payload.body.data.targeting);
     return {
       summary: `Update Reddit resource via /${path}`,
       changes: [`~ PATCH /${path} ${JSON.stringify(payload.body)}`],
@@ -417,11 +437,13 @@ export class RedditAdsProvider implements AdProvider {
     return campaign;
   }
 
-  private async assertOwnedResource(path: string, accountId: string): Promise<void> {
+  private async assertOwnedResource(path: string, accountId: string): Promise<Record<string, unknown>> {
     const resource = (await this.client.get<Record<string, unknown>>(path)).data;
-    if (String(resource.ad_account_id ?? '') !== accountId) {
+    if (!isRecord(resource) || String(resource.ad_account_id ?? '') !== accountId) {
       throw new AdportError('INVALID_INPUT', `reddit: /${path} does not prove ownership by selected account ${accountId}`);
     }
+    if (resource.id !== path.split('/').at(-1)) throw new AdportError('INVALID_INPUT', 'reddit: resource response ID mismatch');
+    return resource;
   }
 }
 

@@ -2,9 +2,11 @@ import { defineTool, guardedWriteTool, type AnyToolDefinition } from '@adport/co
 import { z } from 'zod';
 import type { RedditAdsProvider } from './provider.js';
 import { createCampaign, setCampaignBudget, setCampaignStatus } from './schemas.js';
+import { redditCreativeTools } from './creative-tools.js';
 
 export function redditTools(provider: RedditAdsProvider): AnyToolDefinition[] {
   return [
+    ...redditCreativeTools(provider),
     defineTool({
       name: 'reddit_api_read',
       namespace: 'reddit',

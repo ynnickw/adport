@@ -138,7 +138,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
         await updateProviderCredential(principal.organizationId, 'reddit', rotated);
       },
     });
-    const provider = new RedditAdsProvider(client);
+    const provider = new RedditAdsProvider(client, media);
     modules.push({ provider: scopeProvider(provider), tools: redditTools(provider) });
   }
   const engine = new PolicyEngine(policy, new PostgresPendingStore(principal), new PostgresAuditStore(principal));

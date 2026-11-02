@@ -54,6 +54,15 @@ describeDatabase('project media signed-upload boundary', () => {
     await expect(other.read({ media_id: prepared.media_id, expected_sha256: sha256 })).rejects.toThrow('selected project');
     expect((await other.list({ limit: 10 })).assets.some(asset => asset.id === prepared.media_id)).toBe(false);
     await expect(owner.read({ media_id: prepared.media_id, expected_sha256: '0'.repeat(64) })).rejects.toThrow('SHA-256');
+    const source = { media_id: prepared.media_id, expected_sha256: sha256 };
+    const providerGrant = await owner.providerUrl(source, { contentTypes: ['image/png'] });
+    expect(providerGrant.sha256).toBe(sha256);
+    expect(Date.parse(providerGrant.expires_at)).toBeGreaterThan(Date.now() + 3_590_000);
+    expect(Buffer.from(await (await fetch(providerGrant.url)).arrayBuffer()).equals(bytes)).toBe(true);
+    await expect(other.providerUrl(source)).rejects.toThrow('selected project');
+    await expect(owner.providerUrl({ ...source, expected_sha256: '0'.repeat(64) })).rejects.toThrow('SHA-256');
+    const reader = new ProjectMediaLibrary({ organizationId: projects[0]!, userId: users[0]!, role: 'owner', scopes: ['tools:read'] });
+    await expect(reader.providerUrl(source)).rejects.toThrow();
     const [row] = await db()<Array<{ objectPath: string }>>`select object_path from private.creative_media where id = ${prepared.media_id}`;
     expect((await anonymous.storage.from('creative-media').download(row!.objectPath)).error).toBeTruthy();
     // An attacker cannot override the upsert=false grant with a request header.
