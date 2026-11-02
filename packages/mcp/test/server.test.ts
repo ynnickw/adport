@@ -7,7 +7,7 @@ import { AdportError, createContext, FindingsStore } from '@adport/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createMcpServer } from '../src/index.js';
-import { ADPORT_UI_DOMAIN, ADPORT_UI_URI } from '../src/ui.js';
+import { ADPORT_UI_DOMAIN, ADPORT_UI_URI, ADPORT_UI_RESOURCE_DOMAINS } from '../src/ui.js';
 
 let home: string;
 let client: Client;
@@ -91,7 +91,7 @@ describe('adport MCP server', () => {
       const content = (await hostClient.readResource({ uri: ADPORT_UI_URI })).contents[0];
       for (const resource of [listing, content]) {
         expect(resource?._meta).toMatchObject({
-          ui: { domain: uiDomain, csp: { connectDomains: [], resourceDomains: [] } },
+          ui: { domain: uiDomain, csp: { connectDomains: [], resourceDomains: ADPORT_UI_RESOURCE_DOMAINS } },
           'openai/widgetDomain': ADPORT_UI_DOMAIN,
         });
       }
@@ -297,7 +297,7 @@ describe('adport MCP server', () => {
       ui: {
         domain: ADPORT_UI_DOMAIN,
         prefersBorder: false,
-        csp: { connectDomains: [], resourceDomains: [] },
+        csp: { connectDomains: [], resourceDomains: ADPORT_UI_RESOURCE_DOMAINS },
       },
       'openai/widgetDomain': ADPORT_UI_DOMAIN,
     });

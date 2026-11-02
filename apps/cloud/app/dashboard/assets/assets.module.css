@@ -1,0 +1,17 @@
+.upload { padding: 24px; display: grid; gap: 12px; }
+.upload label { font-size: 14px; font-weight: 550; }
+.controls { display: flex; gap: 12px; align-items: center; }
+.controls input { min-width: 0; flex: 1; }
+.controls input::file-selector-button { cursor: pointer; border: 0; border-right: 1px solid var(--line); margin: -8px 12px -8px -10px; padding: 10px 14px; color: inherit; background: var(--paper); font: inherit; }
+.controls button { flex-shrink: 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 20px; }
+.asset { min-width: 0; overflow: hidden; }
+.preview { display: grid; place-items: center; aspect-ratio: 16 / 10; overflow: hidden; background: var(--surface-soft, #f4f4f3); }
+.preview img, .preview video { display: block; width: 100%; height: 100%; object-fit: contain; }
+.preview audio { max-width: calc(100% - 24px); }
+.details { padding: 18px; overflow-wrap: anywhere; }
+.details h2 { font-size: 15px; margin: 0 0 8px; }
+.details details { margin-top: 16px; font-size: 12px; }
+.details summary { cursor: pointer; }
+.details code { display: block; margin-top: 4px; font-size: 11px; }
+@media (max-width: 600px) { .controls { align-items: stretch; flex-direction: column; } .upload { padding: 18px; } }

@@ -1,4 +1,4 @@
-import { defineTool, guardedWriteTool, type AnyToolDefinition } from '@adport/core';
+import { defineTool, guardedWriteTool, mediaSourceFields, type AnyToolDefinition } from '@adport/core';
 import { z } from 'zod';
 import type { AppleAdsProvider } from './provider.js';
 
@@ -16,6 +16,16 @@ const timestamp = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z
 
 export function appleTools(provider: AppleAdsProvider): AnyToolDefinition[] {
   return [
+    ...([
+      ['ad_group', 'ad_group_id'], ['keyword', 'keyword_id'], ['ad', 'ad_id'],
+    ] as const).map(([entity, id]) => guardedWriteTool({
+      name: `apple_set_${entity}_status`,
+      namespace: 'apple',
+      provider: 'apple',
+      kind: 'update',
+      description: `Enable or pause an existing Apple Ads ${entity.replaceAll('_', ' ')}. Parent campaign and ad-group statuses remain independent.`,
+      payload: z.object({ [id]: idSchema, status: statusSchema }),
+    })),
     ...(['adgroups', 'keywords', 'negative-keywords', 'ads', 'creatives', 'product-pages'] as const).map((resource) => defineTool({
       name: `apple_${resource.replaceAll('-', '_')}`,
       namespace: 'apple',
@@ -203,15 +213,14 @@ export function appleTools(provider: AppleAdsProvider): AnyToolDefinition[] {
       name: 'apple_upload_asset',
       namespace: 'apple',
       description:
-        'Upload a PNG, JPG/JPEG, or HEIC creative asset for a Business Brand. The required SHA-256 binds the exact local file contents to the preview/apply approval.',
+        'Upload a PNG, JPG/JPEG, or HEIC creative asset for a Business Brand. SHA-256 binds exact bytes to approval. Hosted calls require a project media_id; file_path is local-only.',
       provider: 'apple',
       kind: 'create',
       payload: z.object({
-        file_path: z.string().min(1),
-        expected_sha256: z.string().regex(/^[a-fA-F0-9]{64}$/),
+        ...mediaSourceFields,
         promoted_object_id: z.string().min(1),
         promoted_object_type: z.literal('BUSINESS_BRAND').default('BUSINESS_BRAND'),
-      }),
+      }).refine(value => Number(Boolean(value.file_path)) + Number(Boolean(value.media_id)) === 1, 'Choose media_id or file_path'),
     }),
     guardedWriteTool({
       name: 'apple_apply_recommendations',

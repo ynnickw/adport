@@ -169,9 +169,10 @@ export function formatMicrosoftError(status: number, raw: string): string {
   return message;
 }
 
-export function formatPartialErrors(partialErrors: BatchErrorItem[] | undefined): string | undefined {
-  if (!partialErrors || partialErrors.length === 0) return undefined;
-  return partialErrors
+export function formatPartialErrors(partialErrors: Array<BatchErrorItem | null> | undefined): string | undefined {
+  const errors = partialErrors?.filter((error): error is BatchErrorItem => error !== null) ?? [];
+  if (errors.length === 0) return undefined;
+  return errors
     .map((e) => `item ${e.Index ?? '?'}: ${e.Code ?? ''} ${e.ErrorCode ?? ''} ${e.Message ?? ''}${e.FieldPath ? ` (${e.FieldPath})` : ''}`)
     .join('; ');
 }

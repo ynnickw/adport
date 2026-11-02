@@ -21,7 +21,7 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   payload: S;
   destructive?: boolean;
 }): AnyToolDefinition {
-  const input = def.payload.extend({
+  const input = def.payload.safeExtend({
     account_id: z.string().min(1).describe('Target account id'),
     pending_operation_id: z
       .string()

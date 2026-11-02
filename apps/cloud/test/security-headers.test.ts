@@ -16,6 +16,14 @@ describe('content security policy', () => {
     expect(buildContentSecurityPolicy(supabaseOrigin, false, true)).toContain("script-src 'self' 'unsafe-inline' 'unsafe-eval'");
   });
 
+  it('permits private media previews from the configured Storage origin without broadening scripts or other image origins', () => {
+    const directives = buildContentSecurityPolicy(supabaseOrigin).split('; ');
+    expect(directives).toContain(`img-src 'self' data: ${supabaseOrigin}`);
+    expect(directives).toContain(`media-src 'self' ${supabaseOrigin}`);
+    expect(directives.find(value => value.startsWith('script-src'))).not.toContain(supabaseOrigin);
+    expect(directives.find(value => value.startsWith('img-src'))).not.toContain('https: ');
+  });
+
   it('allows registered HTTPS and loopback OAuth callbacks on the consent page', () => {
     const policy = buildContentSecurityPolicy(supabaseOrigin, true);
     expect(policy).toContain(

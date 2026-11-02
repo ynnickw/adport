@@ -94,11 +94,11 @@ All 11 providers have local connection commands, normalized reports, and guarded
 
 | Provider | Connection ID | Capabilities and setup |
 | --- | --- | --- |
-| Google Ads | `google` | [GAQL, campaigns, ad groups, keywords, RSAs, budgets, bidding](docs/providers.md#google-ads) |
-| Meta Ads | `meta` | [Insights, account objects, campaigns, ad sets, budgets, status](docs/providers.md#meta-ads) |
+| Google Ads | `google` | [GAQL, campaigns, ad groups, keywords, RSA copy/status, budgets, bidding](docs/providers.md#google-ads) |
+| Meta Ads | `meta` | [Insights, ads, creatives/media, targeting, audiences, budgets, status](docs/providers.md#meta-ads) |
 | TikTok Ads | `tiktok` | [Reports, campaigns, budgets, status, sandbox support](docs/providers.md#tiktok-ads) |
 | Apple Ads | `apple` | [Campaigns, ad groups, keywords, creatives, reports](docs/providers.md#apple-ads) |
-| Microsoft Advertising | `microsoft` | [Asynchronous reports, campaigns, budgets, status](docs/providers.md#microsoft-advertising) |
+| Microsoft Advertising | `microsoft` | [Detailed reports, campaigns, ad groups, keywords, RSAs, budgets, status](docs/providers.md#microsoft-advertising) |
 | Reddit Ads | `reddit` | [Native reports, account resources, campaigns, CBO budgets](docs/providers.md#reddit-ads) |
 | Snapchat Ads | `snapchat` | [Discovery, reports, campaigns, budgets, status](docs/providers/snapchat.md) |
 | Spotify Ads | `spotify` | [Reports, unpublished drafts, campaign status, ad-set delivery](docs/providers/spotify.md) |

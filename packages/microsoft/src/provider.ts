@@ -1,5 +1,6 @@
 import {
   AdportError,
+  METRICS,
   resolveDateRange,
   type Account,
   type AdProvider,
@@ -17,6 +18,7 @@ import {
 import { unzipSync } from 'fflate';
 import { formatPartialErrors, MicrosoftAdsClient, type MicrosoftService } from './client.js';
 import { parseCsv } from './csv.js';
+import { MicrosoftChildService } from './children.js';
 
 /** DailyBudget is a double in whole account-currency units. */
 export const UNITS_TO_MICROS = 1_000_000;
@@ -44,11 +46,14 @@ export class MicrosoftAdsProvider implements AdProvider {
   readonly id = 'microsoft';
   /** accountId → parent customer id, learned from SearchAccounts. */
   private customerIds = new Map<string, string>();
+  readonly children: MicrosoftChildService;
 
   constructor(
     private readonly client: MicrosoftAdsClient,
     private readonly options: { pollIntervalMs?: number; pollMaxAttempts?: number } = {},
-  ) {}
+  ) {
+    this.children = new MicrosoftChildService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign));
+  }
 
   capabilities(): ProviderCapabilities {
     return { serverDryRun: false };
@@ -132,29 +137,50 @@ export class MicrosoftAdsProvider implements AdProvider {
   }
 
   async report(query: NormalizedQuery): Promise<Report> {
-    if (query.level !== 'campaign' && query.level !== 'account') {
-      throw new AdportError('INVALID_INPUT', 'microsoft: report supports campaign and account levels in v0');
-    }
     const range = resolveDateRange(query.dateRange);
     const accountIds = query.accountIds ?? (await this.listAccounts()).map((a) => a.id);
     const rows: ReportRow[] = [];
     for (const accountId of accountIds) {
-      const providerRows = await this.campaignReport(accountId, range.start, range.end, query);
+      const providerRows = await this.performanceReport(accountId, range.start, range.end, query.level === 'account' ? { ...query, level: 'campaign', metrics: [...METRICS] } : query);
       if (query.level === 'account') {
-        if (providerRows.length > 0) rows.push(aggregateAccountRows(providerRows, this.id, accountId));
+        if (providerRows.length > 0) {
+          const aggregate = aggregateAccountRows(providerRows, this.id, accountId);
+          aggregate.metrics = Object.fromEntries(query.metrics.filter(metric => aggregate.metrics[metric] !== undefined).map(metric => [metric, aggregate.metrics[metric]]));
+          rows.push(aggregate);
+        }
       } else {
         rows.push(...providerRows);
       }
     }
-    return { rows };
+    const limit = query.limit ?? 1000;
+    return { rows: rows.slice(0, limit), truncated: rows.length > limit };
   }
 
-  private async campaignReport(
+  private async performanceReport(accountId: string, start: string, end: string, query: NormalizedQuery): Promise<ReportRow[]> {
+    const selection = query.level === 'ad_group'
+      ? { type: 'AdGroupPerformanceReportRequest', columns: ['AdGroupId', 'AdGroupName', 'Status'] }
+      : query.level === 'ad' ? { type: 'AdPerformanceReportRequest', columns: ['AdId', 'AdTitle', 'AdStatus'] }
+        : { type: 'CampaignPerformanceReportRequest', columns: ['CampaignId', 'CampaignName', 'CampaignStatus'] };
+    const bytes = await this.reportCsv(accountId, start, end, selection.type, [...selection.columns, 'Spend', 'Impressions', 'Clicks', 'Conversions', 'Revenue']);
+    return bytes ? this.parseReport(bytes, accountId, query) : [];
+  }
+
+  async nativeReport(input: { account_id: string; kind: 'keyword' | 'search_term'; date_range: NormalizedQuery['dateRange']; limit: number }) {
+    const range = resolveDateRange(input.date_range);
+    const type = input.kind === 'keyword' ? 'KeywordPerformanceReportRequest' : 'SearchQueryPerformanceReportRequest';
+    const columns = input.kind === 'keyword' ? ['CampaignId', 'AdGroupId', 'KeywordId', 'Keyword', 'BidMatchType'] : ['CampaignId', 'AdGroupId', 'AdId', 'KeywordId', 'Keyword', 'SearchQuery'];
+    const bytes = await this.reportCsv(input.account_id, range.start, range.end, type, [...columns, 'Spend', 'Impressions', 'Clicks', 'Conversions', 'Revenue']);
+    const records = bytes ? this.reportObjects(bytes) : [];
+    return { rows: records.slice(0, input.limit), truncated: records.length > input.limit, report_type: type };
+  }
+
+  private async reportCsv(
     accountId: string,
     start: string,
     end: string,
-    query: NormalizedQuery,
-  ): Promise<ReportRow[]> {
+    type: string,
+    columns: string[],
+  ): Promise<Uint8Array | undefined> {
     const scope = await this.scopeFor(accountId);
     const toDate = (iso: string) => {
       const [year, month, day] = iso.split('-').map(Number);
@@ -167,7 +193,7 @@ export class MicrosoftAdsProvider implements AdProvider {
       'GenerateReport/Submit',
       {
         ReportRequest: {
-          Type: 'CampaignPerformanceReportRequest',
+          Type: type,
           Format: 'Csv',
           FormatVersion: '2.0',
           ReportName: 'adport campaign report',
@@ -176,7 +202,7 @@ export class MicrosoftAdsProvider implements AdProvider {
           ExcludeColumnHeaders: false,
           ReturnOnlyCompleteData: false,
           Aggregation: 'Summary',
-          Columns: ['CampaignId', 'CampaignName', 'CampaignStatus', 'Spend', 'Impressions', 'Clicks', 'Conversions', 'Revenue'],
+          Columns: columns,
           Scope: { AccountIds: [accountId] },
           Time: { CustomDateRangeStart: toDate(start), CustomDateRangeEnd: toDate(end) },
         },
@@ -199,58 +225,36 @@ export class MicrosoftAdsProvider implements AdProvider {
       }
       if (status === 'Success') {
         const url = poll.ReportRequestStatus?.ReportDownloadUrl;
-        if (!url) return []; // Success with null URL = no data for the range.
-        return this.parseReport(await this.client.download(url), accountId, query);
+        if (!url) return undefined; // Success with null URL = no data for the range.
+        return this.client.download(url);
       }
       await new Promise((resolve) => setTimeout(resolve, interval));
     }
     throw new AdportError('PROVIDER_ERROR', `microsoft: report not ready after ${maxAttempts} polls`);
   }
 
-  private parseReport(zipBytes: Uint8Array, accountId: string, query: NormalizedQuery): ReportRow[] {
+  private reportObjects(zipBytes: Uint8Array): Array<Record<string, string>> {
     const files = unzipSync(zipBytes);
-    const first = Object.values(files)[0];
-    if (!first) return [];
-    const rows = parseCsv(new TextDecoder().decode(first));
-    if (rows.length < 2) return [];
-    const header = rows[0]!;
-    const index = (name: string) => header.indexOf(name);
-    const out: ReportRow[] = [];
-    for (const row of rows.slice(1)) {
-      const value = (name: string) => {
-        const i = index(name);
-        return i >= 0 ? (row[i] ?? '') : '';
+    const selected = Object.entries(files).find(([name]) => name.toLowerCase().endsWith('.csv'))?.[1] ?? Object.values(files)[0];
+    if (!selected) return [];
+    const rows = parseCsv(new TextDecoder().decode(selected).replace(/^\uFEFF/, ''));
+    const header = rows[0];
+    return header ? rows.slice(1).map(row => Object.fromEntries(header.map((key, index) => [key, row[index] ?? '']))) : [];
+  }
+
+  private parseReport(zipBytes: Uint8Array, accountId: string, query: NormalizedQuery): ReportRow[] {
+    return this.reportObjects(zipBytes).map(row => {
+      const numeric = (key: string) => {
+        const text = row[key]?.trim();
+        if (!text) return undefined;
+        const number = Number(text);
+        return Number.isFinite(number) ? number : undefined;
       };
-      const spend = Number(value('Spend') || 0);
-      const impressions = Number(value('Impressions') || 0);
-      const clicks = Number(value('Clicks') || 0);
-      const conversions = Number(value('Conversions') || 0);
-      const revenue = Number(value('Revenue') || 0);
-      const all: Record<MetricName, number> = {
-        spend: round2(spend),
-        impressions,
-        clicks,
-        conversions,
-        conversion_value: round2(revenue),
-        ctr: impressions > 0 ? round2((clicks / impressions) * 100) : 0,
-        cpc: clicks > 0 ? round2(spend / clicks) : 0,
-        cpm: impressions > 0 ? round2((spend / impressions) * 1000) : 0,
-        cpa: conversions > 0 ? round2(spend / conversions) : 0,
-        roas: spend > 0 ? round2(revenue / spend) : 0,
-      };
-      out.push({
-        provider: this.id,
-        accountId,
-        entity: {
-          level: 'campaign',
-          id: value('CampaignId'),
-          name: value('CampaignName'),
-          status: value('CampaignStatus') || undefined,
-        },
-        metrics: Object.fromEntries(query.metrics.map((m) => [m, all[m]])),
-      });
-    }
-    return out;
+      const metrics = performanceMetrics({ spend: numeric('Spend'), impressions: numeric('Impressions'), clicks: numeric('Clicks'), conversions: numeric('Conversions'), conversion_value: numeric('Revenue') });
+      const identity = query.level === 'ad_group' ? ['AdGroupId', 'AdGroupName', 'Status'] : query.level === 'ad' ? ['AdId', 'AdTitle', 'AdStatus'] : ['CampaignId', 'CampaignName', 'CampaignStatus'];
+      return { provider: this.id, accountId, entity: { level: query.level, id: row[identity[0]!] ?? '', name: row[identity[1]!] ?? '', status: row[identity[2]!] || undefined },
+        metrics: Object.fromEntries(query.metrics.filter(metric => metrics[metric] !== undefined).map(metric => [metric, metrics[metric]])) };
+    });
   }
 
   async previewWrite(op: WriteOperation, guard: WriteGuard): Promise<WritePreview> {
@@ -286,7 +290,7 @@ export class MicrosoftAdsProvider implements AdProvider {
       case 'microsoft_api_delete':
         return this.planApiDelete(op.accountId, payload);
       default:
-        throw new AdportError('PROVIDER_ERROR', `microsoft: unsupported write tool ${op.tool}`);
+        return this.children.plan(op, guard);
     }
   }
 
@@ -465,24 +469,20 @@ export class MicrosoftAdsProvider implements AdProvider {
   }
 }
 
+function performanceMetrics(base: Partial<Record<MetricName, number>>): Partial<Record<MetricName, number>> {
+  const ratio = (numerator: number | undefined, denominator: number | undefined, scale = 1) => numerator === undefined || denominator === undefined ? undefined : denominator > 0 ? round2(numerator / denominator * scale) : 0;
+  return Object.fromEntries(Object.entries({ ...base,
+    ctr: ratio(base.clicks, base.impressions, 100), cpc: ratio(base.spend, base.clicks), cpm: ratio(base.spend, base.impressions, 1000),
+    cpa: ratio(base.spend, base.conversions), roas: ratio(base.conversion_value, base.spend),
+  }).filter(([, value]) => value !== undefined).map(([key, value]) => [key, round2(value!)]));
+}
+
 function aggregateAccountRows(rows: ReportRow[], provider: string, accountId: string): ReportRow {
-  const metrics = Object.fromEntries(
-    Object.keys(rows[0]!.metrics).map((metric) => [
-      metric,
-      round2(rows.reduce((sum, row) => sum + (row.metrics[metric as MetricName] ?? 0), 0)),
-    ]),
-  ) as Partial<Record<MetricName, number>>;
-  const spend = metrics.spend ?? 0;
-  const impressions = metrics.impressions ?? 0;
-  const clicks = metrics.clicks ?? 0;
-  const conversions = metrics.conversions ?? 0;
-  const conversionValue = metrics.conversion_value ?? 0;
-  if ('ctr' in metrics) metrics.ctr = impressions > 0 ? round2((clicks / impressions) * 100) : 0;
-  if ('cpc' in metrics) metrics.cpc = clicks > 0 ? round2(spend / clicks) : 0;
-  if ('cpm' in metrics) metrics.cpm = impressions > 0 ? round2((spend / impressions) * 1000) : 0;
-  if ('cpa' in metrics) metrics.cpa = conversions > 0 ? round2(spend / conversions) : 0;
-  if ('roas' in metrics) metrics.roas = spend > 0 ? round2(conversionValue / spend) : 0;
-  return { provider, accountId, entity: { level: 'account', id: accountId, name: accountId }, metrics };
+  const totals: Partial<Record<MetricName, number>> = {};
+  for (const metric of ['spend', 'impressions', 'clicks', 'conversions', 'conversion_value'] as const) {
+    if (rows.every(row => row.metrics[metric] !== undefined)) totals[metric] = rows.reduce((sum, row) => sum + row.metrics[metric]!, 0);
+  }
+  return { provider, accountId, entity: { level: 'account', id: accountId, name: accountId }, metrics: performanceMetrics(totals) };
 }
 
 function validateMicrosoftReadPath(path: string): string {

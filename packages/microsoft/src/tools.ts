@@ -1,11 +1,20 @@
-import { defineTool, guardedWriteTool, type AnyToolDefinition } from '@adport/core';
+import { DATE_PRESETS, defineTool, guardedWriteTool, type AnyToolDefinition } from '@adport/core';
 import { z } from 'zod';
 import type { MicrosoftAdsProvider } from './provider.js';
+import { microsoftChildTools } from './child-tools.js';
 
 const statusSchema = z.enum(['Active', 'Paused']);
 
 export function microsoftTools(provider: MicrosoftAdsProvider): AnyToolDefinition[] {
   return [
+    ...microsoftChildTools(provider),
+    ...(['keyword', 'search_term'] as const).map(kind => defineTool({
+      name: `microsoft_${kind}_report`, namespace: 'microsoft',
+      description: `Read the native Microsoft ${kind.replace('_', ' ')} performance report through Submit/Poll/CSV. Native numeric values remain strings; empty or unavailable values are preserved.`,
+      input: z.object({ account_id: z.string().regex(/^\d+$/), date_range: z.union([z.enum(DATE_PRESETS), z.object({ start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) })]).default('last_7_days'), limit: z.number().int().positive().max(5000).default(1000) }),
+      output: z.object({ rows: z.array(z.record(z.string(), z.string())), truncated: z.boolean(), report_type: z.string() }),
+      annotations: { readOnly: true }, handler: input => provider.nativeReport({ ...input, kind }),
+    })),
     defineTool({
       name: 'microsoft_api_read',
       namespace: 'microsoft',

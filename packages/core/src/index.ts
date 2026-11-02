@@ -1,4 +1,6 @@
 export { AdportError, type AdportErrorCode } from './errors.js';
+export { creativeSchema, creativesOutput, creativeActionSchema, creativeFieldSchema, creativeStatusAction, type Creative, type CreativeAction } from './creatives.js';
+export { LocalMediaResolver, mediaSourceFields, mediaContentType, mediaAssetSchema, verifyMedia, type MediaAsset, type MediaLibrary, type MediaSource, type MediaResolver, type VerifiedMedia } from './media.js';
 export { adportHome } from './paths.js';
 export {
   METRICS,

@@ -14,7 +14,7 @@ vi.mock('@/lib/cloud/auth', () => ({ apiPrincipal: mocks.principal }));
 vi.mock('@/lib/cloud/runtime', () => ({ createTenantRuntime: mocks.runtime }));
 vi.mock('@/lib/cloud/mcp-projects', () => ({ routeMcpProjects: (runtime: unknown) => runtime }));
 vi.mock('@/lib/cloud/mcp-oauth-repository', () => ({ getMcpOAuthClient: mocks.oauthClient }));
-vi.mock('@adport/mcp', () => ({ createMcpServer: mocks.server }));
+vi.mock('@adport/mcp', async importOriginal => ({ ...await importOriginal<typeof import('@adport/mcp')>(), createMcpServer: mocks.server }));
 vi.mock('@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js', () => ({
   WebStandardStreamableHTTPServerTransport: class {
     async handleRequest() { return Response.json({ ok: true }); }
@@ -57,6 +57,7 @@ describe('hosted MCP entitlement explanation', () => {
     expect(options.uiDomain).toMatch(/^[a-f0-9]{32}\.claudemcpcontent\.com$/);
     expect(mocks.oauthClient).toHaveBeenCalledWith('fictional-client');
     expect(options.scopes).toEqual(['tools:read']);
+    expect(options.uiResourceDomains).toContain(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).origin);
   });
 
   it('preserves default metadata for other clients and skips lookup for API keys', async () => {

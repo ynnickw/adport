@@ -18,6 +18,7 @@ import packageJson from '../package.json';
 import {
   ADPORT_UI_HTML,
   ADPORT_UI_DOMAIN,
+  ADPORT_UI_RESOURCE_DOMAINS,
   ADPORT_UI_URI,
   structuredResult,
   toolInvocationLabels,
@@ -26,6 +27,7 @@ import {
 } from './ui.js';
 
 export const PROVIDER_IDS = ['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const;
+export { ADPORT_UI_RESOURCE_DOMAINS };
 
 const DEFAULT_MCP_ICONS = [{
   src: 'https://app.adport.dev/icon.svg?brand=orange-dot-v2',
@@ -75,6 +77,7 @@ export interface CreateServerOptions {
   productionOnly?: boolean;
   /** Host-specific MCP Apps sandbox domain; OpenAI's widget domain stays independent. */
   uiDomain?: string;
+  uiResourceDomains?: readonly string[];
 }
 
 export interface ToolScopeDenial {
@@ -87,7 +90,7 @@ export interface ToolScopeDenial {
  * Thin adapter: every tool in the shared registry becomes an MCP tool.
  * No tool logic lives here — see the "one tool-definition layer" principle.
  */
-export function createMcpServer({ runtime, instructions, name = 'adport', version = packageJson.version, icons = DEFAULT_MCP_ICONS, scopes, scopeDenials, notConnectedMessage, productionOnly = false, uiDomain = ADPORT_UI_DOMAIN }: CreateServerOptions): McpServer {
+export function createMcpServer({ runtime, instructions, name = 'adport', version = packageJson.version, icons = DEFAULT_MCP_ICONS, scopes, scopeDenials, notConnectedMessage, productionOnly = false, uiDomain = ADPORT_UI_DOMAIN, uiResourceDomains = ADPORT_UI_RESOURCE_DOMAINS }: CreateServerOptions): McpServer {
   if (productionOnly && (runtime.dataSource === 'synthetic'
     || runtime.ctx.providers.list().some(provider => !PROVIDER_IDS.includes(provider.id as typeof PROVIDER_IDS[number]))
     || runtime.registry.list().some(tool => /^(demo|mock|synthetic)(_|$)/.test(tool.name) || /^(demo|mock|synthetic)$/.test(tool.namespace)))) {
@@ -104,7 +107,7 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
     {
       description: 'Responsive Adport accounts, performance, recommendations, and guarded-change view.',
       _meta: {
-        ui: { domain: uiDomain, prefersBorder: false, csp: { connectDomains: [], resourceDomains: [] } },
+        ui: { domain: uiDomain, prefersBorder: false, csp: { connectDomains: [], resourceDomains: [...uiResourceDomains] } },
         'openai/widgetDomain': ADPORT_UI_DOMAIN,
       },
     },
@@ -114,7 +117,7 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
         mimeType: RESOURCE_MIME_TYPE,
         text: ADPORT_UI_HTML,
         _meta: {
-          ui: { domain: uiDomain, prefersBorder: false, csp: { connectDomains: [], resourceDomains: [] } },
+          ui: { domain: uiDomain, prefersBorder: false, csp: { connectDomains: [], resourceDomains: [...uiResourceDomains] } },
           'openai/widgetDomain': ADPORT_UI_DOMAIN,
         },
       }],
@@ -127,7 +130,7 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
     const requiredScope = tool.annotations.readOnly ? 'tools:read' : 'tools:write';
     const scopeDenial = scopes && !scopes.includes(requiredScope) ? scopeDenials?.[requiredScope] : undefined;
     if (scopes && !scopes.includes(requiredScope) && !scopeDenial) continue;
-    const view = viewForTool(tool.name, tool.annotations.readOnly ?? false);
+    const view = tool.presentation ?? viewForTool(tool.name, tool.annotations.readOnly ?? false);
     const labels = view ? toolInvocationLabels(view) : undefined;
     // MCP structuredContent must be an object. Preserve legacy raw arrays in
     // text/CLI results, exposing their declared schema under a value envelope.
@@ -142,7 +145,12 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
         : tool.description,
       inputSchema: tool.input.shape,
       ...(objectOutput ? { outputSchema: objectOutput.extend({
-        ...(view ? { _adport: z.object({ tool: z.literal(tool.name), view: z.literal(view), providerNames: z.record(z.string(), z.string()), approval: z.object({ arguments: z.record(z.string(), z.unknown()) }).optional() }) } : {}),
+        ...(view ? { _adport: z.object({
+          tool: z.literal(tool.name), view: z.literal(view), providerNames: z.record(z.string(), z.string()),
+          approval: z.object({ arguments: z.record(z.string(), z.unknown()) }).optional(),
+          context: z.object({ project_id: z.string() }).optional(),
+          capabilities: z.object({ can_write: z.boolean() }).optional(),
+        }) } : {}),
         ...(runtime.dataSource === 'synthetic' ? { data_source: z.literal('synthetic') } : {}),
       }) } : {}),
       annotations: {
@@ -185,7 +193,7 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
           : undefined;
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-          ...(view ? { structuredContent: structuredResult(tool.name, view, structured, approval) }
+          ...(view ? { structuredContent: structuredResult(tool.name, view, structured, approval, typeof args.project_id === 'string' ? { project_id: args.project_id } : undefined, { can_write: !scopes || scopes.includes('tools:write') }) }
             : tool.output ? { structuredContent: structured as Record<string, unknown> } : {}),
         };
       } catch (err) {

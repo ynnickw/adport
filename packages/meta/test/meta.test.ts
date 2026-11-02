@@ -320,7 +320,7 @@ describe('MetaAdsProvider writes', () => {
     const { impl } = fakeFetch([
       {
         match: (url) => url.includes('/120210000000/') || url.includes('/120210000000?'),
-        reply: { name: 'Prospecting DE', daily_budget: '5000', id: '120210000000' },
+        reply: { account_id: '426197654150180', name: 'Prospecting DE', daily_budget: '5000', id: '120210000000' },
       },
       { match: (url, body) => url.includes('/120210000000') && body.includes('daily_budget'), reply: { success: true } },
     ]);
@@ -344,7 +344,7 @@ describe('MetaAdsProvider writes', () => {
 
   it('fails clearly when the object has no daily_budget', async () => {
     const { impl } = fakeFetch([
-      { match: (url) => url.includes('/120210000000'), reply: { name: 'CBO child adset', id: '120210000000' } },
+      { match: (url) => url.includes('/120210000000'), reply: { account_id: '426197654150180', name: 'CBO child adset', id: '120210000000' } },
     ]);
     const provider = new MetaAdsProvider(new MetaGraphClient(CREDS, 'v25.0', impl));
     await expect(
@@ -536,7 +536,7 @@ describe('end-to-end through the shared tool registry (policy engine + meta tool
     const { impl } = fakeFetch([
       {
         match: (url) => url.includes('/120210000000'),
-        reply: { name: 'Prospecting DE', daily_budget: '5000', id: '120210000000' },
+        reply: { account_id: '426197654150180', name: 'Prospecting DE', daily_budget: '5000', id: '120210000000' },
       },
     ]);
     const provider = new MetaAdsProvider(new MetaGraphClient(CREDS, 'v25.0', impl));

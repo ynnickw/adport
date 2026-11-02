@@ -4,6 +4,7 @@ import type { FindingsRepository } from '../audit/store.js';
 import { AdportError } from '../errors.js';
 import type { PolicyEngine } from '../policy/engine.js';
 import type { ProviderRegistry } from '../provider.js';
+import type { MediaLibrary } from '../media.js';
 
 export interface ToolAnnotations {
   readOnly?: boolean;
@@ -21,6 +22,7 @@ export interface ToolContext {
   authorizeToolCall?: (tool: AnyToolDefinition, input: Record<string, unknown>) => void | Promise<void>;
   /** Hosted runtimes inject a tenant-scoped findings repository. */
   findings?: FindingsRepository;
+  media?: MediaLibrary;
 }
 
 export interface AnyToolDefinition {
@@ -32,6 +34,8 @@ export interface AnyToolDefinition {
   /** Successful result contract, shared by all transports. Errors use their own envelope. */
   output?: z.ZodType;
   annotations: ToolAnnotations;
+  /** Optional presentation shared by hosted and local MCP adapters. */
+  presentation?: 'creatives';
   handler: (input: never, ctx: ToolContext) => Promise<unknown>;
 }
 
@@ -42,6 +46,7 @@ export function defineTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   input: S;
   output?: z.ZodType;
   annotations?: ToolAnnotations;
+  presentation?: AnyToolDefinition['presentation'];
   handler: (input: z.infer<S>, ctx: ToolContext) => Promise<unknown>;
 }): AnyToolDefinition {
   const openWorldByDefault = !['core', 'mock', 'audit'].includes(def.namespace);

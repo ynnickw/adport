@@ -1,4 +1,6 @@
 import {
+  creativeStatusAction,
+  creativesOutput,
   AdportError,
   resolveDateRange,
   type Account,
@@ -45,6 +47,48 @@ export class GoogleAdsProvider implements AdProvider {
   private readonly discoveredLoginCustomerIds = new Map<string, string>();
 
   constructor(private readonly client: GoogleAdsRestClient) {}
+
+  async listAds(input: { account_id: string; campaign_id?: string; ad_group_id?: string; limit: number }) {
+    const cid = normalizeCustomerId(input.account_id);
+    const conditions = ["ad_group_ad.status != 'REMOVED'"];
+    if (input.campaign_id) conditions.push(`campaign.id = ${input.campaign_id}`);
+    if (input.ad_group_id) conditions.push(`ad_group.id = ${input.ad_group_id}`);
+    const rows = await this.client.search(cid,
+      `SELECT campaign.id, ad_group.id, ad_group_ad.ad.id, ad_group_ad.ad.name, ad_group_ad.ad.type, ad_group_ad.status, ad_group_ad.ad.final_urls, ad_group_ad.ad.responsive_search_ad.headlines, ad_group_ad.ad.responsive_search_ad.descriptions FROM ad_group_ad WHERE ${conditions.join(' AND ')} LIMIT ${input.limit + 1}`,
+      { maxRows: input.limit + 1 });
+    const textAssets = (value: unknown): string[] => Array.isArray(value)
+      ? value.flatMap(item => item && typeof item === 'object' && 'text' in item && typeof item.text === 'string' ? [item.text] : []) : [];
+    return creativesOutput.parse({
+      truncated: rows.length > input.limit,
+      creatives: rows.slice(0, input.limit).map(row => {
+        const groupAd = row.adGroupAd as { ad?: { id?: string; name?: string; type?: string; finalUrls?: string[]; responsiveSearchAd?: { headlines?: unknown[]; descriptions?: unknown[] } }; status?: string };
+        const ad = groupAd.ad;
+        if (!ad?.id) throw new AdportError('PROVIDER_ERROR', 'google: ad response is missing its identifier');
+        const adGroupId = String((row.adGroup as { id?: string })?.id ?? '');
+        if (!/^\d+$/.test(adGroupId)) throw new AdportError('PROVIDER_ERROR', 'google: ad response is missing its ad-group identifier');
+        const headlines = textAssets(ad.responsiveSearchAd?.headlines);
+        return {
+          id: ad.id, provider: this.id, account_id: cid, ad_group_id: adGroupId,
+          campaign_id: String((row.campaign as { id?: string })?.id ?? ''),
+          name: ad.name || headlines[0] || `Ad ${ad.id}`, type: ad.type ?? 'UNKNOWN', status: groupAd.status,
+          headlines, descriptions: textAssets(ad.responsiveSearchAd?.descriptions),
+          landing_urls: (ad.finalUrls ?? []).filter(url => { try { const parsed = new URL(url); return ['http:', 'https:'].includes(parsed.protocol) && !parsed.username && !parsed.password; } catch { return false; } }),
+          media: [],
+          actions: ['ENABLED', 'PAUSED'].includes(groupAd.status ?? '')
+            ? [creativeStatusAction('google_set_ad_status', { account_id: cid, ad_group_id: adGroupId, ad_id: ad.id }, groupAd.status!, ['ENABLED', 'PAUSED']),
+              ...(ad.type === 'RESPONSIVE_SEARCH_AD' ? [{
+                label: 'Edit ad copy', tool: 'google_update_responsive_search_ad', arguments: { account_id: cid, ad_group_id: adGroupId, ad_id: ad.id },
+                fields: [
+                  { key: 'headlines', label: 'Headlines (one per line)', type: 'text_list', value: headlines },
+                  { key: 'descriptions', label: 'Descriptions (one per line)', type: 'text_list', value: textAssets(ad.responsiveSearchAd?.descriptions) },
+                  { key: 'final_urls', label: 'Landing pages (one per line)', type: 'url_list', value: ad.finalUrls ?? [] },
+                ],
+              }] : []),
+            ] : [],
+        };
+      }),
+    });
+  }
 
   capabilities(): ProviderCapabilities {
     return { serverDryRun: true };
@@ -288,6 +332,10 @@ export class GoogleAdsProvider implements AdProvider {
         return this.planAddKeywords(cid, payload);
       case 'google_set_keyword_status':
         return this.planSetKeywordStatus(cid, payload);
+      case 'google_set_ad_status':
+        return this.planSetAdStatus(cid, payload);
+      case 'google_update_responsive_search_ad':
+        return this.planUpdateRsa(cid, payload);
       case 'google_remove_keywords':
         return this.planRemoveKeywords(cid, payload);
       case 'google_create_responsive_search_ad':
@@ -645,6 +693,77 @@ export class GoogleAdsProvider implements AdProvider {
           { validateOnly },
         );
         return (res.results ?? []).map((r) => r.resourceName ?? '');
+      },
+    };
+  }
+
+  private async planSetAdStatus(
+    cid: string,
+    payload: { ad_group_id: string; ad_id: string; status: 'ENABLED' | 'PAUSED' },
+  ): Promise<WritePlan> {
+    const resourceName = `customers/${cid}/adGroupAds/${payload.ad_group_id}~${payload.ad_id}`;
+    const rows = await this.client.search(cid,
+      `SELECT ad_group_ad.resource_name, ad_group_ad.status FROM ad_group_ad WHERE ad_group.id = ${payload.ad_group_id} AND ad_group_ad.ad.id = ${payload.ad_id} LIMIT 2`,
+      { maxRows: 2 });
+    const current = rows[0]?.adGroupAd as { resourceName?: string; status?: string } | undefined;
+    if (rows.length !== 1 || current?.resourceName !== resourceName || current.status === 'REMOVED') {
+      throw new AdportError('INVALID_INPUT', 'google: ad was not found in the selected account and ad group, or has been removed');
+    }
+    return {
+      summary: `Set ad ${payload.ad_id} status ${current.status ?? 'unknown'} → ${payload.status}`,
+      changes: [`~ ad ${payload.ad_id} status ${current.status ?? 'unknown'} → ${payload.status}`],
+      coercions: [],
+      budgetDeltas: [],
+      execute: async (validateOnly) => {
+        const result = await this.client.mutate(cid, 'adGroupAds', [
+          { update: { resourceName, status: payload.status }, updateMask: 'status' },
+        ], { validateOnly });
+        return (result.results ?? []).map(item => item.resourceName ?? resourceName);
+      },
+    };
+  }
+
+  private async planUpdateRsa(
+    cid: string,
+    payload: { ad_group_id: string; ad_id: string; headlines?: string[]; descriptions?: string[]; final_urls?: string[]; path1?: string; path2?: string },
+  ): Promise<WritePlan> {
+    type TextAsset = { text: string; pinnedField?: string };
+    type Ad = { id: string; type: string; finalUrls?: string[]; responsiveSearchAd?: { headlines?: TextAsset[]; descriptions?: TextAsset[]; path1?: string; path2?: string } };
+    const rows = await this.client.search(cid,
+      `SELECT ad_group_ad.resource_name, ad_group_ad.ad.id, ad_group_ad.ad.type, ad_group_ad.ad.final_urls, ad_group_ad.ad.responsive_search_ad.headlines, ad_group_ad.ad.responsive_search_ad.descriptions, ad_group_ad.ad.responsive_search_ad.path1, ad_group_ad.ad.responsive_search_ad.path2 FROM ad_group_ad WHERE ad_group.id = ${payload.ad_group_id} AND ad_group_ad.ad.id = ${payload.ad_id} AND ad_group_ad.status != 'REMOVED' LIMIT 2`,
+      { maxRows: 2 });
+    const groupAd = rows[0]?.adGroupAd as { resourceName?: string; ad?: Ad } | undefined;
+    if (rows.length !== 1 || groupAd?.resourceName !== `customers/${cid}/adGroupAds/${payload.ad_group_id}~${payload.ad_id}` || groupAd.ad?.type !== 'RESPONSIVE_SEARCH_AD') {
+      throw new AdportError('INVALID_INPUT', 'google: responsive search ad was not found in the selected account and ad group');
+    }
+    const current = groupAd.ad;
+    const update: Record<string, unknown> = { resourceName: `customers/${cid}/ads/${payload.ad_id}` };
+    const responsiveSearchAd: Record<string, unknown> = {};
+    const mask: string[] = [], changes: string[] = [];
+    for (const key of ['headlines', 'descriptions'] as const) {
+      if (payload[key] === undefined) continue;
+      const existing = current.responsiveSearchAd?.[key] ?? [];
+      responsiveSearchAd[key] = payload[key].map((text, index) => ({ text,
+        ...(existing[index]?.pinnedField && existing[index]!.pinnedField !== 'UNSPECIFIED' ? { pinnedField: existing[index]!.pinnedField } : {}),
+      }));
+      mask.push(`responsive_search_ad.${key}`);
+      changes.push(`~ ad ${payload.ad_id} ${key} ${JSON.stringify(existing.map(item => item.text))} → ${JSON.stringify(payload[key])}`);
+    }
+    for (const key of ['path1', 'path2'] as const) {
+      if (payload[key] === undefined) continue;
+      responsiveSearchAd[key] = payload[key]; mask.push(`responsive_search_ad.${key}`);
+      changes.push(`~ ad ${payload.ad_id} ${key} ${current.responsiveSearchAd?.[key] ?? '(unset)'} → ${payload[key] || '(cleared)'}`);
+    }
+    if (Object.keys(responsiveSearchAd).length) update.responsiveSearchAd = responsiveSearchAd;
+    if (payload.final_urls !== undefined) {
+      update.finalUrls = payload.final_urls; mask.push('final_urls');
+      changes.push(`~ ad ${payload.ad_id} final URLs ${JSON.stringify(current.finalUrls ?? [])} → ${JSON.stringify(payload.final_urls)}`);
+    }
+    return {
+      summary: `Update responsive search ad ${payload.ad_id} content`, changes, coercions: [], budgetDeltas: [],
+      execute: async validateOnly => {
+        const result = await this.client.mutate(cid, 'ads', [{ update, updateMask: mask.join(',') }], { validateOnly });
+        return (result.results ?? []).map(item => item.resourceName ?? String(update.resourceName));
       },
     };
   }

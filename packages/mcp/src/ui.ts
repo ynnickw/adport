@@ -1,7 +1,8 @@
 export const ADPORT_UI_URI = 'ui://adport/insight-card-v2.html';
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
+export const ADPORT_UI_RESOURCE_DOMAINS = ['https://*.fbcdn.net', 'https://*.fbsbx.com', 'https://*.googleusercontent.com', 'https://tpc.googlesyndication.com'];
 
-export type AdportView = 'accounts' | 'report' | 'operation' | 'insights';
+export type AdportView = 'accounts' | 'report' | 'operation' | 'insights' | 'creatives';
 
 const providerNames: Record<string, string> = {
   google: 'Google Ads',
@@ -44,10 +45,11 @@ export function toolInvocationLabels(view: AdportView): { invoking: string; invo
     // Descriptor labels cover both preview and apply; the card shows the actual result.
     case 'operation': return { invoking: 'Processing change…', invoked: 'Change result ready' };
     case 'insights': return { invoking: 'Reviewing opportunities…', invoked: 'Opportunities ready' };
+    case 'creatives': return { invoking: 'Loading creatives…', invoked: 'Creatives ready' };
   }
 }
 
-export function structuredResult(tool: string, view: AdportView, result: unknown, approval?: { arguments: Record<string, unknown> }): Record<string, unknown> {
+export function structuredResult(tool: string, view: AdportView, result: unknown, approval?: { arguments: Record<string, unknown> }, context?: { project_id: string }, capabilities?: { can_write: boolean }): Record<string, unknown> {
   const payload = result && typeof result === 'object' && !Array.isArray(result)
     ? result as Record<string, unknown>
     : { value: result };
@@ -58,13 +60,16 @@ export function structuredResult(tool: string, view: AdportView, result: unknown
       view,
       providerNames,
       ...(approval ? { approval } : {}),
+      ...(context ? { context } : {}),
+      ...(capabilities ? { capabilities } : {}),
     },
   };
 }
 
 /**
  * Self-contained MCP App. It uses the open MCP Apps postMessage protocol and
- * has no network dependencies, which keeps its review CSP intentionally empty.
+ * has no script/network dependencies. Media uses only the resource CSP supplied
+ * by the server; tool invocations always use the host bridge.
  */
 export const ADPORT_UI_HTML = String.raw`<!doctype html>
 <html lang="en">
@@ -159,6 +164,17 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     .empty { padding:26px 12px; text-align:center; color:var(--muted); font-size:12px }
     @media (max-width:620px) { .kpis { grid-template-columns:repeat(2,minmax(0,1fr)) }.top,.content { padding-left:12px; padding-right:12px } }
     @media (max-width:420px) { .bar-row { grid-template-columns:minmax(0,1fr) auto; gap:5px }.bar-name { grid-column:1/-1 }.bar-name > span:last-child { white-space:normal }.bars { gap:12px } }
+    .creative-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr)); gap:16px }
+    .creative-card { border:1px solid var(--line); border-radius:12px; padding:16px; min-width:0 }
+    .creative-copy { margin:16px 0; overflow-wrap:anywhere }
+    .creative-copy strong { display:block; margin:5px 0 }
+    .creative-copy p { margin:8px 0 }
+    .creative-media { display:grid; gap:8px; margin:14px 0 }
+    .creative-media img,.creative-media video { display:block; width:100%; max-height:360px; object-fit:contain; border-radius:8px; background:var(--soft) }
+    .creative-media audio { width:100% }
+    .creative-field { display:grid; gap:6px; margin:12px 0; font-size:13px }
+    .creative-field textarea,.creative-field select { box-sizing:border-box; width:100%; color:var(--ink); background:var(--paper); border:1px solid var(--line); border-radius:7px; padding:9px; font:inherit }
+    .creative-field textarea { min-height:76px; resize:vertical }
     @media (prefers-reduced-motion:reduce) { * { animation:none!important; transition:none!important } }
     :root[data-theme="dark"] { --ink:#f5f5f3;--muted:#aaa9ad;--faint:#a09fa5;--paper:#171717;--soft:#222220;--line:rgba(255,255,255,.11) }
     @media (prefers-color-scheme:dark) { :root:not([data-theme="light"]) { --ink:#f5f5f3;--muted:#aaa9ad;--faint:#a09fa5;--paper:#171717;--soft:#222220;--line:rgba(255,255,255,.11) } }
@@ -172,7 +188,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
   <script>
   (() => {
     const app = document.getElementById('app');
-    const state = { host: {}, result: null, reportGroup: null, reportMetric: 'spend', approving: false, approvalError: '' };
+    const state = { host: {}, result: null, reportGroup: null, reportMetric: 'spend', approving: false, approvalError: '', previewing: false, creativeError: '' };
     const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const arr = (value) => Array.isArray(value) ? value : [];
     const num = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
@@ -303,6 +319,73 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       button.addEventListener('click',event=>{if (event.detail===0 && !interacted && !button.disabled) complete();});
     }
     const pendingRequests=new Map();
+    async function callTool(tool,parameters) {
+      const requestId=id++;
+      return new Promise((resolve,reject)=>{
+        const timer=setTimeout(()=>{pendingRequests.delete(requestId);reject(new Error('The request could not be confirmed. Check the result in chat before retrying.'));},30000);
+        pendingRequests.set(requestId,{resolve,reject,timer});
+        if (typeof window.openai?.callTool==='function') {
+          Promise.resolve().then(()=>window.openai.callTool(tool,parameters)).then(result=>{
+            const request=pendingRequests.get(requestId);if (request) {clearTimeout(request.timer);pendingRequests.delete(requestId);request.resolve(result);}
+          },error=>{const request=pendingRequests.get(requestId);if (request) {clearTimeout(request.timer);pendingRequests.delete(requestId);request.reject(error);}});
+        } else send({jsonrpc:'2.0',id:requestId,method:'tools/call',params:{name:tool,arguments:parameters}});
+      });
+    }
+    function resultValue(result) {
+      if (result?.structuredContent) return result.structuredContent;
+      for (const item of arr(result?.content)) {if (item.type==='text') {try {return JSON.parse(item.text);} catch {}}}
+      return result;
+    }
+    function renderCreatives(data,meta) {
+      const creatives=arr(data.creatives);
+      const canWrite=meta.capabilities?.can_write!==false;
+      const safeMediaUrl=value=>{try {const parsed=new URL(value);return parsed.protocol==='https:'&&!parsed.username&&!parsed.password?value:null;} catch {return null;}};
+      const mediaView=creative=>'<div class="creative-media">'+arr(creative.media).map(media=>{
+        const src=safeMediaUrl(media.url);if (!src) return '';
+        if (media.type==='image') return '<img src="'+esc(src)+'" alt="'+esc(media.alt || creative.name)+'" loading="lazy" referrerpolicy="no-referrer">';
+        if (media.type==='video') return '<video src="'+esc(src)+'" controls preload="none" playsinline aria-label="'+esc(media.alt || creative.name)+'"></video>';
+        if (media.type==='audio') return '<audio src="'+esc(src)+'" controls preload="none" aria-label="'+esc(media.alt || creative.name)+'"></audio>';
+        return '';
+      }).join('')+'</div>';
+      const uploadUrl=safeMediaUrl(data.upload_page_url);
+      const fieldInput=(field,key)=>{
+        const label='<span>'+esc(field.label)+'</span>';
+        if (field.type==='select') return '<label class="creative-field">'+label+'<select data-field="'+key+'">'+arr(field.options).map(option=>'<option value="'+esc(option.value)+'" '+(option.value===field.value?'selected':'')+'>'+esc(option.label)+'</option>').join('')+'</select></label>';
+        const value=Array.isArray(field.value)?field.value.join('\n'):String(field.value ?? '');
+        return '<label class="creative-field">'+label+'<textarea data-field="'+key+'" '+(field.max_length?'maxlength="'+Number(field.max_length)+'"':'')+'>'+esc(value)+'</textarea></label>';
+      };
+      const body=notices(data)+(!canWrite&&creatives.some(creative=>arr(creative.actions).length)?'<p class="notice">Your connection can view these creatives. Editing access is required to change them.</p>':'')+(uploadUrl?'<p><button class="approve" type="button" data-open-library>'+(canWrite?'Upload media':'Open media library')+'</button></p>':'')+(state.creativeError?'<p class="notice" role="alert">'+esc(state.creativeError)+'</p>':'')+(creatives.length?'<div class="creative-grid">'+creatives.map((creative,ci)=>{
+        const status=statusOf(creative.status);
+        return '<article class="creative-card"><div class="identity">'+logo(creative.provider)+'<div class="identity-copy"><b>'+esc(creative.name)+'</b><span>'+esc(creative.type)+' · '+esc(creative.id)+'</span></div><span class="pill '+status.tone+'">'+esc(status.label)+'</span></div>'+mediaView(creative)+'<div class="creative-copy">'+arr(creative.headlines).map(text=>'<strong>'+esc(text)+'</strong>').join('')+arr(creative.descriptions).map(text=>'<p>'+esc(text)+'</p>').join('')+arr(creative.landing_urls).map(url=>'<p class="context">'+esc(url)+'</p>').join('')+'</div>'+(canWrite?arr(creative.actions):[]).map((action,ai)=>'<form data-creative="'+ci+'" data-action="'+ai+'">'+arr(action.fields).map((field,fi)=>fieldInput(field,fi)).join('')+'<button class="approve" type="submit" '+(state.previewing?'disabled':'')+'>'+(state.previewing?'Preparing preview…':'Preview '+esc(action.label).toLowerCase())+'</button></form>').join('')+'</article>';
+      }).join('')+'</div>':'<div class="empty">No creatives were returned for this selection.</div>');
+      app.innerHTML=chrome(body,creatives.length+' creative'+(creatives.length===1?'':'s'));
+      app.querySelector('[data-open-library]')?.addEventListener('click',()=>{
+        if (typeof window.openai?.openExternal==='function') window.openai.openExternal({href:uploadUrl});
+        else send({jsonrpc:'2.0',id:id++,method:'ui/open-link',params:{url:uploadUrl}});
+      });
+      app.querySelectorAll('[data-creative]').forEach(form=>form.addEventListener('submit',async event=>{
+        event.preventDefault();if (state.previewing) return;
+        const action=creatives[Number(form.dataset.creative)]?.actions?.[Number(form.dataset.action)];
+        if (!action || typeof action.tool!=='string') return;
+        const parameters={...action.arguments,...(meta.context?.project_id?{project_id:meta.context.project_id}:{})};
+        // Only server-declared editable fields can change. Every submission requests a fresh preview.
+        delete parameters.pending_operation_id;
+        try {
+          for (const [fi,field] of arr(action.fields).entries()) {
+            if (!/^[a-z][a-z0-9_]*$/.test(field.key) || ['account_id','project_id','pending_operation_id','constructor','prototype'].includes(field.key)) throw new Error('This field cannot be edited here.');
+            const value=form.querySelector('[data-field="'+fi+'"]').value;
+            if (field.type==='select' && !arr(field.options).some(option=>option.value===value)) throw new Error('Choose a supported value.');
+            parameters[field.key]=['text_list','url_list'].includes(field.type)?value.split('\n').map(v=>v.trim()).filter(Boolean):value;
+          }
+          state.previewing=true;state.creativeError='';form.querySelector('button').disabled=true;
+          const result=await callTool(action.tool,parameters),value=resultValue(result);
+          if (result?.isError || value?.error) throw new Error(value?.message || 'The preview could not be prepared.');
+          if (value?.status!=='pending_validation' || value?.applied!==false || !value?.pending_operation_id) throw new Error('A validated preview was not returned. Check the tool result in chat.');
+          state.previewing=false;
+          acceptResult({structuredContent:{...value,_adport:{...meta,...value._adport,tool:action.tool,view:'operation',approval:{arguments:parameters}}}});
+        } catch(error) {state.previewing=false;state.creativeError=error?.message || 'The preview could not be prepared.';render(state.result);}
+      }));
+    }
     async function approve(tool,args,pending) {
       if (state.approving || state.approvalError || !state.result) return;
       state.approving=true;state.approvalError='';render(state.result);
@@ -366,6 +449,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       if (meta.view === 'accounts') return renderAccounts(data,meta);
       if (meta.view === 'report') return renderReport(data,meta);
       if (meta.view === 'operation') return renderOperation(data,meta);
+      if (meta.view === 'creatives') return renderCreatives(data,meta);
       return renderInsights(data,meta);
     }
     function acceptResult(result) {

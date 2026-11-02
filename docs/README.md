@@ -6,6 +6,7 @@
 - [Provider connections](providers.md): local applications, credentials, and all 11 provider guides
 - [Reporting semantics](reporting-semantics.md): currencies, date ranges, attribution, and comparison limits
 - [Write safety and audit](write-safety.md): previews, approval binding, policy, and audit records
+- [Creative editing and private media](creative-media.md): visual tools, project uploads, immutable assets, and provider workflows
 - [Apple campaign setup](apple-campaign-setup.md)
 - [Agent plugin](../plugins/adport/README.md)
 - [Support](../SUPPORT.md) and [security reports](../SECURITY.md)

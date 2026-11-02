@@ -70,12 +70,16 @@ export class MetaGraphClient {
     return this.send<T>(path, { method: 'DELETE', ...(body.size > 0 ? { body } : {}) });
   }
 
-  private async send<T>(path: string, init: { method: string; body?: URLSearchParams }): Promise<T> {
+  async postMultipart<T>(path: string, body: FormData): Promise<T> {
+    return this.send<T>(path, { method: 'POST', body });
+  }
+
+  private async send<T>(path: string, init: { method: string; body?: URLSearchParams | FormData }): Promise<T> {
     const response = await this.fetchImpl(`${GRAPH_BASE}/${this.version}/${path}`, {
       method: init.method,
       headers: {
         authorization: `Bearer ${this.credentials.accessToken}`,
-        ...(init.body ? { 'content-type': 'application/x-www-form-urlencoded' } : {}),
+        ...(init.body instanceof URLSearchParams ? { 'content-type': 'application/x-www-form-urlencoded' } : {}),
       },
       body: init.body,
     });
@@ -97,6 +101,8 @@ export class MetaGraphClient {
         data = await this.get(path, params);
         first = false;
       } else if (url) {
+        const next = new URL(url);
+        if (next.origin !== GRAPH_BASE || next.username || next.password) throw new AdportError('PROVIDER_ERROR', 'Meta returned an invalid pagination destination.');
         const response = await this.fetchImpl(url, {
           headers: { authorization: `Bearer ${this.credentials.accessToken}` },
         });

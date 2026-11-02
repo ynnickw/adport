@@ -27,6 +27,7 @@ const PRIMARY_ITEMS: NavItem[] = [
   { label: 'Overview', href: '/dashboard', icon: icon.overview, exact: true },
   { label: 'AI assistants', href: '/dashboard/agents', icon: icon.agents },
   { label: 'Accounts', href: '/dashboard/accounts', icon: icon.accounts, paths: ['/dashboard/accounts', '/dashboard/connections'] },
+  { label: 'Creative media', href: '/dashboard/assets', icon: icon.reports },
   { label: 'Approvals', href: '/dashboard/approvals', icon: icon.approvals, paths: ['/dashboard/approvals', '/dashboard/audit'] },
 ];
 

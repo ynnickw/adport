@@ -1,5 +1,8 @@
 import {
   AdportError,
+  LocalMediaResolver,
+  type MediaResolver,
+  type MediaSource,
   resolveDateRange,
   type Account,
   type AdProvider,
@@ -14,9 +17,6 @@ import {
   type WritePreview,
   type WriteResult,
 } from '@adport/core';
-import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
-import { basename, extname } from 'node:path';
 import { AppleAdsClient } from './client.js';
 
 /** Apple Money amounts are strings in whole currency units. */
@@ -92,7 +92,7 @@ const APPLE_DELETE_PATHS = /^(?:adgroups|ads|assets|campaigns|creatives|keywords
 export class AppleAdsProvider implements AdProvider {
   readonly id = 'apple';
 
-  constructor(private readonly client: AppleAdsClient) {}
+  constructor(private readonly client: AppleAdsClient, private readonly media: MediaResolver = new LocalMediaResolver()) {}
 
   capabilities(): ProviderCapabilities {
     // The Platform API has no validate-only mode — previews remain client-side.
@@ -254,6 +254,32 @@ export class AppleAdsProvider implements AdProvider {
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
     const payload = op.payload as never;
     switch (op.tool) {
+      case 'apple_set_ad_group_status':
+      case 'apple_set_keyword_status':
+      case 'apple_set_ad_status': {
+        const entity = {
+          apple_set_ad_group_status: { path: 'adgroups', id: 'ad_group_id', label: 'ad group' },
+          apple_set_keyword_status: { path: 'keywords', id: 'keyword_id', label: 'keyword' },
+          apple_set_ad_status: { path: 'ads', id: 'ad_id', label: 'ad' },
+        }[op.tool];
+        const id = String(op.payload[entity.id]);
+        const status = String(op.payload.status);
+        const path = `${entity.path}/${id}`;
+        const response = await this.client.request<{ id?: number | string; name?: string; text?: string; status?: string; adAccountId?: number | string }>('GET', path, { adAccountId: op.accountId });
+        const current = response.result;
+        if (!current || String(current.id) !== id || (current.adAccountId !== undefined && String(current.adAccountId) !== op.accountId)) {
+          throw new AdportError('INVALID_INPUT', `apple: ${entity.label} was not found in the selected ad account`);
+        }
+        return {
+          summary: `Set ${entity.label} "${current.name ?? current.text ?? id}" status ${current.status ?? 'unknown'} → ${status}`,
+          changes: [`~ ${entity.label} ${id} status ${current.status ?? 'unknown'} → ${status}`],
+          coercions: [], budgetDeltas: [],
+          execute: async () => {
+            await this.client.request('PUT', path, { adAccountId: op.accountId, body: { status } });
+            return [id];
+          },
+        };
+      }
       case 'apple_create_keywords': {
         const p = op.payload as { ad_group_id: string; keywords: Array<{ text: string; match_type: string; bid?: number; currency?: string; status?: string }> };
         return this.planApiCreate(op.accountId, { path: 'keywords/bulk-create', body: {
@@ -598,29 +624,22 @@ export class AppleAdsProvider implements AdProvider {
   private async planUploadAsset(
     adAccountId: string,
     payload: {
-      file_path: string;
+      file_path?: string;
+      media_id?: string;
       expected_sha256: string;
       promoted_object_id: string;
       promoted_object_type: 'BUSINESS_BRAND';
     },
   ): Promise<WritePlan> {
-    const file = await readFile(payload.file_path);
-    const actualSha256 = createHash('sha256').update(file).digest('hex');
-    if (actualSha256 !== payload.expected_sha256.toLowerCase()) {
-      throw new AdportError(
-        'INVALID_INPUT',
-        `apple: asset SHA-256 mismatch for ${payload.file_path}; expected ${payload.expected_sha256}, got ${actualSha256}`,
-      );
-    }
-    const contentType = assetContentType(payload.file_path);
+    const file = await this.media.read(payload as MediaSource, { maxBytes: 20 * 1024 * 1024, contentTypes: ['image/png', 'image/jpeg', 'image/heic'] });
     return {
-      summary: `Upload Apple Ads asset ${basename(payload.file_path)} (${file.byteLength} bytes)`,
-      changes: [`+ asset sha256=${actualSha256} promotedObject=${payload.promoted_object_id}`],
+      summary: `Upload Apple Ads asset ${file.name} (${file.bytes.byteLength} bytes)`,
+      changes: [`+ asset sha256=${file.sha256} promotedObject=${payload.promoted_object_id}`],
       coercions: [],
       budgetDeltas: [],
       execute: async () => {
         const form = new FormData();
-        form.append('file', new Blob([file], { type: contentType }), basename(payload.file_path));
+        form.append('file', new Blob([file.bytes], { type: file.contentType }), file.name);
         form.append('promotedObjectId', payload.promoted_object_id);
         form.append('promotedObjectType', payload.promoted_object_type);
         const envelope = await this.client.request<unknown>('POST', 'assets/upload', { adAccountId, form });
@@ -793,17 +812,6 @@ export class AppleAdsProvider implements AdProvider {
         return [payload.shared_budget_id];
       },
     };
-  }
-}
-
-function assetContentType(path: string): string {
-  switch (extname(path).toLowerCase()) {
-    case '.png': return 'image/png';
-    case '.jpg':
-    case '.jpeg': return 'image/jpeg';
-    case '.heic': return 'image/heic';
-    default:
-      throw new AdportError('INVALID_INPUT', 'apple: asset file must be PNG, JPG/JPEG, or HEIC');
   }
 }
 

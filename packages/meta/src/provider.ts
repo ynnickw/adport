@@ -13,9 +13,11 @@ import {
   type WriteOperation,
   type WritePreview,
   type WriteResult,
+  type MediaResolver,
 } from '@adport/core';
 import { ACCOUNT_STATUS, MetaGraphClient, normalizeAccountId } from './client.js';
 import { campaignOutput } from './outputs.js';
+import { MetaCreativeService } from './creatives.js';
 
 /** Meta budgets are minor currency units (cents); the policy engine speaks micros. */
 export const CENTS_TO_MICROS = 10_000;
@@ -76,7 +78,11 @@ interface WritePlan {
 export class MetaAdsProvider implements AdProvider {
   readonly id = 'meta';
 
-  constructor(private readonly client: MetaGraphClient, private readonly selectedPageIds?: ReadonlySet<string>) {}
+  readonly creatives: MetaCreativeService;
+
+  constructor(private readonly client: MetaGraphClient, private readonly selectedPageIds?: ReadonlySet<string>, media?: MediaResolver) {
+    this.creatives = new MetaCreativeService(client, () => this.listPages(), media);
+  }
 
   capabilities(): ProviderCapabilities {
     return { serverDryRun: true };
@@ -322,15 +328,15 @@ export class MetaAdsProvider implements AdProvider {
       case 'meta_create_campaign':
         return this.planCreateCampaign(act, payload, guard);
       case 'meta_set_campaign_status':
-        return this.planSetStatus(payload, 'campaign');
+        return this.planSetStatus(act, payload, 'campaign');
       case 'meta_set_budget':
-        return this.planSetBudget(payload);
+        return this.planSetBudget(act, payload);
       case 'meta_create_ad_set':
         return this.planCreateAdSet(act, payload, guard);
       case 'meta_set_ad_set_status':
-        return this.planSetStatus(payload, 'ad set');
+        return this.planSetStatus(act, payload, 'ad set');
       case 'meta_set_lifetime_budget':
-        return this.planSetLifetimeBudget(payload);
+        return this.planSetLifetimeBudget(act, payload);
       case 'meta_api_create':
         return this.planApiCreate(act, payload, guard);
       case 'meta_api_update':
@@ -338,14 +344,15 @@ export class MetaAdsProvider implements AdProvider {
       case 'meta_api_delete':
         return this.planApiDelete(act, payload);
       default:
-        throw new AdportError('PROVIDER_ERROR', `meta: unsupported write tool ${op.tool}`);
+        return this.creatives.plan(op, guard);
     }
   }
 
-  private async planSetLifetimeBudget(payload: { object_id: string; lifetime_budget_cents: number }): Promise<WritePlan> {
-    const current = await this.client.get<{ name?: string; lifetime_budget?: string }>(payload.object_id, {
-      fields: 'name,lifetime_budget',
+  private async planSetLifetimeBudget(act: string, payload: { object_id: string; lifetime_budget_cents: number }): Promise<WritePlan> {
+    const current = await this.client.get<{ account_id?: string; name?: string; lifetime_budget?: string }>(payload.object_id, {
+      fields: 'account_id,name,lifetime_budget',
     });
+    if (normalizeAccountId(current.account_id ?? '') !== act) throw new AdportError('INVALID_INPUT', 'Meta object does not belong to the selected ad account.');
     const fromCents = current.lifetime_budget !== undefined ? Number(current.lifetime_budget) : undefined;
     if (fromCents === undefined) {
       throw new AdportError('PROVIDER_ERROR', `meta: object ${payload.object_id} has no lifetime_budget`);
@@ -502,14 +509,16 @@ export class MetaAdsProvider implements AdProvider {
   }
 
   private async planSetStatus(
+    act: string,
     payload: { object_id?: string; campaign_id?: string; ad_set_id?: string; status: 'ACTIVE' | 'PAUSED' },
     kind: string,
   ): Promise<WritePlan> {
     const objectId = payload.campaign_id ?? payload.ad_set_id ?? payload.object_id;
     if (!objectId) throw new AdportError('INVALID_INPUT', `meta: missing id for ${kind} status change`);
-    const current = await this.client.get<{ name?: string; status?: string }>(objectId, {
-      fields: 'name,status',
+    const current = await this.client.get<{ account_id?: string; name?: string; status?: string }>(objectId, {
+      fields: 'account_id,name,status',
     });
+    if (normalizeAccountId(current.account_id ?? '') !== act) throw new AdportError('INVALID_INPUT', 'Meta object does not belong to the selected ad account.');
     return {
       summary: `Set ${kind} "${current.name ?? objectId}" status ${current.status ?? '?'} → ${payload.status}`,
       changes: [`~ ${kind} ${objectId} status ${current.status ?? '?'} → ${payload.status}`],
@@ -526,10 +535,11 @@ export class MetaAdsProvider implements AdProvider {
   }
 
   /** Works for both campaigns (CBO) and ad sets — daily_budget lives on either. */
-  private async planSetBudget(payload: { object_id: string; daily_budget_cents: number }): Promise<WritePlan> {
-    const current = await this.client.get<{ name?: string; daily_budget?: string }>(payload.object_id, {
-      fields: 'name,daily_budget',
+  private async planSetBudget(act: string, payload: { object_id: string; daily_budget_cents: number }): Promise<WritePlan> {
+    const current = await this.client.get<{ account_id?: string; name?: string; daily_budget?: string }>(payload.object_id, {
+      fields: 'account_id,name,daily_budget',
     });
+    if (normalizeAccountId(current.account_id ?? '') !== act) throw new AdportError('INVALID_INPUT', 'Meta object does not belong to the selected ad account.');
     const fromCents = current.daily_budget !== undefined ? Number(current.daily_budget) : undefined;
     if (fromCents === undefined) {
       throw new AdportError(

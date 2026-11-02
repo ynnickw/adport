@@ -10,7 +10,8 @@ export function buildContentSecurityPolicy(supabaseOrigin: string, allowOAuthRed
     "base-uri 'self'",
     "object-src 'none'",
     "frame-ancestors 'none'",
-    "img-src 'self' data:",
+    `img-src 'self' data: ${supabaseOrigin}`,
+    `media-src 'self' ${supabaseOrigin}`,
     "font-src 'self' data:",
     "style-src 'self' 'unsafe-inline'",
     // React development mode needs eval for source-mapped stacks; never allowed in production.

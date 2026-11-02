@@ -28,6 +28,64 @@ const tokenRoute = {
   reply: { access_token: 'access-token', expires_in: 3600 },
 };
 
+// Official v25 AdGroupAdOperation and ad_group_ad fields, checked 2026-11-03.
+describe('ad activation', () => {
+  const resourceName = 'customers/1234567890/adGroupAds/22~33';
+  it('updates RSA copy through AdService with exact masks and preserves pinned assets', async () => {
+    const { impl, calls } = fakeFetch([tokenRoute,
+      { match: url => url.includes('googleAds:search'), reply: { results: [{ adGroupAd: { resourceName, ad: { id: '33', type: 'RESPONSIVE_SEARCH_AD', finalUrls: ['https://old.example'], responsiveSearchAd: { headlines: [{ text: 'Old', pinnedField: 'HEADLINE_1' }, { text: 'Two' }, { text: 'Three' }], descriptions: [{ text: 'Description one' }, { text: 'Description two' }] } } } }] } },
+      { match: url => url.includes('/ads:mutate'), reply: { results: [{ resourceName: 'customers/1234567890/ads/33' }] } },
+    ]);
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
+    await provider.previewWrite({ tool: 'google_update_responsive_search_ad', provider: 'google', accountId: '1234567890', kind: 'update', payload: { ad_group_id: '22', ad_id: '33', headlines: ['New', 'Two', 'Three'] } }, { forcePausedCreation: true });
+    const body = JSON.parse(String(calls.at(-1)!.init.body));
+    expect(body).toEqual({ validateOnly: true, partialFailure: false, operations: [{ update: { resourceName: 'customers/1234567890/ads/33', responsiveSearchAd: { headlines: [{ text: 'New', pinnedField: 'HEADLINE_1' }, { text: 'Two' }, { text: 'Three' }] } }, updateMask: 'responsive_search_ad.headlines' }] });
+    expect(body.operations[0].update).not.toHaveProperty('status');
+    expect(body.operations[0].update).not.toHaveProperty('finalUrls');
+  });
+  it('reads actual RSA content and emits a status action bound to the returned account and ad group', async () => {
+    const { impl, calls } = fakeFetch([tokenRoute,
+      { match: url => url.includes('googleAds:search'), reply: { results: [{ campaign: { id: '11' }, adGroup: { id: '22' }, adGroupAd: {
+        status: 'PAUSED', ad: { id: '33', type: 'RESPONSIVE_SEARCH_AD', finalUrls: ['https://example.com'],
+          responsiveSearchAd: { headlines: [{ text: 'Headline' }], descriptions: [{ text: 'Description' }] } },
+      } }] } },
+    ]);
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
+    const result = await provider.listAds({ account_id: '1234567890', ad_group_id: '22', limit: 10 });
+    expect(result.creatives[0]).toMatchObject({ id: '33', name: 'Headline', headlines: ['Headline'], descriptions: ['Description'],
+      actions: expect.arrayContaining([expect.objectContaining({ tool: 'google_set_ad_status', arguments: { account_id: '1234567890', ad_group_id: '22', ad_id: '33' } })]),
+    });
+    expect(result.truncated).toBe(false);
+    const query = JSON.parse(String(calls.at(-1)!.init.body)).query;
+    expect(query).toContain('ad_group.id = 22');
+    expect(calls.some(c => c.url.includes(':mutate'))).toBe(false);
+  });
+  it('validates an exact account/ad-group ad status update before applying it', async () => {
+    const { impl, calls } = fakeFetch([tokenRoute,
+      { match: url => url.includes('googleAds:search'), reply: { results: [{ adGroupAd: { resourceName, status: 'PAUSED' } }] } },
+      { match: url => url.includes('adGroupAds:mutate'), reply: { results: [{ resourceName }] } },
+    ]);
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
+    const op = { tool: 'google_set_ad_status', provider: 'google', accountId: '1234567890', kind: 'update' as const,
+      payload: { ad_group_id: '22', ad_id: '33', status: 'ENABLED' } };
+    expect(await provider.previewWrite(op, { forcePausedCreation: true })).toMatchObject({ serverValidated: true, changes: ['~ ad 33 status PAUSED → ENABLED'] });
+    let mutations = calls.filter(c => c.url.includes('adGroupAds:mutate'));
+    expect(JSON.parse(String(mutations[0]!.init.body))).toEqual({ operations: [{ update: { resourceName, status: 'ENABLED' }, updateMask: 'status' }], validateOnly: true, partialFailure: false });
+    expect(await provider.applyWrite(op, { forcePausedCreation: true })).toEqual({ applied: true, resourceIds: [resourceName] });
+    mutations = calls.filter(c => c.url.includes('adGroupAds:mutate'));
+    expect(JSON.parse(String(mutations[1]!.init.body)).validateOnly).toBe(false);
+    expect(calls.filter(c => c.url.includes('googleAds:search'))).toHaveLength(2);
+  });
+  it('rejects a missing or differently scoped ad before mutation', async () => {
+    const { impl, calls } = fakeFetch([tokenRoute,
+      { match: url => url.includes('googleAds:search'), reply: { results: [{ adGroupAd: { resourceName: 'customers/1234567890/adGroupAds/99~33', status: 'PAUSED' } }] } },
+    ]);
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
+    await expect(provider.previewWrite({ tool: 'google_set_ad_status', provider: 'google', accountId: '1234567890', kind: 'update', payload: { ad_group_id: '22', ad_id: '33', status: 'ENABLED' } }, { forcePausedCreation: true })).rejects.toThrow('selected account and ad group');
+    expect(calls.some(c => c.url.includes(':mutate'))).toBe(false);
+  });
+});
+
 describe('normalizeCustomerId', () => {
   it('strips dashes and prefixes', () => {
     expect(normalizeCustomerId('123-456-7890')).toBe('1234567890');

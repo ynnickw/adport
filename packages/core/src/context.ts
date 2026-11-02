@@ -7,6 +7,8 @@ import { builtinTools } from './tools/builtin.js';
 import { ToolRegistry, type AnyToolDefinition, type ToolContext } from './tools/registry.js';
 import { MockProvider, mockTools } from './testing/mock-provider.js';
 import type { FindingsRepository } from './audit/store.js';
+import { mediaTools } from './tools/media.js';
+import type { MediaLibrary } from './media.js';
 
 export interface ProviderModule {
   provider: AdProvider;
@@ -28,6 +30,7 @@ export interface CreateContextOptions {
   authorizeToolCall?: ToolContext['authorizeToolCall'];
   /** Hosted runtimes inject tenant-scoped finding persistence. */
   findings?: FindingsRepository;
+  media?: MediaLibrary;
 }
 
 export interface AdportRuntime {
@@ -49,6 +52,7 @@ export async function createContext(options: CreateContextOptions = {}): Promise
 
   const registry = new ToolRegistry();
   registry.register(builtinTools());
+  registry.register(mediaTools());
   registry.register(auditTools());
 
   for (const module of modules) {
@@ -66,6 +70,7 @@ export async function createContext(options: CreateContextOptions = {}): Promise
     credentials,
     authorizeToolCall: options.authorizeToolCall,
     findings: options.findings,
+    media: options.media,
   };
   ctx.registry = registry;
   return { ctx, registry, policySource: source };

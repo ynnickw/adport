@@ -33,7 +33,7 @@ export function withProjectRouting(runtime: AdportRuntime, router: ProjectRouter
   for (const tool of runtime.registry.list()) {
     registry.register({
       ...tool,
-      input: tool.input.extend({
+      input: tool.input.safeExtend({
         project_id: z.string().uuid().optional().describe('Project id from projects_list. Required when this connection has access to multiple projects.'),
       }),
       async handler(input) {

@@ -30,6 +30,7 @@ import {
 import type { ProviderCredentialMap, TenantPrincipal } from './types';
 import { isSyntheticReviewer } from './synthetic-reviewer';
 import { HttpError } from '@/lib/http';
+import { ProjectMediaLibrary } from './media';
 import { instrumentCloudTools } from './analytics-tools';
 
 export interface TenantRuntimeOptions {
@@ -48,6 +49,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     throw new HttpError('This demo workspace has been retired. Reconnect with your real Adport account to use connected provider accounts.', 403);
   }
   const enforceAccountScope = options.enforceAccountScope ?? true;
+  const media = new ProjectMediaLibrary(principal);
   const [policy, credentials, enabledAccountIds, inventory] = await Promise.all([
     getOrganizationPolicy(principal.organizationId),
     loadProviderCredentials(principal.organizationId, !enforceAccountScope),
@@ -106,7 +108,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
   }
   if (credentials.meta) {
     const provider = new MetaAdsProvider(new MetaGraphClient(hydrateMeta(credentials.meta)),
-      enforceAccountScope ? new Set(credentials.meta.selectedPageIds ?? []) : undefined);
+      enforceAccountScope ? new Set(credentials.meta.selectedPageIds ?? []) : undefined, media);
     modules.push({ provider: scopeProvider(provider), tools: metaTools(provider) });
   }
   if (credentials.tiktok) {
@@ -115,7 +117,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     modules.push({ provider: scopeProvider(provider), tools: tiktokTools(provider) });
   }
   if (credentials.apple) {
-    const provider = new AppleAdsProvider(new AppleAdsClient(hydrateApple(credentials.apple)));
+    const provider = new AppleAdsProvider(new AppleAdsClient(hydrateApple(credentials.apple)), media);
     modules.push({ provider: scopeProvider(provider), tools: appleTools(provider) });
   }
   if (credentials.microsoft) {
@@ -152,6 +154,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
       authorizeAccounts(tool, input);
     } : undefined,
     findings: new PostgresFindingsStore(principal.organizationId),
+    media,
   });
   if (options.surface === 'mcp') completeMcpCatalog(runtime);
   return enforceAccountScope ? instrumentCloudTools(runtime, principal, options.surface ?? 'dashboard') : runtime;
