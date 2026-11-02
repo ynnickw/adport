@@ -6,6 +6,8 @@ import {
 } from '@adport/core';
 import { SpotifyAdsClient } from './client.js';
 import { SpotifyCreativeService } from './creatives.js';
+import { SpotifyManagementService } from './management.js';
+import { managementWriteNames } from './management-tools.js';
 import {
   accountSchema, adSetSchema, businessSchema, campaignSchema, createDraftSchema,
   draftSchema, pagingSchema, reportSchema, setBudgetSchema, setDeliverySchema,
@@ -23,7 +25,8 @@ const DERIVED = {
 export class SpotifyAdsProvider implements AdProvider {
   readonly id = 'spotify';
   readonly creatives: SpotifyCreativeService;
-  constructor(private readonly client: SpotifyAdsClient, media: MediaResolver = new LocalMediaResolver()) { this.creatives = new SpotifyCreativeService(client, media); }
+  readonly management: SpotifyManagementService;
+  constructor(private readonly client: SpotifyAdsClient, media: MediaResolver = new LocalMediaResolver()) { this.creatives = new SpotifyCreativeService(client, media); this.management = new SpotifyManagementService(client, this.creatives); }
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions {
     return { pauseCampaign: (accountId, campaignId) => ({ tool: 'spotify_set_campaign_status', input: { account_id: accountId, campaign_id: campaignId, status: 'PAUSED' } }) };
@@ -169,7 +172,7 @@ export class SpotifyAdsProvider implements AdProvider {
         },
       };
     }
-    return this.creatives.plan(op, guard);
+    return managementWriteNames.has(op.tool) ? this.management.plan(op) : this.creatives.plan(op, guard);
   }
 }
 

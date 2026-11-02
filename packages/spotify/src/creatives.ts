@@ -43,13 +43,26 @@ export class SpotifyCreativeService {
     if (row.id !== id) throw new AdportError('PROVIDER_ERROR', 'spotify: response ID mismatch');
     this.checkAccount(account, row);
     if (entity === 'campaigns') {
-      if (row.ad_account_id !== account) throw new AdportError('PROVIDER_ERROR', 'spotify: campaign account mismatch');
+      if (draft && row.ad_account_id !== account) throw new AdportError('PROVIDER_ERROR', 'spotify: campaign account mismatch');
+      if (!draft && row.ad_account_id == null) await this.verifyPublishedCampaign(account, id);
     }
     return row;
   }
 
   private checkAccount(account: string, row: Row) {
-    if (row.ad_account_id !== undefined && row.ad_account_id !== account) throw new AdportError('PROVIDER_ERROR', 'spotify: resource belongs to another account');
+    if (row.ad_account_id != null && row.ad_account_id !== account) throw new AdportError('PROVIDER_ERROR', 'spotify: resource belongs to another account');
+  }
+
+  private async verifyPublishedCampaign(account: string, id: string) {
+    // Live campaign GET/list responses can have ad_account_id:null. Prove
+    // membership in the selected account's paged collection instead.
+    for (let page = 0, offset = 0; page < 1000; page++) {
+      const data = await this.page({ account_id: account, limit: 50, offset }, 'campaigns', 'campaigns', { sort_field: 'ID', sort_direction: 'ASC' });
+      if ((data.campaigns as Row[]).some(campaign => campaign.id === id)) return;
+      if (!data.truncated) break;
+      offset = data.next_offset!;
+    }
+    throw new AdportError('INVALID_INPUT', 'spotify: campaign is not present in the selected account’s published campaign list');
   }
 
   async assets(input: Page & { asset_types?: string[]; asset_statuses?: string[]; name?: string }) {
@@ -214,10 +227,11 @@ export class SpotifyCreativeService {
   }
 
   private async publish(op: WriteOperation, guard: WriteGuard): Promise<Plan> {
+    if (guard.forcePausedCreation) throw new AdportError('POLICY_VIOLATION', 'spotify: publication is blocked by paused_creation. The live PUBLISH endpoint activates even a PAUSED draft; Spotify cannot guarantee paused publication. Keep this hierarchy as a draft.');
     const input = publishDraft.parse(op.payload), account = op.accountId;
+    if (!input.acknowledge_active_publication) throw new AdportError('INVALID_INPUT', 'spotify: publishing activates the campaign. Explicit acknowledge_active_publication=true is required.');
     const campaign = await this.get(account, 'campaigns', input.draft_campaign_id);
     this.version(campaign, input.draft_hierarchy_version);
-    if (guard.forcePausedCreation && campaign.status !== 'PAUSED') throw new AdportError('POLICY_VIOLATION', 'spotify: paused_creation requires a PAUSED draft campaign before publishing. Update its draft status, then prepare a new publish preview.');
     const groups = await this.allDrafts(account, 'ad_sets', campaign.id);
     const budgetDeltas: WritePreview['budgetDeltas'] = [];
     for (const group of groups) {
@@ -226,13 +240,14 @@ export class SpotifyCreativeService {
       try { current = await this.get(account, 'ad_sets', String(group.id), false); } catch (error) { if (!isNotFound(error)) throw error; }
       monetaryDeltas(group, current, `publish ad set ${group.id}`, budgetDeltas);
     }
-    return { summary: `Publish Spotify draft campaign ${campaign.name ?? campaign.id} (${campaign.status})`, changes: [`PUBLISH hierarchy version ${input.draft_hierarchy_version}; ${groups.length} draft ad sets. Campaign status remains ${campaign.status}.`], coercions: [], budgetDeltas, execute: async () => {
+    return { summary: `Publish Spotify campaign ${campaign.name ?? campaign.id} as ACTIVE`, changes: [`PUBLISH hierarchy version ${input.draft_hierarchy_version}; ${groups.length} draft ad sets. Spotify changes campaign status ${campaign.status} → ACTIVE, regardless of the draft's paused state.`], coercions: [], budgetDeltas, execute: async () => {
       const validation = await this.validate(account, campaign.id, input.draft_hierarchy_version);
       assertValidation(validation);
       const result = await this.client.mutate(`${this.base(account)}/drafts/campaigns/${campaign.id}`, 'POST', { action: 'PUBLISH', draft_hierarchy_version: input.draft_hierarchy_version }, object);
       assertValidation(result);
       const published = record(result.campaign);
-      if (published.id !== campaign.id || published.ad_account_id !== account || published.status !== campaign.status) throw new AdportError('PROVIDER_ERROR', 'spotify: publish receipt does not confirm the expected campaign/account/status. Inspect before retrying.');
+      if (published.id !== campaign.id || (published.ad_account_id != null && published.ad_account_id !== account) || published.status !== 'ACTIVE') throw new AdportError('PROVIDER_ERROR', 'spotify: publish receipt does not confirm the expected campaign/account/status. Inspect before retrying.', { resource_ids: spotifyId.safeParse(published.id).success ? [published.id] : [], observed_status: published.status });
+      if (published.ad_account_id == null) await this.verifyPublishedCampaign(account, campaign.id);
       return [campaign.id];
     } };
   }

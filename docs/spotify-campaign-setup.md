@@ -15,7 +15,11 @@ Spotify's draft workflow stages changes without altering published delivery. All
 
 Fetch the current **campaign** `draft_hierarchy_version` after editing any child. `spotify_validate_draft` validates that exact version without publishing. Spotify may report invalid/incomplete hierarchies as HTTP400; bounded native messages, error codes and trace IDs are returned with credentials redacted.
 
-`spotify_publish_draft` is a separate preview/apply operation. It rejects a changed version, checks current and proposed child budgets/bids, then validates before sending `PUBLISH`. With `paused_creation` enabled, the draft campaign must already be `PAUSED`. Publication does not automatically activate it. A server validation error prevents the publish call.
+The live `PUBLISH` endpoint activates campaigns **even when their draft status is PAUSED**. `spotify_publish_draft` therefore rejects publication before any API call while `paused_creation` is enabled. Keep the validated hierarchy as a draft under this policy. Adport never disables the policy to publish.
+
+When an operator has independently chosen a policy permitting active creation, publication additionally requires `acknowledge_active_publication=true`. Its separate preview/apply pair shows the ACTIVE transition, binds the exact hierarchy version, checks current/proposed child money and validates before publishing. This is an active launch operation.
+
+The live campaign status PATCH accepts only `ACTIVE` and `PAUSED`; the broader response enum includes `ARCHIVED`, but that update was rejected in real verification.
 
 ## Media and discovery
 
@@ -29,6 +33,14 @@ Use `spotify_ad_categories`, `spotify_targeting_options`, `spotify_geo_targets`,
 
 Delete **ad drafts first**, then ad-set drafts, then the campaign draft. `spotify_delete_draft_ads` and `spotify_delete_draft_ad_sets` expose the native atomic batch endpoints. Parent deletion is refused while child ad drafts remain. During live verification, deleting a campaign first left a readable ad draft whose individual and batch deletes failed with `Campaign not found for Ad Draft`. The guard prevents creating that condition in subsequent workflows; it cannot repair an existing provider orphan.
 
+## Audiences, insights and CSV exports
+
+`spotify_audiences`, `spotify_get_audience` and `spotify_audience_datasets` read existing sources. `spotify_create_audience` supports web events from eligible account datasets or engagement with account-owned campaigns/ad sets. `spotify_create_lookalike_audience` verifies the existing seed audience. Metadata edits preserve the native audience type; deletion checks the provider's removed-record count. These tools do not upload customer lists or attach an audience to ad targeting.
+
+`spotify_insight_report` requires exactly one published, account-owned `ad_set_id`, matching the live endpoint's restriction. The broader entity types in the published schema were rejected. Spotify additionally requires more than500 delivered impressions; the QA ad set correctly returned HTTP422 at that eligibility check. Returned native fields, including omitted/suppressed conversions, are preserved. `spotify_change_history` reads the provider's rolling180-day account history.
+
+`spotify_create_report` submits an asynchronous CSV job through preview/apply. Use `spotify_report_status` for its status and native download URL; Adport does not fetch arbitrary report URLs. Submission is separate from completed export generation. A live QA export was accepted and remained PROCESSING during subsequent checks.
+
 ## Verification limits
 
-Real-account verification covered draft campaign/ad-set/ad creation and editing, gallery copy, category/targeting discovery, SHA-bound image/audio uploads and asset processing reads. Contract tests cover native chunk fields, hierarchy-version rejection, failed-validation publication prevention, budget caps, account ownership and shared approval tokens. Complete publication, video upload, advanced audience/measurement workflows and live host widgets require their own verification; these are not implied by tool availability.
+Real-account verification covered draft hierarchy creation/editing, complete audio hierarchy validation, gallery copy, category/targeting discovery and SHA-bound image/audio uploads. A publication test exposed the forced ACTIVE transition; the test campaign was immediately paused and confirmed PAUSED/OFF. It remains paused because the API rejected archiving. Contract tests enforce default-policy publication rejection, explicit active-launch acknowledgement, hierarchy versions, failed-validation prevention, budget caps, account ownership and shared approval tokens. Provider video upload, advanced measurement and live host widgets require their own verification.

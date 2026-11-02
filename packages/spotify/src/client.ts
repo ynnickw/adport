@@ -90,7 +90,7 @@ export class SpotifyAdsClient {
       throw new AdportError('PROVIDER_ERROR', `spotify: HTTP ${response.status}.${advice}${messages}`, details);
     }
     const parsed = schema.safeParse(response.status === 204 ? undefined : await response.json());
-    if (!parsed.success) throw new AdportError('PROVIDER_ERROR', 'spotify: malformed API response');
+    if (!parsed.success) throw new AdportError('PROVIDER_ERROR', 'spotify: malformed API response', { api_path: path, response_issues: parsed.error.issues.map(issue => ({ path: issue.path, code: issue.code })) });
     return parsed.data;
   }
 

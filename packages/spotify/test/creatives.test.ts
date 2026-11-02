@@ -130,44 +130,50 @@ describe('Spotify validation and publication', () => {
   function publisher(options: { status?: string; version?: number; errors?: unknown[] } = {}) {
     return fixture(call => {
       if (call.url.pathname.endsWith(`/drafts/campaigns/${CAMPAIGN}`)) {
-        if (call.init.method === 'POST') return { campaign, validation_errors: options.errors ?? [] };
+        if (call.init.method === 'POST') return { campaign: { ...campaign, status: 'ACTIVE' }, validation_errors: options.errors ?? [] };
         return { ...campaign, status: options.status ?? 'PAUSED', draft_hierarchy_version: options.version ?? 7 };
       }
       if (call.url.pathname.endsWith('/drafts/ad_sets')) return { paging: { offset: 0, total_results: 1 }, ad_set_drafts: [group] };
       if (call.url.pathname.endsWith(`/ad_sets/${GROUP}`)) return Response.json({}, { status: 404 });
     });
   }
-  const operation = op('spotify_publish_draft', { draft_campaign_id: CAMPAIGN, draft_hierarchy_version: 7 }, 'create');
-  it('includes the entire child budget/bid and validates the exact approved version before publishing PAUSED', async () => {
+  const activeGuard = { forcePausedCreation: false };
+  const operation = op('spotify_publish_draft', { draft_campaign_id: CAMPAIGN, draft_hierarchy_version: 7, acknowledge_active_publication: true }, 'create');
+  it('checks all child money and the exact approved version when policy explicitly permits active publication', async () => {
     const { provider, calls } = publisher();
-    expect((await provider.previewWrite(operation, guard)).budgetDeltas.map(d => d.toMicros)).toEqual([100_000_000, 10_000_000]);
+    expect((await provider.previewWrite(operation, activeGuard)).budgetDeltas.map(d => d.toMicros)).toEqual([100_000_000, 10_000_000]);
     expect(writes(calls)).toEqual([]);
-    await provider.applyWrite(operation, guard);
+    await provider.applyWrite(operation, activeGuard);
     expect(writes(calls).map(c => body(c))).toEqual([{ action: 'VALIDATE', draft_hierarchy_version: 7 }, { action: 'PUBLISH', draft_hierarchy_version: 7 }]);
   });
   it('rejects an edited hierarchy version before any validation/publication POST', async () => {
     const { provider, calls } = publisher({ version: 8 });
-    await expect(provider.applyWrite(operation, guard)).rejects.toThrow('hierarchy changed');
+    await expect(provider.applyWrite(operation, activeGuard)).rejects.toThrow('hierarchy changed');
     expect(writes(calls)).toEqual([]);
   });
-  it('does not publish an ACTIVE draft when paused_creation is enabled', async () => {
-    const { provider, calls } = publisher({ status: 'ACTIVE' });
-    await expect(provider.previewWrite(operation, guard)).rejects.toThrow('PAUSED draft');
-    expect(writes(calls)).toEqual([]);
+  it.each(['PAUSED', 'ACTIVE'])('blocks publication of a %s draft before API access when paused_creation is enabled', async status => {
+    const { provider, calls } = publisher({ status });
+    await expect(provider.previewWrite(operation, guard)).rejects.toThrow('blocked by paused_creation');
+    expect(calls).toEqual([]);
+  });
+  it('requires an explicit acknowledgement even when policy allows active creation', async () => {
+    const { provider, calls } = publisher();
+    await expect(provider.previewWrite({ ...operation, payload: { draft_campaign_id: CAMPAIGN, draft_hierarchy_version: 7 } }, activeGuard)).rejects.toThrow('acknowledge_active_publication');
+    expect(calls).toEqual([]);
   });
   it('reports native validation errors and never sends PUBLISH after failed validation', async () => {
     const { provider, calls } = publisher({ errors: [{ message: 'Companion image missing' }] });
-    await expect(provider.applyWrite(operation, guard)).rejects.toThrow('failed validation');
+    await expect(provider.applyWrite(operation, activeGuard)).rejects.toThrow('failed validation');
     expect(writes(calls).map(c => body(c).action)).toEqual(['VALIDATE']);
   });
   it('requires preview/apply approval and budget caps through the one shared registry', async () => {
     const { provider, calls } = publisher();
     const dir = await temp();
-    const engine = new PolicyEngine({ ...DEFAULT_POLICY, max_daily_budget_micros: 50_000_000 }, new PendingStore(path.join(dir, 'pending')), new AuditLog(path.join(dir, 'audit')));
+    const engine = new PolicyEngine({ ...DEFAULT_POLICY, paused_creation: false, max_daily_budget_micros: 50_000_000 }, new PendingStore(path.join(dir, 'pending')), new AuditLog(path.join(dir, 'audit')));
     const runtime = await createContext({ engine, providerModules: [{ provider, tools: spotifyTools(provider) }] });
     await expect(runtime.registry.call(operation.tool, { account_id: ACCOUNT, ...operation.payload }, runtime.ctx)).rejects.toThrow(/cap/);
     expect(writes(calls)).toEqual([]);
-    const allowed = await createContext({ engine: new PolicyEngine(DEFAULT_POLICY, new PendingStore(path.join(dir, 'allowed')), new AuditLog(path.join(dir, 'allowed-audit'))), providerModules: [{ provider, tools: spotifyTools(provider) }] });
+    const allowed = await createContext({ engine: new PolicyEngine({ ...DEFAULT_POLICY, paused_creation: false }, new PendingStore(path.join(dir, 'allowed')), new AuditLog(path.join(dir, 'allowed-audit'))), providerModules: [{ provider, tools: spotifyTools(provider) }] });
     const args = { account_id: ACCOUNT, ...operation.payload };
     const pending = await allowed.registry.call(operation.tool, args, allowed.ctx) as { pending_operation_id: string };
     expect(writes(calls)).toEqual([]);
