@@ -47,4 +47,13 @@ describe('authorized project selection', () => {
     expect(mocks.resolveMembership).not.toHaveBeenCalled();
     expect(mocks.setCookie).not.toHaveBeenCalled();
   });
+
+  it('rejects a missing or malformed project hint before checking membership', async () => {
+    for (const project of ['', 'invalid']) {
+      const form = selection(); form.set('projectId', project);
+      await expect(selectProjectAction(form)).rejects.toThrow();
+    }
+    expect(mocks.resolveMembership).not.toHaveBeenCalled();
+    expect(mocks.setCookie).not.toHaveBeenCalled();
+  });
 });
