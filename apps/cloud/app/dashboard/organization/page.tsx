@@ -21,11 +21,12 @@ export default async function OrganizationPage() {
   const seatAvailable = entitlement.plan.maxMembers === null || usage.editingMembers < entitlement.plan.maxMembers;
   const roles = [{ value: 'member', label: 'Member (uses a team seat)' }, { value: 'viewer', label: 'Viewer (free, read-only)' }, ...(tenant.organizationRole === 'owner' ? [{ value: 'admin', label: 'Admin' }, { value: 'owner', label: 'Owner' }] : [])];
   return <main className="page">
+    <p className="workspace-context-label">{tenant.organizationGroupName}</p>
     <PageHeader title="Organization" description="Manage your team and choose which projects each person can access. Owners, admins, and editing members use a plan seat. Read-only viewers are free."
       action={<DialogTrigger label="Invite member" title="Invite a teammate" className="button"><WorkspaceForm action={saveMemberAction} label="Invite member" successMessage="Access saved. New users receive an email invitation; existing users can open the project from their project menu."><input type="hidden" name="organizationId" value={tenant.organizationGroupId} /><label>Email address<Input type="email" name="email" required maxLength={320} placeholder="name@company.com" /></label><MemberAccessFields key={String(seatAvailable)} roles={roles} projects={activeProjects} initialRole={seatAvailable ? 'member' : 'viewer'} initialProjectIds={[tenant.organizationId]} seatAvailable={seatAvailable} /></WorkspaceForm></DialogTrigger>} />
     <div className="stack">
       <TeamAccessGuide />
-      <section className="card"><div className="card-head"><h2>General</h2></div><div className="card-body">
+      <section className="card"><div className="card-head"><h2>Organization details</h2></div><div className="card-body">
         <WorkspaceForm action={renameCompanyAction}><input type="hidden" name="organizationId" value={tenant.organizationGroupId} /><label>Organization name<Input name="name" defaultValue={tenant.organizationGroupName} required maxLength={120} /></label></WorkspaceForm>
       </div></section>
       <section className="card"><div className="card-head"><h2>Members</h2><span className="card-note">{usage.editingMembers} team seats · {usage.viewers} free viewers</span></div><div className="row-list">

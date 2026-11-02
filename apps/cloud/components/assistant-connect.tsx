@@ -9,6 +9,7 @@ import type { AssistantListings } from '@/lib/assistant-listings';
 import { Button, Disclosure } from './controls';
 import { Dialog } from './dialog';
 import { InfoTooltip } from './info-tooltip';
+import { AssistantPrompt } from './assistant-prompt';
 
 export function AssistantPicker({ value, onChange }: { value: string; onChange: (id: string) => void }) {
   return <div className="setup-assistant-picker" role="group" aria-label="Choose your AI assistant">{AGENT_SETUPS.map(setup => <Button key={setup.id} type="button" className="setup-assistant-choice" aria-pressed={value === setup.id} onClick={() => onChange(setup.id)}><AgentIdentityLogo name={setup.name} /><span>{setup.id === 'mcp' ? 'Other' : setup.name}</span></Button>)}</div>;
@@ -27,7 +28,6 @@ export function AssistantConnect({ baseUrl, projectName, initialAgent = 'chatgpt
   const id = useId();
   const selected = AGENT_SETUPS.find(setup => setup.id === agent) ?? AGENT_SETUPS[0]!;
   const command = selected.command(baseUrl);
-  const prompt = 'Use Adport to list the ad accounts available to you, then summarize their performance over the last 7 days. Show spend, conversions, and what to investigate first. Do not make any changes.';
   const terminal = selected.id === 'codex' || selected.id === 'claude-code';
   const listing = selected.id === 'chatgpt' || selected.id === 'claude' ? listings[selected.id] : undefined;
 
@@ -68,10 +68,10 @@ export function AssistantConnect({ baseUrl, projectName, initialAgent = 'chatgpt
       <p className="setup-project-scope">Project · <strong>{projectName}</strong></p>
       {status.authorized ? <Disclosure label="Connection instructions">{instructions}</Disclosure> : instructions}
       <div className="setup-connection-status" role="status"><span className={'status ' + (status.verified ? 'success' : 'neutral')}>{status.verified ? 'Read verified' : status.authorized ? 'Authorized · waiting for a read' : 'Waiting for sign-in'}</span><InfoTooltip label="About connection verification">Adport checks for a successful account list or nonempty performance report from this assistant in this project. Sign-in alone does not finish setup. Other members’ connections do not count. For an API key or an unrecognized client, choose Other assistant.</InfoTooltip>{status.authorized && status.clientName ? <small>{status.clientName}</small> : null}</div>
-      {status.authorized && !status.verified ? <div className="setup-first-question"><h3>Ask your first question</h3><p>Open a chat with Adport enabled, then paste this prompt.</p><blockquote>{prompt}</blockquote><CopyButton value={prompt} label="Copy first prompt" /></div> : null}
       {status.verified ? <p className="inline-note">Your assistant successfully read this project’s ad data.{!status.hasAccounts ? ' Enable an account to finish setup.' : ' You’re ready to go.'}</p> : !status.authorized ? <p className="inline-note">After sign-in, come back here for your first question. Status updates automatically.</p> : <p className="inline-note">{checking ? 'Checking…' : 'Status updates automatically after a successful read.'}</p>}
       {error ? <p className="error-text" role="alert">{error}</p> : null}
-      <Disclosure label="Having trouble?"><p>{!status.hasAccounts ? <>First <Link href="/dashboard/accounts">enable an ad account</Link>. </> : null}Check that Adport is selected in your conversation and that you authorized {projectName}. A failed or partial read won’t finish setup.</p><a href={selected.docsUrl} target="_blank" rel="noreferrer">Official setup guide ↗</a></Disclosure>
+      <AssistantPrompt baseUrl={baseUrl} projectName={projectName} assistantName={selected.name} authorized={status.authorized} verified={status.verified} />
+      {!status.hasAccounts ? <p className="inline-note"><Link href="/dashboard/accounts">Enable an ad account</Link> to make its data available to your assistant.</p> : null}
     </div>
   </section>;
 }

@@ -16,7 +16,7 @@ export function NewProjectDialog({ organizationId, organizationName, onClose }: 
     <p className="dialog-description">A separate space for a brand, department, or client in {organizationName}. Your existing plan covers it.</p>
     <WorkspaceForm action={createProjectAction} label="Create project">
       <input type="hidden" name="organizationId" value={organizationId} />
-      <label>Project name<Input data-autofocus name="name" required maxLength={120} placeholder="e.g. Acme Store" /></label>
+      <label>Project name<Input data-autofocus name="name" required maxLength={120} placeholder="e.g. Product marketing" /></label>
       <p className="inline-note">We’ll help you connect its accounts next. You can skip setup and come back whenever you’re ready.</p>
     </WorkspaceForm>
   </Dialog>;
