@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/db', () => ({ db: () => mocks.membership }));
 vi.mock('@/lib/cloud/auth', () => ({ apiPrincipal: mocks.principal }));
 vi.mock('@/lib/cloud/runtime', () => ({ createTenantRuntime: mocks.runtime }));
+vi.mock('@/lib/cloud/mcp-projects', () => ({ routeMcpProjects: (runtime: unknown) => runtime }));
 vi.mock('@/lib/cloud/mcp-oauth-repository', () => ({ getMcpOAuthClient: mocks.oauthClient }));
 vi.mock('@adport/mcp', () => ({ createMcpServer: mocks.server }));
 vi.mock('@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js', () => ({

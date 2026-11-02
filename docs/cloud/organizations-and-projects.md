@@ -30,7 +30,7 @@ other projects remain. Archiving projects preserves their audit evidence.
 
 Organization owners and admins see all current and future projects. Members and viewers see only their assigned projects. Within an assigned project, everyone shares its accounts, reports, approvals, and history; the role controls which actions are allowed. Member ad writes also require a paid editing seat and pass through the existing policy engine.
 
-Removing a project member revokes that person’s access tokens, refresh tokens, and unused authorization codes for the project in the same transaction. Adding them back requires a new agent authorization; grants to their other projects remain intact.
+Removing a project member revokes that person’s single-project access tokens, refresh tokens, and unused authorization codes in the same transaction. Adding them back requires a new single-project authorization; grants to their other projects remain intact. An All projects grant immediately loses access to a removed project but continues to follow the user’s current and future assignments in that organization. Removing the person from the organization revokes the All projects grant too.
 
 Owners manage billing and organization owner/admin roles. Admins manage projects and member/viewer access but cannot promote themselves or change owners/admins. Inherited organization roles are shown in the project team and are managed from Organization settings. Project admins manage the team and settings of their project.
 
@@ -73,11 +73,28 @@ client registrations change.
 
 The dashboard project selector is an HTTP-only preference, checked against
 current membership on every request. It cannot retarget an MCP or API-key
-connection. OAuth consent explicitly chooses one project; the issued grant
-remains bound to that project. To use a different project, authorize a separate
-connection if the client supports it, or reconnect and choose the project.
+connection. OAuth consent can choose one project or **All projects** in an
+organization. Single-project grants and API keys remain bound to their project;
+existing connections never gain broader access automatically.
+
+All-project grants include current and future projects the user can access in
+the selected organization. `projects_list` discovers those projects and their
+connected platforms. Other tools accept `project_id`; it is required when more
+than one project is available. Each call rechecks membership, role, paid editing
+seat, enabled accounts and policy in the selected project. Removed or archived
+projects immediately disappear from discovery and cannot be called. Pending
+operations, credentials and audit events stay isolated in that project.
+
+The hosted MCP catalog includes all supported platform tools. Connecting a
+platform later and enabling its accounts does not require a new assistant
+authorization. New calls load the project's current connections. Existing
+single-project connections need one new consent to opt into All projects.
 Provider authorization callbacks retain their initiating project even if the
 dashboard selection changes in another tab.
+
+Apply `20261102134658_mcp_organization_project_access.sql` before deploying the
+all-project authorization code. Its nullable private-table columns preserve all
+existing grants; do not backfill their organization scope.
 
 ## Release validation
 

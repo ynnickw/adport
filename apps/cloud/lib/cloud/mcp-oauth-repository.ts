@@ -1,6 +1,7 @@
 import 'server-only';
 import { randomBytes, randomUUID } from 'node:crypto';
 import type postgres from 'postgres';
+import type { AgentProject } from '@adport/core';
 import { db } from '@/lib/db';
 import { digestState } from '@/lib/crypto';
 import {
@@ -21,6 +22,23 @@ const REFRESH_TOKEN_SECONDS = 30 * 24 * 60 * 60;
 // can complete, while retaining rotation and a bounded replay window.
 const REFRESH_TOKEN_REUSE_GRACE_SECONDS = 60;
 
+export async function listMcpProjects(principal: TenantPrincipal): Promise<AgentProject[]> {
+  if (!principal.userId) return [];
+  const rows = await db()<Array<{ id: string; name: string; organizationName: string; role: string; providers: string[] }>>`
+    select project.id, project.name, company.name as organization_name, access.role,
+      array(select connection.provider from public.connections connection
+        where connection.organization_id = project.id and connection.status = 'connected' order by connection.provider) as providers
+    from private.project_memberships access
+    join public.organizations project on project.id = access.organization_id
+    join public.organization_groups company on company.id = project.organization_group_id
+    where access.user_id = ${principal.userId}
+      and ((${principal.oauthOrganizationGroupId ?? null}::uuid is null and project.id = ${principal.organizationId})
+        or company.id = ${principal.oauthOrganizationGroupId ?? null})
+    order by project.created_at, project.id
+  `;
+  return rows.map(({ organizationName, ...project }) => ({ ...project, organization_name: organizationName }));
+}
+
 export interface McpOAuthTokenPair {
   accessToken: string;
   refreshToken: string;
@@ -30,6 +48,7 @@ export interface McpOAuthTokenPair {
 }
 
 export interface McpOAuthGrantSummary {
+  organizationGroupId?: string | null;
   clientId: string;
   userId: string;
   clientName: string;
@@ -52,8 +71,9 @@ export async function listMcpOAuthGrants(organizationId: string): Promise<McpOAu
     consumedAt: Date | null;
     revokedAt: Date | null;
   }>>`
-    select distinct on (refresh.client_id, refresh.user_id, refresh.resource)
+    select distinct on (refresh.client_id, refresh.user_id, refresh.resource, refresh.organization_group_id)
       refresh.client_id,
+      refresh.organization_group_id,
       refresh.user_id,
       client.client_name,
       client.client_uri,
@@ -73,12 +93,14 @@ export async function listMcpOAuthGrants(organizationId: string): Promise<McpOAu
         and token.user_id = refresh.user_id
         and token.client_id = refresh.client_id
         and token.resource = refresh.resource
+        and token.organization_group_id is not distinct from refresh.organization_group_id
         and token.revoked_at is null
       order by token.created_at desc
       limit 1
     ) access on true
     where refresh.organization_id = ${organizationId}
-    order by refresh.client_id, refresh.user_id, refresh.resource, refresh.created_at desc
+      or refresh.organization_group_id = (select organization_group_id from public.organizations where id = ${organizationId})
+    order by refresh.client_id, refresh.user_id, refresh.resource, refresh.organization_group_id, refresh.created_at desc
   `;
   return grants.map(({ consumedAt, revokedAt, ...grant }) => ({
     ...grant,
@@ -122,17 +144,29 @@ export async function getMcpOAuthClient(clientId: string): Promise<McpOAuthClien
 export async function createMcpAuthorizationCode(
   principal: TenantPrincipal,
   request: AuthorizationRequest,
+  organizationGroupId?: string,
 ): Promise<string> {
   if (!principal.userId) throw new Error('A user session is required to authorize an MCP client.');
+  let organizationId = principal.organizationId;
+  if (organizationGroupId) {
+    const rows = await db()<Array<{ defaultProjectId: string }>>`
+      select company.default_project_id from public.organization_groups company
+      join public.organizations project on project.organization_group_id = company.id
+      join private.project_memberships access on access.organization_id = project.id
+      where company.id = ${organizationGroupId} and project.id = ${principal.organizationId} and access.user_id = ${principal.userId}
+    `;
+    if (!rows[0]) throw new Error('You do not have access to this organization.');
+    organizationId = rows[0].defaultProjectId;
+  }
   const credentialScopes = principal.grantedScopes ?? principal.scopes;
   const scopes = request.scopes.filter((scope) => credentialScopes.includes(scope));
   if (scopes.length === 0) throw new Error('This workspace does not grant any of the requested MCP scopes.');
   const code = `adp_code_${randomBytes(32).toString('base64url')}`;
   await db()`
     insert into private.mcp_oauth_authorization_codes
-      (code_hash, organization_id, user_id, client_id, redirect_uri, scopes, code_challenge, resource, expires_at)
+      (code_hash, organization_id, organization_group_id, user_id, client_id, redirect_uri, scopes, code_challenge, resource, expires_at)
     values
-      (${digestState(code)}, ${principal.organizationId}, ${principal.userId}, ${request.clientId},
+      (${digestState(code)}, ${organizationId}, ${organizationGroupId ?? null}, ${principal.userId}, ${request.clientId},
        ${request.redirectUri}, ${scopes}, ${request.codeChallenge}, ${request.resource}, now() + interval '10 minutes')
   `;
   return code;
@@ -140,26 +174,29 @@ export async function createMcpAuthorizationCode(
 
 async function issueTokenPair(
   sql: postgres.TransactionSql,
-  input: { organizationId: string; userId: string; clientId: string; scopes: McpOAuthScope[]; resource: string; verifiedAt?: Date | null },
+  input: { organizationId: string; organizationGroupId?: string | null; userId: string; clientId: string; scopes: McpOAuthScope[]; resource: string; verifiedAt?: Date | null },
 ): Promise<McpOAuthTokenPair> {
-  const access = await sql`select role from private.project_memberships
-    where organization_id = ${input.organizationId} and user_id = ${input.userId}`;
+  const access = await sql`select access.role from private.project_memberships access
+    join public.organizations project on project.id = access.organization_id
+    where access.user_id = ${input.userId}
+      and ((${input.organizationGroupId ?? null}::uuid is null and project.id = ${input.organizationId})
+        or project.organization_group_id = ${input.organizationGroupId ?? null}) limit 1`;
   if (!access.length) throw new Error('Project access has been revoked.');
   const now = Math.floor(Date.now() / 1000);
   const tokenId = randomUUID();
   const refreshToken = `adp_refresh_${randomBytes(40).toString('base64url')}`;
   await sql`
     insert into private.mcp_oauth_access_tokens
-      (token_id, organization_id, user_id, client_id, scopes, resource, expires_at)
+      (token_id, organization_id, organization_group_id, user_id, client_id, scopes, resource, expires_at)
     values
-      (${tokenId}, ${input.organizationId}, ${input.userId}, ${input.clientId}, ${input.scopes},
+      (${tokenId}, ${input.organizationId}, ${input.organizationGroupId ?? null}, ${input.userId}, ${input.clientId}, ${input.scopes},
        ${input.resource}, to_timestamp(${now + ACCESS_TOKEN_SECONDS}))
   `;
   await sql`
     insert into private.mcp_oauth_refresh_tokens
-      (token_hash, organization_id, user_id, client_id, scopes, resource, expires_at, verified_at)
+      (token_hash, organization_id, organization_group_id, user_id, client_id, scopes, resource, expires_at, verified_at)
     values
-      (${digestState(refreshToken)}, ${input.organizationId}, ${input.userId}, ${input.clientId},
+      (${digestState(refreshToken)}, ${input.organizationId}, ${input.organizationGroupId ?? null}, ${input.userId}, ${input.clientId},
        ${input.scopes}, ${input.resource}, to_timestamp(${now + REFRESH_TOKEN_SECONDS}), ${input.verifiedAt ?? null})
   `;
   const accessToken = signAccessToken({
@@ -186,6 +223,7 @@ export async function exchangeMcpAuthorizationCode(input: {
     const rows = await sql<Array<{
       codeHash: string;
       organizationId: string;
+      organizationGroupId: string | null;
       userId: string;
       clientId: string;
       redirectUri: string;
@@ -195,7 +233,7 @@ export async function exchangeMcpAuthorizationCode(input: {
       expiresAt: Date;
       consumedAt: Date | null;
     }>>`
-      select code_hash, organization_id, user_id, client_id, redirect_uri, scopes,
+      select code_hash, organization_id, organization_group_id, user_id, client_id, redirect_uri, scopes,
         code_challenge, resource, expires_at, consumed_at
       from private.mcp_oauth_authorization_codes
       where code_hash = ${digestState(input.code)}
@@ -225,6 +263,7 @@ export async function exchangeMcpRefreshToken(input: {
     const rows = await sql<Array<{
       tokenHash: string;
       organizationId: string;
+      organizationGroupId: string | null;
       userId: string;
       clientId: string;
       scopes: McpOAuthScope[];
@@ -234,7 +273,7 @@ export async function exchangeMcpRefreshToken(input: {
       revokedAt: Date | null;
       verifiedAt: Date | null;
     }>>`
-      select token_hash, organization_id, user_id, client_id, scopes, resource, expires_at, consumed_at, revoked_at, verified_at
+      select token_hash, organization_id, organization_group_id, user_id, client_id, scopes, resource, expires_at, consumed_at, revoked_at, verified_at
       from private.mcp_oauth_refresh_tokens
       where token_hash = ${digestState(input.refreshToken)}
       for update
@@ -274,6 +313,7 @@ export async function authenticateMcpOAuthAccessToken(token: string): Promise<Te
   const rows = await db()<Array<{
     tokenId: string;
     organizationId: string;
+    organizationGroupId: string | null;
     userId: string;
     clientId: string;
     scopes: string[];
@@ -281,7 +321,7 @@ export async function authenticateMcpOAuthAccessToken(token: string): Promise<Te
     expiresAt: Date;
     revokedAt: Date | null;
   }>>`
-    select token_id, organization_id, user_id, client_id, scopes, resource, expires_at, revoked_at
+    select token_id, organization_id, organization_group_id, user_id, client_id, scopes, resource, expires_at, revoked_at
     from private.mcp_oauth_access_tokens
     where token_id = ${claims.jti}
     limit 1
@@ -294,6 +334,7 @@ export async function authenticateMcpOAuthAccessToken(token: string): Promise<Te
   await db()`update private.mcp_oauth_access_tokens set last_used_at = now() where token_id = ${found.tokenId}`;
   return {
     organizationId: found.organizationId,
+    oauthOrganizationGroupId: found.organizationGroupId ?? undefined,
     userId: found.userId,
     oauthTokenId: found.tokenId,
     clientId: found.clientId,
