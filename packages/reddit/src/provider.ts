@@ -18,6 +18,7 @@ import {
 import { RedditAdsClient, type RedditEnvelope } from './client.js';
 import { createCampaign, redditId, setCampaignBudget, setCampaignStatus } from './schemas.js';
 import { RedditCreativeService } from './creatives.js';
+import { RedditManagementService } from './management.js';
 
 /** Reddit budget, bid, spend, CPC, and CPM fields are integer micros. */
 export const REDDIT_MICROS = 1_000_000;
@@ -58,7 +59,8 @@ const BREAKDOWN = { account: undefined, campaign: 'CAMPAIGN_ID', ad_group: 'AD_G
 export class RedditAdsProvider implements AdProvider {
   readonly id = 'reddit';
   readonly creatives: RedditCreativeService;
-  constructor(private readonly client: RedditAdsClient, media?: MediaResolver) { this.creatives = new RedditCreativeService(client, media); }
+  readonly management: RedditManagementService;
+  constructor(private readonly client: RedditAdsClient, media?: MediaResolver) { this.creatives = new RedditCreativeService(client, media); this.management = new RedditManagementService(client, this.creatives); }
 
   capabilities(): ProviderCapabilities {
     return { serverDryRun: false };
@@ -246,6 +248,7 @@ export class RedditAdsProvider implements AdProvider {
   }
 
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
+    if (/^reddit_(?:create_(?:customer_audience|pixel_audience|engagement_audience|saved_audience)|update_(?:audience_users|saved_audience)|delete_(?:audience|saved_audience)|send_conversion_events)$/.test(op.tool)) return this.management.plan(op, guard);
     if (/^reddit_(?:create_(?:ad_group|ad|post|text_asset)|upload_asset|import_asset_url|stage_post_copy|update_(?:ad_group|ad|targeting)|set_(?:ad_group_budget|ad_group_bidding|ad_group_status|ad_status)|archive_entity|rename_asset|delete_asset)$/.test(op.tool)) return this.creatives.plan(op, guard);
     redditId.parse(op.accountId);
     const expectedKind = op.tool === 'reddit_api_delete' ? 'remove' : op.tool === 'reddit_create_campaign' || op.tool === 'reddit_api_create' ? 'create' : 'update';

@@ -42,12 +42,28 @@ The widget’s copy action uses `reddit_stage_post_copy`: it verifies the select
 
 Poll `reddit_post_job`, review the result, then use a separate `reddit_update_ad` approval to attach its post ID to one selected ad. Replacement preserves configured delivery status and can trigger review. `reddit_create_ad` creates a paused ad instead. Existing posts shared across ads are not edited in place by this workflow.
 
+## Audiences and measurement
+
+`reddit_audiences`/`reddit_get_audience` show native availability, ownership and readiness. Named creation supports empty customer lists, Pixel retargeting and campaign-engagement retargeting. Pixel sources must be available to the account; engagement campaigns must belong to it. Current v3 exposes lookalikes for reading, without a documented creation route here. It also has no custom-audience rename/update endpoint.
+
+Membership changes use native PATCH, with up to 2,500 rows and explicit `EMAIL_SHA256`/`MAID_SHA256` column order. Rows must contain lowercase SHA-256 values, match the columns and be unique. Mutations require account ownership and a directly managed customer list. Read access to a shared or external-provider audience does not grant direct membership editing or deletion. Previews and audit summaries contain counts and a payload digest; identifiers remain in the private expiring pending operation. Deleting a custom audience is permanent and can affect targeting.
+
+Saved audiences have their own list/get/create/update/delete tools. Updates merge supplied dimensions and preserve omitted targeting, reject unknown current dimensions, and validate referenced custom audiences. Creation makes expansion explicitly false unless supplied. Native deletion is PATCH `status: DELETED`. Previews include the reported number of active ad groups using the shared saved audience.
+
+`reddit_pixels` lists account-available Pixels and `reddit_pixel_last_fired` reports native activity timestamps. Current public v3 documents reading Pixels, without a Pixel creation/rename route. Configure those in Events Manager.
+
+`reddit_send_conversion_events` requires the connection’s existing `adsconversions` permission; ordinary `adsread`/`adsedit` access is insufficient. This implementation does not request broader OAuth permissions or generate a conversion token. TEST mode needs an Events Manager `test_id`. LIVE mode must be explicit and submits real measurement data, which can affect attribution and optimization. Keep fabricated QA events in TEST mode. Native API acceptance does not prove final processing or attribution.
+
+Events use Unix milliseconds, native uppercase v3 tracking types and base-currency revenue values, separate from advertising budget micros. Every event needs a stable `metadata.conversion_id` for deduplication. Adport requires pre-hashed customer match keys; follow Reddit’s normalization rules before hashing. Source URLs, match keys and event IDs are omitted from previews. Payloads are not automatically retried. Reddit requires events within seven days of occurrence. Data-deletion jobs and catalog workflows are separate capabilities and remain outstanding.
+
 ## Reports and verification
 
 Report pages repeat the original POST body and remain account-scoped. Spend/bid/budget fields use micros; `CONVERSION*TOTAL_VALUE` report fields use cents. Missing conversions remain unavailable, ratios are calculated only from available inputs, and truncation is explicit.
 
 Wire tests cover native envelopes, CBO inheritance, paused receipts, current monetary policy checks, hierarchy/source ownership, raw-tool guard compatibility, account-bound async receipts, immutable media sources, structured-post copies and native URL pagination. Local storage integration checks exercise source bytes, write access and cross-project denial. DOM tests verify the multiline edit payload and preview-only host-bridge submission.
 
-Existing authorized MCP campaign/report reads and a no-change paused-status preview have succeeded on a real account. The new child/creative flows need their own live endpoint verification. Native Claude and ChatGPT widget execution is separate from tool discovery. Reddit Max, advanced audience/measurement setup, catalog workflows and other specialized formats require their own implementation and checks; this is not full API coverage.
+Existing authorized MCP campaign/report reads and a no-change paused-status preview have succeeded on a real account. The new child/creative/audience/measurement flows need their own live endpoint verification. No customer list or fabricated LIVE conversion has been uploaded for QA. Native Claude and ChatGPT widget execution is separate from tool discovery. Reddit Max, data-deletion jobs, catalog workflows and other specialized formats require their own implementation and checks; this is not full API coverage.
 
 Source: [official current Reddit v3 OpenAPI](https://ads-api.reddit.com/api/v3/openapi.json), fetched 2026-11-03.
+
+Measurement references: [official CAPI direct integration](https://ads-api.reddit.com/docs/v3/guides/programs/capi/direct-integration) and [customer match keys](https://business.reddithelp.com/articles/Knowledge/about-match-keys).

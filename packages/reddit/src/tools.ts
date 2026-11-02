@@ -3,10 +3,12 @@ import { z } from 'zod';
 import type { RedditAdsProvider } from './provider.js';
 import { createCampaign, setCampaignBudget, setCampaignStatus } from './schemas.js';
 import { redditCreativeTools } from './creative-tools.js';
+import { redditManagementTools } from './management-tools.js';
 
 export function redditTools(provider: RedditAdsProvider): AnyToolDefinition[] {
   return [
     ...redditCreativeTools(provider),
+    ...redditManagementTools(provider),
     defineTool({
       name: 'reddit_api_read',
       namespace: 'reddit',
