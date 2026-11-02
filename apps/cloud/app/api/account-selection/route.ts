@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { sessionPrincipal } from '@/lib/cloud/auth';
 import { saveAccountSelection } from '@/lib/cloud/account-selection';
 import { apiError, noStoreJson } from '@/lib/http';
-import { getOrganizationEntitlement, recommendedUpgradePlan } from '@/lib/cloud/plans';
+import { getOrganizationEntitlement } from '@/lib/cloud/plans';
 
 const schema = z.object({
   organizationId: z.string().uuid(),
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const entitlement = input.enableAccess ? await getOrganizationEntitlement(principal.organizationId) : undefined;
     return noStoreJson(await saveAccountSelection(principal, input.selectionId, input.accountIds, input.pageIds, entitlement ? {
       maxActiveAccounts: entitlement.plan.maxActiveAccounts, currentPlan: entitlement.plan.name,
-      recommendedPlan: recommendedUpgradePlan(entitlement.plan.id),
+      currentPlanId: entitlement.plan.id,
     } : undefined));
   } catch (error) {
     return apiError(error, 403);

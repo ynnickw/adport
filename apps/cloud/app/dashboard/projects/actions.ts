@@ -10,9 +10,10 @@ import { PROJECT_COOKIE } from '@/lib/cloud/auth';
 import { resolveMembership, enforceRateLimit } from '@/lib/cloud/repository';
 import { createOrganization, createProject, updateProject, renameCompany, saveOrganizationMember, removeCompanyMember } from '@/lib/cloud/workspaces';
 import { HttpError } from '@/lib/http';
+import { PlanLimitError, type PlanLimitDetails } from '@/lib/cloud/plan-limit';
 import { safeProjectSwitchReturnPath } from '@/lib/return-path';
 
-export interface WorkspaceActionState { error?: string; success?: string; }
+export interface WorkspaceActionState { error?: string; success?: string; planLimit?: PlanLimitDetails; }
 const uuid = z.string().uuid();
 const name = z.string().trim().min(1).max(120);
 
@@ -35,6 +36,7 @@ async function mutation(work: (actor: string) => Promise<void>): Promise<Workspa
     await work(actor);
   } catch (error) {
     if (error instanceof z.ZodError) return { error: 'Check the name, email, role, and selected projects.' };
+    if (error instanceof PlanLimitError) return { error: error.message, planLimit: error.details };
     if (error instanceof HttpError) return { error: error.message };
     const message = error instanceof Error ? error.message : '';
     if (/^(Organization (active account|member) limit reached|The default project cannot be archived)/.test(message)) return { error: message };

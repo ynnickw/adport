@@ -1,7 +1,7 @@
 import 'server-only';
 import { db } from '@/lib/db';
 import type { TenantPrincipal } from './types';
-import type { UpgradePlanId } from './plan-limit';
+import { recommendUpgradePlan, type PlanRequirements, type UpgradePlanId } from './plan-limit';
 import { HttpError } from '@/lib/http';
 import type postgres from 'postgres';
 import catalog from './plan-catalog.json';
@@ -126,9 +126,6 @@ export function formatPlanLimit(value: number | null, unit: string): string {
   return `${value} ${value === 1 ? unit.replace(/s$/, '') : unit}`;
 }
 
-export function recommendedUpgradePlan(plan: PlanId): UpgradePlanId {
-  if (plan === 'reader') return 'operator';
-  if (plan === 'operator') return 'premium';
-  if (plan === 'premium') return 'agency';
-  return 'enterprise';
+export function recommendedUpgradePlan(plan: PlanId, required?: PlanRequirements): UpgradePlanId {
+  return recommendUpgradePlan(plan, required);
 }

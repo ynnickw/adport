@@ -6,7 +6,8 @@ import { HttpError } from '@/lib/http';
 import { mcpResourceUrl, oauthIssuerUrl, protectedResourceMetadataUrl } from '@/lib/mcp-oauth';
 import { getMcpOAuthClient } from '@/lib/cloud/mcp-oauth-repository';
 import { mcpUiDomain } from '@/lib/mcp-ui-domain';
-import { recommendedUpgradePlan } from '@/lib/cloud/plans';
+import { adWritePlanLimit } from '@/lib/cloud/write-plan-limit';
+import { env } from '@/lib/env';
 
 async function handle(request: Request): Promise<Response> {
   try {
@@ -17,24 +18,12 @@ async function handle(request: Request): Promise<Response> {
     const oauthClient = principal.oauthTokenId && principal.clientId
       ? await getMcpOAuthClient(principal.clientId)
       : undefined;
-    const planLimitMessage = principal.entitlement
-      ? `MCP write tools are not included in the current ${principal.entitlement.planName} plan. They require ${recommendedUpgradePlan(principal.entitlement.planId)} or higher with write access. No changes were made.`
-      : undefined;
-    const writePlanDenial = principal.role !== 'viewer'
-      && principal.grantedScopes?.includes('tools:write')
-      && principal.entitlement
-      && !principal.entitlement.writeAccess
+    const writeLimit = await adWritePlanLimit(principal, env().ADPORT_CLOUD_BASE_URL);
+    const writePlanDenial = writeLimit
       ? {
           code: 'PLAN_LIMIT',
-          message: planLimitMessage!,
-          data: {
-            planLimit: {
-              kind: 'write_access',
-              currentPlan: principal.entitlement.planName,
-              recommendedPlan: recommendedUpgradePlan(principal.entitlement.planId),
-              message: planLimitMessage!,
-            },
-          },
+          message: writeLimit.message,
+          data: { planLimit: writeLimit },
         }
       : undefined;
     const server = createMcpServer({

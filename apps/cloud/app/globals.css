@@ -1,3 +1,5 @@
+@import '../../../website/pricing.css';
+
 :root {
   color-scheme: light;
   /* Tokens shared with adport.dev (website/site.css). */
@@ -427,6 +429,33 @@ select { min-width: 11rem; border: 1px solid var(--line); border-radius: 999px; 
 .upgrade-modal li { position: relative; color: var(--muted); padding-left: 1.25rem; font-size: 0.8125rem; line-height: 1.5; }
 .upgrade-modal li::before { position: absolute; left: 0; color: var(--success); content: "✓"; font-weight: 750; }
 .modal-actions { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: 1.35rem; }
+
+/* Shared landing-page pricing. Keep card geometry in website/pricing.css. */
+.pricing-surface {
+  --paper: #f5f5f7; --raised: #ffffff; --ink: #1d1d1f; --ink-soft: #424245; --muted: #6e6e73;
+  --rule: #dcdce1; --rule-strong: #c7c7cc; --go: #1a7f4b; --go-wash: rgba(26, 127, 75, .1);
+  --sans: var(--font-overpass), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--ink); font-family: var(--sans); font-size: 1.0625rem; line-height: 1.6;
+}
+:where(.pricing-surface) :where(h1, h2, h3, p, dl, dd, figure, ol, ul) { margin: 0; }
+.dashboard-pricing { background: #f5f5f7; border-radius: 1.2rem; margin-block: 2rem; container-type: inline-size; }
+.pricing-surface .pricing-billing a { border-radius: 999px; padding: .7rem 1.15rem; color: var(--muted); font: 650 .875rem var(--sans); }
+.pricing-surface .pricing-billing a[aria-current="true"] { background: var(--ink); color: var(--raised); }
+.pricing-surface .pricing-billing a > span { margin-left: .35rem; color: var(--signal-ink); font-size: .6875rem; }
+.pricing-surface .pricing-billing a[aria-current="true"] > span { color: #ffad73; }
+.pricing-surface .pricing-billing a:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
+.pricing-surface .billing-action-form { margin: 0; }
+.pricing-card-body > .billing-action-form > .pricing-action { display: flex; width: 100%; min-height: 3.25rem; }
+.pricing-action-current, .pricing-action-current:hover { border-color: var(--rule); background: var(--paper); color: var(--muted); cursor: default; }
+.pricing-surface .pricing-next a, .pricing-surface .pricing-local a { text-decoration: underline; text-underline-offset: .25rem; }
+.pricing-dismiss { border: 0; padding: 0; background: transparent; color: var(--ink-soft); font-size: .875rem; font-weight: 650; text-decoration: underline; text-underline-offset: .25rem; }
+.paywall-context { max-width: 51rem; margin: 0 auto 1.5rem; color: var(--ink-soft); font-size: .875rem; line-height: 1.65; text-align: center; }
+.paywall-context p { margin: 0; }
+.pricing-surface .pricing-enterprise[data-requested="true"] { outline: 2px solid var(--signal); }
+.upgrade-owner-note { margin: 1.25rem 0; padding: .85rem 1rem; border-radius: .5rem; background: #f6f6f3; color: var(--muted); font-size: .8125rem; line-height: 1.65; }
+.inline-upgrade-button { display: inline; padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; text-decoration: underline; text-underline-offset: .2em; }
+.account-picker-upgrade { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem 1rem; width: 100%; padding: .25rem 0; font-size: .75rem; color: var(--muted); }
+@container (max-width: 50rem) { .dashboard-pricing .pricing-cards { grid-template-columns: 1fr; max-width: 31rem; margin-inline: auto; gap: 2rem; } .dashboard-pricing .pricing-free { align-items: stretch; flex-direction: column; max-width: 31rem; margin-inline: auto; } }
 
 /* ── Direct support ─────────────────────────────────────────────────── */
 .support-fab { position: fixed; z-index: 50; right: 1.35rem; bottom: 1.35rem; display: flex; align-items: center; gap: 0.6rem; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--ink); padding: 0.35rem 0.8rem 0.35rem 0.35rem; box-shadow: var(--shadow-float); font-size: 0.8125rem; font-weight: 650; }
@@ -1355,4 +1384,27 @@ input.control-checkbox:disabled { cursor: not-allowed; opacity: .45; }
   .onboarding-title { padding: 0; }
   .onboarding-title > .plan-kicker, .onboarding-title > p { display: none; }
   .onboarding-title h1 { margin: 0; font-size: 1.25rem; }
+}
+
+/* A full pricing comparison in a modal, with the app visible around it. */
+.app-dialog.pricing-paywall { --paywall-sidebar: 0rem; position: fixed; inset: 0 0 0 var(--paywall-sidebar); width: min(81rem, calc(100vw - var(--paywall-sidebar) - 4rem)); max-width: none; height: auto; max-height: calc(100dvh - 4rem); margin: auto; padding: 0; border: 1px solid var(--rule); border-radius: 1.2rem; background: var(--paper); box-shadow: 0 24px 80px #1d1d1f33; overflow: auto; overscroll-behavior: contain; }
+.pricing-paywall::backdrop { background: #1d1d1f38; }
+.pricing-paywall:focus { outline: none; }
+.pricing-paywall > .dialog-heading { position: sticky; z-index: 20; top: 0; display: flex; min-height: 4.25rem; gap: 1.5rem; margin: 0; padding: .75rem 1.5rem; border-bottom: 1px solid var(--rule); background: var(--raised); }
+.pricing-paywall > .dialog-heading .icon-button { flex: none; width: 2.5rem; height: 2.5rem; margin-left: auto; border: 1px solid var(--rule); border-radius: 50%; background: var(--raised); }
+.pricing-paywall > .cloud-pricing { padding-block: 2rem 3rem; }
+.pricing-paywall .paywall-context { margin-bottom: 0; }
+.pricing-paywall .pricing-billing { margin-block: 1.25rem 2rem; }
+.pricing-paywall .provider-tooltip { line-height: 1.6; }
+@media (min-width: 881px) { body:has(.app-shell) .pricing-paywall { --paywall-sidebar: 14.5rem; } }
+@media (max-width: 760px) { .app-dialog.pricing-paywall { width: calc(100vw - 1.5rem); max-height: calc(100dvh - 1.5rem); border-radius: 1rem; } .pricing-paywall > .dialog-heading { padding-inline: 1rem; } }
+@media (max-width: 1240px) {
+  .pricing-paywall .pricing-cards { grid-template-columns: 1fr; max-width: 31rem; margin-inline: auto; gap: 2rem; }
+  .pricing-paywall .pricing-free { flex-direction: column; align-items: stretch; max-width: 31rem; margin-inline: auto; }
+  .pricing-paywall .pricing-ecosystem { flex-direction: column; gap: 1.1rem; }
+  .pricing-paywall .pricing-connectors { padding: .9rem 0 0; border: 0; border-top: 1px solid var(--rule); }
+  .pricing-paywall .pricing-enterprise { flex-direction: column; align-items: stretch; }
+  .pricing-paywall .comparison-scroll { max-height: 75dvh; overflow: auto; }
+  .pricing-paywall .comparison-table { min-width: 820px; }
+  .pricing-paywall .comparison-table thead th { top: 0; }
 }

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import type { Policy } from '@adport/core';
 import { Button, Checkbox, Disclosure, Input, Switch } from '@/components/controls';
 import { PlanLimitModal } from '@/components/plan-limit-modal';
+import { UpgradeButton } from '@/components/upgrade-button';
 import { Field, Provider } from '@/components/ui';
 import { InfoTooltip } from '@/components/info-tooltip';
 import { planLimitFromResponse, type PlanLimitDetails } from '@/lib/cloud/plan-limit';
@@ -77,7 +78,7 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
     <form className="form" onSubmit={(event) => void save(event)}>
       <PlanLimitModal limit={planLimit} onClose={() => setPlanLimit(undefined)} />
       <fieldset className="form" style={{ border: 0, margin: 0, padding: 0 }}>
-        {!writeAccess ? <div className="policy-plan-note"><div><strong>{planName} is read only</strong><p>Your safeguards apply when write access is enabled.</p></div><Link className="button secondary small" href="/dashboard/billing">View plans</Link></div> : null}
+        {!writeAccess ? <div className="policy-plan-note"><div><strong>{planName} is read only</strong><p>Your safeguards apply when write access is enabled.</p></div>{canAdminister ? <UpgradeButton kind="write_access" message="Upgrade to preview and apply ad changes from your assistant, with your project’s safeguards in place." label="Explore write access" className="button secondary small" /> : null}</div> : null}
         <section className="policy-section">
           <div className="policy-section-copy"><h3>Creation <InfoTooltip label="About paused creation">When enabled, supported new campaigns, ad groups, and ads start paused. Turning this off uses the requested status. Existing campaigns are unaffected.</InfoTooltip></h3></div>
           <div className="policy-controls">

@@ -15,10 +15,10 @@ function requireOwner(role: string | undefined): void {
 
 export interface BillingActionState { error?: string; }
 
-async function checkoutUrl(plan: PlanId, interval: BillingInterval): Promise<string> {
+async function checkoutUrl(plan: PlanId, interval: BillingInterval, projectId?: string): Promise<string> {
   if (plan !== 'operator' && plan !== 'premium' && plan !== 'agency') throw new Error('Choose Pro, Growth, or Business.');
   if (interval !== 'monthly' && interval !== 'annual') throw new Error('Choose monthly or annual billing.');
-  const principal = await sessionPrincipal();
+  const principal = await sessionPrincipal(projectId);
   requireOwner(principal.role);
   const entitlement = await getOrganizationEntitlement(principal.organizationId);
   const billingOrganizationId = entitlement.billingOrganizationId ?? principal.organizationId;
@@ -34,14 +34,18 @@ export async function startSubscription(plan: PlanId, interval: BillingInterval)
 }
 
 export async function startSubscriptionForm(plan: PlanId, interval: BillingInterval, _state: BillingActionState, _form: FormData): Promise<BillingActionState> {
+  return startProjectSubscriptionForm(undefined, plan, interval, _state, _form);
+}
+
+export async function startProjectSubscriptionForm(projectId: string | undefined, plan: PlanId, interval: BillingInterval, _state: BillingActionState, _form: FormData): Promise<BillingActionState> {
   let url: string;
-  try { url = await checkoutUrl(plan, interval); }
+  try { url = await checkoutUrl(plan, interval, projectId); }
   catch { return { error: 'Checkout could not be opened. Please try again or contact support.' }; }
   redirect(url);
 }
 
-async function billingPortalUrl(): Promise<string> {
-  const principal = await sessionPrincipal();
+async function billingPortalUrl(projectId?: string): Promise<string> {
+  const principal = await sessionPrincipal(projectId);
   requireOwner(principal.role);
   const entitlement = await getOrganizationEntitlement(principal.organizationId);
   const organization = await requireOrganizationAdmin(principal.userId!, entitlement.billingOrganizationId ?? principal.organizationId);
@@ -60,8 +64,12 @@ export async function openBillingPortal(): Promise<void> {
 }
 
 export async function openBillingPortalForm(_state: BillingActionState, _form: FormData): Promise<BillingActionState> {
+  return openProjectBillingPortalForm(undefined, _state, _form);
+}
+
+export async function openProjectBillingPortalForm(projectId: string | undefined, _state: BillingActionState, _form: FormData): Promise<BillingActionState> {
   let url: string;
-  try { url = await billingPortalUrl(); }
+  try { url = await billingPortalUrl(projectId); }
   catch { return { error: 'Billing could not be opened. Please try again or contact support.' }; }
   redirect(url);
 }

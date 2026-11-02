@@ -6,8 +6,10 @@ const mocks = vi.hoisted(() => ({
   runtime: vi.fn(),
   server: vi.fn(),
   oauthClient: vi.fn(),
+  membership: vi.fn(),
 }));
 
+vi.mock('@/lib/db', () => ({ db: () => mocks.membership }));
 vi.mock('@/lib/cloud/auth', () => ({ apiPrincipal: mocks.principal }));
 vi.mock('@/lib/cloud/runtime', () => ({ createTenantRuntime: mocks.runtime }));
 vi.mock('@/lib/cloud/mcp-oauth-repository', () => ({ getMcpOAuthClient: mocks.oauthClient }));
@@ -22,6 +24,7 @@ import { POST } from '@/app/mcp/route';
 
 const freePrincipal: TenantPrincipal = {
   organizationId: 'fictional-org',
+  userId: 'fictional-user',
   oauthTokenId: 'fictional-token-id',
   clientId: 'fictional-client',
   role: 'owner',
@@ -32,6 +35,7 @@ const freePrincipal: TenantPrincipal = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.membership.mockResolvedValue([{ role: 'owner' }]);
   mocks.principal.mockResolvedValue(freePrincipal);
   mocks.runtime.mockResolvedValue({});
   mocks.oauthClient.mockResolvedValue(undefined);
@@ -66,20 +70,25 @@ describe('hosted MCP entitlement explanation', () => {
     expect(options.notConnectedMessage).not.toMatch(/adport connect|--demo/);
   });
 
-  it('identifies the plan limit without promoting or initiating a purchase', async () => {
+  it('explains Free write access with a priced, organization-specific upgrade link without granting access', async () => {
     const options = await serverOptions();
     const denial = options.scopeDenials['tools:write'];
     expect(options.scopes).toEqual(['tools:read']);
     expect(denial.code).toBe('PLAN_LIMIT');
     expect(denial.data.planLimit).toEqual({
-      kind: 'write_access',
-      currentPlan: 'Free',
-      recommendedPlan: 'operator',
-      message: denial.message,
+      kind: 'write_access', currentPlan: 'Free', recommendedPlan: 'operator', message: denial.message,
+      canManageBilling: true, projectId: 'fictional-org',
+      upgradeUrl: new URL('/dashboard/billing?intent=write_access&plan=operator&projectId=fictional-org', process.env.ADPORT_CLOUD_BASE_URL).href,
     });
-    expect(denial.message).toContain('not included in the current Free plan');
-    expect(denial.message).toContain('require operator or higher with write access');
-    expect(JSON.stringify(denial)).not.toMatch(/https?:|upgrade|subscribe|checkout|billing|buy/i);
+    expect(denial.message).toContain('Pro (€19/month)');
+    expect(denial.message).toContain('No changes were made.');
+  });
+
+  it('asks a project owner who is not the organization owner to share the link', async () => {
+    mocks.membership.mockResolvedValue([{ role: 'admin' }]);
+    const denial = (await serverOptions()).scopeDenials['tools:write'];
+    expect(denial.data.planLimit.canManageBilling).toBe(false);
+    expect(denial.message).toContain('Ask your organization owner');
   });
 
   it('does not mislabel a missing OAuth write scope as a plan limit', async () => {
