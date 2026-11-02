@@ -10,6 +10,7 @@
 - [Apple campaign setup](apple-campaign-setup.md)
 - [TikTok campaign and creative setup](tiktok-campaign-setup.md)
 - [Spotify campaign drafts and media](spotify-campaign-setup.md)
+- [Pinterest campaign hierarchy and previews](pinterest-campaign-setup.md)
 - [Agent plugin](../plugins/adport/README.md)
 - [Support](../SUPPORT.md) and [security reports](../SECURITY.md)
 

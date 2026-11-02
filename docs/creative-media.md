@@ -36,6 +36,8 @@ Apple ad-group, keyword and ad statuses can be changed with their named status t
 
 Spotify's `spotify_ads` and `spotify_assets` render copy and image/video/audio previews. Published ads can stage a draft; draft cards edit copy through the ordinary preview/apply gate. Hierarchy validation and version-bound publication remain separate operations. See [Spotify campaign drafts and media](spotify-campaign-setup.md) for setup, native field semantics and cleanup limits.
 
+Pinterest's `pinterest_ads` reads account ad settings and hydrates only their referenced Pins when the existing connection has boards/pins read access. Its visual actions edit advertiser ad settings through the shared gate. Original shared Pins remain unchanged. See [Pinterest campaign setup](pinterest-campaign-setup.md) for CBO budgets, targeting, native filter encoding and Pin-permission limits.
+
 Microsoft exposes named ad-group, keyword and responsive search ad workflows, including status changes and partial copy/bid updates. Ad-group creation asks for an explicit language. Reads request the optional `AdGroupType` field to verify RSA compatibility. RSA updates retain positional pinning and omit read-only text-asset IDs. Batch failures report successful resource IDs so callers can reconcile partially applied requests before retrying.
 
 Microsoft's normalized `report` supports account, campaign, ad-group and ad levels. `microsoft_keyword_report` and `microsoft_search_term_report` return native CSV fields as strings, including empty or suppressed values. Account ratios use spend/revenue totals even when a caller requests only ROAS. Missing conversion or revenue data is kept unavailable.

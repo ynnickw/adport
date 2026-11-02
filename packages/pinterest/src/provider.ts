@@ -5,6 +5,7 @@ import {
   type WriteGuard, type WriteOperation, type WritePreview, type WriteResult,
 } from '@adport/core';
 import { PinterestAdsClient } from './client.js';
+import { PinterestCreativeService } from './creatives.js';
 import { accountSchema, batchResponseSchema, campaignSchema, createCampaignSchema, entitySchema, entityStatus, pinterestId, setBudgetSchema, setStatusSchema } from './schemas.js';
 
 interface Plan extends Omit<WritePreview, 'serverValidated'> { execute: () => Promise<string[]> }
@@ -22,7 +23,8 @@ const DERIVED = {
 
 export class PinterestAdsProvider implements AdProvider {
   readonly id = 'pinterest';
-  constructor(private readonly client: PinterestAdsClient) {}
+  readonly creatives: PinterestCreativeService;
+  constructor(private readonly client: PinterestAdsClient) { this.creatives = new PinterestCreativeService(client, (account, id) => this.getCampaign(account, id)); }
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions {
     return { pauseCampaign: (accountId, campaignId) => ({ tool: 'pinterest_set_campaign_status', input: { account_id: accountId, campaign_id: campaignId, status: 'PAUSED' } }) };
@@ -51,9 +53,9 @@ export class PinterestAdsProvider implements AdProvider {
   }
   private async listEntities<T extends z.infer<typeof entitySchema>>(accountId: string, collection: string, schema: z.ZodType<T>) {
     const params = new URLSearchParams();
-    // Include archived entities so historical reporting isn't silently filtered
-    // to the API's ACTIVE/PAUSED default. Arrays use OpenAPI form/explode.
-    for (const status of entityStatus.options) params.append('entity_statuses', status);
+    // Live v5 requires CSV arrays; repeated status parameters select only the
+    // final value despite the specification's omitted explode annotation.
+    params.set('entity_statuses', entityStatus.options.join(','));
     const rows = await this.collect(`ad_accounts/${pinterestId.parse(accountId)}/${collection}`, schema, params);
     if (rows.some(row => row.ad_account_id !== accountId)) throw new AdportError('PROVIDER_ERROR', 'pinterest: entity account mismatch');
     return rows;
@@ -91,7 +93,7 @@ export class PinterestAdsProvider implements AdProvider {
           start_date: start, end_date: end, granularity: 'TOTAL', columns: [level.id, ...fields].join(','),
           click_window_days: '30', view_window_days: '1', conversion_report_time: 'TIME_OF_AD_ACTION',
         });
-        if (level.filter) for (const entity of batch) params.append(level.filter, entity.id);
+        if (level.filter) params.set(level.filter, batch.map(entity => entity.id).join(','));
         const data = await this.client.get(`${base}/${level.path ? `${level.path}/` : ''}analytics`, z.array(z.record(z.string(), z.unknown())), params);
         for (const row of data) {
           const entityId = pinterestId.parse(row[level.id]);
@@ -160,7 +162,7 @@ export class PinterestAdsProvider implements AdProvider {
         execute: () => this.write(accountId, 'PATCH', { id: current.id, status: input.status }),
       };
     }
-    throw new AdportError('INVALID_INPUT', `pinterest: unsupported write ${op.tool}`);
+    return this.creatives.plan(op, guard);
   }
 }
 

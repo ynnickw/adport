@@ -69,10 +69,18 @@ export class PinterestAdsClient {
     }
     if (!response.ok) {
       const advice = response.status === 403 ? ' Check app Trial/Standard access, ads scopes and ad-account permissions; reauthorization alone may not help.' : '';
-      throw new AdportError('PROVIDER_ERROR', `pinterest: HTTP ${response.status}.${advice}`);
+      const details: Record<string, unknown> = { http_status: response.status };
+      if ([400, 404, 409, 422].includes(response.status)) {
+        const error = z.object({ code: z.union([z.string(), z.number()]).optional(), message: z.string().max(2000).optional() }).safeParse(await response.json().catch(() => undefined));
+        if (error.success) {
+          if (error.data.code !== undefined) details.api_code = error.data.code;
+          if (error.data.message) details.api_message = [this.credentials.clientId, this.credentials.clientSecret, this.credentials.refreshToken, this.refreshToken, token].reduce((text, secret) => secret ? text.replaceAll(secret, '[redacted]') : text, error.data.message);
+        }
+      }
+      throw new AdportError('PROVIDER_ERROR', `pinterest: HTTP ${response.status}.${advice}${details.api_message ? ` ${details.api_message}` : ''}`, details);
     }
     const parsed = schema.safeParse(await response.json());
-    if (!parsed.success) throw new AdportError('PROVIDER_ERROR', 'pinterest: malformed API response');
+    if (!parsed.success) throw new AdportError('PROVIDER_ERROR', 'pinterest: malformed API response', { api_path: path, response_issues: parsed.error.issues.map(issue => ({ path: issue.path, code: issue.code })) });
     return parsed.data;
   }
   private async accessToken(): Promise<string> {

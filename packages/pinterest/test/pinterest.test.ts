@@ -108,10 +108,10 @@ describe('Pinterest discovery and normalized reporting', () => {
     const { provider } = fixture(() => ({ items: [account], bookmark: 'same' }));
     await expect(provider.listAccounts()).rejects.toThrow('repeated an entity');
   });
-  it('includes archived and draft campaigns using schema-defined query arrays', async () => {
+  it('includes archived and draft campaigns using live-verified CSV query arrays', async () => {
     const { provider, calls } = fixture(() => ({ items: [campaign] }));
     expect(await provider.listCampaigns(ACCOUNT)).toHaveLength(1);
-    expect(calls[1]!.url.searchParams.getAll('entity_statuses')).toEqual(['ACTIVE', 'PAUSED', 'ARCHIVED', 'DRAFT', 'DELETED_DRAFT']);
+    expect(calls[1]!.url.searchParams.getAll('entity_statuses')).toEqual(['ACTIVE,PAUSED,ARCHIVED,DRAFT,DELETED_DRAFT']);
   });
   it('rejects cross-account entity responses', async () => {
     const { provider } = fixture(() => ({ items: [{ ...campaign, ad_account_id: SECOND }] }));
@@ -136,9 +136,9 @@ describe('Pinterest discovery and normalized reporting', () => {
   });
   it('chunks entity filters at the official 250-item limit', async () => {
     const entities = Array.from({ length: 251 }, (_, i) => ({ ...campaign, id: String(1000 + i) }));
-    const { provider, calls } = fixture(({ url }) => url.pathname.endsWith('/analytics') ? url.searchParams.getAll('campaign_ids').map(id => ({ CAMPAIGN_ID: id, ...stats })) : url.searchParams.has('bookmark') ? { items: entities.slice(250) } : { items: entities.slice(0, 250), bookmark: 'next' });
+    const { provider, calls } = fixture(({ url }) => url.pathname.endsWith('/analytics') ? url.searchParams.get('campaign_ids')!.split(',').map(id => ({ CAMPAIGN_ID: id, ...stats })) : url.searchParams.has('bookmark') ? { items: entities.slice(250) } : { items: entities.slice(0, 250), bookmark: 'next' });
     expect((await provider.report(query)).rows).toHaveLength(251);
-    expect(calls.filter(c => c.url.pathname.endsWith('/analytics')).map(c => c.url.searchParams.getAll('campaign_ids').length)).toEqual([250, 1]);
+    expect(calls.filter(c => c.url.pathname.endsWith('/analytics')).map(c => c.url.searchParams.get('campaign_ids')!.split(',').length)).toEqual([250, 1]);
   });
   it('requests derived-metric dependencies only and omits missing values', async () => {
     const { provider, calls } = fixture(({ url }) => url.pathname.endsWith('/analytics') ? [{ CAMPAIGN_ID: CAMPAIGN, SPEND_IN_MICRO_DOLLAR: 10_000_000 }] : { items: [campaign] });
