@@ -16,7 +16,7 @@ describe('skippable project setup', () => {
     expect(mocks.update).toHaveBeenCalledWith(principal, expect.objectContaining({ currentStep: 'accounts', skip: true }));
     expect(mocks.capture).toHaveBeenCalledWith(principal, expect.objectContaining({ complete: false, skipped: true, setup_kind: 'new_project' }));
   });
-  it.each([{ currentStep: 'complete', skip: true }, { currentStep: 'complete', skip: true, complete: true }, { currentStep: 'accounts', complete: true }])('rejects ambiguous completion: %j', async body => {
+  it.each([{ currentStep: 'complete' }, { currentStep: 'complete', skip: true }, { currentStep: 'complete', skip: true, complete: true }, { currentStep: 'accounts', complete: true }])('rejects ambiguous completion: %j', async body => {
     expect((await POST(request(body))).status).toBe(403);
     expect(mocks.update).not.toHaveBeenCalled();
   });

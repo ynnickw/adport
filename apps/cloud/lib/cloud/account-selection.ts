@@ -5,6 +5,7 @@ import { decryptSecret, encryptSecret } from '@/lib/crypto';
 import { safeReturnPath } from '@/lib/return-path';
 import type { CloudProvider, StoredMetaCredential, TenantPrincipal } from './types';
 import { providerLabel } from './providers';
+import { PlanLimitError, type UpgradePlanId } from './plan-limit';
 
 interface SelectionRow {
   id: string;
@@ -81,10 +82,15 @@ export async function getAccountSelection(principal: TenantPrincipal, id: string
 }
 
 /** Commit a subset atomically, then destroy the full discovery snapshot. */
-export async function saveAccountSelection(principal: TenantPrincipal, id: string, accountIds: string[], pageIds?: string[]) {
+export async function saveAccountSelection(principal: TenantPrincipal, id: string, accountIds: string[], pageIds?: string[], activation?: {
+  maxActiveAccounts: number | null; currentPlan: string; recommendedPlan: UpgradePlanId;
+}) {
   requireManager(principal);
   return db().begin(async sql => {
     // Serialize inventory changes with account activation and other selections.
+    await sql`select company.id from public.organization_groups company
+      join public.organizations project on project.organization_group_id = company.id
+      where project.id = ${principal.organizationId} for update of company`;
     await sql`select id from public.organizations where id = ${principal.organizationId} for update`;
     const rows = await sql<SelectionRow[]>`
       select selection.id, selection.connection_id, selection.provider, selection.ciphertext, selection.return_path
@@ -142,6 +148,25 @@ export async function saveAccountSelection(principal: TenantPrincipal, id: strin
           status = excluded.status, last_seen_at = now()
       `;
     }
+    if (activation && selected.length) {
+      const [capacity] = await sql<Array<{ used: number; additional: number }>>`
+        select count(*) filter (where account.enabled)::int as used,
+          count(*) filter (where account.organization_id = ${principal.organizationId}
+            and account.provider = ${row.provider} and not account.enabled
+            and account.account_id = any(${accountIds}::text[]))::int as additional
+        from public.organization_ad_accounts account
+        join public.organizations project on project.id = account.organization_id
+        where project.organization_group_id = (select organization_group_id from public.organizations where id = ${principal.organizationId})
+          and project.archived_at is null
+      `;
+      if (!capacity) throw new Error('Could not check account capacity. Try again.');
+      if (activation.maxActiveAccounts !== null && capacity.used + capacity.additional > activation.maxActiveAccounts) {
+        throw new PlanLimitError({ kind: 'active_accounts', currentPlan: activation.currentPlan, recommendedPlan: activation.recommendedPlan,
+          message: `Your plan allows ${activation.maxActiveAccounts} enabled accounts across projects. Choose fewer accounts, disable another account, or import without enabling.` });
+      }
+      await sql`update public.organization_ad_accounts set enabled = true
+        where organization_id = ${principal.organizationId} and provider = ${row.provider} and account_id = any(${accountIds}::text[])`;
+    }
     await sql`
       update public.connections set account_selection_id = null, external_subject = null,
         external_label = ${`${selected.length} added ${providerLabel(row.provider)} account(s)`}
@@ -152,11 +177,12 @@ export async function saveAccountSelection(principal: TenantPrincipal, id: strin
       insert into public.audit_events (organization_id, actor_user_id, event, provider, tool, account_id, summary, details)
       values (${principal.organizationId}, ${principal.userId!}, 'account_access_updated', ${row.provider},
         'account_selection_save', '*', ${`Added ${selected.length} selected ${providerLabel(row.provider)} account(s)`},
-        ${sql.json({ selectedAccountIds: accountIds, ...(row.provider === 'meta' ? { selectedPageIds } : {}) } as never)})
+        ${sql.json({ selectedAccountIds: accountIds, enabledSelectedAccounts: Boolean(activation), ...(row.provider === 'meta' ? { selectedPageIds } : {}) } as never)})
     `;
     const returnUrl = new URL(safeReturnPath(row.returnPath), 'https://adport.invalid');
     returnUrl.searchParams.delete('connected');
     returnUrl.searchParams.set('accounts_saved', row.provider);
+    if (activation && selected.length) returnUrl.searchParams.set('access_enabled', '1');
     return { returnPath: `${returnUrl.pathname}${returnUrl.search}${returnUrl.hash}`, count: selected.length };
   });
 }

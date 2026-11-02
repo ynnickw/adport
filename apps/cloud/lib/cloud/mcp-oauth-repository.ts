@@ -140,7 +140,7 @@ export async function createMcpAuthorizationCode(
 
 async function issueTokenPair(
   sql: postgres.TransactionSql,
-  input: { organizationId: string; userId: string; clientId: string; scopes: McpOAuthScope[]; resource: string },
+  input: { organizationId: string; userId: string; clientId: string; scopes: McpOAuthScope[]; resource: string; verifiedAt?: Date | null },
 ): Promise<McpOAuthTokenPair> {
   const access = await sql`select role from private.project_memberships
     where organization_id = ${input.organizationId} and user_id = ${input.userId}`;
@@ -157,10 +157,10 @@ async function issueTokenPair(
   `;
   await sql`
     insert into private.mcp_oauth_refresh_tokens
-      (token_hash, organization_id, user_id, client_id, scopes, resource, expires_at)
+      (token_hash, organization_id, user_id, client_id, scopes, resource, expires_at, verified_at)
     values
       (${digestState(refreshToken)}, ${input.organizationId}, ${input.userId}, ${input.clientId},
-       ${input.scopes}, ${input.resource}, to_timestamp(${now + REFRESH_TOKEN_SECONDS}))
+       ${input.scopes}, ${input.resource}, to_timestamp(${now + REFRESH_TOKEN_SECONDS}), ${input.verifiedAt ?? null})
   `;
   const accessToken = signAccessToken({
     sub: input.userId,
@@ -232,8 +232,9 @@ export async function exchangeMcpRefreshToken(input: {
       expiresAt: Date;
       consumedAt: Date | null;
       revokedAt: Date | null;
+      verifiedAt: Date | null;
     }>>`
-      select token_hash, organization_id, user_id, client_id, scopes, resource, expires_at, consumed_at, revoked_at
+      select token_hash, organization_id, user_id, client_id, scopes, resource, expires_at, consumed_at, revoked_at, verified_at
       from private.mcp_oauth_refresh_tokens
       where token_hash = ${digestState(input.refreshToken)}
       for update

@@ -1196,3 +1196,58 @@ input.control-checkbox:disabled { cursor: not-allowed; opacity: .45; }
 .selection-back-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
 .selection-back-row .selection-back { margin-bottom: 0; }
 @media (max-width: 600px) { body:has(.account-selection-step) .support-fab { display: none; } }
+
+/* Shared, compact onboarding and assistant connection surfaces. */
+.setup-project-label { color: var(--faint); font-size: .6875rem; }
+.onboarding-project { display: flex; align-items: center; gap: .6rem; }
+.onboarding-choose-assistant { margin-block: 1.5rem; max-width: 32rem; }
+.onboarding-choose-assistant h2 { font-size: .875rem; margin: 0 0 .75rem; }
+.setup-assistant-picker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
+.setup-assistant-choice { display: flex; align-items: center; gap: .55rem; min-width: 0; padding: .7rem; border: 1px solid var(--line); border-radius: .5rem; background: var(--paper); text-align: left; cursor: pointer; font-size: .8125rem; }
+.setup-assistant-choice[aria-pressed="true"] { border-color: var(--signal-ink); background: var(--signal-wash); }
+.setup-assistant-choice .agent-logo { width: 1.5rem; height: 1.5rem; flex: none; }
+.setup-connect .card-head { flex-wrap: wrap; gap: 1rem; }
+.setup-connect-identity { display: flex; align-items: center; gap: .65rem; }
+.setup-connect-identity h2 { margin: 0; font-size: 1rem; }
+.setup-assistant-select { display: flex; align-items: center; gap: .5rem; font-size: .75rem; color: var(--muted); }
+.setup-assistant-select select { max-width: 11rem; padding: .4rem .6rem; border: 1px solid var(--line); border-radius: .4rem; background: var(--paper); color: var(--ink); font: inherit; }
+.setup-project-scope { margin: 0; color: var(--muted); font-size: .75rem; }
+.setup-connect-instructions { display: grid; gap: .85rem; }
+.setup-connect-instructions > p { margin: 0; line-height: 1.65; font-size: .875rem; }
+.setup-connect-instructions > .button { justify-self: start; }
+.setup-connect .assistant-code { margin: 0; }
+.setup-connect .assistant-code pre { min-width: 0; overflow: auto; }
+.setup-connect .assistant-code .button { flex-shrink: 0; }
+.setup-connection-status { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; padding-top: .9rem; border-top: 1px solid var(--line-soft); }
+.setup-connection-status small { margin-left: auto; color: var(--faint); font-size: .75rem; overflow-wrap: anywhere; }
+.setup-first-question { padding: 1rem; border-radius: .5rem; background: var(--signal-wash); }
+.setup-first-question h3 { margin: 0 0 .5rem; font-size: 1rem; }
+.setup-first-question p { font-size: .8125rem; color: var(--muted); }
+.setup-first-question blockquote { margin: .85rem 0; line-height: 1.65; font-size: .875rem; }
+.setup-safety { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; padding: .9rem 1rem; background: var(--success-soft); border: 1px solid var(--line); border-radius: .5rem; font-size: .75rem; }
+.setup-safety > span { display: flex; align-items: center; gap: .25rem; }
+.setup-safety > a { color: var(--muted); text-underline-offset: .2em; }
+.connect-assistant-dialog { width: min(42rem, calc(100vw - 2rem)); }
+.connect-assistant-dialog > .setup-connect { margin-top: 1rem; }
+.connect-assistant-dialog .card-body { padding: 1rem; }
+.setup-checklist { padding: 1.15rem 1.25rem; margin-bottom: 1.5rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
+.setup-checklist-heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+.setup-checklist h2 { display: flex; align-items: center; gap: .3rem; margin: 0; font-size: 1rem; }
+.setup-checklist p { margin: .4rem 0 0; font-size: .8125rem; color: var(--muted); }
+.setup-checklist-content { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 1rem; }
+.setup-checklist ol { display: flex; flex-wrap: wrap; gap: .6rem 1.5rem; padding: 0; margin: 0; list-style: none; font-size: .75rem; color: var(--muted); }
+.setup-checklist li { display: flex; align-items: center; gap: .4rem; }
+.setup-checklist li[data-complete="true"] > span { color: var(--success); }
+.account-picker-submit { display: flex; align-items: center; justify-content: flex-end; gap: 1rem; flex-wrap: wrap; }
+.account-picker-footer > .account-picker-help { padding: 0; margin: 0; }
+.onboarding-stage:has(.setup-connect) .onboarding-actions { position: static; }
+.onboarding-platforms .connection-row > .provider { flex: 1; }
+.onboarding-platforms .connection-status { flex: none; }
+@media (max-width: 640px) {
+  .setup-assistant-picker { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .setup-checklist-content, .account-picker-actions { align-items: stretch; flex-direction: column; }
+  .setup-checklist ol { display: grid; gap: .7rem; }
+  .account-picker-submit { justify-content: space-between; }
+  .setup-connect .assistant-code { flex-wrap: wrap; }
+  .setup-connect .assistant-code pre { flex: 1 1 100%; }
+}

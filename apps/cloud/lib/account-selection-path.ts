@@ -12,10 +12,11 @@ export function accountSelectionPath(selectionId: string, returnPath: string, ne
   return '/dashboard/accounts?' + new URLSearchParams({ selection_id: selectionId });
 }
 
-export function accountSelectionSavedPath(returnPath: string, provider: string): string {
+export function accountSelectionSavedPath(returnPath: string, provider: string, enabled?: boolean): string {
   const destination = new URL(safeReturnPath(returnPath), 'https://adport.invalid');
   destination.searchParams.delete('selection_id');
   destination.searchParams.delete('connected');
   destination.searchParams.set('accounts_saved', provider);
+  if (enabled !== undefined) destination.searchParams.set('access_enabled', enabled ? '1' : '0');
   return `${destination.pathname}${destination.search}${destination.hash}`;
 }

@@ -16,20 +16,23 @@ export interface ProviderAccountSelection {
   pages?: Array<{ id: string; name: string; category?: string }>;
 }
 
-export function AccountConnectionProgress({ stage = 'choose' }: { stage?: 'choose' | 'enable' }) {
+export function AccountConnectionProgress({ stage = 'choose' }: { stage?: 'choose' | 'enable' | 'ready' }) {
   return <ol className="account-connection-progress" aria-label="Account connection progress">
     <li data-complete="true"><span aria-hidden="true">✓</span><span>Platform connected</span></li>
-    <li data-complete={stage === 'enable'} aria-current={stage === 'choose' ? 'step' : undefined}><span aria-hidden="true">{stage === 'enable' ? '✓' : '•'}</span><span>Choose accounts</span></li>
-    <li aria-current={stage === 'enable' ? 'step' : undefined}><span aria-hidden="true">•</span><span>Enable access</span></li>
+    <li data-complete={stage !== 'choose'} aria-current={stage === 'choose' ? 'step' : undefined}><span aria-hidden="true">{stage !== 'choose' ? '✓' : '•'}</span><span>Choose accounts</span></li>
+    <li data-complete={stage === 'ready'} aria-current={stage === 'enable' ? 'step' : undefined}><span aria-hidden="true">{stage === 'ready' ? '✓' : '•'}</span><span>Enable access</span></li>
   </ol>;
 }
 
-export function ProviderAccountPicker({ organizationId, selectionId, provider, accounts, initialSelectedIds, pages, backHref = '/dashboard/connections', nextPath }: {
+export function ProviderAccountPicker({ organizationId, selectionId, provider, accounts, initialSelectedIds, initialEnabledIds = [], maxActiveAccounts = null, organizationActiveCount = 0, pages, backHref = '/dashboard/connections', nextPath }: {
   organizationId: string; selectionId: string; provider: string;
   accounts: Account[]; initialSelectedIds: string[];
   pages?: Array<{ id: string; name: string; category?: string }>;
   backHref?: string;
   nextPath?: string;
+  initialEnabledIds?: string[];
+  maxActiveAccounts?: number | null;
+  organizationActiveCount?: number;
 }) {
   const router = useRouter();
   const singleAccount = accounts.length === 1;
@@ -39,20 +42,24 @@ export function ProviderAccountPicker({ organizationId, selectionId, provider, a
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
   const visible = accounts.filter(account => `${account.name} ${account.id}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const chosenIds = singleAccount ? accounts.map(account => account.id) : [...selected];
+  const enabledElsewhere = organizationActiveCount - initialEnabledIds.length;
+  const exceedsLimit = maxActiveAccounts !== null && enabledElsewhere + chosenIds.length > maxActiveAccounts;
 
-  function save(accountIds = [...selected]) {
+  function save(enableAccess: boolean) {
+    const accountIds = chosenIds;
     setError(undefined);
     startTransition(async () => {
       try {
         const response = await fetch('/api/account-selection', {
           method: 'POST', headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ organizationId, selectionId, accountIds,
+          body: JSON.stringify({ organizationId, selectionId, accountIds, enableAccess,
             ...(provider === 'meta' && pages !== undefined ? { pageIds: [...selectedPages] } : {}),
           }),
         });
         const body = await response.json() as { error?: string; returnPath?: string };
         if (!response.ok) { setError(body.error ?? 'Could not save account selection.'); return; }
-        router.replace(accountSelectionSavedPath(nextPath ?? body.returnPath ?? '/dashboard/accounts', provider));
+        router.replace(accountSelectionSavedPath(nextPath ?? body.returnPath ?? '/dashboard/accounts', provider, enableAccess && accountIds.length > 0));
         router.refresh();
       } catch { setError('Could not save account selection. Check your connection and try again.'); }
     });
@@ -91,9 +98,10 @@ export function ProviderAccountPicker({ organizationId, selectionId, provider, a
       {!selectedPages.size ? <p className="inline-note" style={{ padding: '0 1.5rem' }}>No Pages selected. Page tools will have no access; ad-account access is managed separately.</p> : null}
     </section> : null}
     <div className="account-picker-footer">
-      <p className="inline-note">New accounts start disabled. Enable access next.</p>
+      <p className="account-picker-help">{chosenIds.length ? `Enable ${chosenIds.length === 1 ? 'this account' : 'these accounts'} for Adport and your assistant.` : 'Choose the accounts this project can use.'} <InfoTooltip label="About enabling accounts">Enabled accounts count toward your plan across all projects. Enabling Adport access does not start or change campaigns. Importing without enabling keeps new accounts disabled and preserves access for accounts already enabled.</InfoTooltip></p>
+      {maxActiveAccounts !== null ? <p className={exceedsLimit ? 'error-text' : 'inline-note'} role={exceedsLimit ? 'status' : undefined}>{exceedsLimit ? `Choose fewer accounts or import without enabling. Your plan allows ${maxActiveAccounts} enabled accounts across projects.` : `You can enable up to ${Math.max(0, maxActiveAccounts - enabledElsewhere)} accounts here.`}</p> : null}
       {!singleAccount && !selected.size && initialSelectedIds.length ? <p className="inline-note">Saving with nothing selected removes this provider’s accounts from Adport, without changing them at the provider.</p> : null}
-      <div className="account-picker-actions"><Link className="button secondary" href={backHref} aria-disabled={pending} onClick={event => { if (pending) event.preventDefault(); }}>Back to platforms</Link><Button type="button" className="button" disabled={pending} onClick={() => save(singleAccount ? accounts.map(account => account.id) : [...selected])}>{pending ? 'Saving…' : singleAccount || selected.size ? 'Continue to enable access' : selectedPages.size ? 'Save Pages and continue' : 'Continue without accounts'}</Button></div>
+      <div className="account-picker-actions"><Link className="button secondary" href={backHref} aria-disabled={pending} onClick={event => { if (pending) event.preventDefault(); }}>Back</Link><div className="account-picker-submit">{chosenIds.length ? <Button type="button" className="link-button" disabled={pending} onClick={() => save(false)}>Import without enabling</Button> : null}<Button type="button" className="button" disabled={pending || exceedsLimit} onClick={() => save(chosenIds.length > 0)}>{pending ? 'Saving…' : chosenIds.length ? `Add and enable ${chosenIds.length} account${chosenIds.length === 1 ? '' : 's'}` : selectedPages.size ? 'Save Pages and continue' : 'Continue without accounts'}</Button></div></div>
     </div>
   </section></div>;
 }

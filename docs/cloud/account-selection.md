@@ -10,11 +10,21 @@ When popups or BroadcastChannel are unavailable, the ordinary link opens authori
 
 1. The owner/admin authorizes the provider.
 2. Adport discovers the accounts once and opens `/account-selection`.
-3. With multiple accounts, the user selects accounts individually, selects all, or continues without any. With exactly one account, Adport shows its details and an explicit **Add account** button, without checkboxes or bulk-selection controls.
+3. With multiple accounts, the user selects accounts individually, selects all, or continues without any. With exactly one account, Adport shows its details without checkboxes or bulk-selection controls.
 4. Saving replaces that provider's Adport inventory with only the selected accounts and deletes the discovery snapshot.
 5. Unselected accounts cannot be listed, enabled, reported on, or mutated through the Cloud runtime. Re-authorizing is required to discover/select them again.
 
-Adding an account does not automatically enable agent access. New accounts are inactive; existing selected active accounts retain their setting. Existing active-account plan limits still apply when enabling accounts. Provider consent may grant broader upstream access; the narrower selection is enforced by Adport, not represented as a provider-side permission revocation.
+**Add and enable N accounts** explicitly imports the selection and enables assistant access in one transaction. The picker shows the available allowance across projects. **Import without enabling** adds new accounts as disabled and preserves access for existing enabled accounts. Older API clients that omit `enableAccess` retain this import-only behavior.
+
+The server locks the shared organization allowance before saving, validates the selected IDs, and checks the resulting enabled count. A capacity failure rolls back inventory changes, Page choices, and snapshot consumption together. The user can choose fewer accounts or import without enabling. Provider consent may grant broader upstream access; the narrower selection is enforced by Adport, not represented as a provider-side permission revocation.
+
+## Verified setup
+
+Onboarding carries the chosen assistant from welcome to a compact connection panel. After account activation it moves directly to that panel. A successful, nonempty `accounts_list` or `report` call over the hosted MCP transport records verification on the credential. Authentication, discovery, dashboard reads, failed/partial reads and synthetic responses do not count. Verification remains attached to an OAuth grant through refresh rotation; expired or revoked grants do not count. Setup completion requires an enabled, connected account and a verified credential belonging to the signed-in user and selected assistant in this project. Client metadata identifies the assistant for UX only, never for authorization; API keys and unrecognized clients use **Other assistant**.
+
+**Set up later** records `skipped_at`, independently of `completed_at`. Skipped projects keep a small setup checklist on Overview. Dismissal is stored per user/project in that browser; the permanent **Connect assistant** button remains available and opens the same connection panel in a modal. Its status refreshes while visible and when the user returns to the tab.
+
+Official listing buttons are opt-in server configuration: `ADPORT_APPROVED_CHATGPT_LISTING_URL` and `ADPORT_APPROVED_CLAUDE_LISTING_URL`. Set each only after the Adport listing is approved and public. Destinations must use HTTPS on `chatgpt.com` or `claude.ai`, respectively. Empty or invalid configuration uses existing manual setup. No directory approval is implied and no public landing-page app links are introduced.
 
 ## Security and lifecycle
 

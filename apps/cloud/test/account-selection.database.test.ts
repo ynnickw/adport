@@ -6,6 +6,7 @@ import { resetEnvForTests } from '@/lib/env';
 import { getAccountSelection, saveAccountSelection, stageAccountSelection } from '@/lib/cloud/account-selection';
 import { listOrganizationAdAccounts, loadEnabledAccountIds, loadProviderCredentials, setOrganizationAdAccountEnabled, upsertProviderConnection } from '@/lib/cloud/repository';
 import type { TenantPrincipal } from '@/lib/cloud/types';
+import { createProject } from '@/lib/cloud/workspaces';
 
 const databaseUrl = process.env.ADPORT_SELECTION_TEST_DATABASE_URL;
 const suite = databaseUrl ? describe : describe.skip;
@@ -20,7 +21,7 @@ suite('one-time provider account selection (local database)', () => {
 
   beforeAll(async () => {
     const url = new URL(databaseUrl!);
-    if (!['localhost', '127.0.0.1'].includes(url.hostname) || !['55322', '56322'].includes(url.port)) throw new Error('Selection tests require the explicit local Adport database on port 55322 or isolated port 56322.');
+    if (!['localhost', '127.0.0.1'].includes(url.hostname) || !['55322', '56322', '58322'].includes(url.port)) throw new Error('Selection tests require an explicit local Adport database.');
     process.env.SUPABASE_DB_URL = databaseUrl;
     resetEnvForTests();
     admin = postgres(databaseUrl!, { max: 1 });
@@ -64,6 +65,39 @@ suite('one-time provider account selection (local database)', () => {
     expect(await admin`select id from private.provider_account_selections where id = ${id}`).toHaveLength(0);
     await expect(saveAccountSelection(principal, id, ['excluded'])).rejects.toThrow(/expired or was already saved/);
     await expect(setOrganizationAdAccountEnabled({ principal, provider: 'google', accountId: 'excluded', enabled: true, maxActiveAccounts: 3, currentPlan: 'Reader', recommendedPlan: 'operator' })).rejects.toThrow(/not found/);
+  });
+
+  const activation = { maxActiveAccounts: 3, currentPlan: 'Free', recommendedPlan: 'operator' as const };
+  it('explicitly adds and enables the chosen accounts in one transaction', async () => {
+    await saveAccountSelection(principal, id, ['chosen'], undefined, activation);
+    expect(await listOrganizationAdAccounts(principal.organizationId)).toMatchObject([{ accountId: 'chosen', enabled: true }]);
+    expect((await loadEnabledAccountIds(principal.organizationId)).google).toEqual(new Set(['chosen']));
+  });
+
+  it('rolls back the entire selection on capacity failure and still allows import only', async () => {
+    await expect(saveAccountSelection(principal, id, ['chosen', 'excluded'], undefined, { ...activation, maxActiveAccounts: 1 })).rejects.toThrow(/Choose fewer accounts/);
+    expect(await listOrganizationAdAccounts(principal.organizationId)).toEqual([]);
+    expect(await getAccountSelection(principal, id)).toBeDefined();
+    await saveAccountSelection(principal, id, ['chosen', 'excluded']);
+    expect((await listOrganizationAdAccounts(principal.organizationId)).every(account => !account.enabled)).toBe(true);
+  });
+
+  it('serializes batch enables across projects sharing one allowance', async () => {
+    const [project] = await admin`select organization_group_id from public.organizations where id = ${principal.organizationId}`;
+    const nextProject = await createProject(principal.userId!, project!.organization_group_id, 'Concurrent account selection');
+    try {
+      const second = { ...principal, organizationId: nextProject };
+      const secondId = randomUUID();
+      const connection = await upsertProviderConnection({ organizationId: nextProject, userId: principal.userId!, provider: 'google', credential: { refreshToken: 'fixture-only' }, selectionId: secondId });
+      await stageAccountSelection({ principal: second, id: secondId, connectionId: connection, provider: 'google', accounts, returnPath: '/onboarding' });
+      const results = await Promise.allSettled([
+        saveAccountSelection(principal, id, ['chosen', 'excluded'], undefined, activation),
+        saveAccountSelection(second, secondId, ['chosen', 'excluded'], undefined, activation),
+      ]);
+      expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+      const enabled = [...await listOrganizationAdAccounts(principal.organizationId), ...await listOrganizationAdAccounts(nextProject)].filter(account => account.enabled);
+      expect(enabled).toHaveLength(2);
+    } finally { await admin`delete from public.organizations where id = ${nextProject}`; }
   });
 
   it('rejects foreign organizations, other users and non-admins', async () => {

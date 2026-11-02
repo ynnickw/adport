@@ -3,6 +3,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import type { AdportRuntime } from '@adport/core';
 import { captureProductEvent } from './product-analytics';
 import type { TenantPrincipal } from './types';
+import { recordAssistantRead } from './assistant-connection';
 
 const insideTool = new AsyncLocalStorage<boolean>();
 
@@ -24,6 +25,14 @@ export function instrumentCloudTools(runtime: AdportRuntime, principal: TenantPr
         else if (tool.annotations.readOnly || value?.status === 'applied' || value?.status === 'pending_validation') {
           const completedCategory = tool.annotations.readOnly ? category : value?.status === 'applied' ? 'write_apply' : 'write_preview';
           captureProductEvent(principal, { event: 'tool_completed', category: completedCategory, surface });
+          // Count only data reads through the assistant transport. Empty account
+          // discovery, partial errors, previews and dashboard reads do not verify setup.
+          const data = result as { accounts?: unknown[]; rows?: unknown[]; data_source?: string } | null;
+          if (surface === 'mcp' && runtime.dataSource !== 'synthetic' && tool.annotations.readOnly && data?.data_source !== 'synthetic'
+            && ((name === 'report' && Boolean(data?.rows?.length)) || (name === 'accounts_list' && Boolean(data?.accounts?.length)))) {
+            try { await recordAssistantRead(principal); }
+            catch { console.error('Could not record assistant connection verification.'); }
+          }
         }
         return result;
       } catch (error) {

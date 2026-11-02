@@ -33,7 +33,7 @@ export function AgentIdentityLogo({ name }: { name: string }) {
   return <span className={`agent-logo ${setup?.provider ?? 'mcp'}`} aria-hidden="true">{setup ? <AgentLogo provider={setup.provider} /> : name.slice(0, 1).toUpperCase()}</span>;
 }
 
-function CopyButton({ value, label, className = '' }: { value: string; label: string; className?: string }) {
+export function CopyButton({ value, label, className = '' }: { value: string; label: string; className?: string }) {
   const [status, setStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   async function copy() {
     try { await navigator.clipboard.writeText(value); setStatus('copied'); }

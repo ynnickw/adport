@@ -74,7 +74,7 @@ export default async function BillingPage({
       <PageHeader
         title="Plan & billing"
         description="One subscription covers every project in your organization. Active accounts and editing-member allowances are shared across projects. Read-only viewers are free."
-        action={!tenant.onboardingCompletedAt && canManage ? <Link className="button secondary" href={'/onboarding?return_to=' + encodeURIComponent(setupDestination)}>Continue setup</Link> : undefined}
+        action={!tenant.onboardingCompletedAt && canManage ? <Link className="button secondary" href={'/onboarding?resume=1&return_to=' + encodeURIComponent(setupDestination)}>Continue setup</Link> : undefined}
       />
       {query.checkout === 'complete' ? <CheckoutStatus ready={subscriptionReady} planName={entitlement.plan.name} /> : null}
       {query.checkout === 'canceled' ? <div className="callout plan-notice">Checkout was canceled. Your current plan is unchanged.</div> : null}

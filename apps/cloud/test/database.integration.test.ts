@@ -103,8 +103,8 @@ describeDatabase('Supabase tenant boundary', () => {
       select count(*)::int as count from public.feedback where organization_id = ${secondOrgId} and id = ${feedback.id}
     `;
     expect(otherTenantRows[0]?.count).toBe(0);
-    await updateOnboardingState(principal, { currentStep: 'complete', selectedAgent: 'codex', complete: true });
-    expect((await getOnboardingState(firstOrgId)).completedAt).toBeInstanceOf(Date);
+    await expect(updateOnboardingState(principal, { currentStep: 'complete', selectedAgent: 'codex', complete: true })).rejects.toThrow(/run a read/);
+    expect((await getOnboardingState(firstOrgId)).completedAt).toBeNull();
   });
 
   it('allows skipping and resuming setup without losing the saved step or affecting other projects', async () => {
@@ -112,10 +112,11 @@ describeDatabase('Supabase tenant boundary', () => {
     await updateOnboardingState(principal, { currentStep: 'accounts', selectedAgent: 'claude', skip: true });
     const skipped = await getOnboardingState(secondOrgId);
     expect(skipped).toMatchObject({ currentStep: 'accounts', selectedAgent: 'claude' });
-    expect(skipped.completedAt).toBeInstanceOf(Date);
+    expect(skipped.completedAt).toBeNull();
+    expect(skipped.skippedAt).toBeInstanceOf(Date);
     await updateOnboardingState(principal, { currentStep: 'agent' });
-    expect(await getOnboardingState(secondOrgId)).toMatchObject({ currentStep: 'agent', completedAt: skipped.completedAt });
-    expect((await getOnboardingState(firstOrgId)).currentStep).toBe('complete');
+    expect(await getOnboardingState(secondOrgId)).toMatchObject({ currentStep: 'agent', completedAt: null, skippedAt: skipped.skippedAt });
+    expect((await getOnboardingState(firstOrgId)).currentStep).toBe('agent');
     await expect(updateOnboardingState({ ...principal, role: 'viewer' }, { currentStep: 'welcome', skip: true })).rejects.toThrow('Owner or admin');
   });
 

@@ -82,7 +82,7 @@ describe('provider-specific account picker', () => {
     const html = renderToStaticMarkup(<OnboardingFlow policy={DEFAULT_POLICY} projectName="Client project" setupKind="new_project" organizationId="org" canManage initialStep="accounts" initialAgent={null} baseUrl="https://app.adport.test" providers={[]} connections={[]} accounts={accounts} maxActiveAccounts={3} organizationActiveCount={2} returnTo="/dashboard/agents" pendingSelection={{ id: 'selection', provider: 'google', accounts: [{ provider: 'google', id: 'candidate', name: 'New client account' }] }} />);
     expect(html).toContain('New client account');
     expect(html).toContain('Choose your Google Ads accounts.');
-    expect(html).toContain('Continue to enable access');
+    expect(html).toContain('Add and enable 1 account');
     expect(html).not.toContain('role="switch"');
     for (const account of accounts) expect(html).not.toContain(account.name);
   });

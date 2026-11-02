@@ -113,6 +113,7 @@ export type Database = {
           id: string
           key_prefix: string
           last_used_at: string | null
+          verified_at: string | null
           name: string
           organization_id: string
           revoked_at: string | null
@@ -126,6 +127,7 @@ export type Database = {
           id?: string
           key_prefix: string
           last_used_at?: string | null
+          verified_at?: string | null
           name: string
           organization_id: string
           revoked_at?: string | null
@@ -139,6 +141,7 @@ export type Database = {
           id?: string
           key_prefix?: string
           last_used_at?: string | null
+          verified_at?: string | null
           name?: string
           organization_id?: string
           revoked_at?: string | null
@@ -489,6 +492,7 @@ export type Database = {
       organization_onboarding: {
         Row: {
           completed_at: string | null
+          skipped_at: string | null
           created_at: string
           current_step: string
           organization_id: string
@@ -497,6 +501,7 @@ export type Database = {
         }
         Insert: {
           completed_at?: string | null
+          skipped_at?: string | null
           created_at?: string
           current_step?: string
           organization_id: string
@@ -505,6 +510,7 @@ export type Database = {
         }
         Update: {
           completed_at?: string | null
+          skipped_at?: string | null
           created_at?: string
           current_step?: string
           organization_id?: string

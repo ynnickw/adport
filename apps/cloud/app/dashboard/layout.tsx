@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const tenant = await requireDashboardTenant();
-  if (!tenant.onboardingCompletedAt && ['owner', 'admin'].includes(tenant.role)) {
+  if (!tenant.onboardingCompletedAt && !tenant.onboardingSkippedAt && ['owner', 'admin'].includes(tenant.role)) {
     const destination = safeDashboardReturnPath((await headers()).get(REQUEST_PATH_HEADER));
     if (!['/dashboard/billing', '/dashboard/preferences', '/dashboard/policies'].includes(new URL(destination, 'https://adport.invalid').pathname)) {
       redirect('/onboarding?return_to=' + encodeURIComponent(destination));

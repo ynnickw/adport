@@ -2,7 +2,8 @@ import Link from 'next/link';
 import type { Policy } from '@adport/core';
 import { InfoTooltip } from './info-tooltip';
 
-export function PolicySummary({ policy, settingsHref }: { policy: Policy; settingsHref: string }) {
+export function PolicySummary({ policy, settingsHref, compact = false }: { policy: Policy; settingsHref: string; compact?: boolean }) {
+  if (compact) return <section className="setup-safety" aria-label="Project safeguards"><span><strong>Preview required for every ad change</strong> <InfoTooltip label="About your project safeguards">Always on. Each change needs its exact preview token and arguments. Saved optional rules: new campaigns and ads {policy.paused_creation ? 'start paused' : 'use the requested status'}; budget changes {policy.max_budget_delta_pct === null ? 'have no percentage limit' : `are limited to ${policy.max_budget_delta_pct}%`}; daily budgets {policy.max_daily_budget_micros === null ? 'have no limit' : `are limited to ${new Intl.NumberFormat('en', { maximumFractionDigits: 6 }).format(policy.max_daily_budget_micros / 1_000_000)} in each account’s currency`}. {new Set(policy.protected_accounts).size} read-only accounts. Previews expire after {policy.pending_ttl_minutes} minutes.</InfoTooltip></span><Link href={settingsHref}>Safety settings</Link></section>;
   return <section className="policy-summary" aria-label="Project safeguards">
     <div className="policy-summary-head"><h2>Project safeguards <InfoTooltip label="About project safeguards">These are the saved settings for this project. Previews expire after {policy.pending_ttl_minutes} minutes. You can change the optional safeguards in Policies.</InfoTooltip></h2><Link href={settingsHref} className="link-button">Customize</Link></div>
     <dl>
