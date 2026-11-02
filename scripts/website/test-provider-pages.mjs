@@ -54,8 +54,8 @@ test('all provider setup tabs reuse the homepage agent logos', () => {
 
 test('provider instruction tabs have matching labels and panels with no-JavaScript content', () => {
   for (const [file, html] of [['index.html', home], ...pages.filter(([file]) => file.startsWith('providers/'))]) {
-    assert.equal([...html.matchAll(/role="tab"/g)].length, 6, file);
-    assert.equal([...html.matchAll(/role="tabpanel"/g)].length, 6, file);
+    assert.equal([...html.matchAll(/class="agent-tab" type="button" role="tab"/g)].length, 6, file);
+    assert.equal([...html.matchAll(/class="agent-instructions"[^>]*role="tabpanel"/g)].length, 6, file);
     const mcpTab = html.match(/<button[^>]*id="agent-tab-mcp"[\s\S]*?<\/button>/)?.[0];
     assert(mcpTab?.includes('class="agent-brand-logo agent-brand-mcp"'), `${file}: MCP logo missing`);
     assert(mcpTab.includes('<path d="M13.85 0a4.16 4.16'), `${file}: not the official MCP mark`);
@@ -64,6 +64,15 @@ test('provider instruction tabs have matching labels and panels with no-JavaScri
       assert(html.includes(`id="agent-tab-${id}" aria-controls="agent-panel-${id}"`), file);
       assert(html.includes(`id="agent-panel-${id}" role="tabpanel" aria-labelledby="agent-tab-${id}" tabindex="0">`), file);
     }
+  }
+});
+
+test('local setup offers Claude Code, Codex and Cursor, each with its mark and command', () => {
+  for (const [id, command] of [['claude-code', 'claude mcp add --transport stdio adport -- adport mcp'], ['codex', 'codex mcp add adport -- adport mcp'], ['cursor', '&quot;command&quot;: &quot;adport&quot;']]) {
+    const tab = home.match(new RegExp(`<button class="local-tab"[^>]*id="local-tab-${id}"[\\s\\S]*?</button>`))?.[0];
+    assert(tab?.includes(`agent-brand-${id}`), `local ${id} tab is missing its mark`);
+    const panel = home.match(new RegExp(`<div class="local-panel" id="local-panel-${id}"[\\s\\S]*?</div></div>`))?.[0];
+    assert(panel?.includes(command), `local ${id} panel is missing its command`);
   }
 });
 

@@ -139,36 +139,59 @@ document.querySelectorAll("[data-copy-command]").forEach((button) => {
   });
 });
 
-// The hero pill grows into the email form, so the action keeps its place.
+// The hero pill slides open into the email form: the orange pill travels right and
+// becomes the submit button while the field is uncovered behind it, so the action
+// keeps its place. Joining turns the whole form into the confirmation.
 const signup = document.querySelector(".hero-signup");
 if (signup) {
   const trigger = signup.querySelector(".hero-signup-trigger");
   const form = signup.querySelector("form");
   const surface = form.querySelector(".hero-signup-surface");
   const submit = form.querySelector("button[type=submit]");
+  const label = submit.querySelector(".waitlist-button-label");
+  const input = form.querySelector("input[type=email]");
+  const later = [input, form.querySelector(".hero-signup-meta")];
+  const EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
+  let from = null;
+  let running = [];
 
-  trigger.addEventListener("click", (event) => {
+  const morph = (opening) => {
+    running.forEach((animation) => animation.cancel());
+    const field = surface.getBoundingClientRect();
+    const button = submit.getBoundingClientRect();
+    const shut = `inset(0 ${field.width - from.width}px 0 0 round 999px)`;
+    const open = "inset(0 0px 0 0 round 999px)";
+    const timing = { duration: 560, easing: EASE, fill: "both", direction: opening ? "normal" : "reverse" };
+    running = [
+      surface.animate([{ clipPath: shut }, { clipPath: open }], timing),
+      submit.animate([
+        { width: `${from.width}px`, transform: `translateX(${from.left - button.left}px)` },
+        { width: `${button.width}px`, transform: "none" },
+      ], timing),
+      label.animate([{ opacity: 0 }, { opacity: 0, offset: 0.35 }, { opacity: 1 }], timing),
+      ...later.map((element) => element.animate([{ opacity: 0, transform: "translateX(-0.5rem)" }, { opacity: 0, offset: 0.3 }, { opacity: 1, transform: "none" }], timing)),
+    ];
+    return running[0].finished.catch(() => {});
+  };
+
+  trigger.addEventListener("click", async (event) => {
     event.preventDefault();
-    const from = trigger.getBoundingClientRect().width;
-    const fromColor = getComputedStyle(trigger).backgroundColor;
+    from = trigger.getBoundingClientRect();
     trigger.hidden = true;
     trigger.setAttribute("aria-expanded", "true");
     signup.classList.add("is-open");
     form.hidden = false;
-    if (!reducedMotion()) {
-      surface.animate([
-        { transform: `scaleX(${from / surface.getBoundingClientRect().width})`, backgroundColor: fromColor },
-        { transform: "scaleX(1)", backgroundColor: getComputedStyle(surface).backgroundColor },
-      ], { duration: 360, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
-      form.querySelectorAll("input, button, p").forEach((element) => {
-        element.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260 });
-      });
-    }
-    form.querySelector("input[type=email]").focus({ preventScroll: true });
+    input.focus({ preventScroll: true });
+    if (!reducedMotion()) await morph(true);
+    running.forEach((animation) => animation.cancel());
+    running = [];
   });
 
-  const collapse = () => {
+  const collapse = async () => {
     if (submit.disabled) return;
+    if (!reducedMotion() && from) await morph(false);
+    running.forEach((animation) => animation.cancel());
+    running = [];
     form.hidden = true;
     signup.classList.remove("is-open");
     trigger.hidden = false;
@@ -178,6 +201,20 @@ if (signup) {
   form.querySelector(".hero-signup-close").addEventListener("click", collapse);
   form.addEventListener("keydown", (event) => {
     if (event.key === "Escape") { event.preventDefault(); collapse(); }
+  });
+
+  // Joined: the field folds into the button, which widens into the confirmation.
+  form.addEventListener("waitlist:joined", () => {
+    const before = submit.getBoundingClientRect();
+    form.dataset.joined = "true";
+    label.textContent = "You’re on the list";
+    if (reducedMotion()) return;
+    const after = submit.getBoundingClientRect();
+    submit.animate([
+      { width: `${before.width}px`, transform: `translateX(${before.left - after.left}px)` },
+      { width: `${after.width}px`, transform: "none" },
+    ], { duration: 520, easing: EASE });
+    label.animate([{ opacity: 0, transform: "translateY(0.4rem)" }, { opacity: 1, transform: "none" }], { duration: 360, delay: 140, easing: EASE, fill: "backwards" });
   });
 }
 
@@ -211,6 +248,7 @@ document.querySelectorAll(".waitlist-form").forEach((form) => {
       if (!response.ok || result.ok !== true) throw new Error(FALLBACK_ERROR);
       status.textContent = "You’re on the list. We’ll email you when early access opens.";
       form.reset();
+      form.dispatchEvent(new CustomEvent("waitlist:joined"));
     } catch (error) {
       status.dataset.error = "true";
       status.textContent = error instanceof Error && error.message.startsWith("Too many") ? error.message : FALLBACK_ERROR;

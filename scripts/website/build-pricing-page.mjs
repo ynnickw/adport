@@ -74,7 +74,6 @@ function pricingSection(standalone = false) {
   const heading = standalone ? 'h1' : 'h2';
   return `<section class="cloud-pricing" id="pricing" aria-labelledby="pricing-title">
   <div class="pricing-heading"><p class="pricing-eyebrow">Adport Cloud pricing</p><${heading} id="pricing-title">One organization. Your whole team in control.</${heading}><p>Cloud is currently invite-only. Unlimited projects, free read-only viewers, and fixed pricing with no percentage of ad spend.</p></div>
-  ${ecosystem}
   <div class="pricing-billing" aria-label="Billing interval"><button type="button" data-billing="monthly" aria-pressed="true">Monthly</button><button type="button" data-billing="annual" aria-pressed="false">Yearly <span>Save 2 months</span></button></div>
   <div class="pricing-cards">${paidIds.map(id => {
     const plan = catalog[id];
@@ -87,8 +86,9 @@ function pricingSection(standalone = false) {
     </article>`;
   }).join('\n')}</div>
   <div class="pricing-free"><div><span class="pricing-free-label">Free</span><h3>Start with a read-only view.</h3><p>${catalog.reader.maxActiveAccounts} active ad accounts · ${catalog.reader.maxMembers} member · ${catalog.reader.maxRetentionDays}-day audit history. Unlimited projects and free read-only viewers.</p></div><div>${amount('reader')}${action('reader')}<span class="pricing-trial-note">No card required</span></div></div>
+  ${ecosystem}
   <div class="pricing-next"><a class="pricing-compare-link" href="${standalone ? '#compare-plans' : '/pricing#compare-plans'}">Compare all features <span aria-hidden="true">↓</span></a><a class="pricing-waitlist-link" href="${standalone ? '/#waitlist' : '#waitlist'}">Join the Cloud waitlist <span aria-hidden="true">↗</span></a></div>
-  <p class="pricing-shared-note">Prices are per organization. Active accounts and editing members are shared across its projects. Viewers can report, but cannot change ads.</p>
+  <p class="pricing-shared-note">Prices are per organization. Active accounts and editing members are shared across its projects. Viewers can see results, but cannot change ads.</p>
   ${standalone ? comparison() : ''}
   <div class="pricing-enterprise"><div><p class="pricing-eyebrow">Enterprise</p><h3>A little more room for your team.</h3><p>More than ${catalog.agency.maxActiveAccounts} active accounts or ${catalog.agency.maxMembers} editing members? Let’s put together a plan for your organization.</p></div><a class="pricing-action" href="mailto:yannick@adport.dev?subject=Adport%20custom%20plan">Talk to us</a></div>
   <p class="pricing-local">Prefer to host it yourself? The open-source CLI and local MCP server remain free. <a href="https://github.com/ynnickw/adport">Explore the source</a>.</p>

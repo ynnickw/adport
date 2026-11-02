@@ -1,0 +1,27 @@
+{
+  "name": "@adport/stage",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Faux product scenes for adport.dev and the Cloud dashboard's empty states, built on the Stageshow kit.",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": { "types": "./index.d.ts", "default": "./src/index.ts" }
+  },
+  "scripts": {
+    "build:site": "node build-site.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-icons": "^5.7.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.3"
+  }
+}

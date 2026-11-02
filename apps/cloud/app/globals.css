@@ -622,17 +622,37 @@ time[title] { cursor: help; text-decoration: underline dotted var(--rule-strong)
   padding: 2rem 1.5rem;
 }
 .auth-card { width: min(27.5rem, 100%); overflow: hidden; border: 1px solid var(--line); border-radius: 1.25rem; background: var(--paper); box-shadow: var(--shadow-float); }
-.auth-bar { position: relative; display: flex; height: 3rem; align-items: center; justify-content: center; border-bottom: 1px solid var(--line-soft); background: #fafafa; color: var(--faint); font: 600 0.8125rem var(--font-sans); }
-.traffic { position: absolute; left: 1.1rem; display: flex; gap: 0.38rem; }
-.traffic i { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: #ff5f57; }
-.traffic i:nth-child(2) { background: #febc2e; }
-.traffic i:nth-child(3) { background: #28c840; }
+.auth-card-wide { width: min(31rem, 100%); }
 .auth-body { padding: 1.9rem 2rem 2rem; }
 .auth-body .brand-lockup { margin-bottom: 1.5rem; }
 .auth-body h1 { margin: 0 0 0.6rem; font-size: 2rem; font-weight: 820; letter-spacing: -0.035em; }
 .auth-body > p { margin: 0 0 1.5rem; color: var(--ink-soft); font-size: 0.9375rem; line-height: 1.6; }
 .local-note { margin-top: 0.9rem; color: var(--faint); font-size: 0.8125rem; line-height: 1.55; }
 .auth-body .error-callout { margin-bottom: 0; }
+
+/* ── OAuth consent ───────────────────────────────────────────────────── */
+.consent-pair { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1.4rem; }
+.consent-pair .agent-logo { width: 2.75rem; height: 2.75rem; border-radius: 0.75rem; }
+.auth-body .consent-pair .brand-lockup { margin: 0; }
+.consent-pair .agent-logo svg { width: 1.35rem; height: 1.35rem; }
+.consent-link { width: 1.1rem; height: 1.1rem; color: var(--faint); }
+.auth-body .consent h1 { margin: 0; font-size: 1.6rem; font-weight: 780; letter-spacing: -0.03em; line-height: 1.2; }
+.consent-lede { margin: 0.5rem 0 0; color: var(--ink-soft); font-size: 0.9375rem; line-height: 1.55; }
+.consent-scopes { display: grid; gap: 0.75rem; margin: 1.4rem 0 0; padding: 1rem 1.1rem; border: 1px solid var(--line-soft); border-radius: 0.75rem; background: var(--bg); list-style: none; }
+.consent-scopes li { display: flex; align-items: flex-start; gap: 0.65rem; }
+.consent-scopes svg { width: 1.1rem; height: 1.1rem; flex: none; margin-top: 0.1rem; color: var(--success); }
+.consent-scopes span { display: grid; gap: 0.15rem; color: var(--muted); font-size: 0.8125rem; line-height: 1.5; }
+.consent-scopes strong { color: var(--ink); font-size: 0.875rem; font-weight: 680; }
+.consent-form { display: grid; gap: 1.1rem; margin-top: 1.4rem; }
+.consent-form .field-label { color: var(--ink); }
+.consent-form .select-control { display: flex; width: 100%; }
+.consent-form .select-trigger { min-height: 2.75rem; padding: 0.55rem 0.85rem; border-radius: 0.6rem; font-size: 0.9375rem; font-weight: 600; }
+.consent-return { display: flex; align-items: flex-start; gap: 0.55rem; margin: 0; color: var(--muted); font-size: 0.8125rem; line-height: 1.5; }
+.consent-return svg { width: 1rem; height: 1rem; flex: none; margin-top: 0.1rem; }
+.consent-return strong { color: var(--ink); font-family: var(--font-mono); font-size: 0.78rem; font-weight: 600; }
+.consent-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.6rem; }
+.consent-actions .button { min-height: 2.75rem; border-radius: 0.6rem; font-size: 0.9375rem; }
+.consent-foot { margin: 1rem 0 0; color: var(--faint); font-size: 0.8125rem; text-align: center; }
 
 /* ── Loading skeleton ────────────────────────────────────────────────── */
 .skeleton-line { border-radius: 999px; background: linear-gradient(90deg, rgba(29, 29, 31, 0.05) 25%, rgba(29, 29, 31, 0.09) 50%, rgba(29, 29, 31, 0.05) 75%); background-size: 200% 100%; animation: shimmer 1.4s ease infinite; }
