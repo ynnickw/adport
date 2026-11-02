@@ -1,6 +1,6 @@
 export const ADPORT_UI_URI = 'ui://adport/insight-card-v2.html';
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
-export const ADPORT_UI_RESOURCE_DOMAINS = ['https://*.fbcdn.net', 'https://*.fbsbx.com', 'https://*.googleusercontent.com', 'https://tpc.googlesyndication.com'];
+export const ADPORT_UI_RESOURCE_DOMAINS = ['https://*.fbcdn.net', 'https://*.fbsbx.com', 'https://*.googleusercontent.com', 'https://tpc.googlesyndication.com', 'https://*.scdn.co', 'https://*.spotifycdn.com', 'https://storage.googleapis.com'];
 
 export type AdportView = 'accounts' | 'report' | 'operation' | 'insights' | 'creatives';
 

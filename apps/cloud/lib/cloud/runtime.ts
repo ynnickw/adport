@@ -77,7 +77,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
   }
   if (credentials.spotify && providerAllowedForOrganization('spotify', principal.organizationId)) {
     const persist = persistTokens('spotify');
-    const provider = new SpotifyAdsProvider(new SpotifyAdsClient({ ...cloudProviderApp('spotify'), refreshToken: credentials.spotify.refreshToken, onRefreshToken: refreshToken => persist({ refreshToken }) }));
+    const provider = new SpotifyAdsProvider(new SpotifyAdsClient({ ...cloudProviderApp('spotify'), refreshToken: credentials.spotify.refreshToken, onRefreshToken: refreshToken => persist({ refreshToken }) }), media);
     modules.push({ provider: scopeProvider(provider), tools: spotifyTools(provider) });
   }
   if (credentials.pinterest && providerAllowedForOrganization('pinterest', principal.organizationId)) {

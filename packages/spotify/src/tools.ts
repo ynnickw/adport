@@ -2,9 +2,11 @@ import { z } from 'zod';
 import { defineTool, guardedWriteTool, type AnyToolDefinition } from '@adport/core';
 import { createDraftSchema, setBudgetSchema, setDeliverySchema, setStatusSchema, spotifyId } from './schemas.js';
 import type { SpotifyAdsProvider } from './provider.js';
+import { spotifyCreativeTools } from './creative-tools.js';
 
 export function spotifyTools(provider: SpotifyAdsProvider): AnyToolDefinition[] {
   return [
+    ...spotifyCreativeTools(provider),
     defineTool({ name: 'spotify_list_campaigns', namespace: 'spotify', description: 'List published Spotify Ads campaigns in the selected account.',
       input: z.object({ account_id: spotifyId }), annotations: { readOnly: true }, handler: input => provider.listCampaigns(input.account_id) }),
     defineTool({ name: 'spotify_get_ad_set', namespace: 'spotify', description: 'Read a Spotify ad set, including its budget and delivery setting.',

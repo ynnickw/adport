@@ -9,6 +9,7 @@
 - [Creative editing and private media](creative-media.md): visual tools, project uploads, immutable assets, and provider workflows
 - [Apple campaign setup](apple-campaign-setup.md)
 - [TikTok campaign and creative setup](tiktok-campaign-setup.md)
+- [Spotify campaign drafts and media](spotify-campaign-setup.md)
 - [Agent plugin](../plugins/adport/README.md)
 - [Support](../SUPPORT.md) and [security reports](../SECURITY.md)
 

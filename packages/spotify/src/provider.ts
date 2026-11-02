@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import {
-  AdportError, resolveDateRange, type Account, type AdProvider, type MetricName,
+  AdportError, LocalMediaResolver, resolveDateRange, type Account, type AdProvider, type MediaResolver, type MetricName,
   type NormalizedQuery, type Report, type ReportRow, type StandardActions,
   type WriteGuard, type WriteOperation, type WritePreview, type WriteResult,
 } from '@adport/core';
 import { SpotifyAdsClient } from './client.js';
+import { SpotifyCreativeService } from './creatives.js';
 import {
   accountSchema, adSetSchema, businessSchema, campaignSchema, createDraftSchema,
   draftSchema, pagingSchema, reportSchema, setBudgetSchema, setDeliverySchema,
@@ -21,7 +22,8 @@ const DERIVED = {
 
 export class SpotifyAdsProvider implements AdProvider {
   readonly id = 'spotify';
-  constructor(private readonly client: SpotifyAdsClient) {}
+  readonly creatives: SpotifyCreativeService;
+  constructor(private readonly client: SpotifyAdsClient, media: MediaResolver = new LocalMediaResolver()) { this.creatives = new SpotifyCreativeService(client, media); }
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions {
     return { pauseCampaign: (accountId, campaignId) => ({ tool: 'spotify_set_campaign_status', input: { account_id: accountId, campaign_id: campaignId, status: 'PAUSED' } }) };
@@ -167,7 +169,7 @@ export class SpotifyAdsProvider implements AdProvider {
         },
       };
     }
-    throw new AdportError('INVALID_INPUT', `spotify: unsupported write ${op.tool}`);
+    return this.creatives.plan(op, guard);
   }
 }
 

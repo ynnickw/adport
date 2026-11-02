@@ -51,11 +51,14 @@ export class SpotifyAdsClient {
   async get<T>(path: string, schema: z.ZodType<T>, params = new URLSearchParams()): Promise<T> {
     return this.request(path, 'GET', schema, undefined, params);
   }
-  async mutate<T>(path: string, method: 'POST' | 'PATCH', body: unknown, schema: z.ZodType<T>): Promise<T> {
-    return this.request(path, method, schema, body);
+  async mutate<T>(path: string, method: 'POST' | 'PATCH' | 'DELETE', body: unknown, schema: z.ZodType<T>, params = new URLSearchParams()): Promise<T> {
+    return this.request(path, method, schema, body, params);
+  }
+  async upload<T>(path: string, body: FormData, schema: z.ZodType<T>): Promise<T> {
+    return this.request(path, 'POST', schema, body);
   }
 
-  private async request<T>(path: string, method: 'GET' | 'POST' | 'PATCH', schema: z.ZodType<T>, body?: unknown, params = new URLSearchParams(), retry = true): Promise<T> {
+  private async request<T>(path: string, method: 'GET' | 'POST' | 'PATCH' | 'DELETE', schema: z.ZodType<T>, body?: unknown, params = new URLSearchParams(), retry = true): Promise<T> {
     // Resource paths are built from schema-checked IDs. Reject foreign URLs,
     // absolute paths, queries and dot segments before sending any credentials.
     if (!/^[a-z_]+(?:\/[a-zA-Z0-9_-]+)*$/.test(path)) throw new AdportError('INVALID_INPUT', 'spotify: invalid API resource path');
@@ -63,8 +66,8 @@ export class SpotifyAdsClient {
     url.search = params.toString();
     const token = await this.accessToken();
     const response = await this.fetchImpl(url.href, {
-      method, headers: { authorization: `Bearer ${token}`, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}), redirect: 'error', signal: AbortSignal.timeout(30_000),
+      method, headers: { authorization: `Bearer ${token}`, ...(body !== undefined && !(body instanceof FormData) ? { 'content-type': 'application/json' } : {}) },
+      ...(body !== undefined ? { body: body instanceof FormData ? body : JSON.stringify(body) } : {}), redirect: 'error', signal: AbortSignal.timeout(60_000),
     });
     if (response.status === 401 && method === 'GET' && retry) {
       if (this.token?.value === token) this.token = undefined;
@@ -72,9 +75,21 @@ export class SpotifyAdsClient {
     }
     if (!response.ok) {
       const advice = response.status === 403 ? ' Check Ads API terms/allowlisting and ad-account permissions; reauthorization alone may not help.' : '';
-      throw new AdportError('PROVIDER_ERROR', `spotify: HTTP ${response.status}.${advice}`);
+      const details: Record<string, unknown> = { http_status: response.status };
+      if ([400, 404, 409, 422].includes(response.status)) {
+        const errors = z.object({ messages: z.array(z.string().max(2000)).max(30).optional(), sp_trace_id: z.uuid().optional(), error_codes: z.array(z.object({ code: z.string().max(200), definition: z.string().max(2000).optional() })).max(30).optional() });
+        const parsed = errors.safeParse(await response.json().catch(() => undefined));
+        if (parsed.success) {
+          const redact = (value: string) => [this.credentials.clientId, this.credentials.clientSecret, this.credentials.refreshToken, this.refreshToken, token].reduce((text, secret) => secret ? text.replaceAll(secret, '[redacted]') : text, value);
+          if (parsed.data.messages) details.messages = parsed.data.messages.map(redact);
+          if (parsed.data.sp_trace_id) details.sp_trace_id = parsed.data.sp_trace_id;
+          if (parsed.data.error_codes) details.error_codes = parsed.data.error_codes.map(error => ({ code: redact(error.code), ...(error.definition ? { definition: redact(error.definition) } : {}) }));
+        }
+      }
+      const messages = Array.isArray(details.messages) ? ` ${details.messages.join('; ')}` : '';
+      throw new AdportError('PROVIDER_ERROR', `spotify: HTTP ${response.status}.${advice}${messages}`, details);
     }
-    const parsed = schema.safeParse(await response.json());
+    const parsed = schema.safeParse(response.status === 204 ? undefined : await response.json());
     if (!parsed.success) throw new AdportError('PROVIDER_ERROR', 'spotify: malformed API response');
     return parsed.data;
   }
