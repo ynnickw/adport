@@ -20,7 +20,7 @@ export function AuthScreen({ mode, error, message, returnTo }: AuthScreenProps) 
       <h1>{signup ? 'Create your Adport account.' : 'Sign in to Adport.'}</h1>
       <p>
         {signup
-          ? 'Create an organization, invite your team, and keep each client’s accounts in its own project.'
+          ? 'Create an organization, invite your team, and organize accounts by brand, department, or client.'
           : 'Your projects, ad accounts, and connected assistants in one place.'}
       </p>
       {error ? <div className="error-callout" role="alert">{error}</div> : null}

@@ -16,7 +16,7 @@ function requireOwner(role: string | undefined): void {
 export interface BillingActionState { error?: string; }
 
 async function checkoutUrl(plan: PlanId, interval: BillingInterval): Promise<string> {
-  if (plan !== 'operator' && plan !== 'premium' && plan !== 'agency') throw new Error('Choose Pro, Growth, or Agency.');
+  if (plan !== 'operator' && plan !== 'premium' && plan !== 'agency') throw new Error('Choose Pro, Growth, or Business.');
   if (interval !== 'monthly' && interval !== 'annual') throw new Error('Choose monthly or annual billing.');
   const principal = await sessionPrincipal();
   requireOwner(principal.role);

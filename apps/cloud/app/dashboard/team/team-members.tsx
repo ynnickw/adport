@@ -8,8 +8,9 @@ import { PlanLimitModal } from '@/components/plan-limit-modal';
 import { planLimitFromResponse, type PlanLimitDetails } from '@/lib/cloud/plan-limit';
 import { Select } from '@/components/select';
 import { useConfirm } from '@/components/use-confirm';
+import { TEAM_ROLES } from '@/lib/team-roles';
 
-interface Member { userId: string; email: string; displayName: string; role: string; }
+interface Member { userId: string; email: string; displayName: string; role: string; inheritedFromOrganization: boolean; }
 
 export function TeamMembers({ organizationId, currentUserId, currentRole, members }: {
   organizationId: string;
@@ -63,12 +64,13 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
             <div>
               <strong>{member.displayName}{member.userId === currentUserId ? <span className="text-muted"> · you</span> : null}</strong>
               <div className="cell-sub">{member.email}</div>
+              {member.inheritedFromOrganization ? <div className="cell-sub">Organization {member.role} · all projects</div> : null}
             </div>
             <div className="row-actions">
-              {canAdminister && member.role !== 'owner' && (currentRole === 'owner' || member.role !== 'admin')
+              {canAdminister && !member.inheritedFromOrganization && member.role !== 'owner' && (currentRole === 'owner' || member.role !== 'admin')
                 ? <Select aria-label={`Role for ${member.email}`} value={member.role} options={roles} disabled={busy} onValueChange={role => void call('PATCH', { userId: member.userId, role }, 'Member role updated.')} />
-                : <span className="status neutral">{member.role}</span>}
-              {canAdminister && member.userId !== currentUserId && member.role !== 'owner' && (currentRole === 'owner' || member.role !== 'admin')
+                : <span className="status neutral">{TEAM_ROLES[member.role as keyof typeof TEAM_ROLES]?.label ?? member.role}</span>}
+              {canAdminister && !member.inheritedFromOrganization && member.userId !== currentUserId && member.role !== 'owner' && (currentRole === 'owner' || member.role !== 'admin')
                 ? <Button className="button danger small" disabled={busy} onClick={async () => { if (await confirm({ title: 'Remove project member?', description: `${member.email} will lose access to this project.`, confirmLabel: 'Remove member' })) void call('DELETE', { userId: member.userId }, 'Member removed.'); }}>Remove</Button>
                 : null}
             </div>

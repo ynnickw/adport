@@ -28,8 +28,12 @@ async function requireProjectManagedMember(projectId: string, userId: string): P
 }
 
 export async function listOrganizationMembers(organizationId: string) {
-  return db()<Array<{ userId: string; email: string; displayName: string; role: string; createdAt: Date }>>`
-    select * from private.organization_member_directory(${organizationId})
+  return db()<Array<{ userId: string; email: string; displayName: string; role: string; createdAt: Date; inheritedFromOrganization: boolean }>>`
+    select directory.*, coalesce(member.role in ('owner', 'admin'), false) as inherited_from_organization
+    from private.organization_member_directory(${organizationId}) directory
+    join public.organizations project on project.id = ${organizationId}
+    left join public.organization_group_memberships member
+      on member.organization_group_id = project.organization_group_id and member.user_id = directory.user_id
   `;
 }
 

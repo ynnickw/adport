@@ -7,9 +7,11 @@ The shared public catalog is `apps/cloud/lib/cloud/plan-catalog.json`. Both the 
 | Free | reader | 0 | 0 | 3 | 1 | 30 |
 | Pro | operator | 19 | 190 | 5 | 2 | 90 |
 | Growth | premium | 39 | 390 | 20 | 5 | 365 |
-| Agency | agency | 79 | 790 | 60 | 15 | 730 |
+| Business | agency | 79 | 790 | 60 | 15 | 730 |
 
-Allowances are shared per organization, across unlimited projects. Read-only client viewers do not consume editing seats. Owners and admins count; a member editing multiple projects consumes one seat. A project-level editor cannot hide behind an organization viewer role. Database triggers and authenticated handlers enforce promotions and concurrent invitations. Existing read-only access is retained after a downgrade; write scopes are limited to the plan's editing seats, ordered by owner/admin/member, membership age, then user ID. Owners retain organization/billing rights even when their ad access is read-only. Organization settings lets owners choose which people remain editors by changing others to Viewer.
+Allowances are shared per organization, across unlimited projects. Read-only viewers do not consume editing seats. Owners and admins count; a member editing multiple projects consumes one seat. A project-level editor cannot hide behind an organization viewer role. Database triggers and authenticated handlers enforce promotions and concurrent invitations. Existing read-only access is retained after a downgrade; write scopes are limited to the plan's editing seats, ordered by owner/admin/member, membership age, then user ID. Owners retain organization/billing rights even when their ad access is read-only. Organization settings lets owners choose which people remain editors by changing others to Viewer.
+
+The Business plan retains the stable `agency` ID and existing Stripe price IDs. This is a display-name change; prices, allowances, subscriptions, and historical mappings are unchanged.
 
 ## Stripe
 
@@ -17,7 +19,7 @@ Current checkout requires these server variables:
 
 - Pro: `STRIPE_PRO_PRICE_ID`, `STRIPE_PRO_ANNUAL_PRICE_ID`
 - Growth: `STRIPE_GROWTH_PRICE_ID`, `STRIPE_GROWTH_ANNUAL_PRICE_ID`
-- Agency: `STRIPE_AGENCY_V2_PRICE_ID`, `STRIPE_AGENCY_V2_ANNUAL_PRICE_ID`
+- Business: `STRIPE_AGENCY_V2_PRICE_ID`, `STRIPE_AGENCY_V2_ANNUAL_PRICE_ID`
 - Portal: `STRIPE_BILLING_PORTAL_CONFIGURATION_ID`
 
 The original Operator/Premium/Agency variables remain webhook-only legacy mappings. `STRIPE_LEGACY_PRICE_PLAN_MAP` is a JSON object mapping additional historical price IDs to stable plan IDs. An old price is never offered as a fallback for new checkout: missing current configuration disables the corresponding CTA, preventing a €39 card from silently charging an old €79 price.

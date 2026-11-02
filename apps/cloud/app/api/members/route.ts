@@ -11,6 +11,7 @@ import { apiError, noStoreJson } from '@/lib/http';
 const roleSchema = z.enum(['admin', 'member', 'viewer']);
 const inviteSchema = z.object({ organizationId: z.string().uuid(), email: z.string().email().max(320), role: roleSchema });
 const updateSchema = z.object({ organizationId: z.string().uuid(), userId: z.string().uuid(), role: roleSchema });
+const removeSchema = updateSchema.omit({ role: true });
 
 export async function GET(request: Request) {
   try {
@@ -47,10 +48,11 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const url = new URL(request.url);
-    const organizationId = z.string().uuid().parse(url.searchParams.get('organization_id'));
-    const userId = z.string().uuid().parse(url.searchParams.get('user_id'));
-    const principal = await sessionPrincipal(organizationId);
-    await removeOrganizationMember(principal, userId);
+    const input = removeSchema.parse(url.searchParams.has('organization_id') || url.searchParams.has('user_id')
+      ? { organizationId: url.searchParams.get('organization_id'), userId: url.searchParams.get('user_id') }
+      : await request.json());
+    const principal = await sessionPrincipal(input.organizationId);
+    await removeOrganizationMember(principal, input.userId);
     return noStoreJson({ removed: true });
   } catch (error) {
     return apiError(error, 403);
