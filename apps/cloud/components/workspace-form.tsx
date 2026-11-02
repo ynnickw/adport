@@ -2,9 +2,11 @@
 
 import { Button } from '@/components/controls';
 
-import { startTransition, useActionState, type FormEvent } from 'react';
+import { startTransition, useActionState, useState, type FormEvent } from 'react';
 import type { WorkspaceActionState } from '@/app/dashboard/projects/actions';
 import { useConfirm } from './use-confirm';
+import { PlanLimitModal } from './plan-limit-modal';
+import type { PlanLimitDetails } from '@/lib/cloud/plan-limit';
 
 export function WorkspaceForm({ action, children, label = 'Save changes', danger = false, confirmation, successMessage }: {
   action: (state: WorkspaceActionState, form: FormData) => Promise<WorkspaceActionState>;
@@ -15,6 +17,7 @@ export function WorkspaceForm({ action, children, label = 'Save changes', danger
   successMessage?: string;
 }) {
   const [confirm, confirmationDialog] = useConfirm();
+  const [dismissedLimit, setDismissedLimit] = useState<PlanLimitDetails>();
   const [state, formAction, pending] = useActionState(action, {});
   function submit(event: FormEvent<HTMLFormElement>) {
     if (!confirmation) return;
@@ -27,6 +30,7 @@ export function WorkspaceForm({ action, children, label = 'Save changes', danger
   return (
     <form action={formAction} onSubmit={submit} className="form workspace-form">
       {confirmationDialog}
+      <PlanLimitModal limit={state.planLimit !== dismissedLimit ? state.planLimit : undefined} onClose={() => setDismissedLimit(state.planLimit)} />
       {children}
       {state.error ? <p className="error-callout" role="alert">{state.error}</p> : null}
       {state.success ? <p className="callout success" role="status">{successMessage ?? state.success}</p> : null}

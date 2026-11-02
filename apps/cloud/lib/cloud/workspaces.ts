@@ -6,7 +6,8 @@ import { invitationRedirectUrl } from '@/lib/invitations';
 import { db } from '@/lib/db';
 import { HttpError } from '@/lib/http';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getOrganizationEntitlement } from './plans';
+import { getOrganizationEntitlement, recommendedUpgradePlan } from './plans';
+import { PlanLimitError } from './plan-limit';
 import type { TenantPrincipal } from './types';
 import { editingMemberCapacity } from './member-capacity';
 
@@ -165,7 +166,7 @@ export async function saveOrganizationMember(input: {
     if (!targetUserId) {
       const entitlement = await getOrganizationEntitlement(actor.defaultProjectId);
       const members = await editingMemberCapacity(actor.defaultProjectId);
-      if (input.role !== 'viewer' && entitlement.plan.maxMembers !== null && members.count >= entitlement.plan.maxMembers) throw new HttpError('Your organization has reached its editing-member limit. Read-only viewers are free.', 409);
+      if (input.role !== 'viewer' && entitlement.plan.maxMembers !== null && members.count >= entitlement.plan.maxMembers) throw new PlanLimitError({ kind: 'members', currentPlan: entitlement.plan.name, recommendedPlan: recommendedUpgradePlan(entitlement.plan.id, { members: members.count + 1 }), message: 'Your organization has reached its editing-member limit. Read-only viewers are free.' });
       const result = await createAdminClient().auth.admin.inviteUserByEmail(email, {
         redirectTo: invitationRedirectUrl(env().ADPORT_CLOUD_BASE_URL, projectIds[0] ?? actor.defaultProjectId),
       });
@@ -190,7 +191,7 @@ export async function saveOrganizationMember(input: {
     const entitlement = await getOrganizationEntitlement(organization.defaultProjectId, sql);
     const members = await editingMemberCapacity(organization.defaultProjectId, target, sql);
     if (input.role !== 'viewer' && !members.existing && entitlement.plan.maxMembers !== null && members.count >= entitlement.plan.maxMembers) {
-      throw new HttpError('Your organization has reached its editing-member limit. Read-only viewers are free.', 409);
+      throw new PlanLimitError({ kind: 'members', currentPlan: entitlement.plan.name, recommendedPlan: recommendedUpgradePlan(entitlement.plan.id, { members: members.count + 1 }), message: 'Your organization has reached its editing-member limit. Read-only viewers are free.' });
     }
     const projectIds = [...new Set(input.projectIds)];
     const projects = await sql<Array<{ id: string }>>`select id from public.organizations

@@ -7,6 +7,7 @@ import { Button, Input, Switch } from '@/components/controls';
 import { InfoTooltip } from '@/components/info-tooltip';
 import { Provider } from '@/components/ui';
 import { PlanLimitModal } from '@/components/plan-limit-modal';
+import { UpgradeButton } from '@/components/upgrade-button';
 import { planLimitFromResponse, type PlanLimitDetails } from '@/lib/cloud/plan-limit';
 import { providerLabel } from '@/lib/cloud/providers';
 import type { OAuthProvider } from '@/lib/cloud/types';
@@ -80,7 +81,7 @@ export function AccountAccessManager({ organizationId, accounts, canManage, maxA
         {(['all', 'enabled', 'disabled'] as const).map(value => <Button type="button" key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{value === 'all' ? 'All' : value === 'enabled' ? 'Enabled' : 'Disabled'} <span>{value === 'all' ? providerAccounts.length : value === 'enabled' ? activeCount : providerAccounts.length - activeCount}</span></Button>)}
       </div>
     </div>
-    {atLimit && canManage ? <div className="account-limit-note">All {maxActiveAccounts} organization account slots are in use. Disable an account to free a slot, or <Link href="/dashboard/billing?intent=active_accounts">compare plans</Link>.</div> : null}
+    {atLimit && canManage ? <div className="account-limit-note">All {maxActiveAccounts} organization account slots are in use. Disable an account to free a slot, or <UpgradeButton kind="active_accounts" required={(organizationCount ?? 0) + 1} message={`All ${maxActiveAccounts} enabled account slots are in use across your organization.`} label="compare upgrade options" />.</div> : null}
     {!canManage ? <p className="account-limit-note">An owner or admin can change account access.</p> : null}
     {error ? <div className="error-callout" role="alert">{error}</div> : null}
     {notice ? <p className="account-access-notice" role="status">{notice}</p> : null}

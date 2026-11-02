@@ -54,7 +54,7 @@ export async function inviteOrganizationMember(
     if (!totals.existing && totals.count >= entitlement.plan.maxMembers) {
       throw new PlanLimitError({
         kind: 'members', currentPlan: entitlement.plan.name,
-        recommendedPlan: recommendedUpgradePlan(entitlement.plan.id),
+        recommendedPlan: recommendedUpgradePlan(entitlement.plan.id, { members: totals.count + 1 }),
         message: `${entitlement.plan.name} supports ${entitlement.plan.maxMembers} editing member${entitlement.plan.maxMembers === 1 ? '' : 's'}. Read-only viewers are free.`,
       });
     }
@@ -197,7 +197,7 @@ export async function updateOrganizationSettings(
   if (dataRetentionDays > entitlement.plan.maxRetentionDays) {
     throw new PlanLimitError({
       kind: 'retention', currentPlan: entitlement.plan.name,
-      recommendedPlan: recommendedUpgradePlan(entitlement.plan.id),
+      recommendedPlan: recommendedUpgradePlan(entitlement.plan.id, { retentionDays: dataRetentionDays }),
       message: `${entitlement.plan.name} supports up to ${entitlement.plan.maxRetentionDays} days of retention. Upgrade for a longer audit history.`,
     });
   }

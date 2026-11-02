@@ -16,6 +16,7 @@ import { getOrganizationUsage } from '@/lib/cloud/usage';
 import { safeDashboardReturnPath } from '@/lib/return-path';
 import { SupportWidget } from '@/components/support-widget';
 import { getAssistantListings } from '@/lib/cloud/assistant-listings';
+import { UpgradeProvider } from '@/components/upgrade-context';
 
 export const metadata = { title: 'Set up Adport' };
 export const dynamic = 'force-dynamic';
@@ -39,6 +40,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
   const availability = oauthAvailability(tenant.organizationId);
   const providers: OAuthProviderView[] = OAUTH_PROVIDERS.map((id) => ({ id, available: availability[id] }));
   return (
+    <UpgradeProvider value={{ planId: entitlement.plan.id, canManageBilling: tenant.organizationRole === 'owner', projectId: tenant.organizationId }}>
     <main className="onboarding-page">
       <ProductAnalytics key={`${tenant.userId}:${tenant.organizationId}`} />
       <OnboardingFlow key={tenant.organizationId + ':' + (selection?.id ?? (params.step === 'connect' ? 'connect' : ''))}
@@ -76,5 +78,6 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
       />
       <SupportWidget />
     </main>
+    </UpgradeProvider>
   );
 }

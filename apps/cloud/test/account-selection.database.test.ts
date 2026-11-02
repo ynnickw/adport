@@ -67,7 +67,7 @@ suite('one-time provider account selection (local database)', () => {
     await expect(setOrganizationAdAccountEnabled({ principal, provider: 'google', accountId: 'excluded', enabled: true, maxActiveAccounts: 3, currentPlan: 'Reader', recommendedPlan: 'operator' })).rejects.toThrow(/not found/);
   });
 
-  const activation = { maxActiveAccounts: 3, currentPlan: 'Free', recommendedPlan: 'operator' as const };
+  const activation = { maxActiveAccounts: 3, currentPlan: 'Free', currentPlanId: 'reader' as const };
   it('explicitly adds and enables the chosen accounts in one transaction', async () => {
     await saveAccountSelection(principal, id, ['chosen'], undefined, activation);
     expect(await listOrganizationAdAccounts(principal.organizationId)).toMatchObject([{ accountId: 'chosen', enabled: true }]);

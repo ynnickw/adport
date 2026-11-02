@@ -1,3 +1,5 @@
+@import '../../../website/pricing.css';
+
 :root {
   color-scheme: light;
   /* Tokens shared with adport.dev (website/site.css). */
@@ -427,6 +429,47 @@ select { min-width: 11rem; border: 1px solid var(--line); border-radius: 999px; 
 .upgrade-modal li { position: relative; color: var(--muted); padding-left: 1.25rem; font-size: 0.8125rem; line-height: 1.5; }
 .upgrade-modal li::before { position: absolute; left: 0; color: var(--success); content: "✓"; font-weight: 750; }
 .modal-actions { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: 1.35rem; }
+
+/* Landing-page pricing, adapted to the dashboard's available width. */
+.pricing-surface { --rule: var(--line); --raised: var(--paper); --sans: var(--font-sans); --go: var(--success); --go-wash: var(--success-soft); }
+.dashboard-pricing { container-type: inline-size; margin-bottom: 2rem; }
+.dashboard-pricing-heading { margin: 2rem auto 0; max-width: 45rem; text-align: center; }
+.dashboard-pricing-heading h2 { margin: .75rem 0; font-size: clamp(1.6rem, 3vw, 2.4rem); line-height: 1.15; letter-spacing: -.04em; }
+.dashboard-pricing-heading > p:last-child { color: var(--muted); line-height: 1.7; }
+.dashboard-pricing .pricing-billing { margin-block: 1.5rem 2.5rem; }
+.dashboard-pricing .pricing-billing a { border-radius: 999px; padding: .7rem 1.15rem; color: var(--muted); font: 650 .875rem var(--font-sans); }
+.dashboard-pricing .pricing-billing a[aria-current="true"] { background: var(--ink); color: var(--paper); }
+.dashboard-pricing .pricing-billing a > span { margin-left: .35rem; color: var(--signal-ink); font-size: .6875rem; }
+.dashboard-pricing .pricing-billing a[aria-current="true"] > span { color: #ffad73; }
+.pricing-card-action .pricing-action { display: flex; width: 100%; min-height: 3.25rem; }
+.upgrade-dialog .pricing-action { gap: .4rem; }
+.dashboard-pricing .pricing-billing a:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
+.pricing-action-current { border-color: var(--line); background: #f6f6f3; color: var(--muted); cursor: default; }
+.pricing-card-compact .pricing-card-header { min-height: 0; padding: 1rem 1.25rem .75rem; }
+.pricing-card-compact h3 { margin-block: .35rem 0; font-size: 1.6rem; }
+.pricing-card-compact .pricing-card-body { padding: 1rem 1.25rem; }
+.pricing-card-compact .pricing-amount strong { font-size: 2.75rem; }
+.pricing-card-compact .pricing-billing-note { margin-bottom: .75rem; }
+.pricing-card-compact .pricing-limits { gap: .3rem; margin-block: .75rem; }
+.pricing-card-compact .pricing-features { gap: .4rem; }
+.pricing-card-compact .pricing-features li { font-size: .8125rem; }
+.pricing-card-compact .comparison-check { width: 1.2rem; height: 1.2rem; }
+.pricing-card-compact .comparison-check svg { width: .8rem; height: .8rem; }
+.pricing-custom-amount { font-size: 2.5rem !important; }
+.upgrade-dialog > .pricing-card { margin-top: 1.75rem; }
+.upgrade-dialog .dialog-description { overflow-wrap: anywhere; }
+.upgrade-owner-note { margin: 1.25rem 0; padding: .85rem 1rem; border-radius: .5rem; background: #f6f6f3; color: var(--muted); font-size: .8125rem; line-height: 1.65; }
+.inline-upgrade-button { display: inline; padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; text-decoration: underline; text-underline-offset: .2em; }
+.account-picker-upgrade { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem 1rem; width: 100%; padding: .25rem 0; font-size: .75rem; color: var(--muted); }
+.dashboard-provider-stack { display: inline-flex; align-items: center; }
+.dashboard-provider-stack .pricing-provider-logo { width: 1.5rem; height: 1.5rem; border-width: 1px; }
+.dashboard-provider-stack .pricing-provider-logo + .pricing-provider-logo { margin-left: -.4rem; }
+.dashboard-provider-stack .pricing-provider-logo svg { width: 1.05rem; height: 1.05rem; }
+.pricing-card .pricing-card-agent-logos .agent-logo, .pricing-card .pricing-ai-feature > .agent-logo { width: 1.5rem; height: 1.5rem; border-radius: 50%; }
+.pricing-card .pricing-card-agent-logos .agent-logo + .agent-logo { margin-left: -.2rem; }
+.pricing-card .pricing-card-agent-logos svg, .pricing-card .pricing-ai-feature > .agent-logo svg { width: 1.05rem; height: 1.05rem; }
+.dashboard-pricing .pricing-enterprise[data-requested="true"] { outline: 2px solid var(--signal); }
+@container (max-width: 50rem) { .dashboard-pricing .pricing-cards { grid-template-columns: 1fr; max-width: 32rem; margin-inline: auto; gap: 2rem; } .dashboard-pricing .pricing-free { align-items: flex-start; flex-direction: column; gap: 1rem; } }
 
 /* ── Direct support ─────────────────────────────────────────────────── */
 .support-fab { position: fixed; z-index: 50; right: 1.35rem; bottom: 1.35rem; display: flex; align-items: center; gap: 0.6rem; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--ink); padding: 0.35rem 0.8rem 0.35rem 0.35rem; box-shadow: var(--shadow-float); font-size: 0.8125rem; font-weight: 650; }
