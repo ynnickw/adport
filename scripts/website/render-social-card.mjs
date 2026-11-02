@@ -17,7 +17,7 @@ const html = `<!doctype html><html lang="en"><meta charset="utf-8"><title>Adport
 @font-face{font-family:Mono;src:url(data:font/woff2;base64,${mono});font-weight:300 700}
 *{box-sizing:border-box}html,body{margin:0;width:1200px;height:630px;overflow:hidden}
 body{font-family:Overpass,sans-serif;background:#f5f5f7;color:#1d1d1f;border-bottom:8px solid #ff6b00}
-.brand{position:absolute;top:58px;left:64px;font-size:30px;font-weight:800;letter-spacing:-.035em}.brand span span{color:#ff6b00}
+.brand{position:absolute;top:58px;left:64px;font-size:30px;font-weight:800;letter-spacing:-.035em}.brand span span{color:#ff6b00;font-size:1.3em;line-height:0}
 h1{position:absolute;top:138px;left:64px;margin:0;font-size:64px;line-height:1.04;letter-spacing:-.035em;font-weight:800}h1 span{color:#8e8e93}
 .description{position:absolute;top:371px;left:64px;width:625px;font-size:23px;line-height:1.4;margin:0;color:#48484a}
 .providers{position:absolute;bottom:40px;left:64px;display:flex;align-items:center;gap:22px}.providers svg{height:26px;width:26px;fill:currentColor}
