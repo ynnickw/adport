@@ -78,7 +78,7 @@ export async function createProject(userId: string, organizationId: string, name
       values (${id}, ${projectName}, ${`project-${id}`}, ${userId}, ${organizationId})`;
     await sql`insert into public.organization_settings (organization_id) values (${id})`;
     await sql`insert into public.audit_events (organization_id, actor_user_id, event, provider, tool, account_id, summary)
-      values (${id}, ${userId}, 'settings_updated', 'cloud', 'project_create', '*', 'Created isolated client project')`;
+      values (${id}, ${userId}, 'settings_updated', 'cloud', 'project_create', '*', 'Created isolated project')`;
   });
   return id;
 }

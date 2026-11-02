@@ -13,7 +13,7 @@ export default async function TeamPage() {
   const members = await listOrganizationMembers(tenant.organizationId);
   return (
     <main className="page">
-      <PageHeader title="Project team" description="Manage access to this project. Organization owners and admins inherit access; members can read and operate, and read-only client viewers are free."
+      <PageHeader title="Project team" description="People here share this project’s accounts, reports, approvals, and history. Members can operate ads; viewers have read-only access. Organization owners and admins inherit access."
         action={['owner', 'admin'].includes(tenant.organizationRole) ? <Link className="button secondary" href="/dashboard/organization">Organization access</Link> : undefined} />
       <div className="stack">
         <section className="card">

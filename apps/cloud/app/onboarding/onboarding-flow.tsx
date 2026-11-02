@@ -96,7 +96,7 @@ export function OnboardingFlow({ organizationId, projectName, policy, setupKind,
         <div className="onboarding-intro-copy">
           <span className="plan-kicker">{setupKind === 'new_project' ? 'New project · Included in your plan' : 'Welcome to Adport'}</span>
           <h1>{setupKind === 'new_project' ? <>Set up <span>{projectName}.</span></> : <>Your ads.<br />One clear picture.</>}</h1>
-          <p>{setupKind === 'new_project' ? 'Keep this client’s accounts, reports, and AI access in their own space. Your organization’s plan and team stay with you.' : 'See how your campaigns are doing, find what needs attention, and work on your ads with your AI assistant.'}</p>
+          <p>{setupKind === 'new_project' ? 'Keep this project’s accounts, reports, and AI access in their own space. Your organization’s plan and team stay with you.' : 'See how your campaigns are doing, find what needs attention, and work on your ads with your AI assistant.'}</p>
           <div className="onboarding-intro-actions"><Button className="button" disabled={busy} onClick={() => void advance('connect')}>Connect a platform <span aria-hidden="true">→</span></Button><Button className="link-button" disabled={busy} onClick={skip}>Explore the dashboard first</Button></div>
           <p className="onboarding-reassurance">Start with one account. Connecting won’t change your campaigns.</p>
         </div>

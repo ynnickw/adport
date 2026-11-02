@@ -16,7 +16,7 @@ describe('Cloud plans', () => {
     expect(PLANS.reader).toMatchObject({ name: 'Free', monthlyPriceEur: 0, annualPriceEur: 0, maxActiveAccounts: 3, maxMembers: 1, writeAccess: false });
     expect(PLANS.operator).toMatchObject({ name: 'Pro', monthlyPriceEur: 19, annualPriceEur: 190, maxActiveAccounts: 5, maxMembers: 2, writeAccess: true });
     expect(PLANS.premium).toMatchObject({ name: 'Growth', monthlyPriceEur: 39, annualPriceEur: 390, maxActiveAccounts: 20, maxMembers: 5, writeAccess: true });
-    expect(PLANS.agency).toMatchObject({ name: 'Agency', monthlyPriceEur: 79, annualPriceEur: 790, maxActiveAccounts: 60, maxMembers: 15, writeAccess: true });
+    expect(PLANS.agency).toMatchObject({ name: 'Business', monthlyPriceEur: 79, annualPriceEur: 790, maxActiveAccounts: 60, maxMembers: 15, writeAccess: true });
     expect(PLANS.enterprise.maxActiveAccounts).toBeNull();
   });
 

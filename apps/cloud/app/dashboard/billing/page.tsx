@@ -34,11 +34,11 @@ const PLAN_COPY: Record<PlanId, { eyebrow: string; description: string }> = {
   },
   premium: {
     eyebrow: 'Grow',
-    description: 'For freelancers and growing teams managing several brands or clients.',
+    description: 'For growing teams managing several brands, departments, or projects.',
   },
   agency: {
     eyebrow: 'Scale',
-    description: 'For agencies coordinating client accounts, editing teams, and two years of audit history.',
+    description: 'For companies coordinating more accounts, larger teams, and two years of audit history.',
   },
   enterprise: {
     eyebrow: 'Customize',
@@ -159,7 +159,7 @@ export default async function BillingPage({
           );
         })}
       </div>
-      <p className="inline-note plan-shared-features">Every plan includes unlimited projects, free read-only client viewers, and MCP, CLI, REST, and dashboard access.</p>
+      <p className="inline-note plan-shared-features">Every plan includes unlimited projects, free read-only viewers, and MCP, CLI, REST, and dashboard access.</p>
 
       <section className="enterprise-card">
         <div>

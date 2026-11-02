@@ -13,7 +13,7 @@ export function NewProjectButton({ organizationId, organizationName }: { organiz
 
 export function NewProjectDialog({ organizationId, organizationName, onClose }: { organizationId: string; organizationName: string; onClose: () => void }) {
   return <Dialog title="New project" onClose={onClose}>
-    <p className="dialog-description">A separate space for a client or brand in {organizationName}. Your existing plan covers it.</p>
+    <p className="dialog-description">A separate space for a brand, department, or client in {organizationName}. Your existing plan covers it.</p>
     <WorkspaceForm action={createProjectAction} label="Create project">
       <input type="hidden" name="organizationId" value={organizationId} />
       <label>Project name<Input data-autofocus name="name" required maxLength={120} placeholder="e.g. Acme Store" /></label>

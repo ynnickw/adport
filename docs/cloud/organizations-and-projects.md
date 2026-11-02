@@ -1,13 +1,13 @@
 # Organizations and projects
 
 An organization represents a company or agency and owns its subscription and
-team. A project represents a client or brand. Connections, encrypted grants,
+team. A project represents a brand, department, region, or client. Connections, encrypted grants,
 selected advertising accounts, policies, approvals, findings and audit events
 are isolated by project. Organization account and member allowances are shared
 across projects; creating a project does not create another paid allowance.
 
 Owners and admins inherit access to every project. Owners alone manage billing
-and organization owners/admins. Other members and client viewers receive only
+and organization owners/admins. Other members and viewers receive only
 explicitly selected projects. Removing an organization member removes their
 project grants and revokes their MCP OAuth tokens. The last owner cannot be
 removed or demoted. Archived projects reject agent access and release their
@@ -24,7 +24,15 @@ advertising-platform or MCP OAuth redirect URI.
 
 The default project cannot be archived. Existing permanent deletion remains
 available for individual projects; a default project cannot be deleted while
-other projects remain. Archiving client projects preserves their audit evidence.
+other projects remain. Archiving projects preserves their audit evidence.
+
+## Company access
+
+Organization owners and admins see all current and future projects. Members and viewers see only their assigned projects. Within an assigned project, everyone shares its accounts, reports, approvals, and history; the role controls which actions are allowed. Member ad writes also require a paid editing seat and pass through the existing policy engine.
+
+Owners manage billing and organization owner/admin roles. Admins manage projects and member/viewer access but cannot promote themselves or change owners/admins. Inherited organization roles are shown in the project team and are managed from Organization settings. Project admins manage the team and settings of their project.
+
+The Organization page shows each person’s project assignments and explains every role when inviting or changing access. Read-only viewers remain free and all existing plan allowances remain unchanged.
 
 ## Compatibility
 

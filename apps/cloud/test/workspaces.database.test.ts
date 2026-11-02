@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { db, closeDbForTests } from '@/lib/db';
-import { createOrganization, createProject, listProjectAccess, saveOrganizationMember, removeCompanyMember, updateProject } from '@/lib/cloud/workspaces';
+import { createOrganization, createProject, listProjectAccess, saveOrganizationMember, removeCompanyMember, updateProject, renameCompany } from '@/lib/cloud/workspaces';
+import { listOrganizationMembers, removeOrganizationMember } from '@/lib/cloud/tenant-admin';
 import { resolveMembership, createApiKey, authenticateApiKey, upsertGoogleConnection, setOrganizationAdAccountEnabled, PostgresPendingStore, listConnections } from '@/lib/cloud/repository';
 import { stageAccountSelection } from '@/lib/cloud/account-selection';
 import { getOrganizationEntitlement, applyPlanToPrincipal } from '@/lib/cloud/plans';
@@ -14,7 +15,7 @@ import { getOrganizationUsage } from '@/lib/cloud/usage';
 
 const describeDatabase = process.env.ADPORT_RUN_DATABASE_TESTS === '1' ? describe : describe.skip;
 
-describeDatabase('agency organizations and isolated projects', () => {
+describeDatabase('company organizations and isolated projects', () => {
   const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SECRET_KEY!, { auth: { persistSession: false, autoRefreshToken: false } });
   const users: string[] = [];
   let owner: string;
@@ -86,6 +87,27 @@ describeDatabase('agency organizations and isolated projects', () => {
     expect(forged.error).not.toBeNull();
     const principal = await applyPlanToPrincipal({ organizationId: firstProject, userId: client, scopes: ['tools:read', 'tools:write'] });
     expect(principal.scopes).toEqual(['tools:read']);
+  });
+
+  it('lets organization admins manage assigned teammates without escalating access', async () => {
+    await saveOrganizationMember({ actorUserId: owner, organizationId: company, userId: client, role: 'admin', projectIds: [] });
+    try {
+      expect((await resolveMembership(client, secondProject)).role).toBe('admin');
+      await renameCompany(client, company, 'Company growth team');
+      await saveOrganizationMember({ actorUserId: client, organizationId: company, userId: outsider, role: 'viewer', projectIds: [firstProject] });
+      expect((await listProjectAccess(outsider)).filter(project => project.organizationId === company).map(project => project.id)).toEqual([firstProject]);
+      await expect(saveOrganizationMember({ actorUserId: client, organizationId: company, userId: outsider, role: 'admin', projectIds: [] })).rejects.toThrow('Only an owner');
+      await expect(removeCompanyMember(client, company, owner)).rejects.toThrow('Only an owner');
+      const team = await listOrganizationMembers(firstProject);
+      expect(team.find(member => member.userId === owner)).toMatchObject({ role: 'owner', inheritedFromOrganization: true });
+      expect(team.find(member => member.userId === client)).toMatchObject({ role: 'admin', inheritedFromOrganization: true });
+      expect(team.find(member => member.userId === outsider)).toMatchObject({ role: 'viewer', inheritedFromOrganization: false });
+      await expect(removeOrganizationMember({ organizationId: firstProject, userId: owner, role: 'owner', scopes: [] }, client)).rejects.toThrow('Organization settings');
+    } finally {
+      await saveOrganizationMember({ actorUserId: owner, organizationId: company, userId: client, role: 'viewer', projectIds: [firstProject] });
+      await removeCompanyMember(owner, company, outsider);
+    }
+    await expect(resolveMembership(client, secondProject)).rejects.toThrow('access');
   });
 
   it('keeps credentials, approval tokens and OAuth grants bound to a single project', async () => {
