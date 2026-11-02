@@ -1283,10 +1283,16 @@ input.control-checkbox:disabled { cursor: not-allowed; opacity: .45; }
 .setup-assistant-choice[aria-pressed="true"] { border-color: var(--signal-ink); background: var(--signal-wash); }
 .setup-assistant-choice .agent-logo { width: 1.5rem; height: 1.5rem; flex: none; }
 .setup-connect .card-head { flex-wrap: wrap; gap: 1rem; }
-.setup-connect-identity { display: flex; align-items: center; gap: .65rem; }
-.setup-connect-identity h2 { margin: 0; font-size: 1rem; }
-.setup-assistant-select { display: flex; align-items: center; gap: .5rem; font-size: .75rem; color: var(--muted); }
-.setup-assistant-select select { max-width: 11rem; padding: .4rem .6rem; border: 1px solid var(--line); border-radius: .4rem; background: var(--paper); color: var(--ink); font: inherit; }
+.setup-connect .card-head h2 { margin: 0; font-size: 1rem; }
+.setup-assistant-tabs { display: flex; gap: .25rem; padding: .4rem .75rem 0; overflow-x: auto; overscroll-behavior-x: contain; border-bottom: 1px solid var(--line-soft); background: #fafaf8; scrollbar-width: thin; }
+.setup-assistant-tabs [role="tab"] { display: inline-flex; flex: 1 0 auto; align-items: center; justify-content: center; gap: .5rem; min-height: 3rem; padding: .6rem .8rem; border: 0; border-radius: .35rem .35rem 0 0; background: transparent; color: var(--muted); font-size: .8125rem; white-space: nowrap; }
+.setup-assistant-tabs [role="tab"]:hover { background: #f1f1ed; color: var(--ink); }
+.setup-assistant-tabs [role="tab"][aria-selected="true"] { background: var(--paper); color: var(--ink); font-weight: 650; box-shadow: inset 0 -2px var(--signal-ink); }
+.setup-assistant-tabs [role="tab"]:focus-visible, .setup-connect [role="tabpanel"]:focus-visible { outline: 2px solid var(--signal-ink); outline-offset: -3px; }
+.setup-assistant-tabs .agent-logo { width: 1.6rem; height: 1.6rem; border: 0; border-radius: .3rem; }
+.setup-assistant-tabs .agent-logo svg { width: 1.1rem; height: 1.1rem; }
+.setup-listing-button .agent-logo { width: 1.4rem; height: 1.4rem; border: 0; }
+.setup-listing-button .agent-logo svg { width: 1rem; height: 1rem; }
 .setup-project-scope { margin: 0; color: var(--muted); font-size: .75rem; }
 .setup-connect-instructions { display: grid; gap: .85rem; }
 .setup-connect-instructions > p { margin: 0; line-height: 1.65; font-size: .875rem; }
