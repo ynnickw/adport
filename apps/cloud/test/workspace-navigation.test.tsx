@@ -8,7 +8,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('@/app/dashboard/projects/actions', () => ({ selectProjectAction: vi.fn(), createProjectAction: vi.fn(), createOrganizationAction: vi.fn(), updateProjectAction: vi.fn() }));
 
 function project(role: ProjectAccess['organizationRole']): ProjectAccess {
-  return { id: 'project', name: 'Product marketing', organizationId: 'company', organizationName: 'Acme', role, organizationRole: role, defaultProjectId: 'project', archivedAt: null };
+  return { id: 'project', name: 'Product marketing', logoPath: null, organizationId: 'company', organizationName: 'Acme', organizationLogoPath: null, role, organizationRole: role, defaultProjectId: 'project', archivedAt: null };
 }
 
 describe('workspace navigation permissions', () => {

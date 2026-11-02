@@ -9,6 +9,8 @@ import { WorkspaceForm } from '@/components/workspace-form';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { listOrganizationProjects, listOrganizationTeam } from '@/lib/cloud/workspaces';
 import { renameCompanyAction, saveMemberAction, removeMemberAction } from '../projects/actions';
+import { WorkspaceLogoEditor } from '@/components/workspace-logo-editor';
+import { workspaceLogoUrl } from '@/lib/workspace-logos';
 
 export const metadata = { title: 'Organization' };
 
@@ -26,7 +28,8 @@ export default async function OrganizationPage() {
       action={<DialogTrigger label="Invite member" title="Invite a teammate" className="button"><WorkspaceForm action={saveMemberAction} label="Invite member" successMessage="Access saved. New users receive an email invitation; existing users can open the project from their project menu."><input type="hidden" name="organizationId" value={tenant.organizationGroupId} /><label>Email address<Input type="email" name="email" required maxLength={320} placeholder="name@company.com" /></label><MemberAccessFields key={String(seatAvailable)} roles={roles} projects={activeProjects} initialRole={seatAvailable ? 'member' : 'viewer'} initialProjectIds={[tenant.organizationId]} seatAvailable={seatAvailable} /></WorkspaceForm></DialogTrigger>} />
     <div className="stack">
       <TeamAccessGuide />
-      <section className="card"><div className="card-head"><h2>Organization details</h2></div><div className="card-body">
+      <section className="card"><div className="card-head"><h2>Organization details</h2></div><div className="card-body stack">
+        <WorkspaceLogoEditor key={tenant.organizationGroupId} kind="organization" id={tenant.organizationGroupId} name={tenant.organizationGroupName} logoUrl={workspaceLogoUrl('organization', tenant.organizationGroupId, tenant.organizationGroupLogoPath)} />
         <WorkspaceForm action={renameCompanyAction}><input type="hidden" name="organizationId" value={tenant.organizationGroupId} /><label>Organization name<Input name="name" defaultValue={tenant.organizationGroupName} required maxLength={120} /></label></WorkspaceForm>
       </div></section>
       <section className="card"><div className="card-head"><h2>Members</h2><span className="card-note">{usage.editingMembers} team seats · {usage.viewers} free viewers</span></div><div className="row-list">
