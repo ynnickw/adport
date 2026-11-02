@@ -96,7 +96,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     .shell { overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); box-shadow: 0 10px 32px rgba(20,20,20,.07) }
     .top { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 16px 10px }
     .brand { display:flex; align-items:center; gap:9px; min-width:0 }
-    .dot { width:10px; height:10px; border-radius:99px; background:var(--orange); box-shadow:0 0 0 5px color-mix(in srgb,var(--orange) 12%,transparent) }
+    .wordmark-dot { color:#ff6b00; font-size:1.3em; line-height:0 }
     .brand b { font-size:12px; letter-spacing:-.02em }
     .context { color:var(--muted); font-size:11px; text-align:right }
     .content { padding:4px 16px 16px }
@@ -166,7 +166,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
 </head>
 <body>
   <main id="app" class="shell" aria-live="polite">
-    <header class="top"><div class="brand"><span class="dot"></span><b>adport.dev</b></div></header>
+    <header class="top"><div class="brand"><b>adport<span class="wordmark-dot" aria-hidden="true">.</span></b></div></header>
     <section class="content"><div class="empty">Loading…</div></section>
   </main>
   <script>
@@ -207,7 +207,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     };
     const logo = (id) => '<span class="logo '+esc(id)+'" aria-hidden="true">'+(providerSvg[id] || esc(initials(id)))+'</span>';
     let syntheticResult = false;
-    const chrome = (body, context) => '<header class="top"><div class="brand"><span class="dot"></span><b>adport.dev</b></div><span class="context">'+(syntheticResult?'Synthetic demo · ':'')+esc(context || '')+'</span></header><section class="content">'+body+'</section>';
+    const chrome = (body, context) => '<header class="top"><div class="brand"><b>adport<span class="wordmark-dot" aria-hidden="true">.</span></b></div><span class="context">'+(syntheticResult?'Synthetic demo · ':'')+esc(context || '')+'</span></header><section class="content">'+body+'</section>';
     function renderAccounts(data, meta) {
       const accounts = arr(data.accounts), errors = arr(data.errors), names = meta.providerNames || {};
       const body = notices(data)+(accounts.length ? '<div class="list">'+accounts.map(a => { const status=statusOf(a.status); return '<div class="row"><div class="identity">'+logo(a.provider)+'<div class="identity-copy"><b>'+esc(a.name || 'Ad account')+'</b><span>'+esc(providerName(a.provider,names))+' · '+esc(a.id)+(a.currency ? ' · '+esc(a.currency) : '')+'</span></div></div><span class="pill '+status.tone+'">'+esc(status.label)+'</span></div>'; }).join('')+'</div>' : '<div class="empty">'+(errors.length ? 'Account inventory could not be fully loaded.' : 'No accessible ad accounts were returned.')+'</div>');
