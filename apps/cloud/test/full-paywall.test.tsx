@@ -7,7 +7,7 @@ import type { BillingOptions } from '@/lib/cloud/billing-options';
 
 const mocks = vi.hoisted(() => ({ checkout: vi.fn(), portal: vi.fn(), forms: vi.fn() }));
 vi.mock('@/components/dialog', () => ({ Dialog: ({ title, children, portal }: { title: string; children: ReactNode; portal: boolean }) => <section role="dialog" aria-label={title} data-portal={portal}>{children}</section> }));
-vi.mock('@/app/dashboard/billing/actions', () => ({ startProjectSubscriptionForm: mocks.checkout, openProjectBillingPortalForm: mocks.portal }));
+vi.mock('@/app/dashboard/billing/actions', () => ({ startProjectSubscriptionForm: mocks.checkout, changeProjectSubscriptionForm: mocks.portal }));
 vi.mock('@/app/dashboard/billing/billing-form', () => ({ BillingForm: (props: { label: string }) => { mocks.forms(props); return <button>{props.label}</button>; } }));
 
 const options: BillingOptions = { hasSubscription: false, portalAvailable: false, trialEligible: true, available: { operator: { monthly: true, annual: true }, premium: { monthly: true, annual: true }, agency: { monthly: true, annual: true } } };
@@ -40,6 +40,7 @@ describe('full upgrade paywall', () => {
     render(true, { ...options, hasSubscription: true, portalAvailable: true, trialEligible: false });
     await mocks.forms.mock.calls[0]![0].action({}, new FormData());
     expect(mocks.portal).toHaveBeenCalledOnce();
+    expect(mocks.portal).toHaveBeenCalledWith('project', 'operator', 'monthly', {}, expect.any(FormData));
     expect(mocks.checkout).not.toHaveBeenCalled();
   });
   it('keeps the comparison usable when checkout is not configured', () => {

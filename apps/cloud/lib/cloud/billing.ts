@@ -147,6 +147,17 @@ async function syncLockedSubscription(sql: BillingSql, organizationId: string, c
   if (!changed) return { updated: false };
 
   const effectivePlan = subscriptionHasAccess(status) ? plan : 'reader';
+  const maxActiveAccounts = await applyOrganizationPlanLimits(sql, organizationId, effectivePlan);
+  await sql`
+    insert into public.audit_events (organization_id, event, provider, tool, account_id, summary, details)
+    values (${organizationId}, 'subscription_updated', 'cloud', ${eventId ? 'stripe_webhook' : 'stripe_reconcile'}, '*',
+      ${`Subscription changed to ${effectivePlan} (${status})`}, ${sql.json({ plan: effectivePlan, status, maxActiveAccounts, cancellationReason } as never)})
+  `;
+  return { updated: true, analytics: previous.status !== status && subscription.metadata.analyticsActorUserId
+    ? { userId: subscription.metadata.analyticsActorUserId, status, plan } : undefined };
+}
+
+export async function applyOrganizationPlanLimits(sql: BillingSql, organizationId: string, effectivePlan: PlanId): Promise<number | null> {
   await sql`update public.organization_settings setting
     set data_retention_days = least(setting.data_retention_days, ${PLANS[effectivePlan].maxRetentionDays})
     from public.organizations project join public.organization_groups company on company.id = project.organization_group_id
@@ -165,13 +176,7 @@ async function syncLockedSubscription(sql: BillingSql, organizationId: string, c
       where organization_id = ${account.organizationId} and provider = ${account.provider} and account_id = ${account.accountId}
     `;
   }
-  await sql`
-    insert into public.audit_events (organization_id, event, provider, tool, account_id, summary, details)
-    values (${organizationId}, 'subscription_updated', 'cloud', ${eventId ? 'stripe_webhook' : 'stripe_reconcile'}, '*',
-      ${`Subscription changed to ${effectivePlan} (${status})`}, ${sql.json({ plan: effectivePlan, status, maxActiveAccounts, cancellationReason } as never)})
-  `;
-  return { updated: true, analytics: previous.status !== status && subscription.metadata.analyticsActorUserId
-    ? { userId: subscription.metadata.analyticsActorUserId, status, plan } : undefined };
+  return maxActiveAccounts;
 }
 
 export async function reconcileOrganizationSubscription(organizationId: string, customerId: string): Promise<boolean> {

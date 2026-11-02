@@ -9,7 +9,8 @@ import catalog from '@/lib/cloud/plan-catalog.json';
 import { PricingComparison, PAID_PLAN_IDS, type PaidPlanId } from './pricing-comparison';
 import { useUpgradeContext } from './upgrade-context';
 import { BillingForm } from '@/app/dashboard/billing/billing-form';
-import { startProjectSubscriptionForm, openProjectBillingPortalForm } from '@/app/dashboard/billing/actions';
+import { startProjectSubscriptionForm, changeProjectSubscriptionForm } from '@/app/dashboard/billing/actions';
+import { planChangeLabel } from '@/lib/plan-change';
 
 export function PlanLimitModal({ limit, onClose }: { limit?: PlanLimitDetails; onClose: () => void }) {
   return limit ? <UpgradePaywall key={`${limit.kind}:${limit.recommendedPlan}:${limit.message}`} limit={limit} onClose={onClose} /> : null;
@@ -38,8 +39,8 @@ function UpgradePaywall({ limit, onClose }: { limit: PlanLimitDetails; onClose: 
     const billing = context.billingOptions;
     if (context.planId === plan) actions[plan] = <span className="pricing-action pricing-action-current">Current plan</span>;
     else if (!canManage) actions[plan] = <Button className={className} type="button" onClick={() => void copy(plan)}>{copyStatus.plan === plan && copyStatus.status === 'copied' ? 'Link copied ✓' : `Ask owner for ${catalog[plan].name}`}</Button>;
-    else if (billing?.hasSubscription) actions[plan] = billing.portalAvailable ? <BillingForm action={openProjectBillingPortalForm.bind(null, context.projectId ?? limit.projectId)} label="Manage billing" pendingLabel="Opening billing…" className={className} /> : <span className="pricing-action pricing-action-current">Billing unavailable</span>;
-    else if (billing?.available[plan][interval]) actions[plan] = <BillingForm action={startProjectSubscriptionForm.bind(null, context.projectId ?? limit.projectId, plan, interval)} label={billing.trialEligible ? 'Start 7-day free trial' : `Subscribe to ${catalog[plan].name}`} pendingLabel="Opening checkout…" className={className} />;
+    else if (billing?.hasSubscription) actions[plan] = billing.portalAvailable && billing.available[plan][interval] ? <BillingForm action={changeProjectSubscriptionForm.bind(null, context.projectId ?? limit.projectId, plan, interval)} label={planChangeLabel(context.planId, plan, interval)} pendingLabel="Opening plan change…" className={className} /> : <span className="pricing-action pricing-action-current">Billing unavailable</span>;
+    else if (billing?.available[plan][interval]) actions[plan] = <BillingForm action={startProjectSubscriptionForm.bind(null, context.projectId ?? limit.projectId, plan, interval)} label={context.planId !== 'reader' ? planChangeLabel(context.planId, plan, interval) : billing.trialEligible ? 'Start 7-day free trial' : `Subscribe to ${catalog[plan].name}`} pendingLabel="Opening checkout…" className={className} />;
     else actions[plan] = <span className="pricing-action pricing-action-current">Checkout unavailable</span>;
     notes[plan] = !canManage ? 'Copy a plan link for your organization owner' : billing?.hasSubscription ? 'Review changes in the billing portal' : billing?.trialEligible ? '7-day free trial · cancel anytime' : 'Cancel anytime';
   }

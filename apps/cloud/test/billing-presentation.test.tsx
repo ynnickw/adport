@@ -8,7 +8,7 @@ vi.mock('@/lib/cloud/plans', async original => ({ ...await original<typeof impor
 vi.mock('@/lib/cloud/usage', () => ({ getOrganizationUsage: async () => ({ activeAccounts: 3, editingMembers: 1 }) }));
 vi.mock('@/lib/cloud/workspaces', () => ({ listOrganizationProjects: async () => [] }));
 vi.mock('@/lib/cloud/billing', () => ({ billingConfigured: () => true, billingPlanConfigured: () => true }));
-vi.mock('@/app/dashboard/billing/actions', () => ({ startProjectSubscriptionForm: () => undefined, openProjectBillingPortalForm: () => undefined }));
+vi.mock('@/app/dashboard/billing/actions', () => ({ startProjectSubscriptionForm: () => undefined, openProjectBillingPortalForm: () => undefined, changeProjectSubscriptionForm: () => undefined }));
 vi.mock('@/app/dashboard/projects/actions', () => ({ selectProjectAction: () => undefined }));
 vi.mock('@/app/dashboard/billing/billing-form', () => ({ BillingForm: ({ label }: { label: string }) => <button>{label}</button> }));
 vi.mock('@/components/plan-usage', () => ({ PlanUsage: () => <div>Plan usage</div> }));
@@ -26,7 +26,7 @@ beforeEach(() => {
 const render = async (query: { plan?: string; intent?: string; billing?: string; projectId?: string } = {}) => renderToStaticMarkup(await BillingPage({ searchParams: Promise.resolve(query) }));
 
 describe('dashboard pricing presentation', () => {
-  it('shows the landing-page cards with unchanged prices and contextual upgrade before usage', async () => {
+  it('shows dashboard cards with unchanged prices and contextual upgrade before usage', async () => {
     const html = await render({ intent: 'write_access', plan: 'operator' });
     expect(html).toContain('pricing-card-featured');
     for (const price of ['€19', '€39', '€79', '€0']) expect(html).toContain(price);
