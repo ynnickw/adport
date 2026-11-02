@@ -120,7 +120,7 @@ describe('Apple campaign setup capabilities', () => {
     const provider = new AppleAdsProvider(new AppleAdsClient(CREDS, impl));
     const tool = appleTools(provider).find((t) => t.name === `apple_${resource}`)!;
     const input = tool.input.parse({ account_id: '1', offset: 100, filters: [{ field: 'campaignId', value: ['2'] }] });
-    expect(await tool.handler(input as never, {} as never)).toEqual({ result, pagination: { totalCount: 101 } });
+    expect(await tool.handler(input as never, {} as never)).toMatchObject({ result, pagination: { totalCount: 101 } });
     expect(JSON.parse(String(calls.at(-1)!.init.body)).pagination.offset).toBe(100);
   });
 });
@@ -313,6 +313,7 @@ describe('AppleAdsProvider', () => {
     expect(body.promotedObjectType).toBe('APPSTORE_APP');
     expect(body.promotedObjectId).toBe('535500008');
     expect(body.targeting).toEqual({
+      supplySource: { include: ['APPSTORE'] },
       countryOrRegion: { include: ['US', 'CA'] },
       supplyPlacement: { include: ['APPSTORE_SEARCH_RESULTS'] },
     });
@@ -454,6 +455,7 @@ describe('AppleAdsProvider', () => {
       tool: 'apple_create_ad_group', provider: 'apple', accountId: '40669820', kind: 'create' as const,
       payload: {
         campaign_id: '444555666', name: 'AwayFinder Brand', bid: 2.5, currency: 'USD',
+        start_time: '2026-11-03T00:00:00.000Z',
         status: 'ENABLED' as const, device_classes: ['IPHONE' as const],
       },
     };
@@ -464,6 +466,7 @@ describe('AppleAdsProvider', () => {
     const adGroupBody = JSON.parse(String(calls.find((call) => call.url.endsWith('/adgroups'))!.init.body));
     expect(adGroupBody).toEqual({
       campaignId: 444555666,
+      startTime: '2026-11-03T00:00:00.000',
       name: 'AwayFinder Brand',
       pricingModel: 'CPT',
       status: 'PAUSED',

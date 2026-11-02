@@ -18,6 +18,8 @@ import {
   type WriteResult,
 } from '@adport/core';
 import { AppleAdsClient } from './client.js';
+import { AppleNativeService } from './native.js';
+import { AppleMapsService } from './maps.js';
 
 /** Apple Money amounts are strings in whole currency units. */
 export const UNITS_TO_MICROS = 1_000_000;
@@ -55,7 +57,7 @@ interface SpendRow {
 
 interface ReportingRow {
   totalMetrics?: SpendRow;
-  metadata?: { id?: number; name?: string; status?: string };
+  metadata?: { id?: number; name?: string; status?: string; campaignId?: number; adGroupId?: number };
 }
 
 interface WritePlan {
@@ -91,8 +93,13 @@ const APPLE_DELETE_PATHS = /^(?:adgroups|ads|assets|campaigns|creatives|keywords
 
 export class AppleAdsProvider implements AdProvider {
   readonly id = 'apple';
+  readonly native: AppleNativeService;
+  readonly maps: AppleMapsService;
 
-  constructor(private readonly client: AppleAdsClient, private readonly media: MediaResolver = new LocalMediaResolver()) {}
+  constructor(private readonly client: AppleAdsClient, private readonly media: MediaResolver = new LocalMediaResolver()) {
+    this.native = new AppleNativeService(client);
+    this.maps = new AppleMapsService(client);
+  }
 
   capabilities(): ProviderCapabilities {
     // The Platform API has no validate-only mode — previews remain client-side.
@@ -130,10 +137,10 @@ export class AppleAdsProvider implements AdProvider {
     return { currency: detail.result?.currency, timezone: detail.result?.timezone };
   }
 
-  async listCampaigns(adAccountId: string, limit = 100): Promise<AppleCampaign[]> {
+  async listCampaigns(adAccountId: string, limit = 100, offset = 0): Promise<AppleCampaign[]> {
     const envelope = await this.client.request<AppleCampaign[]>('POST', 'campaigns/query', {
       adAccountId,
-      body: { pagination: { offset: 0, pageSize: limit, fetchTotalCount: false } },
+      body: { pagination: { offset, pageSize: Math.min(limit, 1000), fetchTotalCount: false } },
     });
     return envelope.result ?? [];
   }
@@ -170,67 +177,77 @@ export class AppleAdsProvider implements AdProvider {
   }
 
   async report(query: NormalizedQuery): Promise<Report> {
-    if (query.level !== 'campaign' && query.level !== 'account') {
-      throw new AdportError('INVALID_INPUT', 'apple: report supports campaign and account levels in v0');
-    }
     const range = resolveDateRange(query.dateRange);
     const accountIds = query.accountIds ?? (await this.listAccounts()).map((a) => a.id);
     const rows: ReportRow[] = [];
+    let truncated = false;
     for (const adAccountId of accountIds) {
-      const envelope = await this.client.request<{ rows?: ReportingRow[] }>(
-        'POST',
-        'reports/apps/campaigns/query',
-        {
-          adAccountId,
-          body: {
-            pagination: { offset: 0, pageSize: Math.min(query.limit ?? 200, 5000) },
-            sorting: [{ field: 'id', order: 'ASC' }],
-            timeRange: { start: range.start, end: range.end, timeZone: 'UTC' },
-            options: { includeRows: ['GRAND_TOTAL'] },
+      // Apple requires a campaignId filter for every child report.
+      const campaigns: AppleCampaign[] | undefined = query.level === 'ad_group' || query.level === 'ad' ? [] : undefined;
+      if (campaigns) {
+        for (let offset = 0; offset < 10000; offset += 1000) {
+          const page = await this.listCampaigns(adAccountId, 1000, offset);
+          campaigns.push(...page);
+          if (page.length < 1000) break;
+          if (offset === 9000) truncated = true;
+        }
+      }
+      const scopes = campaigns ? campaigns.map(campaign => String(campaign.id)) : [undefined];
+      const providerRows: ReportRow[] = [];
+      const limit = Math.min(query.limit ?? 200, 1000);
+      for (const campaignId of scopes) {
+        if (providerRows.length >= limit) { truncated = true; break; }
+        const pageSize = limit - providerRows.length;
+        const envelope = await this.client.request<{ rows?: ReportingRow[] }>(
+          'POST',
+          `reports/apps/${query.level === 'ad_group' ? 'adgroups' : query.level === 'ad' ? 'ads' : 'campaigns'}/query`,
+          {
+            adAccountId,
+            body: {
+              pagination: { offset: 0, pageSize },
+              sorting: [{ field: 'id', order: 'ASC' }],
+              ...(campaignId ? { filters: [{ field: 'campaignId', operator: 'EQUALS', value: [campaignId] }] } : {}),
+              timeRange: { start: range.start, end: range.end, timeZone: 'UTC' },
+              options: { includeRows: ['GRAND_TOTAL'] },
+            },
           },
-        },
-      );
-      const providerRows = (envelope.result?.rows ?? []).map((row) =>
-        this.toReportRow(row, adAccountId, query),
-      );
+        );
+        const values = envelope.result?.rows ?? [];
+        if (envelope.pagination?.totalCount !== undefined ? envelope.pagination.totalCount > values.length : values.length >= pageSize) truncated = true;
+        providerRows.push(...values.slice(0, pageSize).map(row => this.toReportRow(row, adAccountId, query.level === 'account' ? { ...query, metrics: ['spend', 'impressions', 'clicks', 'conversions', ...query.metrics] } : query)));
+      }
       if (query.level === 'account') {
-        if (providerRows.length > 0) rows.push(aggregateAccountRows(providerRows, this.id, adAccountId));
+        if (providerRows.length > 0) {
+          const row = aggregateAccountRows(providerRows, this.id, adAccountId);
+          row.metrics = Object.fromEntries(query.metrics.filter(metric => row.metrics[metric] !== undefined).map(metric => [metric, row.metrics[metric]]));
+          rows.push(row);
+        }
       } else {
         rows.push(...providerRows);
       }
     }
-    return { rows };
+    return { rows, ...(truncated ? { truncated: true } : {}) };
   }
 
   private toReportRow(row: ReportingRow, adAccountId: string, query: NormalizedQuery): ReportRow {
     const total = row.totalMetrics ?? {};
-    const spend = Number(total.localSpend?.amount ?? 0);
-    const impressions = total.impressions ?? 0;
+    const spend = total.localSpend?.amount === undefined ? undefined : Number(total.localSpend.amount);
+    const impressions = total.impressions;
     // Apple has taps, not clicks; installs are the conversion event. No revenue metric exists.
-    const clicks = total.taps ?? 0;
-    const conversions = total.totalInstalls ?? 0;
-    const all: Record<MetricName, number> = {
-      spend: round2(spend),
-      impressions,
-      clicks,
-      conversions,
-      conversion_value: 0,
-      ctr: impressions > 0 ? round2((clicks / impressions) * 100) : 0,
-      cpc: clicks > 0 ? round2(spend / clicks) : 0,
-      cpm: impressions > 0 ? round2((spend / impressions) * 1000) : 0,
-      cpa: conversions > 0 ? round2(spend / conversions) : 0,
-      roas: 0,
-    };
+    const clicks = total.taps;
+    const conversions = total.totalInstalls;
+    const all = availableMetrics({ spend, impressions, clicks, conversions });
     return {
       provider: this.id,
       accountId: adAccountId,
+      ...(total.localSpend?.currency ? { currency: total.localSpend.currency } : {}),
       entity: {
-        level: 'campaign',
+        level: query.level === 'account' ? 'campaign' : query.level,
         id: String(row.metadata?.id ?? ''),
         name: row.metadata?.name ?? '',
         status: row.metadata?.status,
       },
-      metrics: Object.fromEntries(query.metrics.map((m) => [m, all[m]])),
+      metrics: Object.fromEntries(query.metrics.filter(m => all[m] !== undefined).map(m => [m, all[m]])),
     };
   }
 
@@ -254,6 +271,19 @@ export class AppleAdsProvider implements AdProvider {
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
     const payload = op.payload as never;
     switch (op.tool) {
+      case 'apple_create_brand_campaign':
+      case 'apple_create_brand_ad_group':
+      case 'apple_create_brand_creative':
+      case 'apple_create_location_group':
+      case 'apple_update_location_group':
+        return this.maps.plan(op, guard);
+      case 'apple_update_targeting':
+      case 'apple_update_ad':
+      case 'apple_update_creative':
+      case 'apple_update_brand_creative_copy':
+      case 'apple_set_search_match':
+      case 'apple_delete_resource':
+        return this.native.plan(op);
       case 'apple_set_ad_group_status':
       case 'apple_set_keyword_status':
       case 'apple_set_ad_status': {
@@ -363,6 +393,7 @@ export class AppleAdsProvider implements AdProvider {
       name: string;
       adam_id: number;
       countries_or_regions: string[];
+      placement?: string;
       daily_budget: number;
       currency: string;
       status?: string;
@@ -384,8 +415,9 @@ export class AppleAdsProvider implements AdProvider {
       billingEvent: 'TAPS',
       bidStrategy: { bidStrategyType: 'MANUAL_CPT', bidStrategyGoal: 'TAP' },
       targeting: {
+        supplySource: { include: ['APPSTORE'] },
         countryOrRegion: { include: payload.countries_or_regions },
-        supplyPlacement: { include: ['APPSTORE_SEARCH_RESULTS'] },
+        supplyPlacement: { include: [payload.placement ?? 'APPSTORE_SEARCH_RESULTS'] },
       },
       status,
     };
@@ -435,7 +467,7 @@ export class AppleAdsProvider implements AdProvider {
       status?: 'ENABLED' | 'PAUSED';
       device_classes?: Array<'IPHONE' | 'IPAD'>;
       automated_keywords_opt_in?: boolean;
-      start_time?: string;
+      start_time: string;
       end_time?: string;
     },
     guard: WriteGuard,
@@ -462,8 +494,8 @@ export class AppleAdsProvider implements AdProvider {
       ...(payload.automated_keywords_opt_in !== undefined
         ? { automatedKeywordsOptIn: payload.automated_keywords_opt_in }
         : {}),
-      ...(payload.start_time ? { startTime: payload.start_time } : {}),
-      ...(payload.end_time ? { endTime: payload.end_time } : {}),
+      startTime: payload.start_time.replace(/Z$/, ''),
+      ...(payload.end_time ? { endTime: payload.end_time.replace(/Z$/, '') } : {}),
     };
     return {
       summary: `Create Apple Ads ad group "${payload.name}" (${status}) — bid ${payload.bid} ${payload.currency}`,
@@ -911,23 +943,18 @@ function extractResourceIds(value: unknown, fallback?: string): string[] {
 }
 
 function aggregateAccountRows(rows: ReportRow[], provider: string, accountId: string): ReportRow {
-  const metrics = Object.fromEntries(
-    Object.keys(rows[0]!.metrics).map((metric) => [
-      metric,
-      round2(rows.reduce((sum, row) => sum + (row.metrics[metric as MetricName] ?? 0), 0)),
-    ]),
-  ) as Partial<Record<MetricName, number>>;
-  const spend = metrics.spend ?? 0;
-  const impressions = metrics.impressions ?? 0;
-  const clicks = metrics.clicks ?? 0;
-  const conversions = metrics.conversions ?? 0;
-  const conversionValue = metrics.conversion_value ?? 0;
-  if ('ctr' in metrics) metrics.ctr = impressions > 0 ? round2((clicks / impressions) * 100) : 0;
-  if ('cpc' in metrics) metrics.cpc = clicks > 0 ? round2(spend / clicks) : 0;
-  if ('cpm' in metrics) metrics.cpm = impressions > 0 ? round2((spend / impressions) * 1000) : 0;
-  if ('cpa' in metrics) metrics.cpa = conversions > 0 ? round2(spend / conversions) : 0;
-  if ('roas' in metrics) metrics.roas = spend > 0 ? round2(conversionValue / spend) : 0;
-  return { provider, accountId, entity: { level: 'account', id: accountId, name: accountId }, metrics };
+  const sum = (metric: MetricName) => rows.every(row => row.metrics[metric] !== undefined)
+    ? rows.reduce((value, row) => value + row.metrics[metric]!, 0) : undefined;
+  const metrics = availableMetrics({ spend: sum('spend'), impressions: sum('impressions'), clicks: sum('clicks'), conversions: sum('conversions') });
+  return { provider, accountId, ...(rows[0]?.currency ? { currency: rows[0].currency } : {}), entity: { level: 'account', id: accountId, name: accountId }, metrics };
+}
+
+function availableMetrics(values: Partial<Record<MetricName, number>>): Partial<Record<MetricName, number>> {
+  const result = Object.fromEntries(Object.entries(values).filter(([, value]) => typeof value === 'number' && Number.isFinite(value)).map(([key, value]) => [key, round2(value!)])) as Partial<Record<MetricName, number>>;
+  for (const [metric, numerator, denominator, scale] of [['ctr', 'clicks', 'impressions', 100], ['cpc', 'spend', 'clicks', 1], ['cpm', 'spend', 'impressions', 1000], ['cpa', 'spend', 'conversions', 1]] as const) {
+    if (result[numerator] !== undefined && result[denominator] !== undefined) result[metric] = result[denominator]! > 0 ? round2(result[numerator]! / result[denominator]! * scale) : 0;
+  }
+  return result;
 }
 
 function round2(n: number): number {

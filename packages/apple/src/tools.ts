@@ -1,6 +1,8 @@
 import { defineTool, guardedWriteTool, mediaSourceFields, type AnyToolDefinition } from '@adport/core';
 import { z } from 'zod';
 import type { AppleAdsProvider } from './provider.js';
+import { appleNativeTools } from './native-tools.js';
+import { appleMapsTools } from './maps-tools.js';
 
 const statusSchema = z.enum(['ENABLED', 'PAUSED']);
 const idSchema = z.string().regex(/^\d+$/).refine((id) => Number.isSafeInteger(Number(id)) && Number(id) > 0, 'Expected a positive safe integer ID');
@@ -16,6 +18,8 @@ const timestamp = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z
 
 export function appleTools(provider: AppleAdsProvider): AnyToolDefinition[] {
   return [
+    ...appleNativeTools(provider),
+    ...appleMapsTools(provider),
     ...([
       ['ad_group', 'ad_group_id'], ['keyword', 'keyword_id'], ['ad', 'ad_id'],
     ] as const).map(([entity, id]) => guardedWriteTool({
@@ -26,13 +30,13 @@ export function appleTools(provider: AppleAdsProvider): AnyToolDefinition[] {
       description: `Enable or pause an existing Apple Ads ${entity.replaceAll('_', ' ')}. Parent campaign and ad-group statuses remain independent.`,
       payload: z.object({ [id]: idSchema, status: statusSchema }),
     })),
-    ...(['adgroups', 'keywords', 'negative-keywords', 'ads', 'creatives', 'product-pages'] as const).map((resource) => defineTool({
+    ...(['adgroups', 'keywords', 'negative-keywords', 'product-pages'] as const).map((resource) => defineTool({
       name: `apple_${resource.replaceAll('-', '_')}`,
       namespace: 'apple',
       description: `Read Apple ${resource}, including all returned targeting, bids, match types, statuses and creative destinations. Use resource_id for a single record, or filters and offset for paginated queries.`,
       input: z.object({
         account_id: idSchema,
-        resource_id: z.string().min(1).optional(),
+        resource_id: z.string().regex(/^[A-Za-z0-9-]+$/).optional(),
         filters: z.array(z.object({ field: z.string().min(1), operator: z.literal('EQUALS').default('EQUALS'), value: z.array(z.string()).min(1) })).default([]),
         offset: z.number().int().nonnegative().default(0),
         limit: z.number().int().positive().max(1000).default(100),
@@ -64,7 +68,7 @@ export function appleTools(provider: AppleAdsProvider): AnyToolDefinition[] {
     }),
     guardedWriteTool({
       name: 'apple_create_creative', namespace: 'apple', provider: 'apple', kind: 'create',
-      description: 'Create a default or custom product page creative. Use apple_product_pages to find a product_page_id; then read creative status and link a VALID creative with apple_create_ad.',
+      description: 'Create a default or custom product page creative. Default creatives are unique per app/account; reuse an existing apple_creatives ID. Copy and visuals come from App Store Connect. Use apple_product_pages for a custom product_page_id.',
       payload: z.object({ name: z.string().min(1), adam_id: idSchema, product_page_id: z.string().uuid().optional() }),
     }),
     guardedWriteTool({
@@ -95,11 +99,12 @@ export function appleTools(provider: AppleAdsProvider): AnyToolDefinition[] {
         'List Apple Ads Platform API v1 campaigns for an ad account.',
       input: z.object({
         account_id: z.string().describe('Apple Ads ad account id (adAccountId)'),
-        limit: z.number().int().positive().max(5000).default(100),
+        limit: z.number().int().positive().max(1000).default(100),
+        offset: z.number().int().nonnegative().default(0),
       }),
       annotations: { readOnly: true },
       async handler(input) {
-        const campaigns = await provider.listCampaigns(input.account_id, input.limit);
+        const campaigns = await provider.listCampaigns(input.account_id, input.limit, input.offset);
         return { campaigns };
       },
     }),
@@ -116,6 +121,7 @@ export function appleTools(provider: AppleAdsProvider): AnyToolDefinition[] {
         name: z.string().min(1),
         adam_id: z.number().int().positive().describe('App Store app id (adamId)'),
         countries_or_regions: z.array(z.string().length(2)).min(1),
+        placement: z.enum(['APPSTORE_SEARCH_RESULTS', 'APPSTORE_SEARCH_TAB', 'APPSTORE_TODAY_TAB', 'APPSTORE_PRODUCT_PAGES']).default('APPSTORE_SEARCH_RESULTS'),
         daily_budget: z.number().positive(),
         currency: z.string().length(3).describe('Org currency, e.g. USD/EUR'),
         status: statusSchema.optional(),
@@ -144,8 +150,8 @@ export function appleTools(provider: AppleAdsProvider): AnyToolDefinition[] {
         status: statusSchema.optional(),
         device_classes: z.array(z.enum(['IPHONE', 'IPAD'])).min(1).optional(),
         automated_keywords_opt_in: z.boolean().optional(),
-        start_time: z.string().min(1).optional(),
-        end_time: z.string().min(1).optional(),
+        start_time: timestamp.describe('Required UTC start time: YYYY-MM-DDTHH:mm:ss.SSS, optional Z'),
+        end_time: timestamp.optional(),
       }),
     }),
     guardedWriteTool({
