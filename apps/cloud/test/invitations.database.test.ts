@@ -22,14 +22,17 @@ describeDatabase('real passwordless invitation sessions', () => {
   let email: string;
   let projectId: string;
   let otherProjectId: string;
+  let ownerEmail: string;
 
   function selection(id: string) { const form = new FormData(); form.set('projectId', id); return form; }
 
   beforeAll(async () => {
-    const owner = await admin.auth.admin.createUser({ email: `invite-owner-${randomUUID()}@example.test`, email_confirm: true });
+    ownerEmail = `invite-owner-${randomUUID()}@example.test`;
+    const owner = await admin.auth.admin.createUser({ email: ownerEmail, email_confirm: true });
     if (owner.error || !owner.data.user) throw new Error('Could not create invitation test owner');
     users.push(owner.data.user.id);
     projectId = (await resolveMembership(owner.data.user.id)).organizationId;
+    await db()`update public.organizations set name = 'Client North' where id = ${projectId}`;
     email = `invite-new-${randomUUID()}@example.test`;
     const invitation = await admin.auth.admin.generateLink({ type: 'invite', email });
     if (invitation.error || !invitation.data.user) throw new Error('Could not generate test invitation');
@@ -58,6 +61,9 @@ describeDatabase('real passwordless invitation sessions', () => {
     const user = await invited.auth.getUser();
     expect(user.data.user?.id).toBe(invitedId);
     expect(Boolean(user.data.user?.email_confirmed_at)).toBe(true);
+    const project = await invited.from('organizations').select('name').eq('id', projectId).is('archived_at', null).maybeSingle();
+    expect(project.error).toBeNull();
+    expect(project.data).toEqual({ name: 'Client North' });
     await expect(selectProjectAction(selection(projectId))).rejects.toThrow('redirect:/dashboard');
     expect(mocks.setCookie).toHaveBeenCalledWith('adport_project', projectId, expect.objectContaining({ httpOnly: true }));
     expect((await resolveMembership(invitedId, projectId)).role).toBe('viewer');
@@ -80,7 +86,15 @@ describeDatabase('real passwordless invitation sessions', () => {
   it('rejects a different signed-in account even with the correct invitation project ID', async () => {
     mocks.setCookie.mockClear();
     // The owner has no membership in the invitee’s separate personal project.
-    mocks.client.mockResolvedValueOnce({ auth: { getUser: async () => ({ data: { user: { id: users[0] } }, error: null }) } });
+    const link = await admin.auth.admin.generateLink({ type: 'magiclink', email: ownerEmail });
+    if (link.error) throw new Error('Could not generate owner sign-in link');
+    const owner = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+    const verified = await owner.auth.verifyOtp({ type: 'magiclink', token_hash: link.data.properties.hashed_token });
+    expect(verified.error).toBeNull();
+    const project = await owner.from('organizations').select('name').eq('id', otherProjectId).is('archived_at', null).maybeSingle();
+    expect(project.error).toBeNull();
+    expect(project.data).toBeNull();
+    mocks.client.mockResolvedValueOnce(owner);
     await expect(selectProjectAction(selection(otherProjectId))).rejects.toThrow('access');
     expect(mocks.setCookie).not.toHaveBeenCalled();
   });

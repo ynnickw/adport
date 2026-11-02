@@ -3,7 +3,7 @@ import { StrictMode } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ getUser: vi.fn(), setSession: vi.fn(), updateUser: vi.fn(), selectProject: vi.fn(), createClient: vi.fn() }));
+const mocks = vi.hoisted(() => ({ getUser: vi.fn(), setSession: vi.fn(), updateUser: vi.fn(), selectProject: vi.fn(), createClient: vi.fn(), from: vi.fn(), select: vi.fn(), eq: vi.fn(), is: vi.fn(), maybeSingle: vi.fn() }));
 vi.mock('@/lib/supabase/browser', () => ({ createClient: mocks.createClient }));
 vi.mock('@/app/dashboard/projects/actions', () => ({ selectProjectAction: mocks.selectProject }));
 import { InviteAcceptance } from '@/app/auth/invite/invite-acceptance';
@@ -14,8 +14,11 @@ beforeEach(() => {
   window.history.replaceState(null, '', `/auth/invite?project_id=${projectId}`);
   mocks.createClient.mockImplementation(() => {
     expect(window.location.hash).toBe('');
-    return { auth: { getUser: mocks.getUser, setSession: mocks.setSession, updateUser: mocks.updateUser } };
+    return { auth: { getUser: mocks.getUser, setSession: mocks.setSession, updateUser: mocks.updateUser }, from: mocks.from };
   });
+  const query = { select: mocks.select, eq: mocks.eq, is: mocks.is, maybeSingle: mocks.maybeSingle };
+  mocks.from.mockReturnValue(query); mocks.select.mockReturnValue(query); mocks.eq.mockReturnValue(query); mocks.is.mockReturnValue(query);
+  mocks.maybeSingle.mockResolvedValue({ data: { name: 'Client North' }, error: null });
   mocks.getUser.mockResolvedValue({ data: { user: { email: 'member@example.test' } }, error: null });
   mocks.setSession.mockResolvedValue({ error: null });
   mocks.selectProject.mockResolvedValue(undefined);
@@ -29,6 +32,11 @@ describe('passwordless invitation acceptance', () => {
     const join = await screen.findByRole('button', { name: 'Join project' });
     expect(container.querySelector('input[type="password"]')).toBeNull();
     expect(screen.getByText('member@example.test')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: 'Join Client North.' })).toBeTruthy();
+    expect(mocks.from).toHaveBeenCalledWith('organizations');
+    expect(mocks.select).toHaveBeenCalledWith('name');
+    expect(mocks.eq).toHaveBeenCalledWith('id', projectId);
+    expect(mocks.is).toHaveBeenCalledWith('archived_at', null);
     fireEvent.click(join);
     await waitFor(() => expect(mocks.selectProject).toHaveBeenCalledTimes(1));
     expect(mocks.selectProject.mock.calls[0]![0].get('projectId')).toBe(projectId);
@@ -57,6 +65,45 @@ describe('passwordless invitation acceptance', () => {
     expect(screen.getByRole('status').textContent).toContain('Verifying');
     expect(screen.queryByRole('button', { name: 'Join project' })).toBeNull();
     expect(mocks.selectProject).not.toHaveBeenCalled();
+    expect(mocks.from).not.toHaveBeenCalled();
+  });
+
+  it('waits for the authenticated project lookup before offering Join', async () => {
+    mocks.maybeSingle.mockReturnValue(new Promise(() => {}));
+    render(<InviteAcceptance projectId={projectId} />);
+    await waitFor(() => expect(mocks.from).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('status').textContent).toContain('Verifying');
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.queryByText('member@example.test')).toBeNull();
+  });
+
+  it.each([
+    { data: null, error: null },
+    { data: null, error: { message: 'private database detail' } },
+  ])('does not expose a name or offer Join when the project cannot be read: %j', async result => {
+    mocks.maybeSingle.mockResolvedValue(result);
+    render(<InviteAcceptance projectId={projectId} />);
+    expect((await screen.findByRole('alert')).textContent).toContain('This project is unavailable or you do not have access');
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Join Client North.' })).toBeNull();
+    expect(document.body.textContent).not.toContain('private database detail');
+    expect(mocks.selectProject).not.toHaveBeenCalled();
+  });
+
+  it('renders the saved project name as text and ignores a name supplied in the URL', async () => {
+    window.history.replaceState(null, '', window.location.href + '&project_name=Forged');
+    mocks.maybeSingle.mockResolvedValue({ data: { name: 'A&B <Design>' }, error: null });
+    const { container } = render(<InviteAcceptance projectId={projectId} />);
+    expect(await screen.findByRole('heading', { name: 'Join A&B <Design>.' })).toBeTruthy();
+    expect(container.querySelector('design')).toBeNull();
+    expect(document.body.textContent).not.toContain('Forged');
+  });
+
+  it('requires a project ID before looking up a name', async () => {
+    render(<InviteAcceptance projectId="" />);
+    expect((await screen.findByRole('alert')).textContent).toContain('Open the invitation link');
+    expect(mocks.from).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button')).toBeNull();
   });
 
   it.each(['#error=access_denied', '#type=recovery&access_token=a&refresh_token=b', '#type=invite&access_token=a'])('rejects an invalid invitation fragment %s', async hash => {
