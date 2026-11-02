@@ -1,6 +1,7 @@
 import 'server-only';
 import { billingConfigured, billingPlanConfigured } from './billing';
 import { subscriptionEnded, type OrganizationEntitlement, type BillingInterval } from './plans';
+import { trialEligible } from '@/lib/plan-change';
 
 export interface BillingOptions {
   hasSubscription: boolean;
@@ -14,7 +15,7 @@ export function upgradeBillingOptions(entitlement: OrganizationEntitlement): Bil
   return {
     hasSubscription,
     portalAvailable: hasSubscription && Boolean(entitlement.providerCustomerId) && billingConfigured(),
-    trialEligible: !entitlement.providerSubscriptionId,
+    trialEligible: trialEligible(entitlement.plan.id, entitlement.providerSubscriptionId),
     available: {
       operator: { monthly: billingPlanConfigured('operator', 'monthly'), annual: billingPlanConfigured('operator', 'annual') },
       premium: { monthly: billingPlanConfigured('premium', 'monthly'), annual: billingPlanConfigured('premium', 'annual') },
