@@ -71,7 +71,7 @@ export function AuthScreen({ mode, error, message, returnTo }: AuthScreenProps) 
           : <>New to Adport? <Link href={returnTo ? `/login?mode=signup&return_to=${encodeURIComponent(returnTo)}` : '/?mode=signup'}>Create an account</Link></>}
       </p>
       <div className="auth-foot">
-        <a href="https://adport.dev">adport.dev</a>
+        <a href="https://adport.dev">adport<span className="wordmark-dot">.</span></a>
         <a href="https://adport.dev/privacy">privacy</a>
         <a href="https://adport.dev/terms">terms</a>
         <a href="https://github.com/ynnickw/adport">source</a>
