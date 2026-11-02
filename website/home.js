@@ -6,19 +6,38 @@ const gate = document.getElementById("console");
 if (gate) initGate(gate);
 
 // Keep the headline still for reduced motion and while someone is reading it with the pointer.
+// Once the hero scene is playing it leads instead: each loop names its platform and assistant.
 const heroMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-document.querySelectorAll("[data-rotate]").forEach((rotator, group) => {
+const rotators = [...document.querySelectorAll("[data-rotate]")].map((rotator, group) => {
   const items = [...rotator.children];
   let active = 0;
   const show = () => items.forEach((item, index) => item.classList.toggle("is-active", index === active));
   show();
   rotator.dataset.ready = "true";
   heroMotion.addEventListener("change", () => { active = 0; show(); });
-  window.setInterval(() => {
+  const timer = window.setInterval(() => {
     if (heroMotion.matches || document.hidden || rotator.closest("h1").matches(":hover, :focus-within")) return;
     active = (active + 1) % items.length;
     show();
   }, group === 0 ? 3200 : 4000);
+  return { set: (index) => { window.clearInterval(timer); active = index % items.length; show(); } };
+});
+window.addEventListener("adport:scenario", (event) => {
+  if (heroMotion.matches) return;
+  rotators[0]?.set(event.detail.provider);
+  rotators[1]?.set(event.detail.agent);
+});
+
+// Each safety rule lights the policy line that sets it.
+const policyLines = [...document.querySelectorAll(".policy-file .line[data-key]")];
+document.querySelectorAll(".rule-grid [data-policy]").forEach((rule) => {
+  const keys = rule.dataset.policy.split(" ");
+  const light = (on) => {
+    rule.classList.toggle("is-active", on);
+    policyLines.forEach((line) => line.classList.toggle("is-lit", on && keys.includes(line.dataset.key)));
+  };
+  ["pointerenter", "focus"].forEach((name) => rule.addEventListener(name, () => light(true)));
+  ["pointerleave", "blur"].forEach((name) => rule.addEventListener(name, () => light(false)));
 });
 
 // Native controls work without JavaScript. The muted preview adds just a small pause button;

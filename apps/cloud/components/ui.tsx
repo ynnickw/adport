@@ -51,14 +51,10 @@ export function StatusPill({ status }: { status: string }) {
   return <span className={`status ${tone}`}>{status}</span>;
 }
 
-export function AuthFrame({ label, children }: { label: string; children: React.ReactNode }) {
+export function AuthFrame({ label, wide, children }: { label: string; wide?: boolean; children: React.ReactNode }) {
   return (
     <main className="auth-page">
-      <section className="auth-card">
-        <div className="auth-bar">
-          <div className="traffic" aria-hidden="true"><i /><i /><i /></div>
-          <span>adport.dev — {label}</span>
-        </div>
+      <section className={`auth-card${wide ? ' auth-card-wide' : ''}`} aria-label={label}>
         <div className="auth-body">{children}</div>
       </section>
     </main>

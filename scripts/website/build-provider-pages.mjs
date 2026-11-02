@@ -33,27 +33,43 @@ const href = provider => `/providers/${provider.slug}`;
 const code = text => `<pre><code>${escape(text)}</code></pre>`;
 const copy = (text, label) => `<button class="text-action copy-chip" type="button" data-copy-command="${escape(text)}"><span class="copy-label" aria-live="polite">${escape(label)}</span></button>`;
 const cmd = (text, label = 'Copy') => `<div class="cmd${text.includes('\n') ? ' cmd-block' : ''}">${text.includes('\n') ? code(text) : `<code>${escape(text)}</code>`}${copy(text, label)}</div>`;
-const setupTabs = (context = 'your ads') => `<div class="agent-setup" data-agent-tabs>
+// The home page keeps each assistant to one instruction, its command and the next step;
+// the provider pages carry the full guide.
+const homePanel = agent => `<div class="agent-instructions" id="agent-panel-${agent.id}" role="tabpanel" aria-labelledby="agent-tab-${agent.id}" tabindex="0"><p>${escape(agent.instructions)}${agent.open ? ` <a class="text-link" href="${escape(agent.open.href)}">${escape(agent.open.label)} ↗</a>` : agent.id === 'cursor' ? ` <a class="text-link" href="${escape(cursorInstallUrl(mcpBaseUrl))}">Add to Cursor ↗</a>` : ''}</p>${cmd(agent.command(mcpBaseUrl), 'Copy')}<p class="agent-next">${escape(agent.nextStep)}</p>${agent.id === 'codex' ? cmd('codex mcp login adport', 'Copy') : ''}</div>`;
+const setupTabs = (context = 'your ads', { home = false } = {}) => `<div class="agent-setup" data-agent-tabs>${home ? '' : `
   <p class="agent-setup-intro">Adport Cloud is currently invite-only. <a href="/#waitlist">Join the Cloud waitlist</a> for access.</p>
-  <p class="agent-setup-intro">Use the same Adport MCP endpoint and OAuth sign-in in each client. First connect your ad accounts in your Adport workspace. No platform secrets belong in chat.</p>
+  <p class="agent-setup-intro">Use the same Adport MCP endpoint and OAuth sign-in in each client. First connect your ad accounts in your Adport workspace. No platform secrets belong in chat.</p>`}
   <div class="agent-tab-list" role="tablist" aria-label="AI tool setup instructions" hidden>${agentSetups.map((agent, i) => `<button class="agent-tab" type="button" role="tab" id="agent-tab-${agent.id}" aria-controls="agent-panel-${agent.id}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}">${agent.logo ? agentLogo(agent.logo) : ''}<span>${agent.name}</span></button>`).join('')}</div>
-  ${agentSetups.map(agent => `<div class="agent-instructions" id="agent-panel-${agent.id}" role="tabpanel" aria-labelledby="agent-tab-${agent.id}" tabindex="0"><h3>Use ${escape(context)} in ${agent.id === 'mcp' ? 'any MCP client' : agent.name}</h3><p>${escape(agent.instructions)}</p>${agent.open ? `<p><a class="text-link" href="${escape(agent.open.href)}">${escape(agent.open.label)} ↗</a></p>` : agent.id === 'cursor' ? `<p><a class="text-link" href="${escape(cursorInstallUrl(mcpBaseUrl))}">Add to Cursor ↗</a></p><p>Or add this configuration to ~/.cursor/mcp.json:</p>` : ''}${cmd(agent.command(mcpBaseUrl), `Copy ${agent.name} setup`)}<p class="agent-next">${escape(agent.nextStep)}</p>${agent.id === 'codex' ? cmd('codex mcp login adport', 'Copy sign-in command') : ''}${agent.id === 'chatgpt' ? '<p class="agent-note">Your ChatGPT workspace must allow custom MCP plugins. ChatGPT connects over HTTP; the local stdio command is for clients that can launch a process.</p><p><a class="text-link" href="https://developers.openai.com/api/docs/guides/custom-mcp-server">ChatGPT custom MCP documentation</a></p>' : ''}</div>`).join('')}
-  <p class="local-option">Use the MCP URL from AI assistants if you run your own Adport deployment. Client settings, workspace permissions, and advertising-platform approvals still apply.</p>
+  ${agentSetups.map(agent => home ? homePanel(agent) : `<div class="agent-instructions" id="agent-panel-${agent.id}" role="tabpanel" aria-labelledby="agent-tab-${agent.id}" tabindex="0"><h3>Use ${escape(context)} in ${agent.id === 'mcp' ? 'any MCP client' : agent.name}</h3><p>${escape(agent.instructions)}</p>${agent.open ? `<p><a class="text-link" href="${escape(agent.open.href)}">${escape(agent.open.label)} ↗</a></p>` : agent.id === 'cursor' ? `<p><a class="text-link" href="${escape(cursorInstallUrl(mcpBaseUrl))}">Add to Cursor ↗</a></p><p>Or add this configuration to ~/.cursor/mcp.json:</p>` : ''}${cmd(agent.command(mcpBaseUrl), `Copy ${agent.name} setup`)}<p class="agent-next">${escape(agent.nextStep)}</p>${agent.id === 'codex' ? cmd('codex mcp login adport', 'Copy sign-in command') : ''}${agent.id === 'chatgpt' ? '<p class="agent-note">Your ChatGPT workspace must allow custom MCP plugins. ChatGPT connects over HTTP; the local stdio command is for clients that can launch a process.</p><p><a class="text-link" href="https://developers.openai.com/api/docs/guides/custom-mcp-server">ChatGPT custom MCP documentation</a></p>' : ''}</div>`).join('')}${home ? '' : '\n  <p class="local-option">Use the MCP URL from AI assistants if you run your own Adport deployment. Client settings, workspace permissions, and advertising-platform approvals still apply.</p>'}
 </div>`;
+// The local server registers the same way in each CLI agent; one tab per agent, with its mark.
+const localAgents = [
+  { id: 'claude-code', name: 'Claude Code', command: 'claude mcp add --transport stdio adport -- adport mcp' },
+  { id: 'codex', name: 'Codex', command: 'codex mcp add adport -- adport mcp' },
+  { id: 'cursor', name: 'Cursor', command: '{\n  "mcpServers": {\n    "adport": { "command": "adport", "args": ["mcp"] }\n  }\n}' },
+];
+const localTabs = () => `<div class="local-tab-list" role="tablist" aria-label="Local agent setup" hidden>${localAgents.map((agent, i) => `<button class="local-tab" type="button" role="tab" id="local-tab-${agent.id}" aria-controls="local-panel-${agent.id}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}">${agentLogo(agent.id)}${escape(agent.name)}</button>`).join('')}</div>${localAgents.map(agent => `<div class="local-panel" id="local-panel-${agent.id}" role="tabpanel" aria-labelledby="local-tab-${agent.id}">${cmd(agent.command)}</div>`).join('')}`;
 const homeSetup = () => `<!-- agent-setup:start -->
       <section class="setup" id="setup" aria-labelledby="agent-title">
         <div class="section-intro">
+          <p class="section-kicker">Get started</p>
           <h2 id="agent-title">One URL. Your choice of AI.</h2>
+          <p>Add Adport to the AI you already use. Every write still goes through the same gate.</p>
         </div>
         <div class="setup-layout">
-          ${setupTabs()}
-          <aside class="setup-local" aria-labelledby="local-title">
-            <h3 id="local-title">Prefer to run it locally?</h3>
-            <p class="setup-sub">Open source under Apache-2.0. Bring your own credentials; Node.js 22.13 or newer.</p>
+          <div class="setup-card setup-cloud">
+            <div class="setup-card-head"><h3>Adport Cloud</h3><span class="setup-badge">Invite-only</span></div>
+            <p class="setup-sub">Hosted MCP with OAuth sign-in. Connect your ad accounts in Adport, then add one URL to your assistant.</p>
+            ${setupTabs('your ads', { home: true })}
+            <p class="setup-foot">Adport Cloud is currently invite-only. <a class="text-link" href="/#waitlist">Join the waitlist</a></p>
+          </div>
+          <aside class="setup-card setup-local" aria-labelledby="local-title">
+            <div class="setup-card-head"><h3 id="local-title">Run it locally</h3><span class="setup-badge setup-badge-go">Open source</span></div>
+            <p class="setup-sub">Apache-2.0 and free. Bring your own credentials; Node.js 22.13 or newer.</p>
             <ol class="steps">
               <li><span class="step-title">Install the CLI</span>${cmd('npm install -g adport')}</li>
               <li><span class="step-title">Connect a platform</span>${cmd('adport connect google')}</li>
-              <li><span class="step-title">Register the local server</span>${cmd('claude mcp add --transport stdio adport -- adport mcp')}</li>
+              <li data-agent-tabs><span class="step-title">Add it to your agent</span>${localTabs()}</li>
             </ol>
           </aside>
         </div>

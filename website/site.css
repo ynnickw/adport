@@ -300,6 +300,8 @@ button { font: inherit; color: inherit; }
   letter-spacing: -0.035em;
   text-wrap: balance;
 }
+/* Chapter label above a section heading; shared by every page that reuses home sections. */
+.section-kicker, :is(.section-intro, .waitlist-copy, .rules-copy) > .section-kicker { max-width: none; margin: 0 0 0.75rem; color: var(--signal-ink); font-size: 1rem; font-weight: 750; line-height: 1.4; }
 .section-intro p { max-width: 35rem; margin-top: 1.25rem; color: var(--ink-soft); line-height: 1.6; text-wrap: pretty; }
 .section-intro .text-link { margin-top: 1.25rem; }
 

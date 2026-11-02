@@ -1,0 +1,32 @@
+/* Adport's look for every stage: the tokens of website/site.css mapped onto the kit's. */
+.ap-look .ss-stage {
+  --ss-canvas: #f5f5f7;
+  --ss-well: #e9e9ee;
+  --ss-surface: #fff;
+  --ss-chrome: #fafafa;
+  --ss-raised: #fff;
+  --ss-line: rgba(29, 29, 31, 0.1);
+  --ss-line-faint: rgba(29, 29, 31, 0.06);
+  --ss-text-strong: #1d1d1f;
+  --ss-text: #6e6e73;
+  --ss-text-faint: #8e8e93;
+  --ss-icon: #6e6e73;
+  --ss-icon-faint: #a1a1a6;
+  --ss-accent: #ff6b00;
+  --ss-accent-text: #c24400;
+  --ss-accent-soft: rgba(255, 107, 0, 0.1);
+  --ss-success: #1a7f4b;
+  --ss-success-text: #1a7f4b;
+  --ss-success-soft: rgba(26, 127, 75, 0.1);
+  --ss-danger: #c4281c;
+  --ss-danger-text: #c4281c;
+  --ss-danger-soft: rgba(196, 40, 28, 0.08);
+  --ss-font: "Overpass", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --ss-mono: "Overpass Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --ss-term-path: #a1a1a6;
+  --ss-term-sigil: #ff8a3d;
+  --ss-term-ok: #5fd38d;
+  --ss-term-dim: #a1a1a6;
+  --ss-term-bg: #1d1d1f;
+  font-family: var(--ss-font);
+}
