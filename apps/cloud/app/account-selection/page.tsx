@@ -13,8 +13,8 @@ export default async function SelectAccountsPage({ searchParams }: { searchParam
   const id = z.string().uuid().safeParse(selection_id);
   const selection = canAdminister(tenant) && id.success
     ? await getAccountSelection({ ...tenant, scopes: [] }, id.data) : undefined;
-  if (!selection) redirect(tenant.onboardingCompletedAt
+  if (!selection) redirect(tenant.onboardingCompletedAt || tenant.onboardingSkippedAt
     ? '/dashboard/accounts?selection_unavailable=1'
     : '/onboarding?step=connect&selection_unavailable=1');
-  redirect(accountSelectionPath(selection.id, selection.returnPath, !tenant.onboardingCompletedAt));
+  redirect(accountSelectionPath(selection.id, selection.returnPath, !tenant.onboardingCompletedAt && !tenant.onboardingSkippedAt));
 }

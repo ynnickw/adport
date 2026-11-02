@@ -17,7 +17,7 @@ import { SyntheticReviewer } from '@/components/synthetic-reviewer';
 
 export const metadata = { title: 'Accounts' };
 
-export default async function AccountsPage({ searchParams }: { searchParams: Promise<{ connected?: string; accounts_saved?: string; error?: string; select_provider?: string; selection_id?: string; selection_unavailable?: string }> }) {
+export default async function AccountsPage({ searchParams }: { searchParams: Promise<{ connected?: string; accounts_saved?: string; access_enabled?: string; error?: string; select_provider?: string; selection_id?: string; selection_unavailable?: string }> }) {
   const tenant = await requireDashboardTenant();
   if (isSyntheticReviewer(tenant.organizationId)) return <SyntheticReviewer tenant={tenant} />;
   const [connections, inventory, entitlement, params, usage] = await Promise.all([
@@ -35,10 +35,10 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
   const selection = canManage && selectionId.success ? await getAccountSelection({ ...tenant, scopes: [] }, selectionId.data) : undefined;
   if (selection) return <main className="page">
     <div className="selection-back-row"><Link className="selection-back" href="/dashboard/accounts">← Accounts</Link><SupportLauncher className="support-inline" /></div>
-    <PageHeader title={`Add ${providerLabel(selection.provider)} accounts`} showDescription description={`Choose the accounts to add to ${tenant.organizationName}. You'll enable assistant access next.`} />
+    <PageHeader title={`Add ${providerLabel(selection.provider)} accounts`} showDescription description={`Choose the accounts to add to ${tenant.organizationName}. Add and enable them in one step, or import without enabling.`} />
     <ProviderAccountPicker organizationId={tenant.organizationId} selectionId={selection.id} provider={selection.provider}
       accounts={selection.accounts} pages={selection.pages} nextPath={'/dashboard/accounts?select_provider=' + selection.provider}
-      initialSelectedIds={inventory.filter(account => account.provider === selection.provider).map(account => account.accountId)} />
+      initialSelectedIds={inventory.filter(account => account.provider === selection.provider).map(account => account.accountId)} initialEnabledIds={inventory.filter(account => account.provider === selection.provider && account.enabled).map(account => account.accountId)} maxActiveAccounts={entitlement.plan.maxActiveAccounts} organizationActiveCount={usage.enabledAccounts} />
   </main>;
   return (
     <main className="page">
@@ -46,8 +46,8 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
       {providerFilter ? <Link className="button secondary small" href="/dashboard/accounts" style={{ marginBottom: '1rem' }}>View all providers’ accounts</Link> : null}
       {params.connected ? <div className="callout success" role="status" style={{ marginBottom: '1rem' }}>{providerLabel(params.connected)} is connected. Select the specific accounts agents may access below.</div> : null}
       {params.selection_id || params.selection_unavailable ? <div className="error-callout" role="alert">This account selection is no longer available. It may have expired, been saved, or belong to another admin. {canManage ? <Link href="/dashboard/connections">Reconnect the platform to choose accounts again.</Link> : 'Ask a project owner or admin to restart the connection.'}</div> : null}
-      {params.accounts_saved ? <AccountConnectionProgress stage="enable" /> : null}
-      {params.accounts_saved ? <div className="callout success" role="status" style={{ marginBottom: '1rem' }}>Accounts updated. Enable access for any newly added accounts below.</div> : null}
+      {params.accounts_saved ? <AccountConnectionProgress stage={params.access_enabled === '1' ? 'ready' : 'enable'} /> : null}
+      {params.accounts_saved ? <div className="callout success" role="status" style={{ marginBottom: '1rem' }}>{params.access_enabled === '1' ? 'Accounts added and enabled for your assistant.' : 'Accounts imported. New accounts remain disabled until you enable access below.'}</div> : null}
       {params.error ? <div className="error-callout" role="alert">{params.error}</div> : null}
       <PendingAccountSelections connections={pendingConnections} canManage={['owner', 'admin'].includes(tenant.role)} />
       {inventory.length === 0 && pendingConnections.length ? null : inventory.length === 0 && !providerFilter ? <section className="card">

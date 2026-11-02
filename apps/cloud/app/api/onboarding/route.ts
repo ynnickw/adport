@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { sessionPrincipal } from '@/lib/cloud/auth';
 import { AGENT_IDS, LEGACY_AGENT_IDS, ONBOARDING_STEPS, updateOnboardingState } from '@/lib/cloud/onboarding';
 import { apiError, noStoreJson } from '@/lib/http';
+import { getAssistantConnectionStatus } from '@/lib/cloud/assistant-connection';
 
 const inputSchema = z.object({
   currentStep: z.enum(ONBOARDING_STEPS),
@@ -13,10 +14,18 @@ const inputSchema = z.object({
   setupKind: z.enum(['first_project', 'new_project']).optional(),
 });
 
+export async function GET(request: Request) {
+  try {
+    const agent = z.enum(AGENT_IDS).optional().parse(new URL(request.url).searchParams.get('agent') ?? undefined);
+    return noStoreJson(await getAssistantConnectionStatus(await sessionPrincipal(), agent));
+  }
+  catch (error) { return apiError(error, 403); }
+}
+
 export async function POST(request: Request) {
   try {
     const input = inputSchema.parse(await request.json());
-    if (input.complete && input.currentStep !== 'complete') throw new Error('Completed onboarding must use the complete step.');
+    if (Boolean(input.complete) !== (input.currentStep === 'complete')) throw new Error('Completed onboarding must use the complete step and a verified connection.');
     if (input.skip && (input.complete || input.currentStep === 'complete')) throw new Error('Skipped setup must preserve its current step.');
     const principal = await sessionPrincipal();
     await updateOnboardingState(principal, input);

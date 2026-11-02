@@ -7,7 +7,7 @@ import { createPolicySettingsDraft, policySettingsInput } from '@/lib/policy-set
 import { OnboardingFlow } from '@/app/onboarding/onboarding-flow';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
-vi.mock('@/app/dashboard/agents/agent-setup-guide', () => ({ AgentSetupGuide: () => <div>Assistant setup fixture</div> }));
+vi.mock('@/components/assistant-connect', () => ({ AssistantConnect: () => <div>Assistant setup fixture</div>, AssistantPicker: () => <div /> }));
 
 describe('optional policy settings', () => {
   it('turns off both limits without disabling previews or losing other safeguards', () => {
@@ -71,10 +71,9 @@ describe('onboarding safety summary', () => {
 
   it('appears before assistant setup and carries the dashboard return path to Customize', () => {
     const html = renderToStaticMarkup(<OnboardingFlow policy={DEFAULT_POLICY} projectName="Client" setupKind="first_project" organizationId="project" canManage initialStep="agent" initialAgent={null} baseUrl="https://app.adport.test" providers={[]} connections={[]} accounts={[]} maxActiveAccounts={3} organizationActiveCount={0} returnTo="/dashboard/agents" />);
-    expect(html).toContain('Project safeguards');
-    expect(html).toContain('Start paused');
-    expect(html).toContain('25%');
-    expect(html.indexOf('Project safeguards')).toBeLessThan(html.indexOf('Assistant setup fixture'));
+    expect(html).toContain('Preview required for every ad change');
+    expect(html).toContain('About your project safeguards');
+    expect(html.indexOf('Preview required for every ad change')).toBeLessThan(html.indexOf('Assistant setup fixture'));
     expect(html).toContain('href="/dashboard/policies?setup=1&amp;return_to=%2Fdashboard%2Fagents"');
   });
 });

@@ -8,6 +8,11 @@ import { LiveData } from './live-data';
 import { isSyntheticReviewer } from '@/lib/cloud/synthetic-reviewer';
 import { SyntheticReviewer } from '@/components/synthetic-reviewer';
 import { getOnboardingState } from '@/lib/cloud/onboarding';
+import { SetupChecklist } from '@/components/setup-checklist';
+import { ConnectAssistantButton } from '@/components/assistant-connect';
+import { getAssistantConnectionStatus } from '@/lib/cloud/assistant-connection';
+import { getAssistantListings } from '@/lib/cloud/assistant-listings';
+import { env } from '@/lib/env';
 
 export const metadata = { title: 'Overview' };
 
@@ -25,14 +30,16 @@ export default async function OverviewPage() {
   const usableAccounts = accounts.filter(account => account.enabled && connected.some(connection => connection.provider === account.provider && !connection.accountSelectionId));
   const selectionPending = connected.some(connection => connection.accountSelectionId);
   const canManage = ['owner', 'admin'].includes(tenant.role);
+  const assistantStatus = canManage && onboarding.currentStep !== 'complete'
+    ? await getAssistantConnectionStatus({ ...tenant, scopes: [] }) : undefined;
   return (
     <main className="page">
       <PageHeader
         title="Overview"
         description="Your ad accounts, campaign activity, and next steps."
-        action={<Link className="button secondary" href="/dashboard/agents" prefetch={false}>Open AI assistants</Link>}
+        action={<ConnectAssistantButton key={tenant.organizationId} baseUrl={env().ADPORT_CLOUD_BASE_URL.replace(/\/$/, '')} projectName={tenant.organizationName} initialAgent={onboarding.selectedAgent ?? undefined} listings={getAssistantListings()} canManage={canManage} />}
       />
-      {canManage && onboarding.currentStep !== 'complete' ? <section className="setup-resume"><div><span className="plan-kicker">Your project is ready</span><h2>Finish setting up {tenant.organizationName}</h2><p>Pick up where you left off to connect accounts and your AI assistant.</p></div><Link href="/onboarding?resume=1" className="button secondary">Resume setup</Link></section> : null}
+      {assistantStatus ? <SetupChecklist key={`${tenant.userId}:${tenant.organizationId}`} userId={tenant.userId} projectId={tenant.organizationId} projectName={tenant.organizationName} connected={Boolean(connected.length)} accountsEnabled={Boolean(usableAccounts.length)} assistantVerified={assistantStatus.verified} /> : null}
       {connections.length === 0 ? (
         <div className="card">
           <Empty

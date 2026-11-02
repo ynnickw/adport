@@ -17,6 +17,7 @@ export interface DashboardTenant {
   organizationName: string;
   role: NonNullable<TenantPrincipal['role']>;
   onboardingCompletedAt: Date | null;
+  onboardingSkippedAt: Date | null;
   organizationGroupId: string;
   organizationGroupName: string;
   organizationRole: NonNullable<TenantPrincipal['role']>;
@@ -41,9 +42,10 @@ export const requireDashboardTenant = cache(async (): Promise<DashboardTenant> =
     role: DashboardTenant['role'];
     organizationName: string;
     onboardingCompletedAt: Date | null;
+    onboardingSkippedAt: Date | null;
   }>>`
     select membership.organization_id, membership.role, organization.name as organization_name,
-      onboarding.completed_at as onboarding_completed_at
+      onboarding.completed_at as onboarding_completed_at, onboarding.skipped_at as onboarding_skipped_at
     from private.project_memberships membership
     join public.organizations organization on organization.id = membership.organization_id
     left join public.organization_onboarding onboarding on onboarding.organization_id = organization.id
@@ -62,6 +64,7 @@ export const requireDashboardTenant = cache(async (): Promise<DashboardTenant> =
     organizationName: membership.organizationName,
     role: membership.role as DashboardTenant['role'],
     onboardingCompletedAt: membership.onboardingCompletedAt,
+    onboardingSkippedAt: membership.onboardingSkippedAt,
     organizationGroupId: project.organizationId,
     organizationGroupName: project.organizationName,
     organizationRole: project.organizationRole,
