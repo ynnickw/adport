@@ -113,7 +113,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
   }
   if (credentials.tiktok) {
     const resolved = hydrateTikTok(credentials.tiktok);
-    const provider = new TikTokAdsProvider(new TikTokClient(resolved), { appId: resolved.appId, secret: resolved.secret });
+    const provider = new TikTokAdsProvider(new TikTokClient(resolved), { appId: resolved.appId, secret: resolved.secret }, media);
     modules.push({ provider: scopeProvider(provider), tools: tiktokTools(provider) });
   }
   if (credentials.apple) {

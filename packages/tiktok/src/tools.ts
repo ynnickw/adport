@@ -1,6 +1,7 @@
 import { defineTool, guardedWriteTool, type AnyToolDefinition } from '@adport/core';
 import { z } from 'zod';
 import type { TikTokAdsProvider } from './provider.js';
+import { tiktokCreativeTools } from './creative-tools.js';
 
 const OBJECTIVES = [
   'REACH',
@@ -17,6 +18,7 @@ const operationStatusSchema = z.enum(['ENABLE', 'DISABLE']);
 
 export function tiktokTools(provider: TikTokAdsProvider): AnyToolDefinition[] {
   return [
+    ...tiktokCreativeTools(provider),
     defineTool({
       name: 'tiktok_api_read',
       namespace: 'tiktok',
@@ -117,7 +119,7 @@ export function tiktokTools(provider: TikTokAdsProvider): AnyToolDefinition[] {
     guardedWriteTool({
       name: 'tiktok_api_update',
       namespace: 'tiktok',
-      description: 'Update non-budget fields through any documented TikTok Business API v1.3 /update endpoint.',
+      description: 'Update non-budget/non-bid fields through any documented TikTok Business API v1.3 /update endpoint. Monetary and target-ROAS edits require typed tools.',
       provider: 'tiktok',
       kind: 'update',
       payload: z.object({ path: z.string().min(3), body: z.record(z.string(), z.unknown()) }),

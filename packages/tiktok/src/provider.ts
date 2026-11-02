@@ -1,5 +1,7 @@
 import {
   AdportError,
+  LocalMediaResolver,
+  type MediaResolver,
   resolveDateRange,
   type Account,
   type AdProvider,
@@ -15,6 +17,7 @@ import {
   type WriteResult,
 } from '@adport/core';
 import { TikTokClient } from './client.js';
+import { TikTokCreativeService } from './creatives.js';
 
 /** TikTok budgets are floats in whole account-currency units. */
 export const UNITS_TO_MICROS = 1_000_000;
@@ -34,6 +37,7 @@ const ID_DIMENSION = {
 } as const;
 
 interface TikTokCampaign {
+  advertiser_id?: string;
   campaign_id: string;
   campaign_name: string;
   operation_status: 'ENABLE' | 'DISABLE';
@@ -53,11 +57,13 @@ interface WritePlan {
 
 export class TikTokAdsProvider implements AdProvider {
   readonly id = 'tiktok';
+  readonly creatives: TikTokCreativeService;
 
   constructor(
     private readonly client: TikTokClient,
     private readonly app: { appId: string; secret: string },
-  ) {}
+    media: MediaResolver = new LocalMediaResolver(),
+  ) { this.creatives = new TikTokCreativeService(client, media); }
 
   capabilities(): ProviderCapabilities {
     // No server-side dry run in the Marketing API — previews are client-side diffs.
@@ -239,6 +245,17 @@ export class TikTokAdsProvider implements AdProvider {
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
     const payload = op.payload as never;
     switch (op.tool) {
+      case 'tiktok_create_ad_group':
+      case 'tiktok_create_ads':
+      case 'tiktok_set_ad_group_status':
+      case 'tiktok_set_ad_status':
+      case 'tiktok_update_ad':
+      case 'tiktok_update_targeting':
+      case 'tiktok_set_ad_group_budget':
+      case 'tiktok_set_ad_group_bidding':
+      case 'tiktok_upload_image':
+      case 'tiktok_upload_video':
+        return this.creatives.plan(op, guard);
       case 'tiktok_create_campaign':
         return this.planCreateCampaign(op.accountId, payload, guard);
       case 'tiktok_set_campaign_status':
@@ -267,9 +284,14 @@ export class TikTokAdsProvider implements AdProvider {
     const coercions: string[] = [];
     if (guard.forcePausedCreation) {
       coerceTikTokCreatedStatuses(body, coercions);
-      if (path === 'campaign/create' && body.operation_status !== 'DISABLE') {
+      if (['campaign/create', 'adgroup/create'].includes(path) && body.operation_status !== 'DISABLE') {
         body.operation_status = 'DISABLE';
         coercions.push('operation_status set to DISABLE by policy (paused_creation)');
+      }
+      if (path === 'ad/create' && Array.isArray(body.creatives)) {
+        for (const [index, creative] of body.creatives.entries()) if (isRecord(creative) && creative.operation_status !== 'DISABLE') {
+          creative.operation_status = 'DISABLE'; coercions.push(`creatives[${index}].operation_status set to DISABLE by policy (paused_creation)`);
+        }
       }
     }
     return {
@@ -364,6 +386,7 @@ export class TikTokAdsProvider implements AdProvider {
     payload: { campaign_ids: string[]; operation_status: 'ENABLE' | 'DISABLE' },
   ): Promise<WritePlan> {
     const campaigns = await this.listCampaigns(accountId, payload.campaign_ids);
+    if (payload.campaign_ids.some(id => !campaigns.some(campaign => campaign.campaign_id === id && (campaign.advertiser_id === undefined || campaign.advertiser_id === accountId)))) throw new AdportError('INVALID_INPUT', 'tiktok: campaign was not found in the selected advertiser');
     const changes = payload.campaign_ids.map((id) => {
       const campaign = campaigns.find((c) => c.campaign_id === id);
       return `~ campaign ${id} ("${campaign?.campaign_name ?? '?'}") operation_status ${campaign?.operation_status ?? '?'} → ${payload.operation_status}`;
@@ -389,8 +412,8 @@ export class TikTokAdsProvider implements AdProvider {
     payload: { campaign_id: string; budget: number },
   ): Promise<WritePlan> {
     const campaigns = await this.listCampaigns(accountId, [payload.campaign_id]);
-    const campaign = campaigns[0];
-    if (!campaign) {
+    const campaign = campaigns.find(campaign => campaign.campaign_id === payload.campaign_id);
+    if (!campaign || (campaign.advertiser_id !== undefined && campaign.advertiser_id !== accountId)) {
       throw new AdportError('PROVIDER_ERROR', `tiktok: campaign ${payload.campaign_id} not found in advertiser ${accountId}`);
     }
     if (campaign.budget_mode === 'BUDGET_MODE_INFINITE') {
@@ -470,7 +493,7 @@ function coerceTikTokCreatedStatuses(value: unknown, coercions: string[], path =
 function containsTikTokBudget(value: unknown): boolean {
   if (Array.isArray(value)) return value.some(containsTikTokBudget);
   if (!isRecord(value)) return false;
-  return Object.entries(value).some(([key, child]) => /budget/i.test(key) || containsTikTokBudget(child));
+  return Object.entries(value).some(([key, child]) => /budget|^(?:bid_price|conversion_bid_price|deep_cpa_bid|roas_bid)$/i.test(key) || containsTikTokBudget(child));
 }
 
 function collectTikTokBudgets(value: unknown, path = 'body'): WritePreview['budgetDeltas'] {
@@ -482,7 +505,7 @@ function collectTikTokBudgets(value: unknown, path = 'body'): WritePreview['budg
   if (!isRecord(value)) return deltas;
   for (const [key, child] of Object.entries(value)) {
     const childPath = `${path}.${key}`;
-    if (/budget/i.test(key)) {
+    if (/budget|^(?:bid_price|conversion_bid_price|deep_cpa_bid)$/i.test(key)) {
       const amount = Number(child);
       if (Number.isFinite(amount) && amount > 0) {
         deltas.push({ target: childPath, toMicros: Math.round(amount * UNITS_TO_MICROS) });

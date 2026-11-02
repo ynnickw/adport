@@ -51,7 +51,11 @@ export class TikTokClient {
     return this.send<T>(path, { method: 'POST', body: JSON.stringify(body) });
   }
 
-  private async send<T>(pathWithQuery: string, init: { method: string; body?: string }): Promise<T> {
+  async postMultipart<T>(path: string, form: FormData): Promise<T> {
+    return this.send<T>(path, { method: 'POST', body: form });
+  }
+
+  private async send<T>(pathWithQuery: string, init: { method: string; body?: string | FormData }): Promise<T> {
     // Trailing slash is mandatory before the query string.
     const [path, query] = pathWithQuery.split('?');
     const url = `${this.baseUrl}/${path!.replace(/^\/|\/$/g, '')}/${query ? `?${query}` : ''}`;
@@ -59,7 +63,7 @@ export class TikTokClient {
       method: init.method,
       headers: {
         'Access-Token': this.credentials.accessToken,
-        ...(init.body ? { 'content-type': 'application/json' } : {}),
+        ...(typeof init.body === 'string' ? { 'content-type': 'application/json' } : {}),
       },
       body: init.body,
     });
