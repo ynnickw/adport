@@ -2,6 +2,8 @@ import { creativesOutput, defineTool, guardedWriteTool, type AnyToolDefinition }
 import { z } from 'zod';
 import type { GoogleAdsProvider } from './provider.js';
 import { googlePlanningTools } from './planning.js';
+import { googleAssetTools } from './assets.js';
+import { googleAssetLinkTools } from './asset-links.js';
 
 const statusSchema = z.enum(['ENABLED', 'PAUSED']);
 const matchTypeSchema = z.enum(['EXACT', 'PHRASE', 'BROAD']);
@@ -9,6 +11,8 @@ const matchTypeSchema = z.enum(['EXACT', 'PHRASE', 'BROAD']);
 export function googleTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
   return [
     ...googlePlanningTools(provider),
+    ...googleAssetTools(provider),
+    ...googleAssetLinkTools(provider),
     defineTool({
       name: 'google_ads', namespace: 'google',
       description: 'Browse Google Ads with their actual text, final URLs, serving status and creative actions. Filter by campaign or ad group. Changes requested from the creative viewer return a preview before approval.',

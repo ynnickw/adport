@@ -103,7 +103,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
       refreshToken: credentials.google.refreshToken,
       loginCustomerIds: credentials.google.loginCustomerIds,
     });
-    const provider = new GoogleAdsProvider(client);
+    const provider = new GoogleAdsProvider(client, media);
     modules.push({ provider: scopeProvider(provider), tools: googleTools(provider) });
   }
   if (credentials.meta) {

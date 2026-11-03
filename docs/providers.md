@@ -44,6 +44,16 @@ Idea results contain one native page. Continue with `next_page_token` as `page_t
 
 The REST paths, seed variants and limits follow Google's [v25 keyword planning protocol](https://github.com/googleapis/googleapis/blob/master/google/ads/googleads/v25/services/keyword_plan_idea_service.proto). Provider authorization, API quotas and account eligibility still apply.
 
+### Shared assets and extensions
+
+`google_assets` provides a visual account-owned library with native image previews, extension copy, policy information and name-edit actions. `google_upload_image_asset` accepts checksum-bound PNG/JPEG/GIF bytes; hosted calls use the private project media library. `google_create_youtube_asset` references an existing video without uploading or publishing one. `google_create_extension_asset` creates an unattached sitelink, callout or structured snippet. Creation previews use Google's native `validate_only`; no association or ad is created by these asset tools.
+
+`google_rename_asset` changes only the shared name. `google_update_extension_asset` edits supported extension content of the same type. Every ad sharing that extension, including active ads, can change. Omitted sitelink descriptions are preserved; supply both as empty strings to clear them. Text, image and YouTube content are not editable through this extension tool.
+
+`google_asset_links` reads associations for a customer, campaign or ad group. `google_link_asset` attaches a compatible owned asset, defaulting to PAUSED with policy coercions reported. `google_set_asset_link_status` pauses or enables an existing association; `google_unlink_asset` removes that exact association. Native validation determines placement eligibility. Parent campaign/ad statuses are independent, and every serving use of an association can be affected. These tools cover sitelinks, callouts, structured snippets, ad images and business branding; they do not implement a complete Performance Max asset-group hierarchy.
+
+Google's [Asset protocol](https://github.com/googleapis/googleapis/blob/master/google/ads/googleads/v25/resources/asset.proto) and [AssetOperation](https://github.com/googleapis/googleapis/blob/master/google/ads/googleads/v25/services/asset_service.proto) provide no asset-removal operation. Assets remain in the library after unlinking; Adport does not advertise an asset-delete tool. Association status and removal follow the native [CampaignAsset](https://github.com/googleapis/googleapis/blob/master/google/ads/googleads/v25/resources/campaign_asset.proto) contract, with corresponding customer/ad-group services.
+
 Google can show an “unverified app” warning when your private OAuth project requests the Google Ads scope without completing verification. For the CLI, that warning concerns your BYO project and credentials are not sent to Adport Cloud. Add yourself as a test user during development. The managed cloud application's own OAuth project must complete Google's production verification before public use.
 
 ## Meta Ads
