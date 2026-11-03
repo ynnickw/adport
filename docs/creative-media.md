@@ -4,7 +4,24 @@ Advertising writes use the same tool registry and two-step policy gate in the CL
 
 ## Project media library
 
-In Adport Cloud, open **Creative media** in the dashboard, or call `media_list` and open its `upload_page_url`. Uploads are private to the selected project. The upload screen names the destination project, including when opened from another project's assistant conversation.
+Agents can upload, download, inspect, rename and delete private project media through MCP or the tool REST API without opening a dashboard. The same project authorization and two-step policy gate apply to media mutations. A hosted server cannot read a file on the agent's computer or in its container; the agent transfers the bytes instead.
+
+For files up to 1 MiB, preview and apply `media_upload` with `name`, `content_type`, `byte_length`, `sha256` and canonical `data_base64`. The applied result includes a ready `result.details.media_id` and SHA-256 for provider uploads. For files up to 50 MiB:
+
+1. Preview and apply `media_prepare_upload` with the file's name, MIME type, exact byte length and SHA-256.
+2. Send the raw bytes using HTTP `PUT` to `result.details.upload_url` with the returned headers. This temporary storage capability does not require a dashboard or an Adport API key in the upload request.
+3. Preview and apply `media_finalize_upload` with the returned `media_id` and `expected_sha256`. The file becomes available after its bytes have been verified.
+
+`media_get` returns processing/deletion status, metadata and a temporary `asset.preview_url` for downloading ready files. `media_rename` and `media_delete` require the file's current `expected_name` and immutable `expected_sha256`. Rename changes metadata; delete removes the project source and blocks reuse. Provider copies, ads and campaigns are independent. To replace the file's content, upload a new immutable file and select its new ID.
+
+The CLI can transfer a local file and finalize it with a project-scoped API key. The first command previews; repeat it with the returned pending operation ID to apply:
+
+```sh
+adport media upload ./creative.mp4 --api-key-env ADPORT_API_KEY
+adport media upload ./creative.mp4 --api-key-env ADPORT_API_KEY --pending-operation-id <id-from-preview>
+```
+
+See [agent-managed project media](providers.md#agent-managed-project-media) for the REST/CLI workflow. The dashboard's **Creative media** screen and `media_list`'s `upload_page_url` remain optional ways for people to upload files; agents can use the tools directly.
 
 The upload process reserves a random object path, signs an upload grant with overwrite disabled, verifies the exact size and SHA-256, and fully decodes images before making previews available. Image, video and audio uploads are capped at 50 MiB in the hosted app; provider limits may be lower. Video/audio container acceptance and processing are checked by the advertising provider when uploaded there. Staging a file does not publish an ad.
 
