@@ -104,7 +104,7 @@ All 11 providers have local connection commands, normalized reports, and guarded
 | Spotify Ads | `spotify` | [Reports, unpublished drafts, campaign status, ad-set delivery](docs/providers/spotify.md) |
 | Pinterest Ads | `pinterest` | [Discovery, reports, campaigns, budgets, status](docs/providers/pinterest.md) |
 | LinkedIn Ads | `linkedin` | [Campaigns/groups, targeting, bids, text creatives and image library](docs/providers/linkedin.md) |
-| X Ads | `x` | [Campaigns, line-item configuration/lifecycle, budgets, bids and analytics](docs/providers/x.md) |
+| X Ads | `x` | [Campaigns, line-item lifecycle, targeting, budgets, bids and analytics](docs/providers/x.md) |
 
 Provider application approval, account access, and available metrics depend on the platform. The [connection guides](docs/providers.md) record prerequisites and testing limits. Reports preserve currency and attribution differences; see [reporting semantics](docs/reporting-semantics.md) before comparing providers.
 

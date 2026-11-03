@@ -41,8 +41,8 @@ the Adport Cloud OAuth broker. `adport disconnect x` removes the local copy only
   coercion and integer account-currency micros. Funding ownership and availability
   are checked before creation. Previews make only reads. Apply responses must
   match the approved fields and preserve untouched budgets and status.
-- Six shared tools expose campaign/funding/line-item reads and campaign
-  creation/status/budget changes. All three writes use `guardedWriteTool` and
+- Shared tools expose campaign/funding/line-item reads and guarded campaign,
+  line-item and targeting mutations. Writes use `guardedWriteTool` and
   the shared policy engine's exact preview/apply gate. Integration tests verify
   mismatched pending arguments, budget caps and protected-account rejection.
 
@@ -95,7 +95,17 @@ Name/schedule edits, status, daily/total caps and bidding have separate named to
 
 `x_delete_line_item` requires its relevant promoted-post/account/media children to be removed first, then uses native DELETE and checks the returned deleted flag. Unknown product types are rejected for deletion rather than assuming all child types have been checked. All advertising writes still use the same exact-argument preview/apply gate, audit log, protected-account and budget rules. X does not provide server validation for this workflow.
 
-Targeting edits, draft/post/card/media authoring, audiences and measurement remain outstanding. Native promoted-post associations are created ACTIVE and cannot be updated through a PUT endpoint; a tool must account for this explicitly instead of promising ad-level PAUSED creation or an unsupported status edit. The current additions are partial API coverage. The current provider-owned [MCP reference](https://github.com/xdevplatform/docs/blob/2f701ee04b362fffcc1dfee042b11b64ab884fda/x-ads-api/mcp/reference.mdx) maps additional tool families to v12 routes; this mapping is an API comparison source, not evidence that Adport implements every route.
+Draft/post/card/media authoring, audience management and measurement remain outstanding. Native promoted-post associations are created ACTIVE and cannot be updated through a PUT endpoint; a tool must account for this explicitly instead of promising ad-level PAUSED creation or an unsupported status edit. The current additions are partial API coverage. The current provider-owned [MCP reference](https://github.com/xdevplatform/docs/blob/2f701ee04b362fffcc1dfee042b11b64ab884fda/x-ads-api/mcp/reference.mdx) maps additional tool families to v12 routes; this mapping is an API comparison source, not evidence that Adport implements every route.
+
+## Targeting
+
+`x_targeting_options` reads twelve native choice dimensions with dimension-specific filters. Supported native cursors are returned without dropping rows from oversized pages. Unpaged endpoints explicitly report potential truncation; an unsupported filter or unusable cursor is rejected rather than silently ignored. `x_targeting_criteria` and `x_get_targeting_criterion` verify the selected account's campaign/line-item hierarchy before returning criteria.
+
+Single add/remove tools preserve other dimensions. `x_update_targeting` uses the native atomic JSON batch for up to 500 combined additions/removals on one line item, including geographic replacements and engagement source/type pairs. The planner checks the final state, rejects duplicate criteria and multiple age buckets, requires included geography for TV shows, and warns if the last included location is removed. Existing omitted criteria remain unchanged. Eligibility and compatibility beyond these checks are still decided by X.
+
+Referenced custom audiences must be available and targetable in the account; engagement campaigns, FULL promotable users and exclusion-only app lists are checked against native account resources. Source availability is checked again at apply. Batch signatures exclude the JSON body from OAuth form normalization. Ordered receipts must match the approved operations; item-level errors and mismatches retain safe resource IDs for reconciliation and are never retried automatically. Targeting writes can change delivery immediately on an active line item and use the normal shared preview/apply gate.
+
+Live reads on 2026-11-03 verified placement combinations and language/location/platform-version options through an existing authorized connection. X returned five Berlin location rows despite a requested count of two; Adport retained the full page and reported this. Native query results are returned as received, without claiming the provider honored every filter. Targeting mutations remain contract-tested only; the available X account is REJECTED and has no line items for live mutation verification.
 
 ## Access and commercial boundary
 

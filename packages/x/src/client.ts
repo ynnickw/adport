@@ -36,7 +36,7 @@ export class XAdsClient {
     this.token = { key: credentials.accessToken, secret: credentials.accessTokenSecret };
   }
 
-  async request<T>(method: XMethod, path: string, schema: z.ZodType<T>, params: XParams = {}): Promise<T> {
+  async request<T>(method: XMethod, path: string, schema: z.ZodType<T>, params: XParams = {}, jsonBody?: unknown): Promise<T> {
     if (!/^[a-z0-9_]+(?:\/[a-z0-9_]+)*$/.test(path)) throw new AdportError('INVALID_INPUT', 'x: invalid API resource path');
     const url = new URL(path, X_ADS_API_BASE);
     for (const [key, value] of Object.entries(params)) {
@@ -48,12 +48,12 @@ export class XAdsClient {
     // oauth-1.0a decodes percent escapes but not form-style '+' spaces.
     // Serialize spaces as %20 so the signed values match X's query parser.
     url.search = url.search.replace(/\+/g, '%20');
-    // X's endpoint reference specifies query parameters for POST and PUT too.
-    // Sign the final encoded URL, and send exactly that URL without a JSON body.
+    // Single-resource writes use query parameters; documented batches use JSON.
+    // JSON is excluded from OAuth 1 form-parameter normalization.
     const headers = this.signer.toHeader(this.signer.authorize({ url: url.href, method }, this.token));
     let response: Response;
     try {
-      response = await this.fetchImpl(url.href, { method, headers: { ...headers, accept: 'application/json' }, redirect: 'error', signal: AbortSignal.timeout(30_000) });
+      response = await this.fetchImpl(url.href, { method, headers: { ...headers, accept: 'application/json', ...(jsonBody !== undefined ? { 'content-type': 'application/json' } : {}) }, ...(jsonBody !== undefined ? { body: JSON.stringify(jsonBody) } : {}), redirect: 'error', signal: AbortSignal.timeout(30_000) });
     } catch {
       throw new AdportError('PROVIDER_ERROR', `x: transport failed${method === 'GET' ? '' : '; write outcome unknown, inspect the account before retrying'}`);
     }
@@ -65,8 +65,14 @@ export class XAdsClient {
     }
     let body: unknown;
     try { body = await response.json(); } catch { throw new AdportError('PROVIDER_ERROR', 'x: invalid JSON response'); }
-    if (body && typeof body === 'object' && 'errors' in body && Array.isArray(body.errors) && body.errors.length) {
+    const nonempty = (value: unknown) => Array.isArray(value) ? value.length > 0 : value && typeof value === 'object' ? Object.keys(value).length > 0 : typeof value === 'string' && value.length > 0;
+    if (body && typeof body === 'object' && 'errors' in body && nonempty(body.errors)) {
       throw new AdportError('PROVIDER_ERROR', 'x: provider returned an error envelope');
+    }
+    if (body && typeof body === 'object' && 'operation_errors' in body && nonempty(body.operation_errors)) {
+      const data = /^batch\/accounts\/[a-z0-9]+\/(?:targeting_criteria|line_items)$/.test(path) && 'data' in body && Array.isArray(body.data) ? body.data : [];
+      const ids = data.flatMap(row => row && typeof row === 'object' && typeof row.id === 'string' && /^[a-z0-9]{1,32}$/.test(row.id) ? [row.id] : []).slice(0, 500);
+      throw new AdportError('PROVIDER_ERROR', 'x: provider rejected batch operations; inspect the account before retrying', { resource_ids: ids });
     }
     const parsed = schema.safeParse(body);
     if (!parsed.success) throw new AdportError('PROVIDER_ERROR', 'x: unexpected API response schema');
