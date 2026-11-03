@@ -28,7 +28,7 @@ import {
 
 export const PROVIDER_IDS = ['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const;
 export { ADPORT_UI_RESOURCE_DOMAINS };
-export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v2.html'];
+export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html'];
 
 const DEFAULT_MCP_ICONS = [{
   src: 'https://app.adport.dev/icon.svg?brand=orange-dot-v2',

@@ -66,7 +66,7 @@ const pending = z.object({
 });
 const applied = z.object({
   status: z.literal('applied'), applied: z.literal(true), preview,
-  result: z.object({ applied: z.literal(true), resourceIds: z.array(z.string()), details: z.unknown().optional() }),
+  result: z.object({ applied: z.literal(true), resourceIds: z.array(z.string()), details: z.unknown().optional(), warnings: z.array(z.string()).optional() }),
 });
 
 // Flat wire format is retained for existing CLI/REST consumers. Phase-specific

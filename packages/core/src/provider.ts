@@ -48,6 +48,8 @@ export interface WriteResult {
   applied: true;
   resourceIds: string[];
   details?: unknown;
+  /** Safe for audit/host display; summarize partial failures without identifiers or secrets. */
+  warnings?: string[];
 }
 
 /** Policy-derived constraints handed to providers on every preview/apply. */

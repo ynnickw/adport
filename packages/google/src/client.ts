@@ -138,6 +138,12 @@ export class GoogleAdsRestClient {
     return { apiVersion: this.version, response };
   }
 
+  async uploadConversions(customerId: string, method: 'uploadClickConversions' | 'uploadCallConversions' | 'uploadConversionAdjustments', rows: Array<Record<string, unknown>>, validateOnly: boolean, jobId?: number): Promise<Record<string, unknown>> {
+    return this.request(`customers/${normalizeCustomerId(customerId)}:${method}`, {
+      method: 'POST', body: { [method === 'uploadConversionAdjustments' ? 'conversionAdjustments' : 'conversions']: rows, partialFailure: true, validateOnly, ...(jobId !== undefined ? { jobId } : {}) },
+    });
+  }
+
   /** Paged GAQL search; accumulates rows up to options.maxRows (default 1000). */
   async search(
     customerId: string,

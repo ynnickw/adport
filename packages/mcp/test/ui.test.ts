@@ -578,6 +578,36 @@ describe('shipped MCP iframe', () => {
     expect(ui.app.innerHTML).toContain('Applied. Upload finalized'); expect(ui.app.innerHTML).toContain('Resource: 3_123'); expect(ui.app.innerHTML).not.toContain('Hold to apply');
   });
 
+  it.each([false, true])('renders partial-write warnings and shares them through the host context (ChatGPT bridge=%s)', async native => {
+    const warnings = ['Only 1 of 2 rows was confirmed; inspect failed rows <script>unsafe</script>'];
+    const outcome = { status: 'applied', applied: true, preview: { summary: 'Upload conversion records' }, result: { resourceIds: ['conversion-action'], details: { status: 'PARTIAL_OR_UNCONFIRMED' }, warnings } };
+    const states: unknown[] = [], calls: unknown[] = [];
+    const ui = widget(native ? { callTool: async (...args: unknown[]) => { calls.push(args); return { structuredContent: outcome }; }, setWidgetState: (value: unknown) => { states.push(value); } } : undefined);
+    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('google_upload_click_conversions', 'operation', { pending_operation_id: 'consumed-conversion-token', preview: { summary: 'Upload conversion records' } }, { arguments: { account_id: '123', project_id: 'project-b', conversions: [{ gclid: 'private-click-id' }] } }) } });
+    ui.approvals[0]!.click();
+    if (!native) {
+      const request = ui.sent.at(-1) as { id: number };
+      ui.message({ jsonrpc: '2.0', id: request.id, result: { structuredContent: outcome } });
+    }
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    expect(ui.app.innerHTML).toContain('Applied with warnings');
+    expect(ui.app.innerHTML).toContain('role="alert"');
+    expect(ui.app.innerHTML).toContain('&lt;script&gt;unsafe&lt;/script&gt;');
+    expect(ui.app.innerHTML).not.toContain('<script>unsafe</script>');
+    expect(ui.app.innerHTML).not.toContain('Hold to apply');
+    const context = native ? states[0] : ui.sent.find((value: any) => value.method === 'ui/update-model-context');
+    expect(JSON.stringify(context)).toContain('Only 1 of 2');
+    expect(JSON.stringify(context)).not.toMatch(/consumed-conversion-token|private-click-id/);
+    expect(native ? calls : ui.sent.filter((value: any) => value.method === 'tools/call')).toHaveLength(1);
+  });
+
+  it('shows upload eligibility notes even when the preview has no editable before/after fields', () => {
+    const ui = widget();
+    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('google_upload_click_conversions', 'operation', { pending_operation_id: 'preview-only', preview: { summary: 'Upload conversion records', changes: ['+ 2 records'], notes: ['Legacy click imports are restricted; new integrations require Data Manager.'] } }) } });
+    expect(ui.app.innerHTML).toContain('Legacy click imports are restricted; new integrations require Data Manager.');
+    expect(ui.app.innerHTML).not.toContain('Applied.');
+  });
+
   it('cancels a released hold and applies once after a completed keyboard hold', () => {
     const ui = widget();
     ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('google_create_campaign', 'operation', {

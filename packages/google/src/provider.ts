@@ -21,6 +21,7 @@ import { GoogleAdsRestClient, normalizeCustomerId } from './client.js';
 import { GoogleAssetService, GOOGLE_ASSET_WRITES } from './assets.js';
 import { GoogleAssetLinks, GOOGLE_ASSET_LINK_WRITES } from './asset-links.js';
 import { GoogleLabelService, GOOGLE_LABEL_WRITES } from './labels.js';
+import { GoogleConversionService, GOOGLE_CONVERSION_WRITES } from './conversions.js';
 
 const LEVEL_RESOURCE = {
   account: 'customer',
@@ -40,6 +41,8 @@ const BASE_METRIC_FIELDS: Record<string, string> = {
 
 interface WritePlan extends Omit<WritePreview, 'serverValidated'> {
   execute: (validateOnly: boolean) => Promise<string[]>;
+  resultDetails?: () => unknown;
+  resultWarnings?: () => string[];
 }
 
 export class GoogleAdsProvider implements AdProvider {
@@ -48,11 +51,13 @@ export class GoogleAdsProvider implements AdProvider {
   readonly assets: GoogleAssetService;
   readonly assetLinks: GoogleAssetLinks;
   readonly labels: GoogleLabelService;
+  readonly conversions: GoogleConversionService;
 
   constructor(private readonly client: GoogleAdsRestClient, media?: MediaResolver) {
     this.assets = new GoogleAssetService(client, media);
     this.assetLinks = new GoogleAssetLinks(client, this.assets);
     this.labels = new GoogleLabelService(client);
+    this.conversions = new GoogleConversionService(client);
   }
 
   keywordPlanning(customerId: string, method: 'generateKeywordIdeas' | 'generateKeywordHistoricalMetrics', body: Record<string, unknown>) {
@@ -325,7 +330,7 @@ export class GoogleAdsProvider implements AdProvider {
   async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> {
     const plan = await this.plan(op, guard);
     const resourceIds = await plan.execute(false);
-    return { applied: true, resourceIds };
+    return { applied: true, resourceIds, ...(plan.resultDetails ? { details: plan.resultDetails() } : {}), ...(plan.resultWarnings ? { warnings: plan.resultWarnings() } : {}) };
   }
 
   // ---- write planning ------------------------------------------------------
@@ -334,6 +339,7 @@ export class GoogleAdsProvider implements AdProvider {
     if (GOOGLE_ASSET_WRITES.has(op.tool)) return this.assets.plan(op);
     if (GOOGLE_ASSET_LINK_WRITES.has(op.tool)) return this.assetLinks.plan(op, guard);
     if (GOOGLE_LABEL_WRITES.has(op.tool)) return this.labels.plan(op);
+    if (GOOGLE_CONVERSION_WRITES.has(op.tool)) return this.conversions.plan(op);
     const cid = normalizeCustomerId(op.accountId);
     // Tool input was already zod-validated at the registry boundary.
     const payload = op.payload as never;

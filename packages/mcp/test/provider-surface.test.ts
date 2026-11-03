@@ -150,7 +150,7 @@ describe('all-provider shared tool surface', () => {
       await modernClient.connect(new StreamableHTTPClientTransport(new URL('https://adport.test/mcp'), { fetch: (url, init) => modern.fetch(new Request(url, init)) }));
       const modernTools = (await modernClient.listTools()).tools;
       expect(modernTools.map(tool => tool.name).sort()).toEqual(names.filter(name => name !== 'recommendation_apply' && !/_api_(read|create|update|delete|remove)$/.test(name)).sort());
-      expect(modernTools.find(tool => tool.name === 'google_assets')?._meta).toMatchObject({ ui: { resourceUri: 'ui://adport/insight-card-v3.html' } });
+      expect(modernTools.find(tool => tool.name === 'google_assets')?._meta).toMatchObject({ ui: { resourceUri: 'ui://adport/insight-card-v4.html' } });
     } finally { await modernClient.close(); await modern.close(); }
   });
 });

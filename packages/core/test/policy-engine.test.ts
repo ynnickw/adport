@@ -105,6 +105,16 @@ describe('PolicyEngine.validate', () => {
 });
 
 describe('PolicyEngine.apply', () => {
+  it('audits partial-result warnings while excluding arbitrary provider details and reusable capabilities', async () => {
+    const op = budgetOp('c1', 12_000_000);
+    const { pendingOperationId } = await engine.validate(provider, op);
+    vi.spyOn(provider, 'applyWrite').mockResolvedValue({ applied: true, resourceIds: ['c1'], warnings: ['Only 1 of 2 records was confirmed. Inspect the remaining outcome.'], details: { upload_url: 'private-capability-never-audit', raw_identifier: 'private-event-identifier' } });
+    await engine.apply(provider, op, pendingOperationId);
+    const entries = await audit.read();
+    expect(entries.at(-1)).toMatchObject({ event: 'applied', details: { resourceIds: ['c1'], warnings: ['Only 1 of 2 records was confirmed. Inspect the remaining outcome.'] } });
+    expect(JSON.stringify(entries)).not.toMatch(/private-capability-never-audit|private-event-identifier/);
+  });
+
   it('rechecks the budget delta cap against changed live state before applying', async () => {
     const op = budgetOp('c1', 12_000_000);
     const { pendingOperationId } = await engine.validate(provider, op);

@@ -132,7 +132,7 @@ export class PolicyEngine {
       accountId: op.accountId,
       pendingId,
       summary: preview.summary,
-      details: { resourceIds: result.resourceIds },
+      details: { resourceIds: result.resourceIds, ...(result.warnings?.length ? { warnings: result.warnings } : {}) },
     });
     await this.pending.delete(pendingId);
     return { result, preview };

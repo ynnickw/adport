@@ -55,7 +55,7 @@ describe('official MCP HTTP protocol entries', () => {
       const resource = await client.readResource({ uri: ADPORT_UI_URI });
       expect(resource.contents[0]).toMatchObject({ mimeType: 'text/html;profile=mcp-app' });
       expect(resource.contents[0]).toHaveProperty('text');
-      expect((await client.listResources()).resources.map(value => value.uri)).toEqual([ADPORT_UI_URI, 'ui://adport/insight-card-v2.html']);
+      expect((await client.listResources()).resources.map(value => value.uri)).toEqual([ADPORT_UI_URI, 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html']);
       expect((await client.listResourceTemplates()).resourceTemplates).toEqual([]);
       const input = { account_id: 'mock-1', campaign_id: 'c1', status: 'PAUSED' };
       const preview = await client.callTool({ name: 'mock_set_campaign_status', arguments: input });
