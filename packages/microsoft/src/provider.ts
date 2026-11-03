@@ -77,7 +77,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     this.negativeKeywords = new MicrosoftNegativeKeywordService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign));
     this.budgets = new MicrosoftBudgetService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign), account => this.listCampaigns(account), async account => { await this.scopeFor(account); return this.currencies.get(account); });
     this.planning = new MicrosoftPlanningService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign), account => this.currencies.get(account));
-    this.conversions = new MicrosoftConversionService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign));
+    this.conversions = new MicrosoftConversionService(client, (account, refresh) => this.scopeFor(account, refresh), (account, campaign) => this.lookupCampaign(account, campaign));
   }
 
   capabilities(): ProviderCapabilities {
@@ -133,8 +133,9 @@ export class MicrosoftAdsProvider implements AdProvider {
     }));
   }
 
-  private async scopeFor(accountId: string) {
-    if (!this.customerIds.has(accountId)) await this.listAccounts();
+  private async scopeFor(accountId: string, refresh = false) {
+    if (refresh) { this.customerIds.delete(accountId); this.currencies.delete(accountId); }
+    if (refresh || !this.customerIds.has(accountId)) await this.listAccounts();
     return { customerId: this.customerIds.get(accountId), customerAccountId: accountId };
   }
 
@@ -547,6 +548,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function requireTypedMutationTool(resource: string, body: unknown): void {
+  if (resource === 'UetTags') throw new AdportError('INVALID_INPUT', 'microsoft: use microsoft_create_uet_tag for new uninstalled tags; customer-wide tag edits, deletion and sharing are not exposed through single-account generic tools');
   if (resource === 'ConversionGoals') throw new AdportError('INVALID_INPUT', 'microsoft: conversion-goal mutations require typed conversion tools for account scope, native auto-tagging side effects and event-criteria preservation');
   const referencesSharedBudget = (value: unknown): boolean => Array.isArray(value) ? value.some(referencesSharedBudget) : isRecord(value) && Object.entries(value).some(([key, child]) => key === 'BudgetId' && child !== null && child !== undefined && String(child) !== '0' || referencesSharedBudget(child));
   if (resource === 'Budgets' || referencesSharedBudget(body)) throw new AdportError('INVALID_INPUT', 'microsoft: shared-budget changes require the typed microsoft shared-budget tools for membership, snapshot and monetary policy checks');

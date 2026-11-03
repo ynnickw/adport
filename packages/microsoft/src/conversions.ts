@@ -16,8 +16,9 @@ const revenue = z.discriminatedUnion('type', [z.object({ type: z.literal('NoValu
 const common = z.object({ name, goal_category: category, status: z.enum(['Active', 'Paused']).default('Paused'), exclude_from_bidding: z.boolean().default(true), count_type: z.enum(['All', 'Unique']).default('All'), conversion_window_minutes: z.number().int().min(1).max(129600).default(43200), revenue: revenue.default({ type: 'NoValue' }), expected_auto_tagging_enabled: z.boolean() });
 const create = z.object({ goal: z.discriminatedUnion('type', [common.extend({ type: z.literal('OfflineConversion'), is_externally_attributed: z.boolean().default(false) }), common.extend({ type: z.literal('Url'), tag_id: id, url_rule: url }), common.extend({ type: z.literal('Event'), tag_id: id, event_conditions: event })]) });
 const update = z.object({ goal_id: id, goal_type: supportedType, expected_snapshot_hash: z.string().regex(/^[a-f0-9]{64}$/), name: name.optional(), goal_category: category.optional(), status: z.enum(['Active', 'Paused']).optional(), exclude_from_bidding: z.boolean().optional(), count_type: z.enum(['All', 'Unique']).optional(), conversion_window_minutes: z.number().int().min(1).max(129600).optional(), revenue: revenue.optional(), is_externally_attributed: z.boolean().optional(), url_rule: url.optional(), event_conditions: event.optional() }).refine(value => Object.entries(value).some(([key, value]) => !['goal_id', 'goal_type', 'expected_snapshot_hash'].includes(key) && value !== undefined), 'Supply an editable field');
-const view = z.object({ goal: z.record(z.string(), z.unknown()), auto_tagging_enabled: z.boolean(), snapshot_hash: z.string().regex(/^[a-f0-9]{64}$/) });
-const additional = 'GoalCategory, IsExternallyAttributed, IsAutoGoal, IsEnhancedConversionsEnabled, ViewThroughConversionWindowInMinutes, AttributionModelType';
+const createTag = z.object({ name, description: z.string().min(1).max(1000).optional(), expected_customer_id: id.describe('native_customer_id from microsoft_linked_uet_tags') });
+const view = z.object({ account_id: id, goal: z.record(z.string(), z.unknown()), auto_tagging_enabled: z.boolean().describe('MSCLKIDAutoTaggingEnabled on the selected account, separate from the goal Scope'), auto_tagging_scope: z.literal('Account'), snapshot_hash: z.string().regex(/^[a-f0-9]{64}$/) });
+const additional = 'GoalCategory, IsExternallyAttributed, IsAutoGoal, IsEnhancedConversionsEnabled, ViewThroughConversionWindowInMinutes, AttributionModelType, ApplicationDownloadGoal';
 const pairs = [['ActionExpression', 'ActionOperator', 'action'], ['CategoryExpression', 'CategoryOperator', 'category'], ['LabelExpression', 'LabelOperator', 'label'], ['Value', 'ValueOperator', 'value']] as const;
 const notes = ['Microsoft automatically enables MSCLKIDAutoTaggingEnabled when adding or updating this goal, including paused goals. This tool does not install a UET tag or send conversion events.', 'Account scope is fixed. Native Deleted status is internal-only; no permanent goal-deletion operation is exposed. Use Paused to stop tracking.', 'Goal snapshots detect changed configuration before submission; Microsoft provides no atomic compare-and-set. Conversion settings can affect reporting and automated bidding.'];
 function canonical(value: unknown): unknown { return Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => [key, canonical(value)])) : value; }
@@ -30,7 +31,7 @@ function eventFields(value: z.infer<typeof event>): Row {
 function matches(actual: Row, fields: Row): boolean {
   return Object.entries(fields).every(([key, value]) => value === null ? actual[key] === null || actual[key] === undefined : value && typeof value === 'object' && !Array.isArray(value) ? actual[key] && typeof actual[key] === 'object' && matches(actual[key] as Row, value as Row) : String(actual[key]) === String(value));
 }
-export const MICROSOFT_CONVERSION_WRITES = new Set(['microsoft_create_conversion_goal', 'microsoft_update_conversion_goal']);
+export const MICROSOFT_CONVERSION_WRITES = new Set(['microsoft_create_conversion_goal', 'microsoft_update_conversion_goal', 'microsoft_create_uet_tag']);
 
 /** Campaign Management v13; EventGoal omissions delete criteria, unlike ordinary optional update fields. */
 export class MicrosoftConversionService extends MicrosoftNativeService {
@@ -51,18 +52,33 @@ export class MicrosoftConversionService extends MicrosoftNativeService {
 
   private snapshot(account: string, goal: Row, enabled: boolean) {
     const { TrackingStatus: _tracking, ...configuration } = goal;
-    return { goal, auto_tagging_enabled: enabled, snapshot_hash: createHash('sha256').update(JSON.stringify(canonical({ account, configuration, enabled }))).digest('hex') };
+    return { account_id: account, goal, auto_tagging_enabled: enabled, auto_tagging_scope: 'Account' as const, snapshot_hash: createHash('sha256').update(JSON.stringify(canonical({ account, configuration, enabled }))).digest('hex') };
   }
 
   async list(input: { account_id: string; goal_types: z.infer<typeof goalType>[]; after_goal_id?: string; limit: number }) {
     const values = await this.query(input.account_id, input.goal_types), enabled = await this.autoTagging(input.account_id), remaining = values.filter(value => !input.after_goal_id || BigInt(nativeId(value.Id)) > BigInt(input.after_goal_id)).sort((a, b) => BigInt(nativeId(a.Id)) < BigInt(nativeId(b.Id)) ? -1 : 1), page = remaining.slice(0, input.limit), truncated = remaining.length > page.length;
-    return { rows: page.map(value => this.snapshot(input.account_id, value, enabled)), auto_tagging_enabled: enabled, truncated, ...(truncated ? { next_cursor: nativeId(page.at(-1)!.Id) } : {}) };
+    return { account_id: input.account_id, rows: page.map(value => this.snapshot(input.account_id, value, enabled)), auto_tagging_enabled: enabled, auto_tagging_scope: 'Account' as const, truncated, ...(truncated ? { next_cursor: nativeId(page.at(-1)!.Id) } : {}) };
   }
 
   async get(account: string, goalId: string, type: z.infer<typeof goalType>) {
     id.parse(goalId); const values = await this.query(account, [type]), enabled = await this.autoTagging(account), current = values.find(value => nativeId(value.Id) === goalId);
     if (!current) throw new AdportError('INVALID_INPUT', 'microsoft: conversion goal was not found for the selected account/type');
     return this.snapshot(account, current, enabled);
+  }
+
+  async linkedTags(input: { account_id: string; after_tag_id?: string; limit: number }) {
+    const scope = await this.accountScope(input.account_id, true);
+    const goals = await this.query(input.account_id, [...standardTypes]), links = new Map<string, string[]>();
+    for (const goal of goals) {
+      if (goal.TagId === null || goal.TagId === undefined || goal.TagId === '0' || goal.TagId === 0) continue;
+      const tag = nativeId(goal.TagId); links.set(tag, [...(links.get(tag) ?? []), nativeId(goal.Id)]);
+    }
+    const ids = [...links.keys()].filter(value => !input.after_tag_id || BigInt(value) > BigInt(input.after_tag_id)).sort((a, b) => BigInt(a) < BigInt(b) ? -1 : 1), page = ids.slice(0, input.limit), truncated = ids.length > page.length;
+    if (!page.length) return { native_customer_id: scope.customerId!, rows: [], truncated: false };
+    const result = await this.request(input.account_id, 'UetTags/QueryByIds', { TagIds: page }), tags = rows(result.UetTags);
+    if (tags.length !== page.length || new Set(tags.map(value => nativeId(value.Id))).size !== page.length || tags.some(value => !page.includes(nativeId(value.Id)))) throw new AdportError('PROVIDER_ERROR', 'microsoft: linked UET tag readback does not match the selected account’s goal references');
+    // CustomerShare is a customer-wide graph; this account-linked view exposes installation metadata only.
+    return { native_customer_id: scope.customerId!, rows: tags.sort((a, b) => page.indexOf(nativeId(a.Id)) - page.indexOf(nativeId(b.Id))).map(tag => ({ tag: { ...Object.fromEntries(['Name', 'Description', 'TrackingStatus', 'TrackingScript', 'TrackingNoScript'].filter(key => Object.hasOwn(tag, key)).map(key => [key, tag[key]])), Id: nativeId(tag.Id) }, goal_ids: links.get(nativeId(tag.Id))!, native_scope: 'Customer' as const })), truncated, ...(truncated ? { next_cursor: page.at(-1)! } : {}) };
   }
 
   private async tag(account: string, tagId: string): Promise<void> {
@@ -78,8 +94,20 @@ export class MicrosoftConversionService extends MicrosoftNativeService {
   }
 
   async plan(op: WriteOperation, guard: WriteGuard): Promise<MicrosoftPlan> {
-    if (op.provider !== 'microsoft' || !MICROSOFT_CONVERSION_WRITES.has(op.tool) || op.kind !== (op.tool === 'microsoft_create_conversion_goal' ? 'create' : 'update')) throw new AdportError('INVALID_INPUT', 'microsoft: conversion-goal operation kind mismatch');
+    if (op.provider !== 'microsoft' || !MICROSOFT_CONVERSION_WRITES.has(op.tool) || op.kind !== (op.tool === 'microsoft_update_conversion_goal' ? 'update' : 'create')) throw new AdportError('INVALID_INPUT', 'microsoft: conversion-goal operation kind mismatch');
     const account = op.accountId;
+    if (op.tool === 'microsoft_create_uet_tag') {
+      // AddUetTags is customer-scoped: re-resolve parent ownership, even in a long-lived stdio runtime.
+      const value = createTag.parse(op.payload), scope = await this.accountScope(account, true), fields = { Name: value.name, ...(value.description ? { Description: value.description } : {}) };
+      if (scope.customerId !== value.expected_customer_id) throw new AdportError('INVALID_INPUT', 'microsoft: parent customer changed; read fresh linked-tag context and request a new preview');
+      return { summary: `Create Microsoft UET tag "${value.name}"`, changes: [`+ uninstalled UET tag in native customer ${scope.customerId} library ${JSON.stringify(fields)}`], fieldChanges: [{ field: 'Name', before: '(new)', after: value.name }, { field: 'Resource scope', before: '(new)', after: 'Customer' }], notes: [`UET tags belong to native customer ${scope.customerId}'s shared library. The new tag is uninstalled and creates no serving campaign, tracking event or account-share update.`, 'Native tags have no pause state. Associate its ID with a paused account-scoped conversion goal, then use microsoft_linked_uet_tags to read its tracking code. Installation is a separate action.', 'This tool creates a new tag only. Customer-wide tag edits, sharing and permanent deletion are not exposed.'], coercions: [], budgetDeltas: [], execute: async () => {
+        const result = await this.request(account, 'UetTags', { UetTags: [fields] }), created = rows(result.UetTags), ids = created.map(value => nativeId(value.Id));
+        if (created.length !== 1 || !matches(created[0]!, fields)) throw new AdportError('PROVIDER_ERROR', 'microsoft: UET creation receipt mismatch; reconcile before retrying', { resourceIds: ids });
+        try { const actual = rows((await this.request(account, 'UetTags/QueryByIds', { TagIds: ids })).UetTags); if (actual.length !== 1 || nativeId(actual[0]!.Id) !== ids[0] || !matches(actual[0]!, fields)) throw new Error('UET readback mismatch'); }
+        catch { throw new AdportError('PROVIDER_ERROR', 'microsoft: UET tag was accepted but readback was not confirmed; reconcile before retrying', { resourceIds: ids }); }
+        return ids;
+      } };
+    }
     if (op.tool === 'microsoft_create_conversion_goal') {
       const value = create.parse(op.payload).goal, enabled = await this.autoTagging(account);
       if (value.expected_auto_tagging_enabled !== enabled) throw new AdportError('INVALID_INPUT', 'microsoft: auto-tagging state changed; read fresh conversion context before previewing');
@@ -119,7 +147,9 @@ export class MicrosoftConversionService extends MicrosoftNativeService {
 
 export function microsoftConversionTools(provider: MicrosoftAdsProvider): AnyToolDefinition[] {
   return [
-    defineTool({ name: 'microsoft_conversion_goals', namespace: 'microsoft', description: 'Read account-associated native goals, tracking state, configuration hashes and click-ID auto-tagging. Default excludes pilot-only InStoreTransaction, whose inclusion can reject the entire query. Continue next_cursor as after_goal_id.', input: z.object({ account_id: id, goal_types: z.array(goalType).min(1).refine(value => new Set(value).size === value.length, 'Goal types must be unique').default([...standardTypes]), after_goal_id: id.optional(), limit: z.number().int().positive().max(1000).default(100) }), output: z.object({ rows: z.array(view), auto_tagging_enabled: z.boolean(), truncated: z.boolean(), next_cursor: id.optional() }), pagination: { cursorInput: 'after_goal_id' }, annotations: { readOnly: true }, handler: input => provider.conversions.list(input) }),
+    defineTool({ name: 'microsoft_linked_uet_tags', namespace: 'microsoft', description: 'Read current native_customer_id plus UET metadata/code only for tags referenced by selected-account goals. Tags are customer-scoped; the entire library and sharing graph are not exposed. Continue next_cursor as after_tag_id.', input: z.object({ account_id: id, after_tag_id: id.optional(), limit: z.number().int().positive().max(100).default(50) }), output: z.object({ native_customer_id: id, rows: z.array(z.object({ tag: z.record(z.string(), z.unknown()), goal_ids: z.array(id), native_scope: z.literal('Customer') })), truncated: z.boolean(), next_cursor: id.optional() }), pagination: { cursorInput: 'after_tag_id' }, annotations: { readOnly: true }, handler: input => provider.conversions.linkedTags(input) }),
+    guardedWriteTool({ name: 'microsoft_create_uet_tag', namespace: 'microsoft', provider: 'microsoft', kind: 'create', description: 'Create one uninstalled UET tag in the selected account’s native customer library. Requires expected_customer_id from linked-tag reads; rechecks current parent ownership. Returns its ID for paused goal setup. No installation or event sending; tags have no pause state.', payload: createTag }),
+    defineTool({ name: 'microsoft_conversion_goals', namespace: 'microsoft', description: 'Read account-associated native goals, tracking state, configuration hashes and account-level click-ID auto-tagging. Default excludes pilot-only InStoreTransaction, whose inclusion can reject the entire query. Continue next_cursor as after_goal_id.', input: z.object({ account_id: id, goal_types: z.array(goalType).min(1).refine(value => new Set(value).size === value.length, 'Goal types must be unique').default([...standardTypes]), after_goal_id: id.optional(), limit: z.number().int().positive().max(1000).default(100) }), output: z.object({ account_id: id, rows: z.array(view), auto_tagging_enabled: z.boolean(), auto_tagging_scope: z.literal('Account'), truncated: z.boolean(), next_cursor: id.optional() }), pagination: { cursorInput: 'after_goal_id' }, annotations: { readOnly: true }, handler: input => provider.conversions.list(input) }),
     defineTool({ name: 'microsoft_get_conversion_goal', namespace: 'microsoft', description: 'Read one account-associated native goal and snapshot_hash. TrackingStatus is system-owned and excluded from the configuration hash. Customer-scoped goals cannot be edited through single-account tools.', input: z.object({ account_id: id, goal_id: id, goal_type: goalType }), output: view, annotations: { readOnly: true }, handler: input => provider.conversions.get(input.account_id, input.goal_id, input.goal_type) }),
     guardedWriteTool({ name: 'microsoft_create_conversion_goal', namespace: 'microsoft', provider: 'microsoft', kind: 'create', description: 'Create an account-scoped URL, Event or OfflineConversion goal. Defaults Paused and excluded from bidding. Native add automatically enables click-ID auto-tagging; supply its expected state from conversion-goal reads. Does not install tracking or send events. Goals cannot be permanently deleted through this API.', payload: create }),
     guardedWriteTool({ name: 'microsoft_update_conversion_goal', namespace: 'microsoft', provider: 'microsoft', kind: 'update', description: 'Edit an Account-scoped URL/Event/Offline goal with expected_snapshot_hash. Preserves omitted event criteria, status and other optional settings. Native update enables click-ID auto-tagging. Event conditions, when supplied, replace the full condition set. Use Paused to stop tracking; Deleted is internal-only.', payload: update }),

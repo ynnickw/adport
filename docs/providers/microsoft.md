@@ -44,7 +44,11 @@ Monthly counts remain native, newest-first, including strings and missing values
 
 ## Conversion goals
 
-`microsoft_conversion_goals` and `microsoft_get_conversion_goal` return native configuration, tracking status, click-ID auto-tagging state and a configuration snapshot. The default list excludes pilot-only InStoreTransaction goals; requesting that type on an ineligible customer can reject the entire native query. Customer-scoped goals can be visible in a selected account, but single-account tools refuse to modify them because they affect other accounts.
+`microsoft_conversion_goals` and `microsoft_get_conversion_goal` return native configuration, tracking status, click-ID auto-tagging state and a configuration snapshot. `account_id` and `auto_tagging_scope: "Account"` identify the account property separately from the goal's own `Scope`. The default list excludes pilot-only InStoreTransaction goals; requesting that type on an ineligible customer can reject the entire native query. Customer-scoped goals can be visible in a selected account, but single-account tools refuse to modify them because they affect other accounts.
+
+`microsoft_linked_uet_tags` reads the selected account's current `native_customer_id` and only the tags referenced by its account-associated conversion goals. Tracking script/no-script code is returned as text; the customer-wide sharing graph is omitted. An empty linked list does not prove the entire native customer library is empty.
+
+For a new source, `microsoft_create_uet_tag` creates one uninstalled tag in that native customer's shared library. Supply `expected_customer_id` from the linked-tag read. Parent-account ownership is refreshed at preview and apply, including in long-lived stdio sessions, and a parent change rejects the write. The receipt returns its ID for goal setup. UET tags have no independent pause state; installation remains a separate action. Existing tag edits, customer sharing and permanent deletion are not exposed by these single-account tools.
 
 `microsoft_create_conversion_goal` creates an Account-scoped URL, Event or OfflineConversion goal. Put its configuration in `goal`; supply `expected_auto_tagging_enabled` from a goal read. Creation defaults to Paused and excluded from bidding, with native paused-creation coercions reported. URL/Event goals require a UET tag already available in the native customer/account context. Creating a goal does not install tracking or submit conversion events.
 
@@ -52,7 +56,7 @@ Monthly counts remain native, newest-first, including strings and missing values
 
 Every native goal add or update automatically enables account `MSCLKIDAutoTaggingEnabled`, including edits to a paused goal. Previews show this setting before and after; snapshots bind its prior state. Updating conversion settings can also change reporting and automated bidding. No atomic native compare-and-set is available. Microsoft’s Deleted goal status is internal-only and there is no supported permanent goal-deletion operation here; pause an unused goal to stop its tracking.
 
-These tools manage goal configuration. Offline conversion imports and adjustments, UET installation, customer sharing and enhanced-conversion event ingestion are separate workflows.
+These tools manage goal configuration and uninstalled UET source creation. Offline conversion imports and adjustments, UET installation, customer sharing and enhanced-conversion event ingestion are separate workflows.
 
 ## Coverage limits
 

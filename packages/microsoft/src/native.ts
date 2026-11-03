@@ -28,12 +28,17 @@ function compactErrors(errors: unknown[]): MicrosoftRow[] {
 
 /** Shared scoped REST access. NestedPartialErrors are not interchangeable with PartialErrors. */
 export class MicrosoftNativeService {
-  constructor(protected readonly client: MicrosoftAdsClient, private readonly scope: (account: string) => Promise<RequestScope>, private readonly lookupCampaign: (account: string, campaign: string) => Promise<unknown>) {}
+  constructor(protected readonly client: MicrosoftAdsClient, private readonly scope: (account: string, refresh?: boolean) => Promise<RequestScope>, private readonly lookupCampaign: (account: string, campaign: string) => Promise<unknown>) {}
+
+  protected async accountScope(account: string, refresh = false): Promise<RequestScope> {
+    microsoftId.parse(account);
+    const scope = await this.scope(account, refresh);
+    if (!scope.customerId || scope.customerAccountId !== account) throw new AdportError('INVALID_INPUT', 'microsoft: selected account ownership could not be verified');
+    return scope;
+  }
 
   protected async request(account: string, path: string, body: MicrosoftRow, method: 'POST' | 'PUT' | 'DELETE' = 'POST', service: MicrosoftService = 'campaign'): Promise<MicrosoftRow> {
-    microsoftId.parse(account);
-    const scope = await this.scope(account);
-    if (!scope.customerId || scope.customerAccountId !== account) throw new AdportError('INVALID_INPUT', 'microsoft: selected account ownership could not be verified');
+    const scope = await this.accountScope(account);
     const result = await this.client.request<MicrosoftRow>(service, method, path, body, scope);
     const errors = ['PartialErrors', 'NestedPartialErrors'].flatMap(key => {
       if (result[key] === undefined || result[key] === null) return [];
@@ -42,7 +47,7 @@ export class MicrosoftNativeService {
     });
     if (errors.length) {
       const negativeIds = Array.isArray(result.NegativeKeywordIds) ? result.NegativeKeywordIds.flatMap(group => group && typeof group === 'object' && Array.isArray(microsoftRow(group).Ids) ? [microsoftRow(group).Ids] : []) : [];
-      const ids = [result.CampaignCriterionIds, result.AdExtensionIdentities, result.BudgetIds, result.ConversionGoalIds, ...negativeIds].flatMap(value => Array.isArray(value) ? value.flatMap(item => {
+      const ids = [result.CampaignCriterionIds, result.AdExtensionIdentities, result.BudgetIds, result.ConversionGoalIds, result.UetTags, ...negativeIds].flatMap(value => Array.isArray(value) ? value.flatMap(item => {
         const id = item && typeof item === 'object' ? microsoftRow(item).Id : item;
         return id === null || id === undefined ? [] : [microsoftNativeId(id)];
       }) : []);
