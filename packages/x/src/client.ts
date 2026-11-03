@@ -11,7 +11,7 @@ export interface XAdsCredentials {
   accessTokenSecret: string;
 }
 export type XParams = Record<string, string | number | boolean>;
-export type XMethod = 'GET' | 'POST' | 'PUT';
+export type XMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
 export function createXSigner(credentials: Pick<XAdsCredentials, 'consumerKey' | 'consumerSecret'>): OAuth {
   const oauth = new OAuth({

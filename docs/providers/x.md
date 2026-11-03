@@ -85,6 +85,18 @@ The implementation follows these current official contracts:
   timezone is unavailable. Timezones whose midnight cannot be represented by the
   API's whole-UTC-hour constraint are also rejected, not rounded silently.
 
+## Line-item configuration and lifecycle
+
+`x_get_campaign` and `x_get_line_item` expose exact native configuration. Line-item reads preserve additional fields, nullable names, money and schedule settings. An exact line-item lookup verifies its parent through the selected account’s campaign route and checks currency consistency. Reporting uses the ID when a native name is null.
+
+`x_create_line_item` creates a PAUSED ad group under an existing non-draft `LINE_ITEM` budget campaign. It requires an explicit objective, product, placements and flight; sibling line items must use the same objective/product. Native requests use signed query parameters and CSV placements. App objectives require an explicit app-store ID, and the preview reports native automatic platform targeting. Publisher-network placement needs an advertiser domain and IAB categories. Placement combinations can be inspected with `x_line_item_placements`.
+
+Name/schedule edits, status, daily/total caps and bidding have separate named tools. Omitted bounds/settings remain unchanged. Money uses integer micros with current-value lookup and shared policy checks. Native `AUTO` ignores a monetary bid; the tool rejects a purported AUTO cap and removal of an existing bounded bid through AUTO. `MAX`/`TARGET` eligibility follows the documented objective restrictions. Receipt checks bind ID, campaign, currency, status, requested settings and preserved monetary caps. Unexpected native changes retain the returned ID and require reconciliation before retrying.
+
+`x_delete_line_item` requires its relevant promoted-post/account/media children to be removed first, then uses native DELETE and checks the returned deleted flag. Unknown product types are rejected for deletion rather than assuming all child types have been checked. All advertising writes still use the same exact-argument preview/apply gate, audit log, protected-account and budget rules. X does not provide server validation for this workflow.
+
+Targeting edits, draft/post/card/media authoring, audiences and measurement remain outstanding. Native promoted-post associations are created ACTIVE and cannot be updated through a PUT endpoint; a tool must account for this explicitly instead of promising ad-level PAUSED creation or an unsupported status edit. The current additions are partial API coverage. The current provider-owned [MCP reference](https://github.com/xdevplatform/docs/blob/2f701ee04b362fffcc1dfee042b11b64ab884fda/x-ads-api/mcp/reference.mdx) maps additional tool families to v12 routes; this mapping is an API comparison source, not evidence that Adport implements every route.
+
 ## Access and commercial boundary
 
 Ads API approval is separate from general X API access. An active developer app
@@ -98,6 +110,8 @@ docs. Do not promise free access or apply general X API prices to Ads endpoints.
 Ask Ads Support to confirm fees, spend requirements and the proposed SaaS/MCP use.
 
 ## Official references inspected 2026-08-31
+
+Line-item/creative contracts were refreshed on 2026-11-03 against provider-owned docs at commit `2f701ee04b362fffcc1dfee042b11b64ab884fda`. Existing authorized campaign/line-item list reads succeeded; new mutation flows still require live endpoint verification. Native eligibility, grant and host-widget verification remain separate from synthetic wire tests.
 
 - [Campaign management reference](https://docs.x.com/x-ads-api/campaign-management/reference)
   ([official source](https://github.com/xdevplatform/docs/blob/main/x-ads-api/campaign-management/reference.mdx))

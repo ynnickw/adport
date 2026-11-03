@@ -4,6 +4,7 @@ import { XAdsClient } from './client.js';
 import { XAdsEntities } from './entities.js';
 import { XAdsAnalytics, X_PLACEMENTS, xAccountMidnight } from './analytics.js';
 import { planXWrite } from './writes.js';
+import { XManagementService } from './management.js';
 
 type BaseMetric = 'spend' | 'impressions' | 'clicks';
 type Metrics = Partial<Record<BaseMetric, number>>;
@@ -14,15 +15,17 @@ const DAY = 86_400_000;
 export class XAdsProvider extends XAdsEntities implements AdProvider {
   readonly id = 'x';
   private readonly analytics: XAdsAnalytics;
-  constructor(client: XAdsClient, analytics?: XAdsAnalytics) { super(client); this.analytics = analytics ?? new XAdsAnalytics(client); }
+  private readonly management: XManagementService;
+  constructor(client: XAdsClient, analytics?: XAdsAnalytics) { super(client); this.analytics = analytics ?? new XAdsAnalytics(client); this.management = new XManagementService(this); }
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions { return { pauseCampaign: (accountId, campaignId) => ({ tool: 'x_set_campaign_status', input: { account_id: accountId, campaign_id: campaignId, status: 'PAUSED' } }) }; }
   async previewWrite(op: WriteOperation, guard: WriteGuard): Promise<WritePreview> {
-    const { execute: _execute, ...preview } = await planXWrite(this, op, guard); return { ...preview, serverValidated: false };
+    const { execute: _execute, ...preview } = await this.writePlan(op, guard); return { ...preview, serverValidated: false };
   }
   async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> {
-    return { applied: true, resourceIds: await (await planXWrite(this, op, guard)).execute() };
+    return { applied: true, resourceIds: await (await this.writePlan(op, guard)).execute() };
   }
+  private writePlan(op: WriteOperation, guard: WriteGuard) { return /^x_(?:create_line_item|update_line_item|set_line_item_(?:status|budget|bidding)|delete_line_item)$/.test(op.tool) ? this.management.plan(op, guard) : planXWrite(this, op, guard); }
   async report(query: NormalizedQuery): Promise<Report> {
     const range = resolveDateRange(query.dateRange);
     z.iso.date().parse(range.start); z.iso.date().parse(range.end);
@@ -92,7 +95,7 @@ export class XAdsProvider extends XAdsEntities implements AdProvider {
     if (level === 'account' || level === 'campaign') return (await this.listCampaigns(accountId)).filter(c => c.entity_status !== 'DRAFT').map(c => ({ id: c.id, name: c.name, currency: c.currency, status: c.entity_status, type: 'CAMPAIGN' }));
     const allLines = await this.listLineItems(accountId);
     const lines = allLines.filter(l => l.entity_status !== 'DRAFT');
-    if (level === 'ad_group') return lines.map(l => ({ id: l.id, name: l.name, currency: l.currency, status: l.entity_status, type: 'LINE_ITEM' }));
+    if (level === 'ad_group') return lines.map(l => ({ id: l.id, name: l.name ?? l.id, currency: l.currency, status: l.entity_status, type: 'LINE_ITEM' }));
     const lookup = new Map(allLines.map(l => [l.id, l]));
     const tweets = await this.listPromotedTweets(accountId), media = await this.listMediaCreatives(accountId);
     const promoted = lines.some(l => l.product_type === 'PROMOTED_ACCOUNT') ? await this.listPromotedAccounts(accountId) : [];
