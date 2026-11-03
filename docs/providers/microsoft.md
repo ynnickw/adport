@@ -60,8 +60,20 @@ Every native goal add or update automatically enables account `MSCLKIDAutoTaggin
 
 These tools manage goal configuration and uninstalled UET source creation. Offline conversion imports and adjustments, UET installation, customer sharing and enhanced-conversion event ingestion are separate workflows.
 
+## Audiences and remarketing
+
+`microsoft_audiences` and `microsoft_get_audience` return account-associated native audience configuration and snapshots. Native unavailable sizes remain unavailable; a new list is not reported as populated. Customer-wide sharing graphs are omitted and `shared` indicates an existing share. The native API excludes system-generated All Visitors, All Converters and Smart Remarketing Lists. Reserved AIPrompt is excluded; CustomSegment is opt-in rather than part of the default query.
+
+`microsoft_create_remarketing_list` creates an unattached Account-scoped list with an existing available UET tag and a membership duration of 1–180 days. Supported rules are PageVisitors, PageVisitorsWhoVisitedAnotherPage, PageVisitorsWhoDidNotVisitAnotherPage and CustomEvents. URL/referrer conditions use native string operators. For PageVisitors, Conjunctive means OR within each group and AND across groups; Disjunctive means AND within each group and OR across groups. Remarketing lists have no independent pause state. Creating a list does not install a tag, send events, upload customer records or attach targeting.
+
+`microsoft_update_remarketing_list` requires `expected_snapshot_hash`. Only unshared Account-scoped lists owned by the selected account can be changed. Omitted rules, tags and optional settings are preserved; supplying `rule` replaces its entire condition set. Scope, parent and sharing cannot be changed here. System-owned sizes and supported campaign types are excluded from the configuration hash. Edits can affect existing audience targeting and exclusions; Microsoft provides no atomic compare-and-set.
+
+`microsoft_audience_usage` checks the owned list and any derived similar lists against campaign/ad-group audience criteria, combined lists and the account's audience-signal library. The check is bounded to 200 campaigns, 2,000 ad groups and fewer than 100 audience signals. Missing inventories, unsupported campaign types or exceeded bounds reject the check. Performance Max references are checked in the signal library. `microsoft_delete_remarketing_list` requires a matching configuration snapshot and no references in a complete bounded scan. Deleting a source list also deletes any derived similar lists; the preview reports those IDs and readback confirms disappearance. Concurrent native association changes cannot be locked.
+
+These tools manage audience definitions. Customer-list records, shared/customer-scoped mutations, new targeting associations and additional audience formats remain separate workflows.
+
 ## Coverage limits
 
-These workflows do not represent the entire Microsoft API. Shared negative-keyword lists, additional extension formats, ad-group targeting, broader planning/recommendation APIs, additional conversion formats, offline imports/adjustments, audience management and experiments require their own implementations. Platform eligibility and the connection's native permissions still apply.
+These workflows do not represent the entire Microsoft API. Shared negative-keyword lists, additional extension formats, ad-group targeting, broader planning/recommendation APIs, additional conversion formats, offline imports/adjustments, broader audience workflows and experiments require their own implementations. Platform eligibility and the connection's native permissions still apply.
 
 Contracts are checked against the official [Microsoft Advertising API documentation](https://learn.microsoft.com/en-us/advertising/guides/?view=bingads-13), including [Budget](https://learn.microsoft.com/en-us/advertising/campaign-management-service/budget?view=bingads-13), [Campaign](https://learn.microsoft.com/en-us/advertising/campaign-management-service/campaign?view=bingads-13) and [GetCampaignsByAccountId](https://learn.microsoft.com/en-us/advertising/campaign-management-service/getcampaignsbyaccountid?view=bingads-13).

@@ -28,6 +28,7 @@ import { MicrosoftNegativeKeywordService, MICROSOFT_NEGATIVE_KEYWORD_WRITES } fr
 import { MicrosoftBudgetService, MICROSOFT_BUDGET_WRITES } from './budgets.js';
 import { MicrosoftPlanningService } from './planning.js';
 import { MicrosoftConversionService, MICROSOFT_CONVERSION_WRITES } from './conversions.js';
+import { MicrosoftAudienceService, MICROSOFT_AUDIENCE_WRITES } from './audiences.js';
 
 /** DailyBudget is a double in whole account-currency units. */
 export const UNITS_TO_MICROS = 1_000_000;
@@ -64,6 +65,7 @@ export class MicrosoftAdsProvider implements AdProvider {
   readonly budgets: MicrosoftBudgetService;
   readonly planning: MicrosoftPlanningService;
   readonly conversions: MicrosoftConversionService;
+  readonly audiences: MicrosoftAudienceService;
 
   constructor(
     private readonly client: MicrosoftAdsClient,
@@ -78,6 +80,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     this.budgets = new MicrosoftBudgetService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign), account => this.listCampaigns(account), async account => { await this.scopeFor(account); return this.currencies.get(account); });
     this.planning = new MicrosoftPlanningService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign), account => this.currencies.get(account));
     this.conversions = new MicrosoftConversionService(client, (account, refresh) => this.scopeFor(account, refresh), (account, campaign) => this.lookupCampaign(account, campaign));
+    this.audiences = new MicrosoftAudienceService(client, (account, refresh) => this.scopeFor(account, refresh), (account, campaign) => this.lookupCampaign(account, campaign), account => this.listCampaigns(account));
   }
 
   capabilities(): ProviderCapabilities {
@@ -310,6 +313,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     if (MICROSOFT_NEGATIVE_KEYWORD_WRITES.has(op.tool)) return this.negativeKeywords.plan(op);
     if (MICROSOFT_BUDGET_WRITES.has(op.tool)) return this.budgets.plan(op);
     if (MICROSOFT_CONVERSION_WRITES.has(op.tool)) return this.conversions.plan(op, guard);
+    if (MICROSOFT_AUDIENCE_WRITES.has(op.tool)) return this.audiences.plan(op);
     const payload = op.payload as never;
     switch (op.tool) {
       case 'microsoft_create_campaign':
@@ -564,6 +568,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function requireTypedMutationTool(resource: string, body: unknown): void {
   const collection = resource.toLowerCase();
+  if (collection === 'audiences') throw new AdportError('INVALID_INPUT', 'microsoft: audience mutations require typed audience tools for Account ownership, replacement-rule semantics and deletion reference checks');
   if (collection === 'uettags') throw new AdportError('INVALID_INPUT', 'microsoft: use microsoft_create_uet_tag for new uninstalled tags; customer-wide tag edits, deletion and sharing are not exposed through single-account generic tools');
   if (collection === 'conversiongoals') throw new AdportError('INVALID_INPUT', 'microsoft: conversion-goal mutations require typed conversion tools for account scope, native auto-tagging side effects and event-criteria preservation');
   const referencesSharedBudget = (value: unknown): boolean => Array.isArray(value) ? value.some(referencesSharedBudget) : isRecord(value) && Object.entries(value).some(([key, child]) => key.toLowerCase() === 'budgetid' && child !== null && child !== undefined && String(child) !== '0' || referencesSharedBudget(child));

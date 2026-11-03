@@ -9,6 +9,7 @@ import { microsoftNegativeKeywordTools } from './negative-keywords.js';
 import { microsoftBudgetTools } from './budgets.js';
 import { microsoftPlanningTools } from './planning.js';
 import { microsoftConversionTools } from './conversions.js';
+import { microsoftAudienceTools } from './audiences.js';
 
 const statusSchema = z.enum(['Active', 'Paused']);
 
@@ -22,6 +23,7 @@ export function microsoftTools(provider: MicrosoftAdsProvider): AnyToolDefinitio
     ...microsoftBudgetTools(provider),
     ...microsoftPlanningTools(provider),
     ...microsoftConversionTools(provider),
+    ...microsoftAudienceTools(provider),
     ...(['keyword', 'search_term'] as const).map(kind => defineTool({
       name: `microsoft_${kind}_report`, namespace: 'microsoft',
       description: `Read the native Microsoft ${kind.replace('_', ' ')} performance report through Submit/Poll/CSV. Native numeric values remain strings; empty or unavailable values are preserved.`,
@@ -93,7 +95,7 @@ export function microsoftTools(provider: MicrosoftAdsProvider): AnyToolDefinitio
       name: 'microsoft_api_create',
       namespace: 'microsoft',
       description:
-        'Create through Microsoft Campaign Management v13 using its documented API body. Under paused creation, campaigns/ad groups/ads/keywords receive explicit Paused status, including omitted status. Budget fields are policy-checked; shared budgets, conversion goals and UET tags require typed tools.',
+        'Create through Microsoft Campaign Management v13 using its documented API body. Under paused creation, campaigns/ad groups/ads/keywords receive explicit Paused status, including omitted status. Budget fields are policy-checked; shared budgets, conversion goals, UET tags and audiences require typed tools.',
       provider: 'microsoft',
       kind: 'create',
       payload: z.object({ resource: z.string().min(2), body: z.record(z.string(), z.unknown()) }),
