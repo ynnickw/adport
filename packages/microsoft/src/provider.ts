@@ -24,6 +24,7 @@ import { MicrosoftChildService } from './children.js';
 import { MicrosoftImageService, MICROSOFT_IMAGE_WRITES } from './images.js';
 import { MicrosoftExtensionService, MICROSOFT_EXTENSION_WRITES } from './extensions.js';
 import { MicrosoftTargetingService, MICROSOFT_TARGETING_WRITES } from './targeting.js';
+import { MicrosoftNegativeKeywordService, MICROSOFT_NEGATIVE_KEYWORD_WRITES } from './negative-keywords.js';
 
 /** DailyBudget is a double in whole account-currency units. */
 export const UNITS_TO_MICROS = 1_000_000;
@@ -51,6 +52,7 @@ export class MicrosoftAdsProvider implements AdProvider {
   readonly images: MicrosoftImageService;
   readonly extensions: MicrosoftExtensionService;
   readonly targeting: MicrosoftTargetingService;
+  readonly negativeKeywords: MicrosoftNegativeKeywordService;
 
   constructor(
     private readonly client: MicrosoftAdsClient,
@@ -61,6 +63,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     this.images = new MicrosoftImageService(client, account => this.scopeFor(account), media);
     this.extensions = new MicrosoftExtensionService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign), (account, ids) => this.images.lookupMany(account, ids));
     this.targeting = new MicrosoftTargetingService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign));
+    this.negativeKeywords = new MicrosoftNegativeKeywordService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign));
   }
 
   capabilities(): ProviderCapabilities {
@@ -288,6 +291,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     if (MICROSOFT_IMAGE_WRITES.has(op.tool)) return this.images.plan(op);
     if (MICROSOFT_EXTENSION_WRITES.has(op.tool)) return this.extensions.plan(op, guard);
     if (MICROSOFT_TARGETING_WRITES.has(op.tool)) return this.targeting.plan(op, guard);
+    if (MICROSOFT_NEGATIVE_KEYWORD_WRITES.has(op.tool)) return this.negativeKeywords.plan(op);
     const payload = op.payload as never;
     switch (op.tool) {
       case 'microsoft_create_campaign':

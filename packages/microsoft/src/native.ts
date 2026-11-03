@@ -41,7 +41,8 @@ export class MicrosoftNativeService {
       return result[key].filter(value => value !== null);
     });
     if (errors.length) {
-      const ids = [result.CampaignCriterionIds, result.AdExtensionIdentities].flatMap(value => Array.isArray(value) ? value.flatMap(item => {
+      const negativeIds = Array.isArray(result.NegativeKeywordIds) ? result.NegativeKeywordIds.flatMap(group => group && typeof group === 'object' && Array.isArray(microsoftRow(group).Ids) ? [microsoftRow(group).Ids] : []) : [];
+      const ids = [result.CampaignCriterionIds, result.AdExtensionIdentities, ...negativeIds].flatMap(value => Array.isArray(value) ? value.flatMap(item => {
         const id = item && typeof item === 'object' ? microsoftRow(item).Id : item;
         return id === null || id === undefined ? [] : [microsoftNativeId(id)];
       }) : []);
@@ -52,6 +53,7 @@ export class MicrosoftNativeService {
   }
 
   protected async campaign(account: string, campaign: string): Promise<MicrosoftRow> {
+    microsoftId.parse(account);
     microsoftId.parse(campaign);
     const result = microsoftRow(await this.lookupCampaign(account, campaign));
     if (microsoftNativeId(result.Id) !== campaign) throw new AdportError('INVALID_INPUT', 'microsoft: campaign ownership mismatch');
