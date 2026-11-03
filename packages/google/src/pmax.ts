@@ -286,8 +286,11 @@ export class GooglePerformanceMaxService {
     if (context.group_snapshot_hash !== input.expected_group_hash) throw new AdportError('PENDING_MISMATCH', 'google: asset-group or parent configuration changed; read context again');
     if (op.tool === 'google_remove_asset_group') return this.atomic(account, [{ assetGroupOperation: { remove: resource } }], `Remove asset group “${String(group.name)}”`, [`- ${resource}; its associations, signals and listing filters may also be removed. Shared assets, parent campaign and budget are retained.`]);
     const { asset_group_id: _id, expected_group_hash: _hash, ...settings } = input, merged = { ...group, ...fields(settings) };
-    this.groupWire({ path1: merged.path1, path2: merged.path2 });
-    this.requirements(context.assets, context.brand_assets, context.campaign.brandGuidelinesEnabled === true, Boolean(row(context.campaign.shoppingSetting).merchantId), merged.finalUrls);
+    const pausing = op.tool === 'google_set_asset_group_status' && 'status' in input && input.status === 'PAUSED';
+    if (!pausing) {
+      this.groupWire({ path1: merged.path1, path2: merged.path2 });
+      this.requirements(context.assets, context.brand_assets, context.campaign.brandGuidelinesEnabled === true, Boolean(row(context.campaign.shoppingSetting).merchantId), merged.finalUrls);
+    }
     return this.atomic(account, [{ assetGroupOperation: { update: { resourceName: resource, ...fields(settings) }, updateMask: Object.keys(settings).filter(key => settings[key as keyof typeof settings] !== undefined).join(',') } }], `Update asset group “${String(group.name)}”`, Object.entries(fields(settings)).map(([key, value]) => `~ ${key}: ${JSON.stringify(group[key] ?? null)} → ${JSON.stringify(value)}`));
   }
   private async updateBrandAssets(account: string, payload: Row): Promise<Plan> {

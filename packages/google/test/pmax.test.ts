@@ -195,6 +195,14 @@ describe('Performance Max creative editing and ownership', () => {
     f.state.links[0].assetGroupAsset.assetGroup = groupName; f.state.links[0].asset.resourceName = 'customers/9999999999/assets/1';
     await expect(f.provider.performanceMax.context({ account_id: account, asset_group_id: '70' })).rejects.toThrow('ownership');
   });
+  it('allows pausing an incomplete group while retaining creative requirements for enabling it', async () => {
+    const f = fixture(); f.state.group.status = 'ENABLED'; f.state.group.finalUrls = []; f.state.links = [];
+    const preview = await f.provider.previewWrite(await operation(f, 'google_set_asset_group_status', { status: 'PAUSED' }), guard);
+    expect(preview.serverValidated).toBe(true);
+    expect(mutations(f)[0]!.body).toMatchObject({ validateOnly: true, partialFailure: false, mutateOperations: [{ assetGroupOperation: { update: { resourceName: groupName, status: 'PAUSED' }, updateMask: 'status' } }] });
+    await expect(f.provider.previewWrite(await operation(f, 'google_set_asset_group_status', { status: 'ENABLED' }), guard)).rejects.toThrow('final URL');
+    expect(mutations(f)).toHaveLength(1);
+  });
   it('checks campaign brand edits separately and reports every affected group without changing serving status', async () => {
     const f = fixture(); f.state.campaign.brandGuidelinesEnabled = true;
     f.state.brands = [3, 4].map(id => { const asset = f.state.assets.find((value: Row) => value.id === String(id)), type = id === 3 ? 'LOGO' : 'BUSINESS_NAME'; return { campaignAsset: { resourceName: `${root}/campaignAssets/42~${id}~${type}`, campaign: campaignName, asset: asset.resourceName, fieldType: type, status: 'ENABLED' }, asset }; });
