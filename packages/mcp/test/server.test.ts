@@ -98,10 +98,10 @@ describe('adport MCP server', () => {
   });
 
   it('returns read-only creative refresh arguments and keeps upload checksums outside human copy', async () => {
-    const runtime = await createContext({ providerModules: [], media: { read: async () => { throw new Error('No upload'); }, list: async () => ({ assets: [{ id: '11111111-1111-4111-8111-111111111111', name: 'QA.png', content_type: 'image/png', byte_length: 17095, sha256: 'a'.repeat(64), status: 'READY', width: 640, height: 640 }], truncated: false }) } });
+    const runtime = await createContext({ providerModules: [], media: { read: async () => { throw new Error('No upload'); }, list: async () => ({ assets: [{ id: '11111111-1111-4111-8111-111111111111', name: 'QA.png', content_type: 'image/png', byte_length: 17095, sha256: 'a'.repeat(64), status: 'READY', width: 640, height: 640 }], truncated: true, next_cursor: '22222222-2222-4222-8222-222222222222' }) } });
     const server = createMcpServer({ runtime, scopes: ['tools:read'] }), host = new Client({ name: 'media-read-host', version: '1' }), [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair(); await server.connect(serverTransport); await host.connect(clientTransport);
     try {
-      const result = await host.callTool({ name: 'media_list', arguments: { limit: 10 } }); expect(result.isError).not.toBe(true); expect(result.structuredContent).toMatchObject({ assets: [{ sha256: 'a'.repeat(64), status: 'READY' }], creatives: [{ status: 'READY', descriptions: ['17 KB · 640 × 640'] }], _adport: { capabilities: { can_write: false }, refresh: { arguments: { limit: 10 } } } });
+      const result = await host.callTool({ name: 'media_list', arguments: { limit: 10 } }); expect(result.isError).not.toBe(true); expect(result.structuredContent).toMatchObject({ assets: [{ sha256: 'a'.repeat(64), status: 'READY' }], creatives: [{ status: 'READY', descriptions: ['17 KB · 640 × 640'] }], _adport: { capabilities: { can_write: false }, refresh: { arguments: { limit: 10 } }, next: { arguments: { limit: 10, cursor: '22222222-2222-4222-8222-222222222222' } } } });
       expect(result.structuredContent).not.toHaveProperty('_adport.approval');
     } finally { await host.close(); await server.close(); }
   });

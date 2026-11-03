@@ -52,6 +52,7 @@ export { PolicyEngine, hashOperation, type ApplyOutcome, type ValidationOutcome 
 export {
   ToolRegistry,
   defineTool,
+  nextPageArguments,
   type AnyToolDefinition,
   type ToolAnnotations,
   type ToolContext,

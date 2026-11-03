@@ -12,7 +12,7 @@ export function mediaTools(): AnyToolDefinition[] {
     description: 'List immutable project media with SHA-256, dimensions and temporary previews. Use a returned media_id and sha256 for a guarded provider upload. upload_page_url opens the project upload library. Local CLI uploads can instead use an absolute file_path.',
     input: z.object({ limit: z.number().int().positive().max(100).default(24), cursor: z.string().uuid().optional() }),
     output: creativesOutput.extend({ assets: z.array(mediaAssetSchema), upload_page_url: z.string().url().optional() }),
-    presentation: 'creatives', annotations: { readOnly: true, openWorld: false },
+    presentation: 'creatives', pagination: { cursorInput: 'cursor' }, annotations: { readOnly: true, openWorld: false },
     async handler(input, ctx) {
       if (!ctx.media) throw new AdportError('NOT_CONNECTED', 'A hosted project media library is required. Local uploads accept file_path and expected_sha256.');
       const result = await ctx.media.list(input);

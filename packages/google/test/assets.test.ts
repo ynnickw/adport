@@ -40,7 +40,7 @@ describe('Google typed shared assets', () => {
     const { provider, calls } = fixture([{ asset: image }, { asset: { ...image, id: '43', resourceName: `customers/${account}/assets/43` } }]);
     const result = await provider.assets.list({ account_id: account, asset_ids: [assetId, '43'], types: ['IMAGE'], limit: 1 });
     expect(result).toMatchObject({ truncated: true, creatives: [{ id: assetId, name: 'Actual image', media: [{ type: 'image', url: image.imageAsset.fullSize.url }], actions: [{ tool: 'google_rename_asset', arguments: { account_id: account, asset_id: assetId } }] }] });
-    expect(calls.at(-1)!.body.query).toContain("asset.id IN (42,43) AND asset.type IN ('IMAGE') LIMIT 2");
+    expect(calls.at(-1)!.body.query).toContain("asset.id IN (42,43) AND asset.type IN ('IMAGE') ORDER BY asset.id ASC LIMIT 2");
     expect(result.assets).toEqual([image]);
     expect(mutations(calls)).toEqual([]);
   });
@@ -50,6 +50,21 @@ describe('Google typed shared assets', () => {
     expect((await provider.assets.list({ account_id: account, limit: 1 })).creatives[0]!.media).toEqual([]);
     const foreign = fixture([{ asset: { ...asset, resourceName: 'customers/9999999999/assets/42' } }]);
     await expect(foreign.provider.assets.list({ account_id: account, limit: 1 })).rejects.toThrow('invalid ID or account');
+  });
+
+  it('continues the same filtered asset selection by ordered int64 ID without rounding', async () => {
+    const previous = '9007199254740993', current = '9007199254740994', following = '9007199254740995';
+    const row = (value: string) => ({ asset: { ...asset, id: value, resourceName: `customers/${account}/assets/${value}` } });
+    const { provider, calls } = fixture([row(current), row(following)]);
+    const result = await provider.assets.list({ account_id: account, after_asset_id: previous, asset_ids: [current, following], types: ['SITELINK'], limit: 1 });
+    expect(result).toMatchObject({ truncated: true, next_cursor: current, assets: [{ id: current }] });
+    expect(calls.at(-1)!.body.query).toContain(`asset.id IN (${current},${following}) AND asset.type IN ('SITELINK') AND asset.id > ${previous} ORDER BY asset.id ASC LIMIT 2`);
+    const last = fixture([row(following)]);
+    expect(await last.provider.assets.list({ account_id: account, after_asset_id: current, limit: 1 })).not.toHaveProperty('next_cursor');
+    for (const rows of [[row(previous)], [row(following), row(current)], [row(current), row(current)]]) {
+      await expect(fixture(rows).provider.assets.list({ account_id: account, after_asset_id: previous, limit: 1 })).rejects.toThrow('did not advance');
+    }
+    expect(mutations(calls)).toEqual([]);
   });
 
   it('validates exact image bytes at preview and applies only the native create operation', async () => {

@@ -24,6 +24,30 @@ function widget(callTool?: (...args: unknown[]) => Promise<unknown>, overrides: 
 }
 
 describe('creative widget editor', () => {
+  it('loads the next native page read-only, then refreshes that page with the same project and filters', async () => {
+    const calls: unknown[][] = [];
+    const selection = { account_id: '1234567890', types: ['IMAGE'], limit: 2 };
+    const nextArgs = { ...selection, after_asset_id: '9007199254740993' };
+    const dom = widget(async (...args) => {
+      calls.push(args);
+      return { structuredContent: structuredResult('google_assets', 'creatives', { creatives: [{ ...creative, name: 'Next image' }], truncated: false }, undefined, { project_id: 'project-b' }, { can_write: false }, { arguments: nextArgs }) };
+    });
+    try {
+      const initial = structuredResult('google_assets', 'creatives', { creatives: [creative], truncated: true }, undefined, { project_id: 'project-b' }, { can_write: false }, { arguments: selection }, { arguments: { ...nextArgs, project_id: 'foreign', pending_operation_id: 'never-send' } });
+      dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window.parent, data: { jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: initial } } }));
+      expect(dom.window.document.body.textContent).toContain('Partial gallery');
+      expect(dom.window.document.querySelector('main')?.textContent).not.toContain('Totals and charts');
+      (dom.window.document.querySelector('[data-next-page]') as HTMLButtonElement).click();
+      await new Promise(resolve => setTimeout(resolve, 10));
+      expect(calls).toEqual([['google_assets', { ...nextArgs, project_id: 'project-b' }]]);
+      expect(dom.window.document.body.textContent).toContain('Next image');
+      expect(dom.window.document.querySelector('[data-next-page]')).toBeNull();
+      expect(dom.window.document.querySelector('form')).toBeNull();
+      (dom.window.document.querySelector('[data-refresh-previews]') as HTMLButtonElement).click();
+      await new Promise(resolve => setTimeout(resolve, 10));
+      expect(calls[1]).toEqual(['google_assets', { ...nextArgs, project_id: 'project-b' }]);
+    } finally { dom.window.close(); }
+  });
   it('keeps read-only connections in a view without editable forms', () => {
     const dom = widget();
     try {

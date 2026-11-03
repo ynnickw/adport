@@ -47,13 +47,15 @@ export class GoogleAssetService {
     if (rows.length !== 1 || value.resourceName !== resource || value.id !== asset) throw new AdportError('INVALID_INPUT', 'google: asset is not owned by the selected account');
     return value;
   }
-  async list(input: { account_id: string; asset_ids?: string[]; types?: string[]; limit: number }) {
+  async list(input: { account_id: string; asset_ids?: string[]; types?: string[]; after_asset_id?: string; limit: number }) {
     const account = normalizeCustomerId(input.account_id);
     const requestedIds = input.asset_ids?.map(value => id.parse(value)), requestedTypes = input.types?.map(value => assetType.parse(value));
-    const conditions = [requestedIds?.length ? `asset.id IN (${requestedIds.join(',')})` : '', requestedTypes?.length ? `asset.type IN (${requestedTypes.map(value => `'${value}'`).join(',')})` : ''].filter(Boolean);
-    const rows = await this.client.search(account, `SELECT ${fields.join(', ')} FROM asset${conditions.length ? ` WHERE ${conditions.join(' AND ')}` : ''} LIMIT ${input.limit + 1}`, { maxRows: input.limit + 1 });
+    const after = input.after_asset_id === undefined ? undefined : id.parse(input.after_asset_id);
+    const conditions = [requestedIds?.length ? `asset.id IN (${requestedIds.join(',')})` : '', requestedTypes?.length ? `asset.type IN (${requestedTypes.map(value => `'${value}'`).join(',')})` : '', after ? `asset.id > ${after}` : ''].filter(Boolean);
+    const rows = await this.client.search(account, `SELECT ${fields.join(', ')} FROM asset${conditions.length ? ` WHERE ${conditions.join(' AND ')}` : ''} ORDER BY asset.id ASC LIMIT ${input.limit + 1}`, { maxRows: input.limit + 1 });
     const all = rows.map(row => record(row.asset));
     if (all.some(value => !id.safeParse(value.id).success || value.resourceName !== this.resource(account, String(value.id)) || (requestedIds?.length && !requestedIds.includes(String(value.id))) || (requestedTypes?.length && !requestedTypes.includes(value.type as z.infer<typeof assetType>)))) throw new AdportError('PROVIDER_ERROR', 'google: asset list returned an invalid ID or account, or an unexpected filter match');
+    if (all.some((value, index) => BigInt(String(value.id)) <= BigInt(index ? String(all[index - 1]!.id) : after ?? '-1'))) throw new AdportError('PROVIDER_ERROR', 'google: asset pagination did not advance in native ID order');
     const assets = all.slice(0, input.limit);
     const creatives: Creative[] = assets.map(asset => {
       const image = record(asset.imageAsset), full = record(image.fullSize), link = record(asset.sitelinkAsset), callout = record(asset.calloutAsset), snippet = record(asset.structuredSnippetAsset), copy = record(asset.textAsset), policy = record(asset.policySummary);
@@ -67,7 +69,8 @@ export class GoogleAssetService {
         actions: [{ label: 'Rename shared asset', tool: 'google_rename_asset', arguments: { account_id: account, asset_id: String(asset.id) }, fields: [{ key: 'name', label: 'Asset name', type: 'text', value: text(asset.name), max_length: 128 }] }],
       };
     });
-    return creativesOutput.extend({ assets: z.array(z.record(z.string(), z.unknown())) }).parse({ creatives, assets, truncated: rows.length > input.limit });
+    const truncated = rows.length > input.limit;
+    return creativesOutput.extend({ assets: z.array(z.record(z.string(), z.unknown())) }).parse({ creatives, assets, truncated, ...(truncated && assets.length ? { next_cursor: String(assets.at(-1)!.id) } : {}) });
   }
   async plan(op: WriteOperation): Promise<GoogleAssetPlan> {
     const account = normalizeCustomerId(op.accountId), input = op.payload;
@@ -110,7 +113,7 @@ export class GoogleAssetService {
 export function googleAssetTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
   const write = (name: string, description: string, payload: z.ZodObject, kind: 'create' | 'update') => guardedWriteTool({ name, namespace: 'google', provider: 'google', description, payload, kind });
   return [
-    defineTool({ name: 'google_assets', namespace: 'google', description: 'View account-owned shared assets, extension copy, image previews and native policy status. Assets cannot be deleted; remove serving associations instead. Name edits use the normal preview/apply gate.', input: z.object({ account_id: z.string(), asset_ids: z.array(id).min(1).max(100).optional(), types: z.array(assetType).min(1).optional(), limit: z.number().int().positive().max(200).default(50) }), output: creativesOutput.extend({ assets: z.array(z.record(z.string(), z.unknown())) }), annotations: { readOnly: true }, presentation: 'creatives', handler: input => provider.assets.list(input) }),
+    defineTool({ name: 'google_assets', namespace: 'google', description: 'View account-owned shared assets, extension copy, image previews and native policy status. Continue with next_cursor as after_asset_id and the same filters. Assets cannot be deleted; remove serving associations instead. Name edits use the normal preview/apply gate.', input: z.object({ account_id: z.string(), asset_ids: z.array(id).min(1).max(100).optional(), types: z.array(assetType).min(1).optional(), after_asset_id: id.optional(), limit: z.number().int().positive().max(200).default(50) }), output: creativesOutput.extend({ assets: z.array(z.record(z.string(), z.unknown())) }), annotations: { readOnly: true }, presentation: 'creatives', pagination: { cursorInput: 'after_asset_id' }, handler: input => provider.assets.list(input) }),
     write('google_upload_image_asset', 'Upload a SHA-256-bound PNG/JPEG/GIF as an unattached Google asset. Hosted calls require project media_id. Preview uses native validate_only. Assets cannot be deleted; no ad or serving association is created.', uploadImage, 'create'),
     write('google_create_youtube_asset', 'Reference an existing YouTube video ID as an unattached Google asset. Does not upload or publish a video or attach it to an ad. Assets cannot be deleted.', youtube, 'create'),
     write('google_create_extension_asset', 'Create an unattached sitelink, callout or structured-snippet asset with native server validation. Does not attach it to serving entities. Assets cannot be deleted.', createExtension, 'create'),

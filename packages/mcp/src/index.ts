@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod';
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
-import { AdportError, CredentialStore, createContext, type AdportRuntime, type ProviderModule } from '@adport/core';
+import { AdportError, CredentialStore, createContext, nextPageArguments, type AdportRuntime, type ProviderModule } from '@adport/core';
 import { createGoogleModule } from '@adport/provider-google';
 import { createMetaModule } from '@adport/provider-meta';
 import { createTikTokModule } from '@adport/provider-tiktok';
@@ -151,6 +151,7 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
           context: z.object({ project_id: z.string() }).optional(),
           capabilities: z.object({ can_write: z.boolean() }).optional(),
           refresh: z.object({ arguments: z.record(z.string(), z.unknown()) }).optional(),
+          next: z.object({ arguments: z.record(z.string(), z.unknown()) }).optional(),
         }) } : {}),
         ...(runtime.dataSource === 'synthetic' ? { data_source: z.literal('synthetic') } : {}),
       }) } : {}),
@@ -192,9 +193,10 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
         const approval = view === 'operation' && typeof pending === 'string' && !args.pending_operation_id
           ? { arguments: { ...args } }
           : undefined;
+        const nextArgs = view === 'creatives' ? nextPageArguments(tool, args, rawObject) : undefined;
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-          ...(view ? { structuredContent: structuredResult(tool.name, view, structured, approval, typeof args.project_id === 'string' ? { project_id: args.project_id } : undefined, { can_write: !scopes || scopes.includes('tools:write') }, view === 'creatives' && tool.annotations.readOnly ? { arguments: Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'pending_operation_id')) } : undefined) }
+          ...(view ? { structuredContent: structuredResult(tool.name, view, structured, approval, typeof args.project_id === 'string' ? { project_id: args.project_id } : undefined, { can_write: !scopes || scopes.includes('tools:write') }, view === 'creatives' && tool.annotations.readOnly ? { arguments: Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'pending_operation_id')) } : undefined, nextArgs ? { arguments: nextArgs } : undefined) }
             : tool.output ? { structuredContent: structured as Record<string, unknown> } : {}),
         };
       } catch (err) {

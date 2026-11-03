@@ -36,6 +36,8 @@ export interface AnyToolDefinition {
   annotations: ToolAnnotations;
   /** Optional presentation shared by hosted and local MCP adapters. */
   presentation?: 'creatives';
+  /** Input field receiving the result's native next_cursor. Read-only tools only. */
+  pagination?: { cursorInput: string; cursorOutput?: string };
   handler: (input: never, ctx: ToolContext) => Promise<unknown>;
 }
 
@@ -47,6 +49,7 @@ export function defineTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   output?: z.ZodType;
   annotations?: ToolAnnotations;
   presentation?: AnyToolDefinition['presentation'];
+  pagination?: AnyToolDefinition['pagination'];
   handler: (input: z.infer<S>, ctx: ToolContext) => Promise<unknown>;
 }): AnyToolDefinition {
   const openWorldByDefault = !['core', 'mock', 'audit'].includes(def.namespace);
@@ -60,6 +63,24 @@ export function defineTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
       openWorld: def.annotations?.openWorld ?? openWorldByDefault,
     },
   } as AnyToolDefinition;
+}
+
+/** Derive a validated continuation without changing the original selection. */
+export function nextPageArguments(tool: AnyToolDefinition, args: Record<string, unknown>, result: Record<string, unknown>): Record<string, unknown> | undefined {
+  const key = tool.pagination?.cursorInput, cursor = result[tool.pagination?.cursorOutput ?? 'next_cursor'];
+  if (!tool.annotations.readOnly || !key || ['account_id', 'project_id', 'pending_operation_id', '__proto__', 'constructor', 'prototype'].includes(key)
+    || !Object.hasOwn(tool.input.shape, key) || !((typeof cursor === 'string' && cursor) || (typeof cursor === 'number' && Number.isSafeInteger(cursor) && cursor >= 0))) return;
+  const field = tool.input.shape[key]!;
+  let value: unknown = cursor;
+  if (!z.safeParse(field, value).success) {
+    if (typeof cursor !== 'string' || !/^\d+$/.test(cursor) || !Number.isSafeInteger(Number(cursor))) return;
+    value = Number(cursor);
+    if (!z.safeParse(field, value).success) return;
+  }
+  if (value === args[key]) return;
+  const next = { ...args, [key]: value };
+  delete next.pending_operation_id;
+  return tool.input.safeParse(next).success ? next : undefined;
 }
 
 export class ToolRegistry {
