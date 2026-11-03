@@ -17,6 +17,7 @@ import { subscriptionCheckoutUrl } from '@/lib/cloud/billing-checkout';
 import { getOrganizationEntitlement, applyPlanToPrincipal } from '@/lib/cloud/plans';
 import { resolveMembership, upsertGoogleConnection } from '@/lib/cloud/repository';
 import { resetEnvForTests } from '@/lib/env';
+import { endComplimentaryPlan } from '@/lib/cloud/billing-plan-changes';
 
 const describeDatabase = process.env.ADPORT_RUN_DATABASE_TESTS === '1' ? describe : describe.skip;
 describeDatabase('Stripe lifecycle with real Postgres transactions', () => {
@@ -178,6 +179,29 @@ describeDatabase('Stripe lifecycle with real Postgres transactions', () => {
     await db()`update public.organization_subscriptions set plan = 'reader', status = 'active', billing_provider = null,
       provider_customer_id = null, provider_subscription_id = null where organization_id = ${organization}`;
   }
+  it('does not offer another trial when a complimentary paid plan starts a chosen subscription', async () => {
+    await freeCustomer();
+    await db()`update public.organization_subscriptions set plan = 'premium', billing_provider = null where organization_id = ${organization}`;
+    await subscriptionCheckoutUrl(organization, owner, 'operator', 'monthly');
+    expect(stripe.create.mock.calls[0]![0].subscription_data).not.toHaveProperty('trial_period_days');
+    expect((await getOrganizationEntitlement(organization)).plan.id).toBe('premium');
+  });
+  it('switches an explicitly ended complimentary grant to Free and applies account and history limits once', async () => {
+    await freeCustomer();
+    await db()`update public.organization_subscriptions set plan = 'premium', billing_provider = null where organization_id = ${organization}`;
+    await endComplimentaryPlan(organization, owner);
+    expect((await getOrganizationEntitlement(organization)).plan.id).toBe('reader');
+    const [accounts] = await db()<Array<{ count: number }>>`select count(*)::int as count from public.organization_ad_accounts where organization_id = ${organization} and enabled`;
+    const [settings] = await db()<Array<{ days: number }>>`select data_retention_days as days from public.organization_settings where organization_id = ${organization}`;
+    expect(accounts?.count).toBe(3); expect(settings?.days).toBe(30);
+    await endComplimentaryPlan(organization, owner);
+    const [audit] = await db()<Array<{ count: number }>>`select count(*)::int as count from public.audit_events where organization_id = ${organization} and tool = 'end_complimentary_plan' and actor_user_id = ${owner}`;
+    expect(audit?.count).toBe(1); expect(stripe.create).not.toHaveBeenCalled();
+  });
+  it('does not overwrite a Stripe subscription through the complimentary-plan path', async () => {
+    await expect(endComplimentaryPlan(organization, owner)).rejects.toThrow('billing portal');
+    expect((await getOrganizationEntitlement(organization)).plan.id).toBe('agency');
+  });
   it.each(['active', 'trialing', 'past_due', 'incomplete', 'unpaid', 'paused'])('blocks a new Checkout for an existing %s subscription', async status => {
     await db()`update public.organization_subscriptions set status = ${status} where organization_id = ${organization}`;
     await expect(subscriptionCheckoutUrl(organization, owner, 'operator', 'monthly')).rejects.toThrow('billing portal');

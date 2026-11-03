@@ -64,7 +64,10 @@ export function AuthScreen({ mode, error, message, returnTo }: AuthScreenProps) 
         </label>
         <PendingButton className="button full" pendingLabel={signup ? 'Creating account…' : 'Signing in…'}>{signup ? 'Create account' : 'Sign in'}</PendingButton>
       </form>
-      {!signup ? <p className="auth-switch"><Link href={'/login/forgot-password' + (returnTo ? '?return_to=' + encodeURIComponent(returnTo) : '')}>Forgot password?</Link></p> : null}
+      {!signup ? <>
+        <p className="auth-switch"><Link href={'/login/email-link' + (returnTo ? '?return_to=' + encodeURIComponent(returnTo) : '')}>Sign in with an email link</Link></p>
+        <p className="auth-switch"><Link href={'/login/forgot-password' + (returnTo ? '?return_to=' + encodeURIComponent(returnTo) : '')}>Forgot password?</Link></p>
+      </> : null}
       <p className="auth-switch">
         {signup
           ? <>Already have an account? <Link href={returnTo ? `/login?return_to=${encodeURIComponent(returnTo)}` : '/'}>Sign in</Link></>

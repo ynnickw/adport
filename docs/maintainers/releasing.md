@@ -53,19 +53,21 @@ The Release workflow:
 
 1. Validates the tag syntax, its ancestry on `main`, version equality across public packages, and the presence of reviewed release notes.
 2. Runs repository checks, build, typecheck, tests, and an isolated tarball installation without publishing credentials.
-3. Builds public packages and publishes missing versions in dependency order with npm provenance. An unavailable `NPM_TOKEN` fails the job; private workspaces are excluded. Only an explicit registry 404 is treated as an unpublished package.
-4. Installs the released CLI from public npm and checks its version, internal dependency versions, fail-closed behavior, and demo reports. Short retries allow for registry propagation.
+3. Builds public packages and publishes missing versions in dependency order with npm provenance. An unavailable `NPM_TOKEN` fails the job; private workspaces are excluded. Only an explicit registry 404 is treated as an unpublished package. Transient lookup failures retry reads. If npm reports that a version is already staged or published, the job waits for that exact version to become publicly visible without sending another publish request. Publication shares a 15-minute registry-wait budget.
+4. Installs the released CLI from public npm and checks its version, internal dependency versions, fail-closed behavior, and demo reports. Missing versions, missing dependency archives, and transient download failures retry for up to 15 minutes with increasing delays capped at 30 seconds. Each attempt uses a fresh credential-free home, npm cache, and installation. Authentication, integrity, and installed-CLI validation failures stop immediately.
 5. Creates the GitHub release from `docs/releases/<tag>.md` after npm verification succeeds.
 
 Publishing requires a valid, least-privilege `NPM_TOKEN` repository secret with access to `adport` and every public `@adport/*` package. Do not paste it into issues, PRs, or local files. The workflow grants write and OIDC permissions only to its publish job. npm trusted publishing can replace the token once publisher mappings are configured for every package; it is not assumed to be configured by this repository.
 
 ## Recover a failed run
 
-Inspect the failed job before retrying. A failed release can leave some npm packages published: npm does not provide a multi-package transaction. Re-run the workflow for the **same immutable tag** using its manual `tag` input; it skips versions the public registry confirms already exist. Authentication, network, or rate-limit lookup errors stop publication.
+Inspect the failed job before retrying. A failed release can leave some npm packages published: npm does not provide a multi-package transaction. Re-run the workflow for the **same immutable tag** using its manual `tag` input; it skips versions the public registry confirms already exist. A successful publish response can precede public metadata and archive availability by several minutes. An explicit existing-version conflict waits for visibility; unrelated publish failures are never retried automatically. Authentication and malformed lookup responses stop publication; exhausted transient read retries also stop it.
 
 Never move a published tag or republish an existing npm version. For a code or packaging fix, prepare a new patch release. If publication succeeded but final verification or GitHub release creation failed, repair the external cause and retry the same tag. GitHub release creation is idempotent and preserves existing release notes.
 
 The workflow rebuilds public packages from the validated tag in the publish job. It does not promote build artifacts from CI. No release workflow changes npm dist-tags for previously published versions automatically.
+
+Release scripts come from the immutable tag. Retrying an older tag retains that tag's retry behavior; new release-tooling fixes apply to later tags. The separate Verify published release workflow uses its selected Git ref, so it can validate an older public version with current verification tooling.
 
 ## Verify after publishing
 

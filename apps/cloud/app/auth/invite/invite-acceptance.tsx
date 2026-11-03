@@ -5,11 +5,12 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/browser';
 import { invitationTokens } from '@/lib/invitations';
 import { selectProjectAction } from '@/app/dashboard/projects/actions';
-import { Button, Input } from '@/components/controls';
+import { Button } from '@/components/controls';
 
 export function InviteAcceptance({ projectId }: { projectId: string }) {
   const started = useRef(false);
   const [email, setEmail] = useState<string>();
+  const [projectName, setProjectName] = useState<string>();
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
 
@@ -29,21 +30,18 @@ export function InviteAcceptance({ projectId }: { projectId: string }) {
       }
       const result = await supabase.auth.getUser();
       if (result.error || !result.data.user) throw new Error('Open the invitation link from your email to continue.');
+      if (!projectId) throw new Error('Open the invitation link from your email to continue.');
+      const project = await supabase.from('organizations').select('name').eq('id', projectId).is('archived_at', null).maybeSingle();
+      if (project.error || !project.data) throw new Error('This project is unavailable or you do not have access. Ask your organization admin to review your invitation.');
+      setProjectName(project.data.name);
       setEmail(result.data.user.email ?? 'your invited account');
     })().catch(error => setError(error instanceof Error ? error.message : 'The invitation could not be verified.'));
   }, []);
 
-  function finish(form: FormData) {
+  function finish() {
     startTransition(async () => {
       setError(undefined);
-      const password = String(form.get('password') ?? '');
-      if (password.length < 12 || password !== form.get('confirmation')) {
-        setError('Use a password of at least 12 characters and enter it twice.');
-        return;
-      }
       try {
-        const result = await createClient().auth.updateUser({ password });
-        if (result.error) { setError('Your password could not be saved. Please try again.'); return; }
         const selection = new FormData(); selection.set('projectId', projectId);
         await selectProjectAction(selection);
       } catch (reason) {
@@ -54,13 +52,12 @@ export function InviteAcceptance({ projectId }: { projectId: string }) {
   }
 
   return <>
-    {email ? <p>Signed in as <strong>{email}</strong>. Create a password to finish joining your project.</p> : !error ? <p role="status">Verifying your invitation…</p> : null}
+    <h1>{projectName ? <>Join {projectName}.</> : 'Join your team.'}</h1>
+    {email ? <p>Signed in as <strong>{email}</strong>. You’re ready to join your project.</p> : !error ? <p role="status">Verifying your invitation…</p> : null}
     {error ? <div className="error-callout" role="alert">{error}</div> : null}
     {email ? <form action={finish} className="form">
-      <label>Password<Input type="password" name="password" autoComplete="new-password" minLength={12} required /></label>
-      <label>Confirm password<Input type="password" name="confirmation" autoComplete="new-password" minLength={12} required /></label>
       <Button className="button" disabled={pending}>{pending ? 'Joining…' : 'Join project'}</Button>
     </form> : null}
-    <p className="auth-switch"><Link href="/login">Back to sign in</Link></p>
+    <p className="auth-switch"><Link href={'/login?return_to=' + encodeURIComponent(`/auth/invite?project_id=${encodeURIComponent(projectId)}`)}>Back to sign in</Link></p>
   </>;
 }

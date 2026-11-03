@@ -8,6 +8,10 @@ import { Provider } from '@/components/ui';
 import { accountSelectionSavedPath } from '@/lib/account-selection-path';
 import { Button, Checkbox, Input } from '@/components/controls';
 import { InfoTooltip } from '@/components/info-tooltip';
+import { UpgradeButton } from '@/components/upgrade-button';
+import { PlanLimitModal } from '@/components/plan-limit-modal';
+import { planLimitFromResponse, type PlanLimitDetails } from '@/lib/cloud/plan-limit';
+import { useUpgradeContext } from '@/components/upgrade-context';
 
 export interface ProviderAccountSelection {
   id: string;
@@ -40,7 +44,9 @@ export function ProviderAccountPicker({ organizationId, selectionId, provider, a
   const [query, setQuery] = useState('');
   const [selectedPages, setSelectedPages] = useState<Set<string>>(() => new Set());
   const [error, setError] = useState<string>();
+  const [planLimit, setPlanLimit] = useState<PlanLimitDetails>();
   const [pending, startTransition] = useTransition();
+  const { canManageBilling } = useUpgradeContext();
   const visible = accounts.filter(account => `${account.name} ${account.id}`.toLowerCase().includes(query.trim().toLowerCase()));
   const chosenIds = singleAccount ? accounts.map(account => account.id) : [...selected];
   const enabledElsewhere = organizationActiveCount - initialEnabledIds.length;
@@ -58,6 +64,8 @@ export function ProviderAccountPicker({ organizationId, selectionId, provider, a
           }),
         });
         const body = await response.json() as { error?: string; returnPath?: string };
+        const limit = planLimitFromResponse(body);
+        if (limit) { setPlanLimit(limit); return; }
         if (!response.ok) { setError(body.error ?? 'Could not save account selection.'); return; }
         router.replace(accountSelectionSavedPath(nextPath ?? body.returnPath ?? '/dashboard/accounts', provider, enableAccess && accountIds.length > 0));
         router.refresh();
@@ -66,6 +74,7 @@ export function ProviderAccountPicker({ organizationId, selectionId, provider, a
   }
 
   return <div className="account-selection-step"><AccountConnectionProgress /><section className="card account-selection-card">
+    <PlanLimitModal limit={planLimit} onClose={() => setPlanLimit(undefined)} />
     <div className="card-head"><h2><Provider name={provider} /></h2><span className="card-note" aria-live="polite">{singleAccount ? '1 account available' : `${selected.size} of ${accounts.length} selected`}</span></div>
     {!singleAccount && accounts.length > 0 ? <div className="account-picker-toolbar">
       <label className="account-picker-search">Search accounts<Input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Account name or ID" /></label>
@@ -100,6 +109,7 @@ export function ProviderAccountPicker({ organizationId, selectionId, provider, a
     <div className="account-picker-footer">
       <p className="account-picker-help">{chosenIds.length ? `Enable ${chosenIds.length === 1 ? 'this account' : 'these accounts'} for Adport and your assistant.` : 'Choose the accounts this project can use.'} <InfoTooltip label="About enabling accounts">Enabled accounts count toward your plan across all projects. Enabling Adport access does not start or change campaigns. Importing without enabling keeps new accounts disabled and preserves access for accounts already enabled.</InfoTooltip></p>
       {maxActiveAccounts !== null ? <p className={exceedsLimit ? 'error-text' : 'inline-note'} role={exceedsLimit ? 'status' : undefined}>{exceedsLimit ? `Choose fewer accounts or import without enabling. Your plan allows ${maxActiveAccounts} enabled accounts across projects.` : `You can enable up to ${Math.max(0, maxActiveAccounts - enabledElsewhere)} accounts here.`}</p> : null}
+      {exceedsLimit ? <div className="account-picker-upgrade"><UpgradeButton kind="active_accounts" required={enabledElsewhere + chosenIds.length} message={`You need room for ${enabledElsewhere + chosenIds.length} enabled ad accounts across your organization to enable this selection.`} label={canManageBilling ? 'Upgrade to enable these accounts' : 'View plans to enable these accounts'} className="button secondary small" /><span>You can also import them without enabling access.</span></div> : null}
       {!singleAccount && !selected.size && initialSelectedIds.length ? <p className="inline-note">Saving with nothing selected removes this provider’s accounts from Adport, without changing them at the provider.</p> : null}
       <div className="account-picker-actions"><Link className="button secondary" href={backHref} aria-disabled={pending} onClick={event => { if (pending) event.preventDefault(); }}>Back</Link><div className="account-picker-submit">{chosenIds.length ? <Button type="button" className="link-button" disabled={pending} onClick={() => save(false)}>Import without enabling</Button> : null}<Button type="button" className="button" disabled={pending || exceedsLimit} onClick={() => save(chosenIds.length > 0)}>{pending ? 'Saving…' : chosenIds.length ? `Add and enable ${chosenIds.length} account${chosenIds.length === 1 ? '' : 's'}` : selectedPages.size ? 'Save Pages and continue' : 'Continue without accounts'}</Button></div></div>
     </div>

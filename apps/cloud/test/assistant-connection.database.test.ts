@@ -45,7 +45,7 @@ suite('verified onboarding through the real hosted MCP transport', () => {
     const selectionId = randomUUID();
     const connectionId = await upsertProviderConnection({ organizationId: owner.organizationId, userId: owner.userId!, provider: 'google', credential: { refreshToken: 'local-fixture-only' }, selectionId });
     await stageAccountSelection({ principal: owner, id: selectionId, connectionId, provider: 'google', accounts: [{ provider: 'google', id: '1234567890', name: 'Local test account', currency: 'EUR' }], returnPath: '/onboarding' });
-    await saveAccountSelection(owner, selectionId, ['1234567890'], undefined, { maxActiveAccounts: 3, currentPlan: 'Free', recommendedPlan: 'operator' });
+    await saveAccountSelection(owner, selectionId, ['1234567890'], undefined, { maxActiveAccounts: 3, currentPlan: 'Free', currentPlanId: 'reader' });
     key = await createApiKey({ organizationId: owner.organizationId, userId: owner.userId!, name: 'Local setup test', scopes: ['tools:read'] });
   });
   afterAll(async () => {

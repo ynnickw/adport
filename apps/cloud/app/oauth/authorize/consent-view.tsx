@@ -3,7 +3,7 @@ import { AgentIdentityLogo } from '@/app/dashboard/agents/agent-setup-guide';
 import { BrandLockup } from '@/components/logos';
 import { Select } from '@/components/select';
 
-export interface ConsentProject { id: string; name: string; organizationName: string }
+export interface ConsentProject { id: string; name: string; organizationId: string; organizationName: string }
 
 /** The consent screen: who is connecting, what it may do, which project, and where it returns. */
 export function ConsentView({ clientName, redirectHost, scopes, projects, defaultProjectId, hidden }: {
@@ -14,7 +14,15 @@ export function ConsentView({ clientName, redirectHost, scopes, projects, defaul
   defaultProjectId?: string;
   hidden: Array<[string, string]>;
 }) {
-  const options = projects.map(project => ({ value: project.id, label: project.name, group: project.organizationName }));
+  const organizations = [...new Set(projects.map(project => project.organizationId))];
+  const defaultProject = projects.find(project => project.id === defaultProjectId) ?? projects[0];
+  const options = organizations.flatMap(id => {
+    const members = projects.filter(project => project.organizationId === id);
+    return [
+      { value: `all:${id}`, label: 'All projects', group: members[0]!.organizationName },
+      ...members.map(project => ({ value: project.id, label: project.name, group: project.organizationName })),
+    ];
+  });
   return (
     <div className="consent">
       <div className="consent-pair" aria-hidden="true">
@@ -23,7 +31,7 @@ export function ConsentView({ clientName, redirectHost, scopes, projects, defaul
         <BrandLockup />
       </div>
       <h1>Connect {clientName} to Adport</h1>
-      <p className="consent-lede">{clientName} will work in the project you choose. Every change still goes through your policy gate.</p>
+      <p className="consent-lede">Choose one project or all projects for {clientName}. Every change still goes through that project’s policy gate.</p>
 
       <ul className="consent-scopes" aria-label={`What ${clientName} can do`}>
         {scopes.includes('tools:read') ? <li><PiCheckCircleFill aria-hidden="true" /><span><strong>Read your ad accounts</strong>Accounts, campaigns and audit history.</span></li> : null}
@@ -34,8 +42,8 @@ export function ConsentView({ clientName, redirectHost, scopes, projects, defaul
         {hidden.map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
         <div className="field">
           <span className="field-label" id="consent-project-label">Project</span>
-          <Select name="project_id" aria-label="Project" options={options} defaultValue={options.some(option => option.value === defaultProjectId) ? defaultProjectId : undefined} required />
-          <span className="field-hint">The connection stays with this project. Connect again to add another.</span>
+          <Select name="project_id" aria-label="Project" options={options} defaultValue={defaultProject ? `all:${defaultProject.organizationId}` : undefined} required />
+          <span className="field-hint">All projects includes current and future projects you can access in that organization. New platforms become available when you connect them and enable their accounts.</span>
         </div>
         <p className="consent-return"><PiArrowSquareOut aria-hidden="true" /><span>Returns to <strong>{redirectHost}</strong>. Only continue if you started this connection there.</span></p>
         <div className="consent-actions">

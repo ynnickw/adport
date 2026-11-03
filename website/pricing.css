@@ -12,6 +12,18 @@
 .provider-stack-marks { display: flex; align-items: center; }
 .pricing-provider-logo { display: inline-grid; flex: none; width: 3.25rem; height: 3.25rem; place-items: center; border: 2px solid var(--paper); border-radius: 50%; background: var(--raised); }
 .pricing-provider-logo svg { display: block; width: 1.9rem; height: 1.9rem; fill: currentColor; }
+.pricing-provider-logo .google-logo path:nth-child(1) { fill: #34a853; }
+.pricing-provider-logo .google-logo path:nth-child(2) { fill: #4285f4; }
+.pricing-provider-logo .google-logo path:nth-child(3) { fill: #fbbc04; }
+.pricing-provider-logo .meta-logo { color: #0866ff; }
+.pricing-provider-logo .reddit-logo { color: #ff4500; }
+.pricing-provider-logo .spotify-logo { color: #1db954; }
+.pricing-provider-logo .pinterest-logo { color: #e60023; }
+.pricing-provider-logo .linkedin-logo { color: #0a66c2; }
+.pricing-provider-logo .microsoft-logo path:nth-child(1) { fill: #f25022; }
+.pricing-provider-logo .microsoft-logo path:nth-child(2) { fill: #7fba00; }
+.pricing-provider-logo .microsoft-logo path:nth-child(3) { fill: #00a4ef; }
+.pricing-provider-logo .microsoft-logo path:nth-child(4) { fill: #ffb900; }
 .provider-stack-marks .pricing-provider-logo + .pricing-provider-logo { margin-left: -.6rem; }
 .provider-more { display: grid; flex: none; padding: 0; width: 3.3rem; height: 3.3rem; margin-left: -.6rem; place-items: center; border: 2px solid var(--paper); border-radius: 50%; background: var(--ink); color: var(--raised); font: 650 .875rem var(--sans); cursor: pointer; transition: background 160ms; }
 .provider-more:hover, .provider-more[aria-expanded="true"] { background: var(--signal-ink); }
@@ -184,3 +196,7 @@
 }
 @media (prefers-reduced-motion: reduce) { .provider-tooltip:not([hidden]) { animation: none; } .provider-more, .pricing-billing button, .pricing-action { transition: none; } }
 @media (prefers-contrast: more) { .pricing-card, .pricing-free, .provider-tooltip, .comparison-scroll { border-color: var(--ink); } .pricing-billing-note, .pricing-shared-note, .pricing-trial-note { color: var(--ink-soft); } }
+
+/* The homepage and app paywall use the same pricing chapter typography. */
+:is(.home, .pricing-surface) .pricing-heading > .pricing-eyebrow { margin: 0 0 .75rem; color: var(--signal-ink); font: 750 1rem/1.4 var(--sans); letter-spacing: 0; text-transform: none; }
+:is(.home, .pricing-surface) .pricing-heading h2 { font-size: clamp(2.05rem, 4.3vw, 3.5rem); font-weight: 800; line-height: 1.02; letter-spacing: -.035em; }

@@ -6,39 +6,34 @@ import { HttpError } from '@/lib/http';
 import { mcpResourceUrl, oauthIssuerUrl, protectedResourceMetadataUrl } from '@/lib/mcp-oauth';
 import { getMcpOAuthClient } from '@/lib/cloud/mcp-oauth-repository';
 import { mcpUiDomain } from '@/lib/mcp-ui-domain';
-import { recommendedUpgradePlan } from '@/lib/cloud/plans';
+import { adWritePlanLimit } from '@/lib/cloud/write-plan-limit';
+import { env } from '@/lib/env';
+import { routeMcpProjects } from '@/lib/cloud/mcp-projects';
 
 async function handle(request: Request): Promise<Response> {
   try {
     const principal = await apiPrincipal(request);
-    const runtime = await createTenantRuntime(principal, { surface: 'mcp' });
+    const tenantRuntime = await createTenantRuntime(principal, { surface: 'mcp' });
+    const runtime = principal.oauthTokenId ? routeMcpProjects(tenantRuntime, principal) : tenantRuntime;
+    const toolScopes = principal.oauthOrganizationGroupId ? principal.grantedScopes ?? principal.scopes : principal.scopes;
     // Each HTTP request has a fresh server, so initialize/clientInfo cannot
     // identify the host on subsequent resources/read requests.
     const oauthClient = principal.oauthTokenId && principal.clientId
       ? await getMcpOAuthClient(principal.clientId)
       : undefined;
-    const planLimitMessage = principal.entitlement
-      ? `MCP write tools are not included in the current ${principal.entitlement.planName} plan. They require ${recommendedUpgradePlan(principal.entitlement.planId)} or higher with write access. No changes were made.`
-      : undefined;
-    const writePlanDenial = principal.role !== 'viewer'
-      && principal.grantedScopes?.includes('tools:write')
-      && principal.entitlement
-      && !principal.entitlement.writeAccess
+    const writeLimit = principal.oauthOrganizationGroupId ? undefined : await adWritePlanLimit(principal, env().ADPORT_CLOUD_BASE_URL);
+    const writePlanDenial = writeLimit
       ? {
           code: 'PLAN_LIMIT',
-          message: planLimitMessage!,
-          data: {
-            planLimit: {
-              kind: 'write_access',
-              currentPlan: principal.entitlement.planName,
-              recommendedPlan: recommendedUpgradePlan(principal.entitlement.planId),
-              message: planLimitMessage!,
-            },
-          },
+          message: writeLimit.message,
+          data: { planLimit: writeLimit },
         }
       : undefined;
     const server = createMcpServer({
       runtime,
+      instructions: principal.oauthTokenId
+        ? 'Call projects_list to discover the projects and platforms authorized for this connection. Use project_id on operations to choose the intended project; it is required when multiple projects are available. Each project has its own accounts and policies. New connected platforms are available after their accounts are enabled, without reconnecting the assistant.'
+        : undefined,
       name: 'adport-cloud',
       productionOnly: true,
       uiDomain: mcpUiDomain(oauthClient?.redirectUris ?? [], mcpResourceUrl()),
@@ -48,9 +43,11 @@ async function handle(request: Request): Promise<Response> {
         mimeType: 'image/svg+xml',
         sizes: ['any'],
       }],
-      scopes: principal.scopes,
+      scopes: toolScopes,
       scopeDenials: writePlanDenial ? { 'tools:write': writePlanDenial } : undefined,
-      notConnectedMessage: 'This provider is not connected or available for this Adport Cloud workspace. Open Connections in the Adport dashboard to connect a supported provider, then Accounts to enable agent access. Local CLI credentials and demo mode do not connect this cloud workspace.',
+      notConnectedMessage: 'This provider is not connected or available in the selected Adport project. Open Connections in the Adport dashboard to connect a supported provider, then Accounts to enable agent access.'
+        + (principal.oauthTokenId ? ' Use projects_list to find projects with this provider.' : '')
+        + ' Local CLI credentials and demo mode do not connect this cloud workspace.',
     });
     const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     await server.connect(transport);
@@ -58,7 +55,7 @@ async function handle(request: Request): Promise<Response> {
       authInfo: {
         token: principal.apiKeyId ?? principal.oauthTokenId!,
         clientId: principal.clientId ?? principal.apiKeyId!,
-        scopes: principal.scopes,
+        scopes: toolScopes,
       },
     });
   } catch (error) {

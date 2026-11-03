@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { currentStripeSubscription, lockBillingOrganization, stripeClient, stripePriceId } from './billing';
 import { getOrganizationEntitlement, subscriptionEnded, type BillingInterval, type PlanId } from './plans';
+import { trialEligible } from '@/lib/plan-change';
 
 type PaidPlan = Extract<PlanId, 'operator' | 'premium' | 'agency'>;
 interface CheckoutAttempt {
@@ -96,7 +97,7 @@ export async function subscriptionCheckoutUrl(organizationId: string, userId: st
       metadata: { organizationId, plan, interval },
       subscription_data: {
         metadata: { organizationId, plan, interval, analyticsActorUserId: userId },
-        ...(entitlement.providerSubscriptionId ? {} : { trial_period_days: 7 }),
+        ...(trialEligible(entitlement.plan.id, entitlement.providerSubscriptionId) ? { trial_period_days: 7 } : {}),
       },
       success_url: new URL('/dashboard/billing?checkout=complete', baseUrl).toString(),
       cancel_url: new URL('/dashboard/billing?' + new URLSearchParams({ checkout: 'canceled', plan, billing: interval, compare: '1' }), baseUrl).toString(),

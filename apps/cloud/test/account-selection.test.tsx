@@ -90,7 +90,7 @@ describe('account selection API', () => {
   it('uses the server entitlement for explicit activation, never a client-provided allowance', async () => {
     expect((await POST(request({ organizationId, selectionId, accountIds: ['a'], enableAccess: true }))).status).toBe(200);
     expect(mocks.entitlement).toHaveBeenCalledWith(organizationId);
-    expect(mocks.save).toHaveBeenCalledWith({ ...tenant, scopes: [] }, selectionId, ['a'], undefined, { maxActiveAccounts: 3, currentPlan: 'Free', recommendedPlan: 'operator' });
+    expect(mocks.save).toHaveBeenCalledWith({ ...tenant, scopes: [] }, selectionId, ['a'], undefined, { maxActiveAccounts: 3, currentPlan: 'Free', currentPlanId: 'reader' });
     mocks.save.mockClear();
     expect((await POST(request({ organizationId, selectionId, accountIds: ['a'], enableAccess: true, maxActiveAccounts: 10000 }))).status).toBe(403);
     expect(mocks.save).not.toHaveBeenCalled();

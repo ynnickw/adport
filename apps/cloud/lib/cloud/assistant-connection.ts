@@ -17,10 +17,13 @@ export async function recordAssistantRead(principal: TenantPrincipal): Promise<v
     await db()`
       update private.mcp_oauth_refresh_tokens refresh set verified_at = now()
       from private.mcp_oauth_access_tokens access
-      where access.token_id = ${principal.oauthTokenId} and access.organization_id = ${principal.organizationId}
+      where access.token_id = ${principal.oauthTokenId}
+        and (access.organization_id = ${principal.organizationId}
+          or access.organization_group_id = (select organization_group_id from public.organizations where id = ${principal.organizationId}))
         and access.user_id = ${principal.userId} and access.revoked_at is null and access.expires_at > now()
         and refresh.organization_id = access.organization_id and refresh.user_id = access.user_id
         and refresh.client_id = access.client_id and refresh.resource = access.resource
+        and refresh.organization_group_id is not distinct from access.organization_group_id
         and refresh.revoked_at is null and refresh.expires_at > now() and refresh.verified_at is null
     `;
   } else if (principal.apiKeyId) {
@@ -38,7 +41,9 @@ export async function getAssistantConnectionStatus(principal: TenantPrincipal, a
       select client.client_name, client.client_uri, 'oauth' as kind, refresh.verified_at
       from private.mcp_oauth_refresh_tokens refresh
       join private.mcp_oauth_clients client on client.client_id = refresh.client_id
-      where refresh.organization_id = ${principal.organizationId} and refresh.user_id = ${principal.userId}
+      where (refresh.organization_id = ${principal.organizationId}
+          or refresh.organization_group_id = (select organization_group_id from public.organizations where id = ${principal.organizationId}))
+        and refresh.user_id = ${principal.userId}
         and refresh.resource = ${mcpResourceUrl()}
         and refresh.revoked_at is null and refresh.consumed_at is null and refresh.expires_at > now()
         and 'tools:read' = any(refresh.scopes)

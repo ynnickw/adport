@@ -5,7 +5,8 @@ import { decryptSecret, encryptSecret } from '@/lib/crypto';
 import { safeReturnPath } from '@/lib/return-path';
 import type { CloudProvider, StoredMetaCredential, TenantPrincipal } from './types';
 import { providerLabel } from './providers';
-import { PlanLimitError, type UpgradePlanId } from './plan-limit';
+import { PlanLimitError, recommendUpgradePlan } from './plan-limit';
+import type { PlanId } from './plans';
 
 interface SelectionRow {
   id: string;
@@ -83,7 +84,7 @@ export async function getAccountSelection(principal: TenantPrincipal, id: string
 
 /** Commit a subset atomically, then destroy the full discovery snapshot. */
 export async function saveAccountSelection(principal: TenantPrincipal, id: string, accountIds: string[], pageIds?: string[], activation?: {
-  maxActiveAccounts: number | null; currentPlan: string; recommendedPlan: UpgradePlanId;
+  maxActiveAccounts: number | null; currentPlan: string; currentPlanId: PlanId;
 }) {
   requireManager(principal);
   return db().begin(async sql => {
@@ -161,7 +162,7 @@ export async function saveAccountSelection(principal: TenantPrincipal, id: strin
       `;
       if (!capacity) throw new Error('Could not check account capacity. Try again.');
       if (activation.maxActiveAccounts !== null && capacity.used + capacity.additional > activation.maxActiveAccounts) {
-        throw new PlanLimitError({ kind: 'active_accounts', currentPlan: activation.currentPlan, recommendedPlan: activation.recommendedPlan,
+        throw new PlanLimitError({ kind: 'active_accounts', currentPlan: activation.currentPlan, recommendedPlan: recommendUpgradePlan(activation.currentPlanId, { activeAccounts: capacity.used + capacity.additional }),
           message: `Your plan allows ${activation.maxActiveAccounts} enabled accounts across projects. Choose fewer accounts, disable another account, or import without enabling.` });
       }
       await sql`update public.organization_ad_accounts set enabled = true

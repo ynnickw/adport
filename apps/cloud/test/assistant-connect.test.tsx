@@ -30,6 +30,8 @@ describe('assistant connection navigation', () => {
     expect(html).toContain(`href="${url}"`);
     expect(html).toContain(`aria-label="Add Adport from the official ${name} connector"`);
     expect(html).toContain(`Add to ${name}`);
-    expect(html).toContain('Set up manually');
+    expect(html).toContain('Connection guide');
+    expect(html).not.toContain('Copy URL');
+    expect(html).not.toContain('Set up manually');
   });
 });

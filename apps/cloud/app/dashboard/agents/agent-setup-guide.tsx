@@ -21,7 +21,7 @@ function OpenAiLogo() {
   );
 }
 
-function AgentLogo({ provider }: { provider: AgentSetup['provider'] }) {
+export function AgentLogo({ provider }: { provider: AgentSetup['provider'] }) {
   if (provider === 'openai') return <OpenAiLogo />;
   if (provider === 'anthropic') return <SiClaude aria-hidden="true" />;
   if (provider === 'cursor') return <SiCursor aria-hidden="true" />;
@@ -33,11 +33,11 @@ export function AgentIdentityLogo({ name }: { name: string }) {
   return <span className={`agent-logo ${setup?.provider ?? 'mcp'}`} aria-hidden="true">{setup ? <AgentLogo provider={setup.provider} /> : name.slice(0, 1).toUpperCase()}</span>;
 }
 
-export function CopyButton({ value, label, className = '' }: { value: string; label: string; className?: string }) {
+export function CopyButton({ value, label, className = '', onCopyFailure }: { value: string; label: string; className?: string; onCopyFailure?: () => void }) {
   const [status, setStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   async function copy() {
     try { await navigator.clipboard.writeText(value); setStatus('copied'); }
-    catch { setStatus('failed'); }
+    catch { setStatus('failed'); onCopyFailure?.(); }
   }
   return <Button className={'button secondary small ' + className} type="button" onClick={() => void copy()} aria-label={label}><span aria-live="polite">{status === 'failed' ? 'Select text to copy' : status === 'copied' ? 'Copied ✓' : label}</span></Button>;
 }
@@ -64,7 +64,7 @@ export function AgentSetupGuide({ baseUrl, projectName, initialSelectedId, onSel
             {selected.open ? <a className="button small" href={selected.open.href} target="_blank" rel="noreferrer">{selected.open.label} ↗</a> : null}
             {selected.id === 'cursor' ? <><a className="button small" href={cursorInstallUrl(baseUrl)}>Add to Cursor ↗</a><Disclosure label="Install manually instead"><p>Add this to ~/.cursor/mcp.json.</p><div className="assistant-code"><pre><code>{command}</code></pre><CopyButton value={command} label="Copy Cursor configuration" /></div></Disclosure></> : <div className={'assistant-code' + (isCommand ? ' is-command' : '')}><span>{isCommand ? 'Terminal' : 'Server URL'}</span><pre><code>{command}</code></pre><CopyButton value={command} label={isCommand ? `Copy ${selected.name} setup` : 'Copy server URL'} /></div>}
           </div></li>
-          <li><span className="assistant-step-number" aria-hidden="true">2</span><div><h4>Sign in and choose your project</h4><p>{selected.nextStep}</p><div className="assistant-project"><span>Project to authorize</span><strong>{projectName ?? 'Your current Adport project'}</strong></div>
+          <li><span className="assistant-step-number" aria-hidden="true">2</span><div><h4>Sign in and choose your projects</h4><p>{selected.nextStep} Choose All projects to use one connection across your organization’s accessible projects.</p><div className="assistant-project"><span>Current project</span><strong>{projectName ?? 'Your current Adport project'}</strong></div>
             {selected.id === 'codex' ? <div className="assistant-code is-command"><pre><code>codex mcp login adport</code></pre><CopyButton value="codex mcp login adport" label="Copy sign-in command" /></div> : null}
           </div></li>
         </ol>

@@ -54,7 +54,7 @@ export async function inviteOrganizationMember(
     if (!totals.existing && totals.count >= entitlement.plan.maxMembers) {
       throw new PlanLimitError({
         kind: 'members', currentPlan: entitlement.plan.name,
-        recommendedPlan: recommendedUpgradePlan(entitlement.plan.id),
+        recommendedPlan: recommendedUpgradePlan(entitlement.plan.id, { members: totals.count + 1 }),
         message: `${entitlement.plan.name} supports ${entitlement.plan.maxMembers} editing member${entitlement.plan.maxMembers === 1 ? '' : 's'}. Read-only viewers are free.`,
       });
     }
@@ -154,11 +154,11 @@ export async function removeOrganizationMember(principal: TenantPrincipal, targe
       where organization_id = ${principal.organizationId} and user_id = ${targetUserId}
     `;
     await sql`update private.mcp_oauth_access_tokens set revoked_at = coalesce(revoked_at, now())
-      where organization_id = ${principal.organizationId} and user_id = ${targetUserId}`;
+      where organization_id = ${principal.organizationId} and user_id = ${targetUserId} and organization_group_id is null`;
     await sql`update private.mcp_oauth_refresh_tokens set revoked_at = coalesce(revoked_at, now())
-      where organization_id = ${principal.organizationId} and user_id = ${targetUserId}`;
+      where organization_id = ${principal.organizationId} and user_id = ${targetUserId} and organization_group_id is null`;
     await sql`update private.mcp_oauth_authorization_codes set consumed_at = coalesce(consumed_at, now())
-      where organization_id = ${principal.organizationId} and user_id = ${targetUserId}`;
+      where organization_id = ${principal.organizationId} and user_id = ${targetUserId} and organization_group_id is null`;
     await sql`
       insert into public.audit_events
         (organization_id, actor_user_id, event, provider, tool, account_id, summary)
@@ -197,7 +197,7 @@ export async function updateOrganizationSettings(
   if (dataRetentionDays > entitlement.plan.maxRetentionDays) {
     throw new PlanLimitError({
       kind: 'retention', currentPlan: entitlement.plan.name,
-      recommendedPlan: recommendedUpgradePlan(entitlement.plan.id),
+      recommendedPlan: recommendedUpgradePlan(entitlement.plan.id, { retentionDays: dataRetentionDays }),
       message: `${entitlement.plan.name} supports up to ${entitlement.plan.maxRetentionDays} days of retention. Upgrade for a longer audit history.`,
     });
   }

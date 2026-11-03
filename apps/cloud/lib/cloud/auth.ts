@@ -1,7 +1,7 @@
 import 'server-only';
 import { createClient } from '@/lib/supabase/server';
 import { authenticateApiKey, enforceRateLimit, resolveMembership } from './repository';
-import { authenticateMcpOAuthAccessToken } from './mcp-oauth-repository';
+import { authenticateMcpOAuthAccessToken, listMcpProjects } from './mcp-oauth-repository';
 import { HttpError } from '@/lib/http';
 import type { TenantPrincipal } from './types';
 import { applyPlanToPrincipal } from './plans';
@@ -34,6 +34,12 @@ export async function apiPrincipal(request: Request): Promise<TenantPrincipal> {
     ? await authenticateApiKey(token)
     : await authenticateMcpOAuthAccessToken(token);
   if (!principal) throw new HttpError('Invalid or expired access token or API key.', 401);
+  if (principal.oauthOrganizationGroupId) {
+    const projects = await listMcpProjects(principal);
+    const project = projects.find(project => project.id === principal.organizationId) ?? projects[0];
+    if (!project) throw new HttpError('Project access has been revoked.', 403);
+    principal.organizationId = project.id;
+  }
   const entitledPrincipal = await applyPlanToPrincipal(principal);
   // Do not key limits with client-controlled forwarding headers. Edge-level IP
   // limits are separate; this durable limit follows the authenticated key.

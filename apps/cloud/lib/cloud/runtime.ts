@@ -1,5 +1,5 @@
 import 'server-only';
-import { createContext, PolicyEngine, type AdportRuntime, type ProviderModule } from '@adport/core';
+import { AdportError, createContext, PolicyEngine, type AdportRuntime, type AnyToolDefinition, type ProviderModule } from '@adport/core';
 import { AppleAdsClient, AppleAdsProvider, appleTools } from '@adport/provider-apple';
 import { GoogleAdsProvider, GoogleAdsRestClient, googleTools } from '@adport/provider-google';
 import { MetaAdsProvider, MetaGraphClient, metaTools } from '@adport/provider-meta';
@@ -140,11 +140,42 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     modules.push({ provider: scopeProvider(provider), tools: redditTools(provider) });
   }
   const engine = new PolicyEngine(policy, new PostgresPendingStore(principal), new PostgresAuditStore(principal));
+  const authorizeAccounts = createAccountScopeAuthorizer(enabledAccountIds);
+  const connected = new Set(modules.map(module => module.provider.id));
   const runtime = await createContext({
     providerModules: modules,
     engine,
-    authorizeToolCall: enforceAccountScope ? createAccountScopeAuthorizer(enabledAccountIds) : undefined,
+    authorizeToolCall: enforceAccountScope ? (tool, input) => {
+      if (tool.namespace !== 'core' && tool.namespace !== 'audit' && !connected.has(tool.namespace)) {
+        throw new AdportError('NOT_CONNECTED', 'This platform is not connected in the selected project.');
+      }
+      authorizeAccounts(tool, input);
+    } : undefined,
     findings: new PostgresFindingsStore(principal.organizationId),
   });
+  if (options.surface === 'mcp') completeMcpCatalog(runtime);
   return enforceAccountScope ? instrumentCloudTools(runtime, principal, options.surface ?? 'dashboard') : runtime;
+}
+
+/** Factories define schemas without calling a provider. These handlers never execute. */
+function unavailableTools<T extends object>(provider: string, factory: (provider: T) => AnyToolDefinition[]): AnyToolDefinition[] {
+  const metadataOnly = new Proxy({} as T, { get() { throw new Error('Tool catalog construction must not access a provider.'); } });
+  return factory(metadataOnly).map(tool => ({
+    ...tool,
+    async handler() { throw new AdportError('NOT_CONNECTED', `${provider} is not connected in the selected project.`); },
+  }));
+}
+
+/** A stable catalog lets clients use platforms connected after OAuth consent. */
+function completeMcpCatalog(runtime: AdportRuntime): void {
+  const registered = new Set(runtime.registry.list().map(tool => tool.name));
+  const catalog = [
+    ...unavailableTools('google', googleTools), ...unavailableTools('meta', metaTools),
+    ...unavailableTools('tiktok', tiktokTools), ...unavailableTools('apple', appleTools),
+    ...unavailableTools('microsoft', microsoftTools), ...unavailableTools('reddit', redditTools),
+    ...unavailableTools('snapchat', snapchatTools), ...unavailableTools('spotify', spotifyTools),
+    ...unavailableTools('pinterest', pinterestTools), ...unavailableTools('linkedin', linkedinTools),
+    ...unavailableTools('x', xTools),
+  ];
+  runtime.registry.register(catalog.filter(tool => !registered.has(tool.name)));
 }

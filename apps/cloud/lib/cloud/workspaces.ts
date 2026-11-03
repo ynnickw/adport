@@ -6,7 +6,8 @@ import { invitationRedirectUrl } from '@/lib/invitations';
 import { db } from '@/lib/db';
 import { HttpError } from '@/lib/http';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getOrganizationEntitlement } from './plans';
+import { getOrganizationEntitlement, recommendedUpgradePlan } from './plans';
+import { PlanLimitError } from './plan-limit';
 import type { TenantPrincipal } from './types';
 import { editingMemberCapacity } from './member-capacity';
 
@@ -14,8 +15,10 @@ export type OrganizationRole = NonNullable<TenantPrincipal['role']>;
 export interface ProjectAccess {
   id: string;
   name: string;
+  logoPath: string | null;
   organizationId: string;
   organizationName: string;
+  organizationLogoPath: string | null;
   role: OrganizationRole;
   organizationRole: OrganizationRole;
   defaultProjectId: string;
@@ -24,7 +27,7 @@ export interface ProjectAccess {
 
 export async function listProjectAccess(userId: string): Promise<ProjectAccess[]> {
   return db()<ProjectAccess[]>`
-    select project.id, project.name, company.id as organization_id, company.name as organization_name,
+    select project.id, project.name, project.logo_path, company.id as organization_id, company.name as organization_name, company.logo_path as organization_logo_path,
       access.role, member.role as organization_role, company.default_project_id, project.archived_at
     from private.project_memberships access
     join public.organizations project on project.id = access.organization_id
@@ -105,8 +108,8 @@ export async function updateProject(userId: string, projectId: string, input: { 
 
 export async function listOrganizationProjects(userId: string, organizationId: string) {
   await requireOrganizationAdmin(userId, organizationId);
-  return db()<Array<{ id: string; name: string; archivedAt: Date | null; enabledAccounts: number }>>`
-    select project.id, project.name, project.archived_at,
+  return db()<Array<{ id: string; name: string; logoPath: string | null; archivedAt: Date | null; enabledAccounts: number }>>`
+    select project.id, project.name, project.logo_path, project.archived_at,
       (select count(*)::int from public.organization_ad_accounts account where account.organization_id = project.id and account.enabled) as enabled_accounts
     from public.organizations project where project.organization_group_id = ${organizationId} order by project.created_at, project.id
   `;
@@ -163,7 +166,7 @@ export async function saveOrganizationMember(input: {
     if (!targetUserId) {
       const entitlement = await getOrganizationEntitlement(actor.defaultProjectId);
       const members = await editingMemberCapacity(actor.defaultProjectId);
-      if (input.role !== 'viewer' && entitlement.plan.maxMembers !== null && members.count >= entitlement.plan.maxMembers) throw new HttpError('Your organization has reached its editing-member limit. Read-only viewers are free.', 409);
+      if (input.role !== 'viewer' && entitlement.plan.maxMembers !== null && members.count >= entitlement.plan.maxMembers) throw new PlanLimitError({ kind: 'members', currentPlan: entitlement.plan.name, recommendedPlan: recommendedUpgradePlan(entitlement.plan.id, { members: members.count + 1 }), message: 'Your organization has reached its editing-member limit. Read-only viewers are free.' });
       const result = await createAdminClient().auth.admin.inviteUserByEmail(email, {
         redirectTo: invitationRedirectUrl(env().ADPORT_CLOUD_BASE_URL, projectIds[0] ?? actor.defaultProjectId),
       });
@@ -188,7 +191,7 @@ export async function saveOrganizationMember(input: {
     const entitlement = await getOrganizationEntitlement(organization.defaultProjectId, sql);
     const members = await editingMemberCapacity(organization.defaultProjectId, target, sql);
     if (input.role !== 'viewer' && !members.existing && entitlement.plan.maxMembers !== null && members.count >= entitlement.plan.maxMembers) {
-      throw new HttpError('Your organization has reached its editing-member limit. Read-only viewers are free.', 409);
+      throw new PlanLimitError({ kind: 'members', currentPlan: entitlement.plan.name, recommendedPlan: recommendedUpgradePlan(entitlement.plan.id, { members: members.count + 1 }), message: 'Your organization has reached its editing-member limit. Read-only viewers are free.' });
     }
     const projectIds = [...new Set(input.projectIds)];
     const projects = await sql<Array<{ id: string }>>`select id from public.organizations
@@ -204,12 +207,15 @@ export async function saveOrganizationMember(input: {
         values (${projectId}, ${target}, ${input.role})`;
     }
     await sql`update private.mcp_oauth_access_tokens token set revoked_at = now() where token.user_id = ${target}
+      and token.organization_group_id is null
       and token.organization_id in (select id from public.organizations where organization_group_id = ${input.organizationId})
       and not exists (select 1 from private.project_memberships access where access.organization_id = token.organization_id and access.user_id = ${target})`;
     await sql`update private.mcp_oauth_refresh_tokens token set revoked_at = now() where token.user_id = ${target}
+      and token.organization_group_id is null
       and token.organization_id in (select id from public.organizations where organization_group_id = ${input.organizationId})
       and not exists (select 1 from private.project_memberships access where access.organization_id = token.organization_id and access.user_id = ${target})`;
     await sql`update private.mcp_oauth_authorization_codes code set consumed_at = coalesce(consumed_at, now()) where code.user_id = ${target}
+      and code.organization_group_id is null
       and code.organization_id in (select id from public.organizations where organization_group_id = ${input.organizationId})
       and not exists (select 1 from private.project_memberships access where access.organization_id = code.organization_id and access.user_id = ${target})`;
     await sql`insert into public.audit_events (organization_id, actor_user_id, event, provider, tool, account_id, summary, details)

@@ -101,7 +101,7 @@ describe('shipped MCP iframe', () => {
     for (const view of ['accounts', 'report', 'operation', 'insights'] as const) {
       ui.render(view, {});
       expect(ui.app.innerHTML).not.toMatch(/<h1|class="hero"|class="foot"|EVIDENCE BEFORE ACTION|Performance,|Normalized metrics/);
-      expect(ui.app.innerHTML).toContain('adport.dev');
+      expect(ui.app.innerHTML).toContain('<b>adport<span class="wordmark-dot" aria-hidden="true">.</span></b>');
     }
   });
 

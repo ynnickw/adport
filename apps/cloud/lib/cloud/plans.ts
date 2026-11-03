@@ -1,7 +1,7 @@
 import 'server-only';
 import { db } from '@/lib/db';
 import type { TenantPrincipal } from './types';
-import type { UpgradePlanId } from './plan-limit';
+import { recommendUpgradePlan, type PlanRequirements, type UpgradePlanId } from './plan-limit';
 import { HttpError } from '@/lib/http';
 import type postgres from 'postgres';
 import catalog from './plan-catalog.json';
@@ -38,6 +38,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = catalog as Record<PlanId, P
 
 export interface OrganizationEntitlement {
   billingOrganizationId?: string;
+  billingProvider?: string | null;
   plan: PlanDefinition;
   status: SubscriptionStatus;
   providerCustomerId: string | null;
@@ -61,8 +62,9 @@ export async function getOrganizationEntitlement(organizationId: string, sql: po
     canceledAt: Date | null;
     cancellationReason: string | null;
     billingOrganizationId: string;
+    billingProvider: string | null;
   }>>`
-    select subscription.plan, subscription.status, subscription.provider_customer_id, subscription.provider_subscription_id,
+    select subscription.plan, subscription.status, subscription.billing_provider, subscription.provider_customer_id, subscription.provider_subscription_id,
       subscription.current_period_end, subscription.cancel_at_period_end, subscription.cancel_at,
       subscription.canceled_at, subscription.cancellation_reason, company.default_project_id as billing_organization_id
     from public.organizations project
@@ -126,9 +128,6 @@ export function formatPlanLimit(value: number | null, unit: string): string {
   return `${value} ${value === 1 ? unit.replace(/s$/, '') : unit}`;
 }
 
-export function recommendedUpgradePlan(plan: PlanId): UpgradePlanId {
-  if (plan === 'reader') return 'operator';
-  if (plan === 'operator') return 'premium';
-  if (plan === 'premium') return 'agency';
-  return 'enterprise';
+export function recommendedUpgradePlan(plan: PlanId, required?: PlanRequirements): UpgradePlanId {
+  return recommendUpgradePlan(plan, required);
 }

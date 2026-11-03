@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   checkout: vi.fn(), portal: vi.fn(), redirect: vi.fn((url: string): never => { throw new Error(`redirect:${url}`); }),
-  sessionPrincipal: vi.fn(), entitlement: vi.fn(), organization: vi.fn(),
+  sessionPrincipal: vi.fn(), entitlement: vi.fn(), organization: vi.fn(), change: vi.fn(), endComplimentary: vi.fn(), revalidate: vi.fn(),
 }));
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }));
 vi.mock('@/lib/cloud/product-analytics', () => ({ captureProductEvent: vi.fn() }));
@@ -10,8 +10,11 @@ vi.mock('@/lib/cloud/auth', () => ({ sessionPrincipal: mocks.sessionPrincipal })
 vi.mock('@/lib/cloud/plans', () => ({ getOrganizationEntitlement: mocks.entitlement }));
 vi.mock('@/lib/cloud/workspaces', () => ({ requireOrganizationAdmin: mocks.organization }));
 vi.mock('@/lib/cloud/billing-checkout', () => ({ subscriptionCheckoutUrl: mocks.checkout }));
+vi.mock('@/lib/cloud/billing-plan-changes', () => ({ subscriptionPlanChangeUrl: mocks.change, endComplimentaryPlan: mocks.endComplimentary }));
+vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidate }));
+import { changeProjectSubscriptionForm } from '@/app/dashboard/billing/actions';
 vi.mock('@/lib/cloud/billing', () => ({ stripeClient: () => ({ billingPortal: { sessions: { create: mocks.portal } } }) }));
-import { startSubscription, startSubscriptionForm, openBillingPortalForm } from '@/app/dashboard/billing/actions';
+import { startSubscription, startSubscriptionForm, openBillingPortalForm, startProjectSubscriptionForm, openProjectBillingPortalForm } from '@/app/dashboard/billing/actions';
 
 describe('billing actions and ownership', () => {
   beforeEach(() => {
@@ -21,6 +24,7 @@ describe('billing actions and ownership', () => {
     mocks.organization.mockResolvedValue({ role: 'owner' });
     mocks.checkout.mockResolvedValue('https://checkout.stripe.com/session');
     mocks.portal.mockResolvedValue({ url: 'https://billing.stripe.com/session' });
+    mocks.change.mockResolvedValue('https://billing.stripe.com/confirm');
   });
   it('uses the shared billing organization when checkout starts inside a project', async () => {
     await expect(startSubscription('premium', 'annual')).rejects.toThrow('redirect:');
@@ -53,5 +57,56 @@ describe('billing actions and ownership', () => {
   it('opens the configured portal for the billing customer', async () => {
     await expect(openBillingPortalForm({}, new FormData())).rejects.toThrow('redirect:https://billing.stripe.com/session');
     expect(mocks.portal).toHaveBeenCalledWith({ customer: 'cus_existing', configuration: 'bpc_expected', return_url: 'https://app.adport.dev/dashboard/billing' });
+  });
+  it('binds paywall checkout and portal access to the displayed project instead of the active cookie', async () => {
+    await expect(startProjectSubscriptionForm('displayed-project', 'premium', 'annual', {}, new FormData())).rejects.toThrow('redirect:');
+    expect(mocks.sessionPrincipal).toHaveBeenLastCalledWith('displayed-project');
+    expect(mocks.checkout).toHaveBeenCalledWith('shared-company', 'owner', 'premium', 'annual');
+    await expect(openProjectBillingPortalForm('displayed-project', {}, new FormData())).rejects.toThrow('redirect:');
+    expect(mocks.sessionPrincipal).toHaveBeenLastCalledWith('displayed-project');
+  });
+  it('does not create a checkout when membership in the displayed project has been revoked', async () => {
+    mocks.sessionPrincipal.mockRejectedValue(new Error('Project access revoked'));
+    expect(await startProjectSubscriptionForm('revoked-project', 'operator', 'monthly', {}, new FormData())).toHaveProperty('error');
+    expect(mocks.checkout).not.toHaveBeenCalled();
+    expect(mocks.portal).not.toHaveBeenCalled();
+  });
+
+});
+
+describe('plan change authorization', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.sessionPrincipal.mockResolvedValue({ organizationId: 'client-project', userId: 'owner', role: 'owner' });
+    mocks.entitlement.mockResolvedValue({ billingOrganizationId: 'shared-company', providerCustomerId: 'cus_existing' });
+    mocks.organization.mockResolvedValue({ role: 'owner' });
+    mocks.change.mockResolvedValue('https://billing.stripe.com/confirm');
+  });
+  it.each(['operator', 'agency', 'reader'] as const)('confirms the selected %s change on the shared owned billing account', async plan => {
+    const form = new FormData(); form.set('customer', 'cus_attacker');
+    await expect(changeProjectSubscriptionForm('client-project', plan, 'annual', {}, form)).rejects.toThrow('redirect:https://billing.stripe.com/confirm');
+    expect(mocks.sessionPrincipal).toHaveBeenCalledWith('client-project');
+    expect(mocks.change).toHaveBeenCalledWith(expect.objectContaining({ providerCustomerId: 'cus_existing' }), 'shared-company', plan, 'annual');
+    expect(mocks.checkout).not.toHaveBeenCalled();
+  });
+  it.each(['project', 'organization'])('requires ownership at the %s boundary', async boundary => {
+    if (boundary === 'project') mocks.sessionPrincipal.mockResolvedValue({ role: 'member' });
+    else mocks.organization.mockResolvedValue({ role: 'admin' });
+    expect((await changeProjectSubscriptionForm('client-project', 'agency', 'monthly', {}, new FormData())).error).toBeTruthy();
+    expect(mocks.change).not.toHaveBeenCalled(); expect(mocks.endComplimentary).not.toHaveBeenCalled();
+  });
+  it('validates plan changes and keeps provider failures private', async () => {
+    await changeProjectSubscriptionForm('project', 'enterprise', 'monthly', {}, new FormData());
+    await changeProjectSubscriptionForm('project', 'agency', 'bad' as never, {}, new FormData());
+    expect(mocks.sessionPrincipal).not.toHaveBeenCalled();
+    mocks.change.mockRejectedValueOnce(new Error('private Stripe detail'));
+    const result = await changeProjectSubscriptionForm('project', 'agency', 'monthly', {}, new FormData());
+    expect(result.error).not.toContain('private Stripe detail'); expect(mocks.redirect).not.toHaveBeenCalled();
+  });
+  it('ends complimentary access only for the owned billing organization when Free is explicitly selected', async () => {
+    mocks.entitlement.mockResolvedValue({ billingOrganizationId: 'shared-company', providerCustomerId: null, providerSubscriptionId: null });
+    expect(await changeProjectSubscriptionForm('client-project', 'reader', 'monthly', {}, new FormData())).toEqual({});
+    expect(mocks.endComplimentary).toHaveBeenCalledWith('shared-company', 'owner');
+    expect(mocks.revalidate).toHaveBeenCalledWith('/dashboard', 'layout'); expect(mocks.change).not.toHaveBeenCalled();
   });
 });

@@ -2,6 +2,7 @@ import { createMcpAuthorizationCode, getMcpOAuthClient } from '@/lib/cloud/mcp-o
 import { sessionPrincipal } from '@/lib/cloud/auth';
 import { oauthError, validateAuthorizationRequest } from '@/lib/mcp-oauth';
 import { z } from 'zod';
+import { listProjectAccess } from '@/lib/cloud/workspaces';
 
 export async function POST(request: Request) {
   try {
@@ -19,8 +20,18 @@ export async function POST(request: Request) {
       target.searchParams.set('error_description', 'The resource owner denied the request.');
     } else {
       const projectId = form.get('project_id');
-      const principal = await sessionPrincipal(projectId ? z.string().uuid().parse(projectId) : undefined);
-      target.searchParams.set('code', await createMcpAuthorizationCode(principal, authorization));
+      if (typeof projectId === 'string' && projectId.startsWith('all:')) {
+        const organizationId = z.string().uuid().parse(projectId.slice(4));
+        const session = await sessionPrincipal();
+        const projects = await listProjectAccess(session.userId!);
+        const project = projects.find(project => project.organizationId === organizationId);
+        if (!project) throw new Error('You do not have access to this organization.');
+        const principal = await sessionPrincipal(project.id);
+        target.searchParams.set('code', await createMcpAuthorizationCode(principal, authorization, organizationId));
+      } else {
+        const principal = await sessionPrincipal(projectId ? z.string().uuid().parse(projectId) : undefined);
+        target.searchParams.set('code', await createMcpAuthorizationCode(principal, authorization));
+      }
     }
     if (authorization.state) target.searchParams.set('state', authorization.state);
     return Response.redirect(target, 303);

@@ -57,7 +57,7 @@ jobs:
   publish:
     needs: validate
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 40
     permissions:
       contents: write
       id-token: write # npm provenance
@@ -91,15 +91,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: node scripts/release/publish-packages.mjs
       - name: Verify the public npm install before announcing the release
-        shell: bash
-        run: |
-          for attempt in 1 2 3; do
-            if node scripts/release/verify-published.mjs "${RELEASE_TAG#v}"; then
-              exit 0
-            fi
-            if [ "$attempt" -lt 3 ]; then sleep 15; fi
-          done
-          exit 1
+        run: node scripts/release/verify-published.mjs "${RELEASE_TAG#v}"
       - name: Publish GitHub release with reviewed notes
         env:
           GH_TOKEN: ${{ github.token }}

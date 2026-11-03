@@ -95,11 +95,9 @@
 .gate-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem 2rem; margin-bottom: 1.1rem; }
 /* One chapter label per section, the same voice as the hero's. */
 .section-kicker,
-.home .pricing-heading > .pricing-eyebrow,
 .home .landing-resources > .resource-section-head:first-child .resource-eyebrow.resource-eyebrow { margin: 0 0 0.75rem; color: var(--signal-ink); font: 750 1rem/1.4 var(--sans); letter-spacing: 0; text-transform: none; }
 .home .landing-resources .resource-eyebrow { margin-bottom: 0.5rem; color: var(--muted); font: 700 0.875rem/1.4 var(--sans); letter-spacing: 0; text-transform: none; }
-.home .landing-resources > .resource-section-head:first-child h2,
-.home .pricing-heading h2 { font-size: clamp(2.05rem, 4.3vw, 3.5rem); font-weight: 800; line-height: 1.02; letter-spacing: -0.035em; }
+.home .landing-resources > .resource-section-head:first-child h2 { font-size: clamp(2.05rem, 4.3vw, 3.5rem); font-weight: 800; line-height: 1.02; letter-spacing: -0.035em; }
 .gate-title { max-width: 16em; margin-top: 0; font-size: clamp(2.05rem, 4.3vw, 3.5rem); font-weight: 820; line-height: 1.04; letter-spacing: -0.035em; text-wrap: balance; }
 .headline-line { transition: color 700ms var(--ease-out); }
 /* The three lines wait for the demo: dimmed only while it runs, lit as each step happens. */
