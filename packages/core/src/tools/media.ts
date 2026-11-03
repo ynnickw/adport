@@ -4,6 +4,8 @@ import { AdportError } from '../errors.js';
 import { mediaAssetSchema } from '../media.js';
 import { defineTool, type AnyToolDefinition } from './registry.js';
 
+const sizeLabel = (bytes: number) => bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : bytes >= 1024 ? `${Math.round(bytes / 1024)} KB` : `${bytes} bytes`;
+
 export function mediaTools(): AnyToolDefinition[] {
   return [defineTool({
     name: 'media_list', namespace: 'core',
@@ -15,8 +17,8 @@ export function mediaTools(): AnyToolDefinition[] {
       if (!ctx.media) throw new AdportError('NOT_CONNECTED', 'A hosted project media library is required. Local uploads accept file_path and expected_sha256.');
       const result = await ctx.media.list(input);
       return { ...result, creatives: result.assets.map(asset => ({
-        id: asset.id, name: asset.name, provider: 'media', account_id: '', type: asset.content_type,
-        headlines: [], descriptions: [`${asset.byte_length} bytes`, `SHA-256: ${asset.sha256}`], landing_urls: [], actions: [],
+        id: asset.id, name: asset.name, provider: 'media', account_id: '', type: asset.content_type, ...(asset.status ? { status: asset.status } : {}),
+        headlines: [], descriptions: [`${sizeLabel(asset.byte_length)}${asset.width && asset.height ? ` · ${asset.width} × ${asset.height}` : ''}`], landing_urls: [], actions: [],
         media: asset.preview_url ? [{ type: asset.content_type.startsWith('image/') ? 'image' : asset.content_type.startsWith('video/') ? 'video' : 'audio', url: asset.preview_url, alt: asset.name }] : [],
       })) };
     },

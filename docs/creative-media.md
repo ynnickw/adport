@@ -22,7 +22,7 @@ Call `meta_upload_image`, `meta_upload_video`, `tiktok_upload_image`, `tiktok_up
 
 Local CLI/stdio uploads accept an absolute `file_path` and `expected_sha256` instead of `media_id`. Hosted calls reject local file paths. Files are read through one bounded file handle, symbolic links are rejected, and changing file bytes invalidates the approval.
 
-The library supports images, video and audio previews. Previews expire after 15 minutes; call `media_list` again to refresh them. Abandoned uploads are cleared on subsequent uploads after their signed grants expire. Project deletion queues private media removal after three hours, and the authenticated hourly cleanup job retries failures. The delay prevents an outstanding two-hour upload grant from recreating a file after cleanup.
+The library supports images, video and audio previews. Previews expire after 15 minutes. Use the native widget’s **Refresh previews** control or call `media_list` again. The control reuses the same read tool and preserves its project, account, filters and page cursor. Verified hosted files show READY with readable file sizes/dimensions; exact checksums remain in the structured asset data for provider uploads. Abandoned uploads are cleared on subsequent uploads after their signed grants expire. Project deletion queues private media removal after three hours, and the authenticated hourly cleanup job retries failures. The delay prevents an outstanding two-hour upload grant from recreating a file after cleanup.
 
 ## Creative tools
 

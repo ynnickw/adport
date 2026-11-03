@@ -149,6 +149,7 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
           approval: z.object({ arguments: z.record(z.string(), z.unknown()) }).optional(),
           context: z.object({ project_id: z.string() }).optional(),
           capabilities: z.object({ can_write: z.boolean() }).optional(),
+          refresh: z.object({ arguments: z.record(z.string(), z.unknown()) }).optional(),
         }) } : {}),
         ...(runtime.dataSource === 'synthetic' ? { data_source: z.literal('synthetic') } : {}),
       }) } : {}),
@@ -192,7 +193,7 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
           : undefined;
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-          ...(view ? { structuredContent: structuredResult(tool.name, view, structured, approval, typeof args.project_id === 'string' ? { project_id: args.project_id } : undefined, { can_write: !scopes || scopes.includes('tools:write') }) }
+          ...(view ? { structuredContent: structuredResult(tool.name, view, structured, approval, typeof args.project_id === 'string' ? { project_id: args.project_id } : undefined, { can_write: !scopes || scopes.includes('tools:write') }, view === 'creatives' && tool.annotations.readOnly ? { arguments: Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'pending_operation_id')) } : undefined) }
             : tool.output ? { structuredContent: structured as Record<string, unknown> } : {}),
         };
       } catch (err) {

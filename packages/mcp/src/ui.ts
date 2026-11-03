@@ -49,7 +49,7 @@ export function toolInvocationLabels(view: AdportView): { invoking: string; invo
   }
 }
 
-export function structuredResult(tool: string, view: AdportView, result: unknown, approval?: { arguments: Record<string, unknown> }, context?: { project_id: string }, capabilities?: { can_write: boolean }): Record<string, unknown> {
+export function structuredResult(tool: string, view: AdportView, result: unknown, approval?: { arguments: Record<string, unknown> }, context?: { project_id: string }, capabilities?: { can_write: boolean }, refresh?: { arguments: Record<string, unknown> }): Record<string, unknown> {
   const payload = result && typeof result === 'object' && !Array.isArray(result)
     ? result as Record<string, unknown>
     : { value: result };
@@ -62,6 +62,7 @@ export function structuredResult(tool: string, view: AdportView, result: unknown
       ...(approval ? { approval } : {}),
       ...(context ? { context } : {}),
       ...(capabilities ? { capabilities } : {}),
+      ...(refresh ? { refresh } : {}),
     },
   };
 }
@@ -188,7 +189,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
   <script>
   (() => {
     const app = document.getElementById('app');
-    const state = { host: {}, result: null, reportGroup: null, reportMetric: 'spend', approving: false, approvalError: '', previewing: false, creativeError: '' };
+    const state = { host: {}, result: null, reportGroup: null, reportMetric: 'spend', approving: false, approvalError: '', previewing: false, refreshing: false, creativeError: '' };
     const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const arr = (value) => Array.isArray(value) ? value : [];
     const num = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
@@ -207,7 +208,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       return available(value) ? value : null;
     };
     const currencyOf = (row) => typeof row.currency === 'string' && /^[A-Z]{3}$/.test(row.currency) ? row.currency : null;
-    const statusOf = (status) => !status || /unknown|unspecified/i.test(status) ? {label:'Status unavailable',tone:'neutral'} : /disabled|removed|inactive|closed|suspended/i.test(status) ? {label:status,tone:'danger'} : /paused|disable$/i.test(status) ? {label:status,tone:'warn'} : /^(enabled|active|approved)$/i.test(status) ? {label:status,tone:''} : {label:status,tone:'neutral'};
+    const statusOf = (status) => !status || /unknown|unspecified/i.test(status) ? {label:'Status unavailable',tone:'neutral'} : /disabled|removed|inactive|closed|suspended/i.test(status) ? {label:status,tone:'danger'} : /paused|disable$/i.test(status) ? {label:status,tone:'warn'} : /^(enabled|active|approved|ready)$/i.test(status) ? {label:status,tone:''} : {label:status,tone:'neutral'};
     const notices = (data) => [...arr(data.errors).map(e => (e.provider || 'Provider')+': '+(e.message || 'Read failed')), ...arr(data.warnings).map(e => e.message || 'Some metadata is unavailable'), ...(data.truncated ? ['Partial result: row limit reached. Totals and charts cover returned rows only.'] : [])].map(text => '<p class="notice">'+esc(text)+'</p>').join('');
     const providerName = (id, names) => names?.[id] || String(id || 'Provider');
     const initials = (id) => ({snapchat:'S',spotify:'S',pinterest:'P',linkedin:'in',x:'X'}[id] || String(id || '?').slice(0,2).toUpperCase());
@@ -354,7 +355,8 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
         const value=Array.isArray(field.value)?field.value.join('\n'):String(field.value ?? '');
         return '<label class="creative-field">'+label+'<textarea data-field="'+key+'" '+(field.max_length?'maxlength="'+Number(field.max_length)+'"':'')+'>'+esc(value)+'</textarea></label>';
       };
-      const body=notices(data)+(!canWrite&&creatives.some(creative=>arr(creative.actions).length)?'<p class="notice">Your connection can view these creatives. Editing access is required to change them.</p>':'')+(uploadUrl?'<p><button class="approve" type="button" data-open-library>'+(canWrite?'Upload media':'Open media library')+'</button></p>':'')+(state.creativeError?'<p class="notice" role="alert">'+esc(state.creativeError)+'</p>':'')+(creatives.length?'<div class="creative-grid">'+creatives.map((creative,ci)=>{
+      const canRefresh=meta.refresh?.arguments && typeof meta.refresh.arguments==='object' && !Array.isArray(meta.refresh.arguments) && typeof meta.tool==='string';
+      const body=notices(data)+(!canWrite&&creatives.some(creative=>arr(creative.actions).length)?'<p class="notice">Your connection can view these creatives. Editing access is required to change them.</p>':'')+((uploadUrl||canRefresh)?'<p>'+(uploadUrl?'<button class="approve" type="button" data-open-library>'+(canWrite?'Upload media':'Open media library')+'</button> ':'')+(canRefresh?'<button class="approve" type="button" data-refresh-previews '+(state.refreshing?'disabled':'')+'>'+(state.refreshing?'Refreshing…':'Refresh previews')+'</button>':'')+'</p>':'')+(state.creativeError?'<p class="notice" role="alert">'+esc(state.creativeError)+'</p>':'')+(creatives.length?'<div class="creative-grid">'+creatives.map((creative,ci)=>{
         const status=statusOf(creative.status);
         return '<article class="creative-card"><div class="identity">'+logo(creative.provider)+'<div class="identity-copy"><b>'+esc(creative.name)+'</b><span>'+esc(creative.type)+' · '+esc(creative.id)+'</span></div><span class="pill '+status.tone+'">'+esc(status.label)+'</span></div>'+mediaView(creative)+'<div class="creative-copy">'+arr(creative.headlines).map(text=>'<strong>'+esc(text)+'</strong>').join('')+arr(creative.descriptions).map(text=>'<p>'+esc(text)+'</p>').join('')+arr(creative.landing_urls).map(url=>'<p class="context">'+esc(url)+'</p>').join('')+'</div>'+(canWrite?arr(creative.actions):[]).map((action,ai)=>'<form data-creative="'+ci+'" data-action="'+ai+'">'+arr(action.fields).map((field,fi)=>fieldInput(field,fi)).join('')+'<button class="approve" type="submit" '+(state.previewing?'disabled':'')+'>'+(state.previewing?'Preparing preview…':'Preview '+esc(action.label).toLowerCase())+'</button></form>').join('')+'</article>';
       }).join('')+'</div>':'<div class="empty">No creatives were returned for this selection.</div>');
@@ -363,8 +365,21 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
         if (typeof window.openai?.openExternal==='function') window.openai.openExternal({href:uploadUrl});
         else send({jsonrpc:'2.0',id:id++,method:'ui/open-link',params:{url:uploadUrl}});
       });
+      app.querySelector('[data-refresh-previews]')?.addEventListener('click',async()=>{
+        if (state.refreshing || state.previewing) return;
+        state.refreshing=true;state.creativeError='';render(state.result);
+        try {
+          const parameters={...meta.refresh.arguments,...(meta.context?.project_id?{project_id:meta.context.project_id}:{})};delete parameters.pending_operation_id;
+          const result=await callTool(meta.tool,parameters),value=resultValue(result);
+          if (result?.isError || value?.error) throw new Error(value?.message || 'Previews could not be refreshed.');
+          if (!Array.isArray(value?.creatives)) throw new Error('A creative result was not returned. Check the tool response in chat.');
+          state.refreshing=false;
+          const next=result?.structuredContent?result:{structuredContent:{...value,_adport:meta}};
+          if (JSON.stringify(state.result)===JSON.stringify(next)) render(state.result); else acceptResult(next);
+        } catch(error) {state.refreshing=false;state.creativeError=error?.message || 'Previews could not be refreshed.';render(state.result);}
+      });
       app.querySelectorAll('[data-creative]').forEach(form=>form.addEventListener('submit',async event=>{
-        event.preventDefault();if (state.previewing) return;
+        event.preventDefault();if (state.previewing || state.refreshing) return;
         const action=creatives[Number(form.dataset.creative)]?.actions?.[Number(form.dataset.action)];
         if (!action || typeof action.tool!=='string') return;
         const parameters={...action.arguments,...(meta.context?.project_id?{project_id:meta.context.project_id}:{})};

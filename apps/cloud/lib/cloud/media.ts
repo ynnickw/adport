@@ -80,7 +80,7 @@ export class ProjectMediaLibrary implements MediaLibrary {
     const assets: MediaAsset[] = await Promise.all(rows.slice(0, input.limit).map(async row => {
       const { data, error } = await createAdminClient().storage.from(BUCKET).createSignedUrl(row.objectPath, 900);
       if (error || !data) throw new HttpError('Media previews could not be prepared.', 502);
-      return { id: row.id, name: row.name, content_type: row.contentType, byte_length: Number(row.byteLength), sha256: row.sha256,
+      return { id: row.id, name: row.name, content_type: row.contentType, byte_length: Number(row.byteLength), sha256: row.sha256, status: 'READY',
         ...(row.width ? { width: row.width } : {}), ...(row.height ? { height: row.height } : {}), preview_url: data.signedUrl };
     }));
     const truncated = rows.length > input.limit;

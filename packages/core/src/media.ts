@@ -21,6 +21,7 @@ export interface MediaResolver {
 export const mediaAssetSchema = z.object({
   id: z.string().uuid(), name: z.string(), content_type: z.string(), byte_length: z.number().int().positive(),
   sha256: z.string().regex(/^[a-f0-9]{64}$/), width: z.number().int().positive().optional(), height: z.number().int().positive().optional(),
+  status: z.enum(['READY', 'PROCESSING', 'FAILED']).optional(),
   preview_url: z.string().url().optional(),
 });
 export type MediaAsset = z.infer<typeof mediaAssetSchema>;

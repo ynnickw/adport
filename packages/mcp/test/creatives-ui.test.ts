@@ -109,6 +109,17 @@ describe('creative widget editor', () => {
     } finally { dom.window.close(); }
   });
 
+  it('refreshes signed previews through the same read tool with the original scoped selection, including read-only grants', async () => {
+    const calls: unknown[][] = [], dom = widget(async (...args) => { calls.push(args); return { structuredContent: structuredResult('x_draft_tweets', 'creatives', { creatives: [{ ...creative, media: [{ type: 'image', url: 'https://pbs.twimg.com/fresh.jpg' }] }], truncated: false }, undefined, { project_id: 'project-b' }, { can_write: false }, { arguments: { account_id: 'a1', cursor: 'page-2', count: 10 } }) }; });
+    try {
+      const result = structuredResult('x_draft_tweets', 'creatives', { creatives: [creative], truncated: true }, undefined, { project_id: 'project-b' }, { can_write: false }, { arguments: { account_id: 'a1', cursor: 'page-2', count: 10 } });
+      dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window.parent, data: { jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: result } } }));
+      expect(dom.window.document.querySelector('form')).toBeNull(); (dom.window.document.querySelector('[data-refresh-previews]') as HTMLButtonElement).click(); await new Promise(resolve => setTimeout(resolve, 10));
+      expect(calls).toEqual([['x_draft_tweets', { account_id: 'a1', cursor: 'page-2', count: 10, project_id: 'project-b' }]]); expect(dom.window.document.querySelector('img')?.src).toBe('https://pbs.twimg.com/fresh.jpg'); expect(dom.window.document.querySelector('form')).toBeNull();
+      (dom.window.document.querySelector('[data-refresh-previews]') as HTMLButtonElement).click(); await new Promise(resolve => setTimeout(resolve, 10)); expect(calls).toHaveLength(2); expect((dom.window.document.querySelector('[data-refresh-previews]') as HTMLButtonElement).disabled).toBe(false);
+    } finally { dom.window.close(); }
+  });
+
   it('renders provider-generated X draft media and previews copy without renaming an unnamed draft', async () => {
     const draftId = '994747471329873920', mediaKey = '3_908573900237180928', copy = 'First line\n\nNext line';
     const provider = new XAdsProvider(new XAdsClient({ consumerKey: 'key', consumerSecret: 'secret', accessToken: 'access', accessTokenSecret: 'access-secret' }, async url => {
