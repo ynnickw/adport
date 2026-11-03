@@ -44,6 +44,8 @@ Reddit's `reddit_ads`, `reddit_posts` and `reddit_assets` render native copy/med
 
 LinkedIn's `linkedin_creatives` displays actual text-ad copy and referenced images with bound copy/name/status actions. Activation requires explicit advertiser confirmation through the named status tool. Copy edits preserve omitted fields and verify readback. Referenced sponsored posts remain identified as references when source content is unavailable under the pinned API version. See [LinkedIn setup](providers/linkedin.md) for format and permission limits.
 
+X's `x_draft_tweets` and `x_media_library` show native draft copy and image/GIF/video media. Bound copy/name actions request guarded previews; draft edits preserve omitted attachments and never publish a post. Library metadata is separate from ad delivery. See [X setup](providers/x.md) for author/composer permissions, native draft deletion and the ACTIVE-only promoted-post association constraint.
+
 Microsoft exposes named ad-group, keyword and responsive search ad workflows, including status changes and partial copy/bid updates. Ad-group creation asks for an explicit language. Reads request the optional `AdGroupType` field to verify RSA compatibility. RSA updates retain positional pinning and omit read-only text-asset IDs. Batch failures report successful resource IDs so callers can reconcile partially applied requests before retrying.
 
 Microsoft's normalized `report` supports account, campaign, ad-group and ad levels. `microsoft_keyword_report` and `microsoft_search_term_report` return native CSV fields as strings, including empty or suppressed values. Account ratios use spend/revenue totals even when a caller requests only ROAS. Missing conversion or revenue data is kept unavailable.

@@ -75,7 +75,12 @@ export class XAdsClient {
       throw new AdportError('PROVIDER_ERROR', 'x: provider rejected batch operations; inspect the account before retrying', { resource_ids: ids });
     }
     const parsed = schema.safeParse(body);
-    if (!parsed.success) throw new AdportError('PROVIDER_ERROR', 'x: unexpected API response schema');
+    if (!parsed.success) {
+      const data = method !== 'GET' && /^accounts\/[a-z0-9]+\/(?:draft_tweets|media_library|line_items|campaigns)(?:\/[a-z0-9_]+)?$/.test(path) && body && typeof body === 'object' && 'data' in body ? body.data : undefined;
+      const rows = Array.isArray(data) ? data : data && typeof data === 'object' ? [data] : [];
+      const ids = [...new Set(rows.flatMap(row => row && typeof row === 'object' ? ['id_str', 'id', 'media_key'].flatMap(key => { const value = (row as Record<string, unknown>)[key]; return typeof value === 'string' && /^(?:[a-z0-9]{1,32}|\d{1,3}_[1-9]\d{0,24})$/.test(value) ? [value] : []; }) : []))].slice(0, 500);
+      throw new AdportError('PROVIDER_ERROR', `x: unexpected API response schema${method === 'GET' ? '' : '; write may have succeeded, reconcile before retrying'}`, ids.length ? { resource_ids: ids } : undefined);
+    }
     return parsed.data;
   }
 

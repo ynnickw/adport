@@ -1,6 +1,7 @@
 import { JSDOM } from 'jsdom';
 import { describe, expect, it, vi } from 'vitest';
 import { ADPORT_UI_HTML, structuredResult } from '../src/ui.js';
+import { XAdsClient, XAdsProvider } from '@adport/provider-x';
 
 const creative = {
   id: '33', provider: 'google', account_id: '1234567890', name: '<img src=x onerror=alert(1)>',
@@ -105,6 +106,24 @@ describe('creative widget editor', () => {
       expect(dom.window.document.querySelector('[role="alert"]')?.textContent).toBe('Protected account');
       expect(dom.window.document.querySelector('main')?.textContent).not.toContain('Applied.');
       expect(dom.window.document.querySelector('form button')?.hasAttribute('disabled')).toBe(false);
+    } finally { dom.window.close(); }
+  });
+
+  it('renders provider-generated X draft media and previews copy without renaming an unnamed draft', async () => {
+    const draftId = '994747471329873920', mediaKey = '3_908573900237180928', copy = 'First line\n\nNext line';
+    const provider = new XAdsProvider(new XAdsClient({ consumerKey: 'key', consumerSecret: 'secret', accessToken: 'access', accessTokenSecret: 'access-secret' }, async url => {
+      const path = new URL(String(url)).pathname;
+      return Response.json({ data: path.endsWith('/draft_tweets') ? [{ id: draftId, user_id: '756201191646691328', text: copy, name: null, nullcast: true, card_uri: null, media_keys: [mediaKey] }] : path.endsWith(`/media_library/${mediaKey}`) ? { media_key: mediaKey, media_type: 'IMAGE', media_status: 'TRANSCODE_COMPLETED', media_url: 'https://pbs.twimg.com/media/image.jpg', deleted: false } : { id: 'a1', name: 'Account', timezone: 'UTC', approval_status: 'ACCEPTED', deleted: false }, next_cursor: null });
+    }));
+    const result = await provider.creatives.drafts({ account_id: 'a1' }), calls: unknown[][] = [];
+    const dom = widget(async (...args) => { calls.push(args); return { structuredContent: { status: 'pending_validation', applied: false, pending_operation_id: 'x-pending', preview: { summary: 'Edit native draft', changes: ['No publication'], coercions: [], budgetDeltas: [], serverValidated: false } } }; }, result);
+    try {
+      const document = dom.window.document;
+      expect(document.querySelector('img')?.src).toBe('https://pbs.twimg.com/media/image.jpg');
+      const text = document.querySelector('textarea')!; expect(text.value).toBe(copy); text.value = 'Edited\n\nCopy';
+      document.querySelector('form')!.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true })); await new Promise(resolve => setTimeout(resolve, 10));
+      expect(calls).toEqual([['x_update_draft_tweet', { account_id: 'a1', draft_tweet_id: draftId, project_id: 'project-b', text: 'Edited\n\nCopy' }]]);
+      expect(document.querySelector('main')?.textContent).toContain('Hold to apply'); expect(document.querySelector('main')?.textContent).not.toContain('Applied.');
     } finally { dom.window.close(); }
   });
 });
