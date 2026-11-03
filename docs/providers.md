@@ -106,6 +106,8 @@ For accounts you control, use a Meta Business app with the Marketing API product
 
 System-user tokens are preferred. Extended user tokens normally expire and require re-authorization. App Review and business verification may be required before an app can authorize assets belonging to other businesses.
 
+See [Meta audiences](providers/meta-audiences.md) for empty containers, metadata editing, usage checks, guarded deletion, website rules and lookalikes. Audience previews are local; native permissions and eligibility still apply.
+
 ## TikTok Ads
 
 TikTok supports a sandbox for development; production access requires an approved Business API application.

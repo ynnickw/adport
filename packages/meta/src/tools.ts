@@ -2,6 +2,7 @@ import { defineTool, guardedWriteTool, type AnyToolDefinition } from '@adport/co
 import { z } from 'zod';
 import type { MetaAdsProvider } from './provider.js';
 import { metaCreativeTools } from './creative-tools.js';
+import { metaAudienceTools } from './audiences.js';
 import { apiReadOutput, campaignOutput, campaignsOutput, insightsOutput, pageEngagementOutput, pagesOutput } from './outputs.js';
 
 const statusSchema = z.enum(['ACTIVE', 'PAUSED']);
@@ -29,6 +30,7 @@ const specialAdCategorySchema = z.enum([
 export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
   return [
     ...metaCreativeTools(provider),
+    ...metaAudienceTools(provider),
     defineTool({
       name: 'meta_list_campaigns',
       namespace: 'meta',

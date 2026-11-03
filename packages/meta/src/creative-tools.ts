@@ -22,7 +22,7 @@ export function metaCreativeTools(provider: MetaAdsProvider): AnyToolDefinition[
     defineTool({ name: 'meta_list_ad_sets', namespace: 'meta', description: 'Read full ad-set targeting, delivery, bidding, schedules and budgets in minor currency units.',
       input: z.object({ account_id: account, campaign_id: id.optional(), limit }), output: objects, annotations: { readOnly: true },
       handler: input => provider.creatives.listAdSets(input) }),
-    ...(['images', 'videos', 'custom_audiences', 'pixels'] as const).map(kind => defineTool({
+    ...(['images', 'videos', 'pixels'] as const).map(kind => defineTool({
       name: `meta_list_${kind}`, namespace: 'meta', description: `Read account-owned Meta ${kind.replaceAll('_', ' ')} and their provider configuration.`,
       input: z.object({ account_id: account, limit }), output: kind === 'images' || kind === 'videos' ? objects.extend(creativesOutput.shape) : objects,
       ...(kind === 'images' || kind === 'videos' ? { presentation: 'creatives' as const } : {}), annotations: { readOnly: true },
@@ -56,8 +56,6 @@ export function metaCreativeTools(provider: MetaAdsProvider): AnyToolDefinition[
       z.object({ ad_set_id: id, targeting: z.record(z.string(), z.unknown()).refine(v => Object.keys(v).length > 0, 'Targeting must not be empty') })),
     write('meta_set_ad_set_bidding', 'Edit an account-owned ad set bidding strategy and optional cap/ROAS floor. Bid amounts use minor currency units. Budgets and targeting remain unchanged.',
       z.object({ ad_set_id: id, bid_strategy: z.enum(['LOWEST_COST_WITHOUT_CAP', 'LOWEST_COST_WITH_BID_CAP', 'COST_CAP', 'LOWEST_COST_WITH_MIN_ROAS']), bid_amount: z.number().int().positive().optional(), bid_constraints: z.object({ roas_average_floor: z.number().int().positive() }).optional() })),
-    write('meta_create_custom_audience', 'Create an empty customer-list audience container. Does not upload customer data or attach the audience to delivery.',
-      z.object({ name: z.string().min(1), description: z.string().optional(), customer_file_source: z.enum(['USER_PROVIDED_ONLY', 'PARTNER_PROVIDED_ONLY', 'BOTH_USER_AND_PARTNER_PROVIDED']) }), 'create'),
     write('meta_create_pixel', 'Create a Meta pixel in the selected ad account. Does not install tracking code or send events.', z.object({ name: z.string().min(1) }), 'create'),
     write('meta_upload_image', 'Upload checksum-bound PNG/JPEG image bytes into the selected ad account image library. Hosted calls require media_id; file_path is local-only. Does not publish an ad.',
       z.object({ ...mediaSourceFields }).refine(v => Number(Boolean(v.media_id)) + Number(Boolean(v.file_path)) === 1, 'Choose media_id or file_path'), 'create'),

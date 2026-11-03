@@ -47,7 +47,7 @@ Google's `google_ads` reads real ad copy and serving status. `google_update_resp
 
 Meta's `meta_list_ads` and `meta_list_creatives` return creative content and configuration with visual actions. Meta creative content is immutable: create a replacement with `meta_create_link_creative` or `meta_create_creative`, then attach its ID with `meta_update_ad`. Creating a creative does not replace an existing ad. `meta_create_ad` creates an account-owned ad and respects paused creation. Replacing an active ad's creative preserves its serving status and can trigger review; the preview reports that state.
 
-Meta also exposes ad-set configuration reads, targeting search and estimates, targeting and bidding updates, media library reads/uploads, empty customer-audience creation and pixel creation. Creating a pixel does not install tracking code or send events. Creating an empty audience does not upload customer data. Creative and image deletion are permanent and require their own preview/apply pair.
+Meta also exposes ad-set configuration reads, targeting search and estimates, targeting and bidding updates, media library reads/uploads, audience configuration and pixel creation. Audience tools cover empty customer containers, metadata edits, usage checks, guarded deletion, URL-based website rules and lookalikes; see [Meta audiences](providers/meta-audiences.md) for snapshots and native permission limits. Creating a pixel does not install tracking code or send events. Creating an empty audience does not upload customer data. Creative and image deletion are permanent and require their own preview/apply pair.
 
 Apple ad-group, keyword and ad statuses can be changed with their named status tools. Parent delivery settings remain independent.
 

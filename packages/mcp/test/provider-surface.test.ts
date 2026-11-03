@@ -93,6 +93,11 @@ describe('all-provider shared tool surface', () => {
       expect(scanned.find(tool => tool.name === 'meta_set_campaign_status')?.annotations).toMatchObject({
         readOnlyHint: false, destructiveHint: true, openWorldHint: true,
       });
+      // Unattached audience creation is additive; it still requires the write policy gate.
+      for (const name of ['meta_create_custom_audience', 'meta_create_website_audience', 'meta_create_lookalike_audience']) {
+        expect(scanned.find(tool => tool.name === name)?.annotations, name).toMatchObject({ readOnlyHint: false, destructiveHint: false });
+      }
+      expect(scanned.find(tool => tool.name === 'meta_delete_custom_audience')?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
       for (const tool of scanned) {
         expect(tool.title, tool.name).toBeTruthy();
         expect(tool.description, tool.name).toBeTruthy();
@@ -104,7 +109,7 @@ describe('all-provider shared tool surface', () => {
         });
         expect(tool.inputSchema.type, tool.name).toBe('object');
         expect(tool.name.length, tool.name).toBeLessThanOrEqual(64);
-        if (!tool.annotations?.readOnlyHint) expect(tool.annotations?.destructiveHint, tool.name).toBe(true);
+        if (!tool.annotations?.readOnlyHint) expect(typeof tool.annotations?.destructiveHint, tool.name).toBe('boolean');
       }
     } finally {
       await client.close();

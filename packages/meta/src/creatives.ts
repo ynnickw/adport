@@ -49,10 +49,9 @@ export class MetaCreativeService {
       input.campaign_id ? [{ field: 'campaign.id', operator: 'EQUAL', value: input.campaign_id }] : []);
   }
 
-  async library(kind: 'images' | 'videos' | 'custom_audiences' | 'pixels', input: { account_id: string; limit: number }) {
+  async library(kind: 'images' | 'videos' | 'pixels', input: { account_id: string; limit: number }) {
     const config = {
       images: ['adimages', 'hash,name,url,width,height,status'], videos: ['advideos', 'id,title,description,status,source,picture,length,created_time'],
-      custom_audiences: ['customaudiences', 'id,account_id,name,subtype,description,delivery_status,operation_status,approximate_count_lower_bound,approximate_count_upper_bound'],
       pixels: ['adspixels', 'id,name,last_fired_time'],
     }[kind]!;
     const result = await this.rows(input.account_id, config[0]!, config[1]!, input.limit);
@@ -165,8 +164,6 @@ export class MetaCreativeService {
         }
         return post(text(p.ad_set_id), fields, `Update Meta ad set "${current.name ?? p.ad_set_id}"`, [`~ ${JSON.stringify(op.tool === 'meta_update_targeting' ? current.targeting : { bid_strategy: current.bid_strategy, bid_amount: current.bid_amount, bid_constraints: current.bid_constraints })} → ${JSON.stringify(fields)}`]);
       }
-      case 'meta_create_custom_audience':
-        return post(`act_${account}/customaudiences`, { name: p.name, subtype: 'CUSTOM', customer_file_source: p.customer_file_source, ...(p.description !== undefined ? { description: p.description } : {}) }, `Create empty Meta audience "${p.name}"`, ['+ Empty CUSTOM audience; no customer data uploaded.'], false);
       case 'meta_create_pixel':
         return post(`act_${account}/adspixels`, { name: p.name }, `Create Meta pixel "${p.name}"`, ['+ Pixel container; no tracking code installed and no events sent.'], false);
       case 'meta_upload_image':

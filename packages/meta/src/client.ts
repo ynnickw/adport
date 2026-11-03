@@ -52,6 +52,20 @@ export class MetaGraphClient {
     return this.send<T>(`${path}${query}`, { method: 'GET' });
   }
 
+  /** Keep continuations on the requested edge; never replay a next URL's token or filters. */
+  async getPage<T>(path: string, params: Record<string, string>): Promise<{ rows: T[]; next_cursor?: string }> {
+    const result = await this.get<{ data?: T[]; paging?: { next?: string; cursors?: { after?: string } } }>(path, params);
+    if (!Array.isArray(result.data)) throw new AdportError('PROVIDER_ERROR', 'Meta returned an invalid data page.');
+    if (!result.paging?.next) return { rows: result.data };
+    let next: URL;
+    try { next = new URL(result.paging.next); } catch { throw new AdportError('PROVIDER_ERROR', 'Meta returned an invalid pagination destination.'); }
+    const after = next.searchParams.get('after');
+    if (next.origin !== GRAPH_BASE || next.username || next.password || next.hash || next.pathname !== `/${this.version}/${path}` || !after || after.length > 4096 || /[\u0000-\u001f\u007f]/.test(after) || (result.paging.cursors?.after !== undefined && result.paging.cursors.after !== after)) {
+      throw new AdportError('PROVIDER_ERROR', 'Meta returned an invalid pagination destination or cursor.');
+    }
+    return { rows: result.data, next_cursor: after };
+  }
+
   async post<T>(path: string, fields: Record<string, unknown>): Promise<T> {
     const body = new URLSearchParams();
     for (const [key, value] of Object.entries(fields)) {

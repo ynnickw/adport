@@ -18,6 +18,7 @@ import {
 import { ACCOUNT_STATUS, MetaGraphClient, normalizeAccountId } from './client.js';
 import { campaignOutput } from './outputs.js';
 import { MetaCreativeService } from './creatives.js';
+import { MetaAudienceService } from './audiences.js';
 
 /** Meta budgets are minor currency units (cents); the policy engine speaks micros. */
 export const CENTS_TO_MICROS = 10_000;
@@ -66,11 +67,7 @@ interface MetaPagePostRow {
   comments?: { summary?: { total_count?: number } };
 }
 
-interface WritePlan {
-  summary: string;
-  changes: string[];
-  coercions: string[];
-  budgetDeltas: WritePreview['budgetDeltas'];
+interface WritePlan extends Omit<WritePreview, 'serverValidated'> {
   execute: (validateOnly: boolean) => Promise<string[]>;
   serverValidated?: boolean;
 }
@@ -79,9 +76,11 @@ export class MetaAdsProvider implements AdProvider {
   readonly id = 'meta';
 
   readonly creatives: MetaCreativeService;
+  readonly audiences: MetaAudienceService;
 
   constructor(private readonly client: MetaGraphClient, private readonly selectedPageIds?: ReadonlySet<string>, media?: MediaResolver) {
     this.creatives = new MetaCreativeService(client, () => this.listPages(), media);
+    this.audiences = new MetaAudienceService(client);
   }
 
   capabilities(): ProviderCapabilities {
@@ -310,6 +309,8 @@ export class MetaAdsProvider implements AdProvider {
       coercions: plan.coercions,
       budgetDeltas: plan.budgetDeltas,
       serverValidated,
+      ...(plan.fieldChanges ? { fieldChanges: plan.fieldChanges } : {}),
+      ...(plan.notes ? { notes: plan.notes } : {}),
     };
   }
 
@@ -344,7 +345,7 @@ export class MetaAdsProvider implements AdProvider {
       case 'meta_api_delete':
         return this.planApiDelete(act, payload);
       default:
-        return this.creatives.plan(op, guard);
+        return this.audiences.supports(op.tool) ? this.audiences.plan(op) : this.creatives.plan(op, guard);
     }
   }
 
