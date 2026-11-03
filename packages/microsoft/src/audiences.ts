@@ -124,7 +124,8 @@ export class MicrosoftAudienceService extends MicrosoftNativeService {
           const result = await this.request(account, `${prefix}Criterions/QueryByIds`, { [`${prefix}Id`]: parentId, [`${prefix}CriterionIds`]: null, CriterionType: type });
           if (!Object.hasOwn(result, `${prefix}Criterions`)) throw new AdportError('PROVIDER_ERROR', 'microsoft: audience association response is unavailable; use check is incomplete');
           for (const criterion of rows(result[`${prefix}Criterions`])) {
-            if (nativeId(criterion[`${prefix}Id`]) !== parentId || row(criterion.Criterion).Type !== 'Audience' || row(criterion.Criterion).AudienceType !== type) throw new AdportError('PROVIDER_ERROR', 'microsoft: audience association ownership/type mismatch');
+            // The REST JSON contract says AudienceCriterion; the inherited Type table says Audience.
+            if (nativeId(criterion[`${prefix}Id`]) !== parentId || !['AudienceCriterion', 'Audience'].includes(String(row(criterion.Criterion).Type)) || row(criterion.Criterion).AudienceType !== type) throw new AdportError('PROVIDER_ERROR', 'microsoft: audience association ownership/type mismatch');
             if (ids.includes(nativeId(row(criterion.Criterion).AudienceId)) && criterion.Status !== 'Deleted') associations.push({ campaign_id: campaignId, ...(group ? { ad_group_id: parentId } : {}), criterion });
           }
         }

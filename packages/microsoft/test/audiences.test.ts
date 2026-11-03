@@ -122,7 +122,7 @@ describe('Microsoft account audiences', () => {
 
   it.each(['campaign', 'ad_group', 'combined', 'signal'])('blocks deletion with %s references, including derived similar lists', async kind => {
     const f = fixture(); f.state.audiences.push(existing(), existing('101', { Type: 'SimilarRemarketingList', SourceId: '100' }));
-    const criterion = { Id: '700', Type: kind === 'campaign' ? 'NegativeCampaignCriterion' : 'BiddableAdGroupCriterion', Criterion: { Type: 'Audience', AudienceId: '101', AudienceType: 'SimilarRemarketingList' } };
+    const criterion = { Id: '700', Type: kind === 'campaign' ? 'NegativeCampaignCriterion' : 'BiddableAdGroupCriterion', Criterion: { Type: 'AudienceCriterion', AudienceId: '101', AudienceType: 'SimilarRemarketingList' } };
     if (kind === 'campaign') f.state.associations.push({ ...criterion, CampaignId: '9' });
     if (kind === 'ad_group') f.state.associations.push({ ...criterion, AdGroupId: '90' });
     if (kind === 'combined') f.state.audiences.push(existing('102', { Type: 'CombinedList', CombinationRules: [{ AudienceIds: ['101'], Operator: 'And' }] }));
@@ -163,5 +163,12 @@ describe('Microsoft account audiences', () => {
     const f = fixture(call => call.path === 'Audiences' && call.method === 'PUT' ? { PartialErrors: [] } : undefined);
     f.state.audiences.push(existing()); const current = await f.provider.audiences.get(account, '100', 'RemarketingList');
     await expect(f.provider.applyWrite(op('microsoft_update_remarketing_list', { audience_id: '100', expected_snapshot_hash: current.snapshot_hash, rule: { type: 'CustomEvents', action: { operator: 'Equals', text: 'qa' } } }), guard)).rejects.toMatchObject({ details: { resourceIds: ['100'] } }); expect(writes(f.calls)).toHaveLength(1);
+  });
+
+  it('recognizes both the REST JSON AudienceCriterion discriminator and the inherited table spelling', async () => {
+    for (const Type of ['AudienceCriterion', 'Audience']) {
+      const f = fixture(); f.state.audiences.push(existing()); f.state.associations.push({ Id: '700', CampaignId: '9', Type: 'BiddableCampaignCriterion', Criterion: { Type, AudienceId: '100', AudienceType: 'RemarketingList' } });
+      expect(await f.provider.audiences.usage(account, '100')).toMatchObject({ complete: true, associations: [{ campaign_id: '9', criterion: { Id: '700' } }] });
+    }
   });
 });
