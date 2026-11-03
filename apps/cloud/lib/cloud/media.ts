@@ -180,7 +180,7 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
           const uploaded = await fetch(grant.upload_url, { method: 'PUT', headers: grant.headers, body: bytes, redirect: 'error', signal: AbortSignal.timeout(60_000) });
           if (!uploaded.ok) throw new Error('Storage upload failed');
           await this.finalize(grant.media_id);
-          return { applied: true, resourceIds: [grant.media_id], details: { asset: await this.asset(await this.record(grant.media_id), false) } };
+          return { applied: true, resourceIds: [grant.media_id], details: { media_id: grant.media_id, sha256: metadata.sha256, status: 'ready', asset: await this.asset(await this.record(grant.media_id), false) } };
         } catch { throw new AdportError('PROVIDER_ERROR', 'Media upload was started but completion was not confirmed. Read media_get for this ID; reconcile before preparing another upload.', { media_id: grant.media_id }); }
       } };
     }
@@ -188,7 +188,7 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
     if (row.sha256 !== selected.expected_sha256) throw new AdportError('INVALID_INPUT', 'Media SHA-256 differs from the selected file.');
     if (tool === 'media_finalize_upload') {
       if (row.status !== 'ready') await this.inspectUpload(row);
-      return { ...base, summary: `Verify project media “${row.name}”`, changes: [`~ ${row.id}: ${row.status} → ready; SHA-256 ${row.sha256}`], fieldChanges: [{ field: 'File readiness', before: row.status, after: 'ready' }], notes: ['The stored bytes are decoded and checksum-verified before provider uploads can use them.'], execute: async () => { await this.finalize(row.id); return { applied: true, resourceIds: [row.id], details: { asset: await this.asset(await this.record(row.id), false) } }; } };
+      return { ...base, summary: `Verify project media “${row.name}”`, changes: [`~ ${row.id}: ${row.status} → ready; SHA-256 ${row.sha256}`], fieldChanges: [{ field: 'File readiness', before: row.status, after: 'ready' }], notes: ['The stored bytes are decoded and checksum-verified before provider uploads can use them.'], execute: async () => { await this.finalize(row.id); return { applied: true, resourceIds: [row.id], details: { media_id: row.id, sha256: row.sha256, status: 'ready', asset: await this.asset(await this.record(row.id), false) } }; } };
     }
     const value = tool === 'media_rename' ? mediaWriteSchemas.media_rename.parse(input) : mediaWriteSchemas.media_delete.parse(input);
     if (value.expected_name !== row.name) throw new AdportError('INVALID_INPUT', 'Media name changed. Read the asset and request a fresh preview.');

@@ -120,6 +120,7 @@ describeDatabase('project media signed-upload boundary', () => {
     await expect(call(rt, 'media_upload', { ...input, name: 'other.png', pending_operation_id: preview.pending_operation_id })).rejects.toMatchObject({ code: 'PENDING_MISMATCH' });
     await expect(call(readonly, 'media_upload', input)).rejects.toThrow('tools:write');
     const uploaded = await call(rt, 'media_upload', { ...input, pending_operation_id: preview.pending_operation_id }), media_id = uploaded.result.resourceIds[0];
+    expect(uploaded.result.details).toMatchObject({ media_id, sha256, status: 'ready' });
     expect(uploaded.result.details.asset).toMatchObject({ id: media_id, sha256, status: 'READY', width: 1200, height: 628 });
     const found = await call(rt, 'media_get', { media_id });
     expect(Buffer.from(await (await fetch(found.asset.preview_url)).arrayBuffer()).equals(bytes)).toBe(true);
@@ -148,6 +149,7 @@ describeDatabase('project media signed-upload boundary', () => {
     const preview = await call(rt, 'media_finalize_upload', args);
     expect((await call(rt, 'media_get', { media_id: grant.media_id })).asset.status).toBe('PROCESSING');
     const final = await call(rt, 'media_finalize_upload', { ...args, pending_operation_id: preview.pending_operation_id });
+    expect(final.result.details).toMatchObject({ media_id: grant.media_id, sha256, status: 'ready' });
     expect(final.result.details.asset).toMatchObject({ status: 'READY', sha256, id: grant.media_id });
     expect(Buffer.from((await owner.read(args)).bytes).equals(bytes)).toBe(true);
     const writer = await runtime(0, ['tools:write']);
