@@ -5,7 +5,7 @@ import { canAdminister, requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { getOnboardingState } from '@/lib/cloud/onboarding';
 import { getOrganizationEntitlement } from '@/lib/cloud/plans';
 import { oauthAvailability } from '@/lib/cloud/provider-oauth';
-import { getOrganizationPolicy, listConnections, listOrganizationAdAccounts } from '@/lib/cloud/repository';
+import { listConnections, listOrganizationAdAccounts } from '@/lib/cloud/repository';
 import { OAUTH_PROVIDERS } from '@/lib/cloud/types';
 import { env } from '@/lib/env';
 import type { OAuthProviderView } from '../dashboard/connections/provider-connections';
@@ -24,14 +24,13 @@ export const dynamic = 'force-dynamic';
 
 export default async function OnboardingPage({ searchParams }: { searchParams: Promise<{ connected?: string; accounts_saved?: string; access_enabled?: string; error?: string; return_to?: string; step?: string; resume?: string; selection_id?: string; selection_unavailable?: string }> }) {
   const tenant = await requireDashboardTenant();
-  const [state, connections, accounts, entitlement, params, usage, policy] = await Promise.all([
+  const [state, connections, accounts, entitlement, params, usage] = await Promise.all([
     getOnboardingState(tenant.organizationId),
     listConnections(tenant.organizationId, tenant.userId),
     listOrganizationAdAccounts(tenant.organizationId),
     getOrganizationEntitlement(tenant.organizationId),
     searchParams,
     getOrganizationUsage(tenant.organizationId),
-    getOrganizationPolicy(tenant.organizationId),
   ]);
   const returnTo = safeDashboardReturnPath(params.return_to ?? null);
   if (((state.completedAt || state.skippedAt) && params.resume !== '1') || !canAdminister(tenant)) redirect(returnTo);
@@ -47,7 +46,6 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
       <OnboardingFlow key={tenant.organizationId + ':' + (selection?.id ?? (params.step === 'connect' ? 'connect' : ''))}
         organizationId={tenant.organizationId}
         projectName={tenant.organizationName}
-        policy={policy}
         setupKind={usage.projects > 1 ? 'new_project' : 'first_project'}
         projectSwitcher={<ProjectSwitcher projects={tenant.projects} currentProjectId={tenant.organizationId} />}
         resuming={params.resume === '1'}
