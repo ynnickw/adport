@@ -51,7 +51,7 @@ describe('Microsoft read-only keyword planning', () => {
     ] });
     expect(call.body.IdeaAttributes).toContain('Competition');
     expect(output.rows[0]).toMatchObject({ AdGroupId: '-1', MonthlySearchCounts: ['100', '0', null], SuggestedBid: 1.25 });
-    expect(output).toMatchObject({ returned_count: 1, truncated: false, currency: 'EUR', date_range: { start: '2026-01-01', end: '2026-09-30' } });
+    expect(output).toMatchObject({ returned_count: 1, native_result_count: 1, truncated: false, currency: 'EUR', date_range: { start: '2026-01-01', end: '2026-09-30' } });
   });
 
   it('uses nonexpanding ideas for history and does not invent calendar labels or fill missing metrics', async () => {
@@ -73,13 +73,14 @@ describe('Microsoft read-only keyword planning', () => {
   it('makes truncation explicit without inventing an unsupported continuation', async () => {
     const f = fixture(call => call.path === 'KeywordIdeas/Query' ? { KeywordIdeas: [{ Keyword: 'one' }, { Keyword: 'two' }] } : undefined);
     const output = await f.provider.planning.keywordIdeas({ ...input(), limit: 1 }, true);
-    expect(output).toMatchObject({ rows: [{ Keyword: 'one' }], returned_count: 2, truncated: true }); expect(output).not.toHaveProperty('next_cursor');
+    expect(output).toMatchObject({ rows: [{ Keyword: 'one' }], returned_count: 1, native_result_count: 2, truncated: true }); expect(output).not.toHaveProperty('next_cursor');
   });
 
   it('builds hypothetical traffic estimators in account units without IDs or mutation fields', async () => {
     const f = fixture(), output = await f.provider.planning.trafficEstimates({ ...target, location_ids: [...target.location_ids], max_cpc: 1.5, daily_budget: 20, keywords: [{ text: 'ad tools', match_type: 'Phrase' }, { text: 'paid media', match_type: 'Broad', max_cpc: 2 }], negative_keywords: [{ text: 'free', match_type: 'Exact' }] });
     expect(f.calls.at(-1)!).toMatchObject({ url: 'https://adinsight.api.bingads.microsoft.com/AdInsight/v13/KeywordTrafficEstimates/Query', body: { CampaignEstimators: [{ AdGroupEstimators: [{ MaxCpc: 1.5, KeywordEstimators: [{ Keyword: { Text: 'ad tools', MatchType: 'Phrase' } }, { Keyword: { Text: 'paid media', MatchType: 'Broad' }, MaxCpc: 2 }] }], DailyBudget: 20, NegativeKeywords: [{ Text: 'free', MatchType: 'Exact' }], Criteria: [{ Type: 'LanguageCriterion', Language: 'English' }, { Type: 'NetworkCriterion', Network: target.network }, { Type: 'LocationCriterion', LocationId: '190' }] }] } });
     expect(JSON.stringify(f.calls.at(-1)!.body)).not.toMatch(/CampaignId|AdGroupId|Status/); expect(output.rows[0]).toHaveProperty('AdGroupEstimates');
+    expect(output).toMatchObject({ estimate_period: 'week', deprecated_metrics: ['AveragePosition'] }); expect(output.notes.join(' ')).toContain('2021-03-31');
     expect(f.calls.every(value => !/\/(CampaignManagement|Reporting)\//.test(value.url))).toBe(true);
   });
 
