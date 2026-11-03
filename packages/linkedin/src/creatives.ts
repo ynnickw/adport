@@ -31,11 +31,31 @@ export class LinkedInCreativeService {
   async images(input: { account_id: string; library_status: 'ACTIVE' | 'ARCHIVED'; start: number; count: number }) {
     const account = linkedinId.parse(input.account_id);
     await this.provider.getAccount(account);
-    const data = await this.client.get('images', z.looseObject({ elements: z.array(imageSchema), paging: z.object({ start: z.number().int().nonnegative(), count: z.number().int().nonnegative(), total: z.number().int().nonnegative().optional(), links: z.array(z.looseObject({ rel: z.string() })).optional() }).optional() }), { q: 'associatedAccount', associatedAccount: aurn(account), mediaLibraryStatus: { value: input.library_status }, start: input.start, count: input.count });
-    if (data.elements.some(value => value.mediaLibraryMetadata?.associatedAccount !== aurn(account) || value.mediaLibraryMetadata.mediaLibraryStatus !== input.library_status) || (data.paging && data.paging.start !== input.start)) throw new AdportError('PROVIDER_ERROR', 'linkedin: image library account/status/paging mismatch');
-    const next = Boolean(data.paging?.links?.some(link => link.rel === 'next')) || (data.paging?.total !== undefined ? input.start + data.elements.length < data.paging.total : data.elements.length >= input.count);
+    const { data, next } = await this.libraryPage(account, input.start, input.count, input.library_status);
     const creatives: Creative[] = data.elements.map(value => { const metadata = value.mediaLibraryMetadata!, url = safeUrl(value.downloadUrl); return { id: value.id, provider: 'linkedin', account_id: account, name: String(metadata.assetName ?? value.id), type: 'IMAGE_ASSET', status: value.status, headlines: [], descriptions: [`Media library: ${metadata.mediaLibraryStatus}; native processing: ${value.status}`], landing_urls: [], media: url ? [{ type: 'image', url, ...(value.downloadUrlExpiresAt ? { expires_at: new Date(value.downloadUrlExpiresAt).toISOString() } : {}) }] : [], actions: [{ label: 'Edit image library entry', tool: 'linkedin_update_image', arguments: { account_id: account, image_id: value.id }, fields: [{ key: 'asset_name', label: 'Name', type: 'text', value: String(metadata.assetName ?? '') }, { key: 'library_status', label: 'Library status', type: 'select', value: String(metadata.mediaLibraryStatus), options: [{ label: 'Active in library', value: 'ACTIVE' }, { label: 'Archived in library', value: 'ARCHIVED' }] }] }] }; });
     return { items: data.elements, creatives, truncated: next, ...(next ? { next_start: input.start + data.elements.length } : {}) };
+  }
+  private async libraryPage(account: string, start: number, count: number, status?: 'ACTIVE' | 'ARCHIVED') {
+    const data = await this.client.get('images', z.looseObject({ elements: z.array(imageSchema), paging: z.object({ start: z.number().int().nonnegative(), count: z.number().int().nonnegative(), total: z.number().int().nonnegative().optional(), links: z.array(z.looseObject({ rel: z.string() })).optional() }).optional() }), { q: 'associatedAccount', associatedAccount: aurn(account), ...(status ? { mediaLibraryStatus: { value: status } } : {}), start, count });
+    if (data.elements.length > count || data.elements.some(value => value.mediaLibraryMetadata?.associatedAccount !== aurn(account) || (status && value.mediaLibraryMetadata.mediaLibraryStatus !== status)) || (data.paging && data.paging.start !== start)) throw new AdportError('PROVIDER_ERROR', 'linkedin: image library account/status/paging mismatch');
+    const next = Boolean(data.paging?.links?.some(link => link.rel === 'next')) || (data.paging?.total !== undefined ? start + data.elements.length < data.paging.total : data.elements.length >= count);
+    return { data, next };
+  }
+  /** Account-library membership is its own native authorization surface. */
+  async libraryImage(accountId: string, resource: string) {
+    const account = linkedinId.parse(accountId); imageUrn.parse(resource);
+    await this.provider.getAccount(account);
+    const seen = new Set<string>(); let start = 0;
+    while (start < 5000) {
+      const { data, next } = await this.libraryPage(account, start, 100);
+      if (data.elements.some(value => seen.has(value.id)) || new Set(data.elements.map(value => value.id)).size !== data.elements.length) throw new AdportError('PROVIDER_ERROR', 'linkedin: image-library pagination repeated an image');
+      const found = data.elements.find(value => value.id === resource);
+      if (found) return found;
+      if (!next) throw new AdportError('INVALID_INPUT', 'linkedin: image has no selected-account library metadata');
+      if (!data.elements.length) throw new AdportError('PROVIDER_ERROR', 'linkedin: image-library pagination did not advance');
+      data.elements.forEach(value => seen.add(value.id)); start += data.elements.length;
+    }
+    throw new AdportError('PROVIDER_ERROR', 'linkedin: image-library lookup reached its 5,000-image limit; membership is unconfirmed');
   }
   async list(input: { account_id: string; campaign_ids?: string[]; creative_ids?: string[]; statuses?: string[]; page_size: number; page_token?: string; include_media: boolean }) {
     const account = linkedinId.parse(input.account_id), params: Record<string, RestliValue> = { q: 'criteria', sortOrder: 'ASCENDING', pageSize: input.page_size, ...(input.page_token ? { pageToken: input.page_token } : {}), ...(input.campaign_ids?.length ? { campaigns: input.campaign_ids.map(id => `urn:li:sponsoredCampaign:${linkedinId.parse(id)}`) } : {}), ...(input.creative_ids?.length ? { creatives: input.creative_ids } : {}), intendedStatuses: input.statuses ?? ['ACTIVE', 'PAUSED', 'DRAFT', 'ARCHIVED', 'CANCELED', 'PENDING_DELETION', 'REMOVED'] };
@@ -68,12 +88,12 @@ export class LinkedInCreativeService {
     if (op.tool === 'linkedin_upload_image') {
       const input = uploadImage.parse(p), file = await this.media.read(input, { maxBytes: 50 * 1024 * 1024, contentTypes: ['image/png', 'image/jpeg', 'image/gif'] });
       await this.provider.getAccount(account);
-      return plan('Upload a LinkedIn account image', [`Initialize an account-owned native image and media-library entry; ${file.name}, ${file.bytes.byteLength} bytes; SHA-256 ${file.sha256}. Processing availability requires a later linkedin_get_image read.`], async () => {
+      return plan('Upload a LinkedIn account image', [`Initialize an account-owned native image and media-library entry named ${JSON.stringify(input.name)}; ${file.name}, ${file.bytes.byteLength} bytes; SHA-256 ${file.sha256}. Processing availability requires a later linkedin_get_library_image read.`], async () => {
         const init = await this.client.action('images', 'initializeUpload', { initializeUploadRequest: { owner: aurn(account), mediaLibraryMetadata: { associatedAccount: aurn(account), assetName: input.name } } }, z.object({ value: z.object({ image: imageUrn, uploadUrl: z.string().url(), uploadUrlExpiresAt: z.number().int().positive().safe() }) }));
         const value = init.value;
         try { if (value.uploadUrlExpiresAt <= Date.now()) throw new AdportError('PROVIDER_ERROR', 'linkedin: initialized image upload URL expired'); await this.client.uploadImage(value.uploadUrl, file.bytes); }
         catch (error) { throw new AdportError('PROVIDER_ERROR', error instanceof Error ? error.message : 'linkedin: image transfer failed', { resource_ids: [value.image] }); }
-        return { applied: true, resourceIds: [value.image], details: { next_tool: 'linkedin_get_image', status: 'UPLOAD_ACCEPTED', note: 'Native upload acceptance does not prove processing readiness.' } };
+        return { applied: true, resourceIds: [value.image], details: { next_tool: 'linkedin_get_library_image', status: 'UPLOAD_ACCEPTED', note: 'Native upload acceptance does not prove processing readiness.' } };
       });
     }
     if (op.tool === 'linkedin_create_text_ad') {
@@ -84,11 +104,11 @@ export class LinkedInCreativeService {
       return plan('Create a LinkedIn text ad', [NON_DISCRIMINATION_NOTICE, `Advertiser confirmation: ${NON_POLITICAL_CONSENT}`, JSON.stringify(fields)], async () => { const resource = await this.client.createCreative(`adAccounts/${account}/creatives`, fields); try { if (!matches(await this.owned(account, resource), fields)) throw new Error('settings mismatch'); } catch { throw new AdportError('PROVIDER_ERROR', 'linkedin: created creative readback mismatch; reconcile before retrying', { resource_ids: [resource] }); } return { applied: true, resourceIds: [resource] }; }, status !== input.status ? ['intendedStatus coerced to PAUSED by policy (paused_creation)'] : []);
     }
     if (op.tool === 'linkedin_update_image') {
-      const resource = imageUrn.parse(p.image_id), value = await this.image(account, resource), current = value.mediaLibraryMetadata;
+      const resource = imageUrn.parse(p.image_id), value = await this.libraryImage(account, resource), current = value.mediaLibraryMetadata;
       if (current?.associatedAccount !== aurn(account)) throw new AdportError('INVALID_INPUT', 'linkedin: image has no selected-account library metadata to update');
       const fields = { ...(p.asset_name !== undefined ? { assetName: z.string().trim().min(1).max(200).parse(p.asset_name) } : {}), ...(p.library_status !== undefined ? { mediaLibraryStatus: z.enum(['ACTIVE', 'ARCHIVED']).parse(p.library_status) } : {}) };
       if (!Object.keys(fields).length) throw new AdportError('INVALID_INPUT', 'linkedin: provide image library changes');
-      return plan(`Update LinkedIn image library ${resource}`, [`${JSON.stringify(fields)}; current library ${current.mediaLibraryStatus}, native processing ${value.status}. Image bytes and existing ad delivery remain unchanged.`], async () => { await this.client.partialUpdate(`images/${encodeURIComponent(resource)}`, { mediaLibraryMetadata: { $set: fields } }, { associatedAccount: aurn(account) }); try { if (!matches((await this.image(account, resource)).mediaLibraryMetadata, fields)) throw new Error('metadata mismatch'); } catch { throw new AdportError('PROVIDER_ERROR', 'linkedin: image-library update readback mismatch; reconcile before retrying', { resource_ids: [resource] }); } return { applied: true, resourceIds: [resource] }; });
+      return plan(`Update LinkedIn image library ${resource}`, [`${JSON.stringify(fields)}; current library ${current.mediaLibraryStatus}, native processing ${value.status}. Image bytes and existing ad delivery remain unchanged.`], async () => { await this.client.partialUpdate(`images/${encodeURIComponent(resource)}`, { mediaLibraryMetadata: { $set: fields } }, { associatedAccount: aurn(account) }); try { if (!matches((await this.libraryImage(account, resource)).mediaLibraryMetadata, fields)) throw new Error('metadata mismatch'); } catch { throw new AdportError('PROVIDER_ERROR', 'linkedin: image-library update readback mismatch; reconcile before retrying', { resource_ids: [resource] }); } return { applied: true, resourceIds: [resource] }; });
     }
     const resource = creativeUrn.parse(p.creative_id), current = await this.owned(account, resource), path = `adAccounts/${account}/creatives/${encodeURIComponent(resource)}`;
     if (['REMOVED', 'PENDING_DELETION', 'CANCELED'].includes(current.intendedStatus)) throw new AdportError('INVALID_INPUT', 'linkedin: creative is already removed, canceled or pending deletion');

@@ -28,7 +28,7 @@ function fixture(handler?: (call: Call) => unknown, media?: MediaResolver) {
     const custom = handler?.(call); if (custom !== undefined) return custom instanceof Response ? custom : Response.json(custom);
     const nativePath = decodeURIComponent(call.url.pathname).replace('/rest/', '');
     if (init.method === 'GET') {
-      const values: Record<string, unknown> = { [`adAccounts/${A}`]: account, [`adAccounts/${A}/adCampaigns/${C}`]: campaign, [`adAccounts/${A}/creatives/${U}`]: current, [`adAccounts/${A}/creatives`]: { elements: [current] }, [`images/${I}`]: image };
+      const values: Record<string, unknown> = { [`adAccounts/${A}`]: account, [`adAccounts/${A}/adCampaigns/${C}`]: campaign, [`adAccounts/${A}/creatives/${U}`]: current, [`adAccounts/${A}/creatives`]: { elements: [current] }, images: { elements: [] }, [`images/${I}`]: image };
       if (values[nativePath]) return Response.json(values[nativePath]);
     }
     if (init.method === 'POST' && nativePath === `adAccounts/${A}/creatives`) { current = { ...current, ...body(call) }; return new Response(null, { status: 201, headers: { 'x-restli-id': encodeURIComponent(U) } }); }
@@ -112,8 +112,8 @@ describe('LinkedIn checksum-bound image transfer', () => {
   const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), sha256 = createHash('sha256').update(bytes).digest('hex'), input = { name: 'QA image', media_id: '00000000-0000-4000-8000-000000000001', expected_sha256: sha256 };
   const media: MediaResolver = { read: async (source, options) => verifyMedia(bytes, 'qa.png', source.expected_sha256, options) };
   it('initializes only on apply, binds the account library, transfers exact bytes and leaves readiness for a later read', async () => {
-    const { provider, calls } = fixture(undefined, media), operation = op('linkedin_upload_image', input, 'create'); await provider.previewWrite(operation, guard); expect(writes(calls)).toEqual([]);
-    expect(await provider.applyWrite(operation, guard)).toMatchObject({ resourceIds: [I], details: { status: 'UPLOAD_ACCEPTED', next_tool: 'linkedin_get_image' } }); const [init, transfer] = writes(calls); expect(init!.url.searchParams.get('action')).toBe('initializeUpload'); expect(body(init!)).toEqual({ initializeUploadRequest: { owner: AU, mediaLibraryMetadata: { associatedAccount: AU, assetName: 'QA image' } } }); expect(transfer!.init.body).toEqual(bytes); expect(transfer!.init.redirect).toBe('error'); expect(transfer!.init.headers).toMatchObject({ authorization: 'Bearer private-access', 'content-type': 'application/octet-stream' });
+    const { provider, calls } = fixture(undefined, media), operation = op('linkedin_upload_image', input, 'create'); const preview = await provider.previewWrite(operation, guard); expect(writes(calls)).toEqual([]); expect(preview.changes[0]).toContain('named "QA image"');
+    expect(await provider.applyWrite(operation, guard)).toMatchObject({ resourceIds: [I], details: { status: 'UPLOAD_ACCEPTED', next_tool: 'linkedin_get_library_image' } }); const [init, transfer] = writes(calls); expect(init!.url.searchParams.get('action')).toBe('initializeUpload'); expect(body(init!)).toEqual({ initializeUploadRequest: { owner: AU, mediaLibraryMetadata: { associatedAccount: AU, assetName: 'QA image' } } }); expect(transfer!.init.body).toEqual(bytes); expect(transfer!.init.redirect).toBe('error'); expect(transfer!.init.headers).toMatchObject({ authorization: 'Bearer private-access', 'content-type': 'application/octet-stream' });
   });
   it.each(['https://evil.example/dms-uploads/file', 'https://www.linkedin.com/not-an-upload', 'https://www.linkedin.com/dms-uploads/file#fragment'])('rejects unsafe upload destination %s without sending bytes or a bearer token', async uploadUrl => {
     const { provider, calls } = fixture(call => call.init.method === 'POST' ? { value: { image: I, uploadUrl, uploadUrlExpiresAt: Date.now() + 60_000 } } : undefined, media); await expect(provider.applyWrite(op('linkedin_upload_image', input, 'create'), guard)).rejects.toMatchObject({ details: { resource_ids: [I] } }); expect(calls.filter(call => call.init.method === 'PUT')).toEqual([]);
@@ -133,19 +133,42 @@ describe('LinkedIn native image library', () => {
   it('updates nested library metadata with an account-bound native partial patch and readback', async () => {
     let current = structuredClone(libraryImage);
     const { provider, calls } = fixture(call => {
+      if (call.url.pathname === '/rest/images' && call.init.method === 'GET') return { elements: [current] };
       if (call.url.pathname.startsWith('/rest/images/')) {
         if (call.init.method === 'POST') { current = { ...current, mediaLibraryMetadata: { ...current.mediaLibraryMetadata, ...body(call).patch.mediaLibraryMetadata.$set } }; return new Response(null, { status: 204 }); }
-        return current;
+        return new Response(null, { status: 403 });
       }
     });
     const operation = op('linkedin_update_image', { image_id: I, asset_name: 'Renamed', library_status: 'ARCHIVED' }); const preview = await provider.previewWrite(operation, guard); expect(preview.changes[0]).toContain('existing ad delivery remain unchanged'); expect(writes(calls)).toEqual([]);
     expect(await provider.applyWrite(operation, guard)).toMatchObject({ applied: true, resourceIds: [I] }); const request = writes(calls)[0]!; expect(request.url.pathname).toBe(`/rest/images/${encodeURIComponent(I)}`); expect(request.url.searchParams.get('associatedAccount')).toBe(AU); expect(request.init.headers).toMatchObject({ 'X-RestLi-Method': 'PARTIAL_UPDATE' }); expect(body(request)).toEqual({ patch: { mediaLibraryMetadata: { $set: { assetName: 'Renamed', mediaLibraryStatus: 'ARCHIVED' } } } }); expect(writes(calls)).toHaveLength(1);
+    expect(calls.some(call => call.init.method === 'GET' && call.url.pathname.startsWith('/rest/images/'))).toBe(false);
   });
   it('rejects foreign library membership and does not treat an unregistered owned image as editable metadata', async () => {
     const foreign = fixture(call => call.url.pathname === '/rest/images' ? { elements: [{ ...libraryImage, mediaLibraryMetadata: { ...libraryImage.mediaLibraryMetadata, associatedAccount: 'urn:li:sponsoredAccount:999' } }] } : undefined); await expect(foreign.provider.creatives.images({ account_id: A, library_status: 'ACTIVE', start: 0, count: 20 })).rejects.toThrow('account/status/paging mismatch');
     const { provider, calls } = fixture(); await expect(provider.previewWrite(op('linkedin_update_image', { image_id: I, asset_name: 'No library entry' }), guard)).rejects.toThrow('no selected-account library metadata'); expect(writes(calls)).toEqual([]);
   });
   it('retains the native image ID when an accepted library edit does not match readback', async () => {
-    const { provider } = fixture(call => call.url.pathname.startsWith('/rest/images/') ? call.init.method === 'POST' ? new Response(null, { status: 204 }) : libraryImage : undefined); await expect(provider.applyWrite(op('linkedin_update_image', { image_id: I, asset_name: 'Changed' }), guard)).rejects.toMatchObject({ details: { resource_ids: [I] } });
+    const { provider } = fixture(call => call.url.pathname === '/rest/images' ? { elements: [libraryImage] } : call.url.pathname.startsWith('/rest/images/') && call.init.method === 'POST' ? new Response(null, { status: 204 }) : undefined); await expect(provider.applyWrite(op('linkedin_update_image', { image_id: I, asset_name: 'Changed' }), guard)).rejects.toMatchObject({ details: { resource_ids: [I] } });
+  });
+
+  it('finds an exact archived library image on a later native offset page without requesting its global endpoint', async () => {
+    const other = { ...libraryImage, id: 'urn:li:image:another' };
+    const { provider, calls } = fixture(call => call.url.pathname === '/rest/images'
+      ? call.url.searchParams.get('start') === '0' ? { elements: [other], paging: { start: 0, count: 100, links: [{ rel: 'next' }] } } : { elements: [{ ...libraryImage, mediaLibraryMetadata: { ...libraryImage.mediaLibraryMetadata, mediaLibraryStatus: 'ARCHIVED' } }], paging: { start: 1, count: 100 } }
+      : undefined);
+    expect(await provider.creatives.libraryImage(A, I)).toMatchObject({ id: I, mediaLibraryMetadata: { associatedAccount: AU, mediaLibraryStatus: 'ARCHIVED' } });
+    const pages = calls.filter(call => call.url.pathname === '/rest/images');
+    expect(pages.map(call => call.url.searchParams.get('start'))).toEqual(['0', '1']);
+    expect(pages.every(call => call.url.searchParams.get('associatedAccount') === AU && !call.url.searchParams.has('mediaLibraryStatus'))).toBe(true);
+    expect(calls.some(call => call.url.pathname.startsWith('/rest/images/'))).toBe(false);
+  });
+
+  it('rejects cyclic library pages and incomplete membership at the lookup ceiling', async () => {
+    const cyclic = fixture(call => call.url.pathname === '/rest/images' ? { elements: [{ ...libraryImage, id: 'urn:li:image:another' }], paging: { start: Number(call.url.searchParams.get('start')), count: 100, links: [{ rel: 'next' }] } } : undefined);
+    await expect(cyclic.provider.creatives.libraryImage(A, I)).rejects.toThrow('repeated an image');
+    const capped = fixture(call => call.url.pathname === '/rest/images' ? { elements: Array.from({ length: 100 }, (_, index) => ({ ...libraryImage, id: `urn:li:image:page${call.url.searchParams.get('start')}_${index}` })), paging: { start: Number(call.url.searchParams.get('start')), count: 100, links: [{ rel: 'next' }] } } : undefined);
+    await expect(capped.provider.creatives.libraryImage(A, I)).rejects.toThrow('5,000-image limit');
+    expect(capped.calls.filter(call => call.url.pathname === '/rest/images')).toHaveLength(50);
+    expect(writes(capped.calls)).toEqual([]);
   });
 });
