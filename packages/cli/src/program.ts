@@ -71,7 +71,8 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
           defs.map((t) => ({
             name: t.name,
             namespace: t.namespace,
-            mode: t.annotations.readOnly ? 'read' : t.annotations.destructive ? 'DESTRUCTIVE' : 'write',
+            mode: t.annotations.readOnly ? 'read' : 'write',
+            risk: t.annotations.destructive ? 'may modify existing data' : '-',
           })),
         ),
       );
