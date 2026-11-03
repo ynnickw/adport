@@ -15,6 +15,7 @@ export function ConsentView({ clientName, redirectHost, scopes, projects, defaul
   hidden: Array<[string, string]>;
 }) {
   const organizations = [...new Set(projects.map(project => project.organizationId))];
+  const defaultProject = projects.find(project => project.id === defaultProjectId) ?? projects[0];
   const options = organizations.flatMap(id => {
     const members = projects.filter(project => project.organizationId === id);
     return [
@@ -41,7 +42,7 @@ export function ConsentView({ clientName, redirectHost, scopes, projects, defaul
         {hidden.map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
         <div className="field">
           <span className="field-label" id="consent-project-label">Project</span>
-          <Select name="project_id" aria-label="Project" options={options} defaultValue={projects.some(project => project.id === defaultProjectId) ? defaultProjectId : projects[0]?.id} required />
+          <Select name="project_id" aria-label="Project" options={options} defaultValue={defaultProject ? `all:${defaultProject.organizationId}` : undefined} required />
           <span className="field-hint">All projects includes current and future projects you can access in that organization. New platforms become available when you connect them and enable their accounts.</span>
         </div>
         <p className="consent-return"><PiArrowSquareOut aria-hidden="true" /><span>Returns to <strong>{redirectHost}</strong>. Only continue if you started this connection there.</span></p>
