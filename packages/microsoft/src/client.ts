@@ -20,10 +20,11 @@ function hosts(sandbox: boolean) {
     campaign: `https://campaign.api${infix}.bingads.microsoft.com/CampaignManagement/v13`,
     customer: `https://clientcenter.api${infix}.bingads.microsoft.com/CustomerManagement/v13`,
     reporting: `https://reporting.api${infix}.bingads.microsoft.com/Reporting/v13`,
+    adinsight: `https://adinsight.api${infix}.bingads.microsoft.com/AdInsight/v13`,
   };
 }
 
-export type MicrosoftService = 'campaign' | 'customer' | 'reporting';
+export type MicrosoftService = 'campaign' | 'customer' | 'reporting' | 'adinsight';
 
 export interface RequestScope {
   /** Manager account (customer) id header. */

@@ -26,6 +26,7 @@ import { MicrosoftExtensionService, MICROSOFT_EXTENSION_WRITES } from './extensi
 import { MicrosoftTargetingService, MICROSOFT_TARGETING_WRITES } from './targeting.js';
 import { MicrosoftNegativeKeywordService, MICROSOFT_NEGATIVE_KEYWORD_WRITES } from './negative-keywords.js';
 import { MicrosoftBudgetService, MICROSOFT_BUDGET_WRITES } from './budgets.js';
+import { MicrosoftPlanningService } from './planning.js';
 
 /** DailyBudget is a double in whole account-currency units. */
 export const UNITS_TO_MICROS = 1_000_000;
@@ -60,6 +61,7 @@ export class MicrosoftAdsProvider implements AdProvider {
   readonly targeting: MicrosoftTargetingService;
   readonly negativeKeywords: MicrosoftNegativeKeywordService;
   readonly budgets: MicrosoftBudgetService;
+  readonly planning: MicrosoftPlanningService;
 
   constructor(
     private readonly client: MicrosoftAdsClient,
@@ -72,6 +74,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     this.targeting = new MicrosoftTargetingService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign));
     this.negativeKeywords = new MicrosoftNegativeKeywordService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign));
     this.budgets = new MicrosoftBudgetService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign), account => this.listCampaigns(account), async account => { await this.scopeFor(account); return this.currencies.get(account); });
+    this.planning = new MicrosoftPlanningService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign), account => this.currencies.get(account));
   }
 
   capabilities(): ProviderCapabilities {

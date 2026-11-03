@@ -7,6 +7,7 @@ import { microsoftExtensionTools } from './extensions.js';
 import { microsoftTargetingTools } from './targeting.js';
 import { microsoftNegativeKeywordTools } from './negative-keywords.js';
 import { microsoftBudgetTools } from './budgets.js';
+import { microsoftPlanningTools } from './planning.js';
 
 const statusSchema = z.enum(['Active', 'Paused']);
 
@@ -18,6 +19,7 @@ export function microsoftTools(provider: MicrosoftAdsProvider): AnyToolDefinitio
     ...microsoftTargetingTools(provider),
     ...microsoftNegativeKeywordTools(provider),
     ...microsoftBudgetTools(provider),
+    ...microsoftPlanningTools(provider),
     ...(['keyword', 'search_term'] as const).map(kind => defineTool({
       name: `microsoft_${kind}_report`, namespace: 'microsoft',
       description: `Read the native Microsoft ${kind.replace('_', ' ')} performance report through Submit/Poll/CSV. Native numeric values remain strings; empty or unavailable values are preserved.`,
@@ -32,7 +34,7 @@ export function microsoftTools(provider: MicrosoftAdsProvider): AnyToolDefinitio
         'Call any documented Microsoft Advertising v13 query, search, get, or reporting submit/poll operation with selected-account headers.',
       input: z.object({
         account_id: z.string(),
-        service: z.enum(['campaign', 'customer', 'reporting']),
+        service: z.enum(['campaign', 'customer', 'reporting', 'adinsight']),
         path: z.string().min(3).describe('REST operation path, e.g. AdGroups/QueryByCampaignId or GenerateReport/Submit'),
         body: z.record(z.string(), z.unknown()).optional(),
       }),

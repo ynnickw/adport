@@ -1,6 +1,6 @@
 import { AdportError, type WritePreview } from '@adport/core';
 import { z } from 'zod';
-import { MicrosoftAdsClient, type RequestScope } from './client.js';
+import { MicrosoftAdsClient, type MicrosoftService, type RequestScope } from './client.js';
 
 export type MicrosoftRow = Record<string, unknown>;
 export type MicrosoftPlan = Omit<WritePreview, 'serverValidated'> & { execute: () => Promise<string[]> };
@@ -30,11 +30,11 @@ function compactErrors(errors: unknown[]): MicrosoftRow[] {
 export class MicrosoftNativeService {
   constructor(protected readonly client: MicrosoftAdsClient, private readonly scope: (account: string) => Promise<RequestScope>, private readonly lookupCampaign: (account: string, campaign: string) => Promise<unknown>) {}
 
-  protected async request(account: string, path: string, body: MicrosoftRow, method: 'POST' | 'PUT' | 'DELETE' = 'POST'): Promise<MicrosoftRow> {
+  protected async request(account: string, path: string, body: MicrosoftRow, method: 'POST' | 'PUT' | 'DELETE' = 'POST', service: MicrosoftService = 'campaign'): Promise<MicrosoftRow> {
     microsoftId.parse(account);
     const scope = await this.scope(account);
     if (!scope.customerId || scope.customerAccountId !== account) throw new AdportError('INVALID_INPUT', 'microsoft: selected account ownership could not be verified');
-    const result = await this.client.request<MicrosoftRow>('campaign', method, path, body, scope);
+    const result = await this.client.request<MicrosoftRow>(service, method, path, body, scope);
     const errors = ['PartialErrors', 'NestedPartialErrors'].flatMap(key => {
       if (result[key] === undefined || result[key] === null) return [];
       if (!Array.isArray(result[key])) throw new AdportError('PROVIDER_ERROR', 'microsoft: malformed native error receipt');

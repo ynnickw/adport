@@ -34,8 +34,16 @@ Assignment compares the campaign's current effective daily limit with the destin
 
 Generic API writes reject shared-budget resources and references, so their monetary and membership checks cannot be bypassed. Native partial failures or uncertain readbacks must be reconciled before retrying; a returned resource ID is not permission to repeat a creation.
 
+## Keyword planning
+
+`microsoft_keyword_ideas` and `microsoft_keyword_historical_metrics` use Ad Insight's native `KeywordIdeas/Query` operation with expanding or nonexpanding seeds. Supply English, French or German, native location IDs, and a supported search network. Ideas accept keyword, HTTPS URL or known native category seeds; history requires keywords. The native category-catalog endpoint returned `UnsupportedEndpoint` as deprecated during live verification, so no typed category lookup is advertised.
+
+Monthly counts remain native, newest-first, including strings and missing values. Supply an explicit `date_range` to identify the calendar period. Without it, the latest available month can lag by up to 72 hours. `returned_count` and `truncated` describe the actual returned collection; Microsoft currently caps it at 3,000 and supplies no continuation cursor. Missing metrics remain unavailable.
+
+`microsoft_keyword_traffic_estimates` accepts hypothetical Phrase/Broad keywords, a default maximum CPC with optional keyword overrides, language/location/network criteria, and optional daily budget and exclusions. It returns native minimum/maximum estimates. Currency is reported when known. These requests create no resources and change no campaign settings; estimates are not observed results or performance guarantees.
+
 ## Coverage limits
 
-These workflows do not represent the entire Microsoft API. Shared negative-keyword lists, additional extension formats, ad-group targeting, planning, conversion goals, offline conversions, audience management and experiments require their own implementations. Platform eligibility and the connection's native permissions still apply.
+These workflows do not represent the entire Microsoft API. Shared negative-keyword lists, additional extension formats, ad-group targeting, broader planning/recommendation APIs, conversion goals, offline conversions, audience management and experiments require their own implementations. Platform eligibility and the connection's native permissions still apply.
 
 Contracts are checked against the official [Microsoft Advertising API documentation](https://learn.microsoft.com/en-us/advertising/guides/?view=bingads-13), including [Budget](https://learn.microsoft.com/en-us/advertising/campaign-management-service/budget?view=bingads-13), [Campaign](https://learn.microsoft.com/en-us/advertising/campaign-management-service/campaign?view=bingads-13) and [GetCampaignsByAccountId](https://learn.microsoft.com/en-us/advertising/campaign-management-service/getcampaignsbyaccountid?view=bingads-13).
