@@ -66,7 +66,10 @@ export class LinkedInAdsClient {
     return id;
   }
   async update(path: string, fields: Record<string, unknown>): Promise<void> {
-    const response = await this.request(path, 'POST', {}, { patch: { $set: fields } }, true);
+    await this.partialUpdate(path, { $set: fields });
+  }
+  async partialUpdate(path: string, patch: Record<string, unknown>, params: Record<string, RestliValue> = {}): Promise<void> {
+    const response = await this.request(path, 'POST', params, { patch }, true);
     if (response.status !== 204) throw new AdportError('PROVIDER_ERROR', 'linkedin: partial update did not return 204; inspect the account before retrying');
   }
   async createCreative(path: string, body: unknown): Promise<string> {

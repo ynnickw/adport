@@ -123,3 +123,29 @@ describe('LinkedIn checksum-bound image transfer', () => {
     await expect(provider.applyWrite(op('linkedin_upload_image', input, 'create'), guard)).rejects.toMatchObject({ details: { resource_ids: [I] } }); expect(calls.filter(call => call.init.method === 'PUT')).toHaveLength(1);
   });
 });
+
+describe('LinkedIn native image library', () => {
+  const libraryImage = { ...image, owner: 'urn:li:organization:5583111', mediaLibraryMetadata: { associatedAccount: AU, assetName: 'Native library image', mediaLibraryStatus: 'ACTIVE' } };
+  it('uses the associatedAccount finder and renders native processing/ownership/name', async () => {
+    const { provider, calls } = fixture(call => call.url.pathname === '/rest/images' ? { elements: [libraryImage], paging: { start: 0, count: 1, links: [{ rel: 'next', href: 'https://api.linkedin.com/rest/images?ignored=true' }] } } : undefined);
+    const result = await provider.creatives.images({ account_id: A, library_status: 'ACTIVE', start: 0, count: 1 }); expect(creativesOutput.safeParse(result).success).toBe(true); expect(result.next_start).toBe(1); expect(result.creatives[0]).toMatchObject({ name: 'Native library image', type: 'IMAGE_ASSET', status: 'AVAILABLE', media: [{ type: 'image', url: image.downloadUrl }] }); expect(Object.fromEntries(calls.at(-1)!.url.searchParams)).toMatchObject({ q: 'associatedAccount', associatedAccount: AU, mediaLibraryStatus: '(value:ACTIVE)', start: '0', count: '1' });
+  });
+  it('updates nested library metadata with an account-bound native partial patch and readback', async () => {
+    let current = structuredClone(libraryImage);
+    const { provider, calls } = fixture(call => {
+      if (call.url.pathname.startsWith('/rest/images/')) {
+        if (call.init.method === 'POST') { current = { ...current, mediaLibraryMetadata: { ...current.mediaLibraryMetadata, ...body(call).patch.mediaLibraryMetadata.$set } }; return new Response(null, { status: 204 }); }
+        return current;
+      }
+    });
+    const operation = op('linkedin_update_image', { image_id: I, asset_name: 'Renamed', library_status: 'ARCHIVED' }); const preview = await provider.previewWrite(operation, guard); expect(preview.changes[0]).toContain('existing ad delivery remain unchanged'); expect(writes(calls)).toEqual([]);
+    expect(await provider.applyWrite(operation, guard)).toMatchObject({ applied: true, resourceIds: [I] }); const request = writes(calls)[0]!; expect(request.url.pathname).toBe(`/rest/images/${encodeURIComponent(I)}`); expect(request.url.searchParams.get('associatedAccount')).toBe(AU); expect(request.init.headers).toMatchObject({ 'X-RestLi-Method': 'PARTIAL_UPDATE' }); expect(body(request)).toEqual({ patch: { mediaLibraryMetadata: { $set: { assetName: 'Renamed', mediaLibraryStatus: 'ARCHIVED' } } } }); expect(writes(calls)).toHaveLength(1);
+  });
+  it('rejects foreign library membership and does not treat an unregistered owned image as editable metadata', async () => {
+    const foreign = fixture(call => call.url.pathname === '/rest/images' ? { elements: [{ ...libraryImage, mediaLibraryMetadata: { ...libraryImage.mediaLibraryMetadata, associatedAccount: 'urn:li:sponsoredAccount:999' } }] } : undefined); await expect(foreign.provider.creatives.images({ account_id: A, library_status: 'ACTIVE', start: 0, count: 20 })).rejects.toThrow('account/status/paging mismatch');
+    const { provider, calls } = fixture(); await expect(provider.previewWrite(op('linkedin_update_image', { image_id: I, asset_name: 'No library entry' }), guard)).rejects.toThrow('no selected-account library metadata'); expect(writes(calls)).toEqual([]);
+  });
+  it('retains the native image ID when an accepted library edit does not match readback', async () => {
+    const { provider } = fixture(call => call.url.pathname.startsWith('/rest/images/') ? call.init.method === 'POST' ? new Response(null, { status: 204 }) : libraryImage : undefined); await expect(provider.applyWrite(op('linkedin_update_image', { image_id: I, asset_name: 'Changed' }), guard)).rejects.toMatchObject({ details: { resource_ids: [I] } });
+  });
+});
