@@ -490,20 +490,39 @@ describe('shipped MCP iframe', () => {
   });
 
   it('uses the native ChatGPT bridge without dispatching a duplicate write and renders text-only results', async () => {
-    const calls: unknown[] = [];
+    const calls: unknown[] = [], states: unknown[] = [];
     const ui = widget({ callTool: async (...args: unknown[]) => {
       calls.push(args);
-      return { content: [{ type: 'text', text: JSON.stringify({ status: 'applied', applied: true, preview: { summary: 'Done' } }) }] };
-    } });
+      return { content: [{ type: 'text', text: JSON.stringify({ status: 'applied', applied: true, preview: { summary: 'Done' }, result: { resourceIds: ['campaign-1'] } }) }] };
+    }, setWidgetState: (value: unknown) => { states.push(value); throw new Error('Context update unavailable'); } });
     ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('google_create_campaign', 'operation', {
       pending_operation_id: 'native', preview: { summary: 'Create paused campaign' },
-    }, { arguments: { account_id: '123', name: 'Paused test' } }) } });
+    }, { arguments: { account_id: '123', project_id: 'project-b', name: 'Paused test' } }) } });
     ui.approvals[0]!.click();
     for (let i = 0; i < 10; i++) await Promise.resolve();
-    expect(calls).toEqual([['google_create_campaign', { account_id: '123', name: 'Paused test', pending_operation_id: 'native' }]]);
+    expect(calls).toEqual([['google_create_campaign', { account_id: '123', project_id: 'project-b', name: 'Paused test', pending_operation_id: 'native' }]]);
     expect(ui.sent).not.toContainEqual(expect.objectContaining({ method: 'tools/call' }));
     expect(ui.app.innerHTML).toContain('Applied. Done');
+    expect(ui.app.innerHTML).toContain('Resource: campaign-1');
     expect(ui.app.innerHTML).not.toContain('Applying…');
+    expect(states).toEqual([{ lastOperation: { tool: 'google_create_campaign', status: 'applied', project_id: 'project-b', account_id: '123', resource_ids: ['campaign-1'] } }]);
+  });
+
+  it('shares confirmed IDs and async receipts through standard host context without a consumed apply token', async () => {
+    const ui = widget();
+    const original = { structuredContent: structuredResult('media_list', 'creatives', { creatives: [], truncated: false }) };
+    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: original });
+    const pending = { structuredContent: structuredResult('x_upload_media', 'operation', { status: 'pending_validation', applied: false, pending_operation_id: 'consumed-token', preview: { summary: 'Upload QA image' } }, { arguments: { account_id: 'a1', project_id: 'project-b' } }) };
+    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: pending });
+    ui.approvals[0]!.click(); const request = ui.sent.at(-1) as { id: number };
+    ui.message({ jsonrpc: '2.0', id: request.id, result: { structuredContent: { status: 'applied', applied: true, result: { resourceIds: ['3_123'], details: { next_tool: 'x_media_upload_status', resource_receipt: 'signed-resource-proof' } }, preview: { summary: 'Upload finalized' } } } });
+    for (let i = 0; i < 3; i++) await Promise.resolve();
+    expect(ui.app.innerHTML).toContain('Resource: 3_123');
+    const context = ui.sent.find((value: any) => value.method === 'ui/update-model-context');
+    expect(context).toMatchObject({ params: { structuredContent: { adport_operation: { tool: 'x_upload_media', status: 'applied', project_id: 'project-b', account_id: 'a1', resource_ids: ['3_123'], next_tool: 'x_media_upload_status', resource_receipt: 'signed-resource-proof' } } } });
+    expect(JSON.stringify(context)).not.toContain('consumed-token'); expect(ui.sent.filter((value: any) => value.method === 'tools/call')).toHaveLength(1);
+    for (const stale of [pending,original]) ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: stale });
+    expect(ui.app.innerHTML).toContain('Applied. Upload finalized'); expect(ui.app.innerHTML).toContain('Resource: 3_123'); expect(ui.app.innerHTML).not.toContain('Hold to apply');
   });
 
   it('cancels a released hold and applies once after a completed keyboard hold', () => {

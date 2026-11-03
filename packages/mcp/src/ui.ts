@@ -189,7 +189,8 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
   <script>
   (() => {
     const app = document.getElementById('app');
-    const state = { host: {}, result: null, reportGroup: null, reportMetric: 'spend', approving: false, approvalError: '', previewing: false, refreshing: false, creativeError: '' };
+    const state = { host: {}, result: null, reportGroup: null, reportMetric: 'spend', approving: false, approvalError: '', previewing: false, refreshing: false, creativeError: '', hasLocalResult: false };
+    const hostResults=new Set();
     const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const arr = (value) => Array.isArray(value) ? value : [];
     const num = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
@@ -263,6 +264,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     function renderOperation(data, meta) {
       if (meta.tool === 'recommendation_apply' && data.result) data = data.result;
       const preview = data.preview || {}, pending = data.pending_operation_id, applied = data.status === 'applied' || data.applied === true;
+      const resources=arr(data.result?.resourceIds).filter(value=>typeof value==='string');
       const changes = arr(preview.changes), coercions = arr(preview.coercions), deltas = arr(preview.budgetDeltas);
       // Review amounts must preserve micros; rounded report totals are not suitable for consent.
       const comparisons=deltas.map(v=>{const currency=currencyOf(v);return {label:(v.target || 'Budget')+(currency?' · '+currency:' (account units)'),before:available(v.fromMicros)?money(v.fromMicros/1e6,currency,6):'—',after:available(v.toMicros)?money(v.toMicros/1e6,currency,6):'—'};});
@@ -292,7 +294,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       const approval=meta.approval;
       const canApprove=typeof pending==='string' && pending.length>0 && typeof preview.summary==='string' && preview.summary.trim() && approval?.arguments && typeof approval.arguments==='object' && !Array.isArray(approval.arguments) && typeof meta.tool==='string';
       const action=canApprove?'<div class="approval"><button class="approve" data-approve="true" aria-label="Hold to approve and apply" '+(state.approving || state.approvalError?'disabled':'')+'>'+(state.approving?'Applying…':state.approvalError?'Check result in chat':'Hold to apply')+'</button><span class="context">Hold for 0.9s · release to cancel. Expires '+esc(data.expires_at || 'soon')+'</span></div>':'';
-      const body=(title?'<p class="operation-name">'+esc(title)+'</p>':'')+table+(changes.length>12?'<p class="notice">Showing 12 of '+changes.length+' changes. All changes are in Details.</p>':'')+coercions.map(v=>'<p class="adjustment">'+esc(v)+'</p>').join('')+(state.approvalError?'<p class="notice" role="alert">'+esc(state.approvalError)+'</p>':'')+action+(applied?'<p class="notice">Applied. '+esc(preview.summary || 'The change was submitted.')+'</p>':'')+'<details><summary>Details</summary><p>'+esc(validation)+'</p><p>'+esc(preview.summary || 'No change details returned.')+'</p>'+changes.map(v=>'<p>'+esc(v)+'</p>').join('')+(pending?'<p>Nothing has been changed. Apply requires the matching pending operation token before it expires.</p>':'')+'<p>'+esc(meta.tool || '')+'</p></details>';
+      const body=(title?'<p class="operation-name">'+esc(title)+'</p>':'')+table+(changes.length>12?'<p class="notice">Showing 12 of '+changes.length+' changes. All changes are in Details.</p>':'')+coercions.map(v=>'<p class="adjustment">'+esc(v)+'</p>').join('')+(state.approvalError?'<p class="notice" role="alert">'+esc(state.approvalError)+'</p>':'')+action+(applied?'<p class="notice">Applied. '+esc(preview.summary || 'The change was submitted.')+'</p>'+(resources.length?'<p class="context">Resource'+(resources.length===1?'':'s')+': '+resources.slice(0,20).map(esc).join(', ')+(resources.length>20?' · '+(resources.length-20)+' more in the tool result':'')+'</p>':''):'')+'<details><summary>Details</summary><p>'+esc(validation)+'</p><p>'+esc(preview.summary || 'No change details returned.')+'</p>'+changes.map(v=>'<p>'+esc(v)+'</p>').join('')+(pending?'<p>Nothing has been changed. Apply requires the matching pending operation token before it expires.</p>':'')+'<p>'+esc(meta.tool || '')+'</p></details>';
       app.innerHTML = chrome(body, applied?'Applied':pending?'Preview · Not applied':'Result');
       if (canApprove) app.querySelectorAll('[data-approve]').forEach(button=>bindHold(button,()=>approve(meta.tool,approval.arguments,pending)));
     }
@@ -375,7 +377,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
           if (!Array.isArray(value?.creatives)) throw new Error('A creative result was not returned. Check the tool response in chat.');
           state.refreshing=false;
           const next=result?.structuredContent?result:{structuredContent:{...value,_adport:meta}};
-          if (JSON.stringify(state.result)===JSON.stringify(next)) render(state.result); else acceptResult(next);
+          if (JSON.stringify(state.result)===JSON.stringify(next)) render(state.result); else acceptResult(next,true);
         } catch(error) {state.refreshing=false;state.creativeError=error?.message || 'Previews could not be refreshed.';render(state.result);}
       });
       app.querySelectorAll('[data-creative]').forEach(form=>form.addEventListener('submit',async event=>{
@@ -397,7 +399,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
           if (result?.isError || value?.error) throw new Error(value?.message || 'The preview could not be prepared.');
           if (value?.status!=='pending_validation' || value?.applied!==false || !value?.pending_operation_id) throw new Error('A validated preview was not returned. Check the tool result in chat.');
           state.previewing=false;
-          acceptResult({structuredContent:{...value,_adport:{...meta,...value._adport,tool:action.tool,view:'operation',approval:{arguments:parameters}}}});
+          acceptResult({structuredContent:{...value,_adport:{...meta,...value._adport,tool:action.tool,view:'operation',approval:{arguments:parameters}}}},true);
         } catch(error) {state.previewing=false;state.creativeError=error?.message || 'The preview could not be prepared.';render(state.result);}
       }));
     }
@@ -432,7 +434,12 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
         }
         const outcome=tool==='recommendation_apply'?value.result:value;
         if (outcome?.applied!==true || outcome?.status!=='applied') throw new Error('The change was not confirmed as applied. Check its status before retrying.');
-        state.approving=false;state.approvalError='';acceptResult({structuredContent:{...value,_adport:{...(state.result.structuredContent?._adport || {}),...value._adport,approval:undefined}}});
+        state.approving=false;state.approvalError='';acceptResult({structuredContent:{...value,_adport:{...(state.result.structuredContent?._adport || {}),...value._adport,approval:undefined}}},true);
+        const resources=arr(outcome.result?.resourceIds).filter(value=>typeof value==='string'),details=outcome.result?.details;
+        const facts={tool,status:'applied',...(typeof args.project_id==='string'?{project_id:args.project_id}:{}),...(typeof args.account_id==='string'?{account_id:args.account_id}:{}),resource_ids:resources.slice(0,100),...(resources.length>100?{resource_ids_truncated:true,total_resource_ids:resources.length}:{}),...(typeof details?.next_tool==='string'?{next_tool:details.next_tool}:{}),...(typeof details?.resource_receipt==='string'?{resource_receipt:details.resource_receipt}:{})};
+        // Share confirmed facts for follow-up reads, never a reusable apply token.
+        if (typeof window.openai?.setWidgetState==='function') Promise.resolve().then(()=>window.openai.setWidgetState({lastOperation:facts})).catch(()=>{});
+        else send({jsonrpc:'2.0',id:id++,method:'ui/update-model-context',params:{structuredContent:{adport_operation:facts}}});
       } catch (error) {
         state.approving=false;state.approvalError=error?.message || 'The change could not be confirmed. Check its status before retrying.';
         render(state.result);
@@ -467,8 +474,13 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       if (meta.view === 'creatives') return renderCreatives(data,meta);
       return renderInsights(data,meta);
     }
-    function acceptResult(result) {
+    function acceptResult(result,local=false) {
       if (!result || typeof result !== 'object') return;
+      const fingerprint=JSON.stringify(resultValue(result));
+      // Host state updates can echo an old tool result after a local edit/apply.
+      if (!local && state.hasLocalResult && hostResults.has(fingerprint)) return;
+      if (local) state.hasLocalResult=true;
+      else {hostResults.add(fingerprint);if (hostResults.size>16) hostResults.delete(hostResults.values().next().value);}
       clearTimeout(resultWait);
       // ChatGPT can deliver the same result through both supported bridges.
       // Do not reset an open disclosure when the second copy arrives.

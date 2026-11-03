@@ -310,6 +310,8 @@ describe('adport MCP server', () => {
       },
       'openai/widgetDomain': ADPORT_UI_DOMAIN,
     });
+    const previous = await client.readResource({ uri: 'ui://adport/insight-card-v2.html' });
+    expect(previous.contents[0]).toMatchObject({ uri: 'ui://adport/insight-card-v2.html', mimeType: content.mimeType, text: content.text });
   });
 
   it('answers accounts_list', async () => {

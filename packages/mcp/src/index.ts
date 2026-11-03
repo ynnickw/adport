@@ -105,17 +105,18 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
     // The OpenAI compatibility alias must not contradict another host's origin.
     ...(uiDomain.startsWith('https://') ? { 'openai/widgetDomain': uiDomain } : {}),
   };
-  registerAppResource(
+  // Cached descriptors and existing cards can still request the previous URI.
+  for (const uri of [ADPORT_UI_URI, 'ui://adport/insight-card-v2.html']) registerAppResource(
     server,
-    'Adport insight card',
-    ADPORT_UI_URI,
+    uri === ADPORT_UI_URI ? 'Adport insight card' : 'Adport insight card (previous URI)',
+    uri,
     {
       description: 'Responsive Adport accounts, performance, recommendations, and guarded-change view.',
       _meta: resourceMeta,
     },
     async () => ({
       contents: [{
-        uri: ADPORT_UI_URI,
+        uri,
         mimeType: RESOURCE_MIME_TYPE,
         text: ADPORT_UI_HTML,
         _meta: resourceMeta,
