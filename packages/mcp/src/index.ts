@@ -1,5 +1,5 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { McpServer } from '@modelcontextprotocol/server';
+import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod';
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
 import { AdportError, CredentialStore, createContext, type AdportRuntime, type ProviderModule } from '@adport/core';
@@ -143,7 +143,7 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
       description: scopeDenial
         ? `${tool.description}\n\nUnavailable on the current plan: ${scopeDenial.message}`
         : tool.description,
-      inputSchema: tool.input.shape,
+      inputSchema: tool.input,
       ...(objectOutput ? { outputSchema: objectOutput.extend({
         ...(view ? { _adport: z.object({
           tool: z.literal(tool.name), view: z.literal(view), providerNames: z.record(z.string(), z.string()),
@@ -235,8 +235,7 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
 }
 
 export async function runStdioServer(runtime: AdportRuntime, version?: string): Promise<void> {
-  const server = createMcpServer({ runtime, version });
-  await server.connect(new StdioServerTransport());
+  serveStdio(() => createMcpServer({ runtime, version }));
   // stdout is the protocol channel; stderr is for humans.
   console.error(`adport MCP server on stdio (${runtime.registry.list().length} tools, policy: ${runtime.policySource})`);
   if (runtime.ctx.providers.list().length === 0) {

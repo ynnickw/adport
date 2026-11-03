@@ -25,7 +25,6 @@
     "@adport/provider-pinterest": "workspace:*",
     "@adport/provider-linkedin": "workspace:*",
     "@adport/provider-x": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.30.0",
     "@supabase/ssr": "0.12.4",
     "@supabase/supabase-js": "2.112.3",
     "@swc/helpers": "0.5.23",
@@ -37,7 +36,8 @@
     "server-only": "0.0.1",
     "sharp": "0.35.3",
     "stripe": "^22.5.0",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@modelcontextprotocol/server": "^2.4.0"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.3",
@@ -47,6 +47,7 @@
     "dotenv": "17.4.2",
     "jsdom": "^26.1.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "@modelcontextprotocol/client": "^2.4.0"
   }
 }

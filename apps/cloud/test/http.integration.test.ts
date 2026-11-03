@@ -1,13 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { UnauthorizedError, type OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { Client, UnauthorizedError, StreamableHTTPClientTransport, type OAuthClientProvider } from '@modelcontextprotocol/client';
 import type {
   OAuthClientInformationMixed,
   OAuthClientMetadata,
   OAuthTokens,
-} from '@modelcontextprotocol/sdk/shared/auth.js';
+} from '@modelcontextprotocol/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApiKey, resolveMembership } from '@/lib/cloud/repository';
 import {

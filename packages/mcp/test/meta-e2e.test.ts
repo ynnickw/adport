@@ -1,8 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { CredentialStore } from '@adport/core';
 import { MetaAdsProvider, MetaGraphClient, metaTools } from '@adport/provider-meta';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

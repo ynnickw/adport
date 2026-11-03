@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
+import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/server';
 import { diagnoseMcpRejection } from '@/lib/mcp-transport-diagnostics';
 
 afterEach(() => vi.restoreAllMocks());

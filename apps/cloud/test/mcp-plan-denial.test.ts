@@ -15,10 +15,9 @@ vi.mock('@/lib/cloud/runtime', () => ({ createTenantRuntime: mocks.runtime }));
 vi.mock('@/lib/cloud/mcp-projects', () => ({ routeMcpProjects: (runtime: unknown) => runtime }));
 vi.mock('@/lib/cloud/mcp-oauth-repository', () => ({ getMcpOAuthClient: mocks.oauthClient }));
 vi.mock('@adport/mcp', async importOriginal => ({ ...await importOriginal<typeof import('@adport/mcp')>(), createMcpServer: mocks.server }));
-vi.mock('@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js', () => ({
-  WebStandardStreamableHTTPServerTransport: class {
-    async handleRequest() { return Response.json({ ok: true }); }
-  },
+vi.mock('@modelcontextprotocol/server', () => ({
+  createMcpHandler: () => ({ fetch: async () => Response.json({ ok: true }) }),
+  isLegacyRequest: async () => false,
 }));
 
 import { POST } from '@/app/mcp/route';

@@ -11,6 +11,7 @@ import { mcpResourceUrl, pkceChallenge } from '@/lib/mcp-oauth';
 import { resetEnvForTests } from '@/lib/env';
 import { POST } from '@/app/mcp/route';
 import { GoogleAdsProvider } from '@adport/provider-google';
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { removeOrganizationMember } from '@/lib/cloud/tenant-admin';
 
 const describeDatabase = process.env.ADPORT_RUN_DATABASE_TESTS === '1' ? describe : describe.skip;
@@ -92,6 +93,35 @@ describeDatabase('all-project MCP authorization and HTTP routing', () => {
     expect(await call(all.accessToken, 'accounts_list')).toMatchObject({ isError: true, error: 'INVALID_INPUT' });
     expect(await call(all.accessToken, 'accounts_list', { project_id: separate })).toMatchObject({ isError: true, error: 'POLICY_VIOLATION' });
     await expect(authorize(owner, company, separate)).rejects.toThrow('access');
+  });
+
+  it('serves modern discovery and UI resources while retaining OAuth project boundaries and header validation', async () => {
+    const client = new Client({ name: 'Modern host fixture', version: '1' }, { versionNegotiation: { mode: { pin: '2026-07-28' } } });
+    const transport = new StreamableHTTPClientTransport(new URL(mcpResourceUrl()), {
+      requestInit: { headers: { authorization: `Bearer ${all.accessToken}` } },
+      fetch: (url, init) => POST(new Request(url, init)),
+    });
+    try {
+      await client.connect(transport);
+      expect(client.getProtocolEra()).toBe('modern');
+      const tools = (await client.listTools()).tools;
+      expect(tools.map(tool => tool.name)).toEqual(expect.arrayContaining(['google_assets', 'linkedin_get_library_image', 'x_draft_tweets', 'projects_list']));
+      expect(tools.some(tool => /_api_(read|create|update|delete|remove)$/.test(tool.name))).toBe(false);
+      const accounts = tools.find(tool => tool.name === 'accounts_list')!;
+      const uri = (accounts._meta?.ui as { resourceUri: string }).resourceUri;
+      expect((await client.readResource({ uri })).contents[0]).toMatchObject({ mimeType: 'text/html;profile=mcp-app' });
+      const projects = await client.callTool({ name: 'projects_list', arguments: {} });
+      expect((projects.structuredContent as { projects: Array<{ id: string }> }).projects.map(project => project.id).sort()).toEqual([company, second].sort());
+      const foreign = await client.callTool({ name: 'accounts_list', arguments: { project_id: separate } });
+      expect(foreign.isError).toBe(true);
+      expect(JSON.parse((foreign.content as Array<{ text: string }>)[0]!.text)).toHaveProperty('error', 'POLICY_VIOLATION');
+      const mismatch = await POST(new Request(mcpResourceUrl(), {
+        method: 'POST', headers: { authorization: `Bearer ${all.accessToken}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'mcp-protocol-version': '2026-07-28', 'mcp-method': 'tools/call' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: { _meta: { 'io.modelcontextprotocol/protocolVersion': '2026-07-28', 'io.modelcontextprotocol/clientCapabilities': {} } } }),
+      }));
+      expect(mismatch.status).toBe(400);
+      expect((await mismatch.json()).error.code).toBe(-32020);
+    } finally { await client.close(); }
   });
 
   it('uses a platform connected after consent with the same token and unchanged native tool catalog', async () => {

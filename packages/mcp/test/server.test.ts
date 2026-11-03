@@ -1,8 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { AdportError, createContext, FindingsStore } from '@adport/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -32,7 +31,7 @@ it('allows an empty real runtime without substituting demos in production', asyn
   await productionClient.connect(clientTransport);
   try {
     expect((await productionClient.listTools()).tools.every(tool => !/^(demo|mock|synthetic)_/.test(tool.name))).toBe(true);
-    expect((await productionClient.callTool({ name: 'demo_set_budget', arguments: {} })).isError).toBe(true);
+    await expect(productionClient.callTool({ name: 'demo_set_budget', arguments: {} })).rejects.toThrow(/not found/);
   } finally { await productionClient.close(); await server.close(); }
 });
 

@@ -1,5 +1,5 @@
 import { createMcpServer, ADPORT_UI_RESOURCE_DOMAINS } from '@adport/mcp';
-import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
+import { createMcpHandler, isLegacyRequest, WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/server';
 import { apiPrincipal } from '@/lib/cloud/auth';
 import { createTenantRuntime } from '@/lib/cloud/runtime';
 import { HttpError } from '@/lib/http';
@@ -51,15 +51,24 @@ async function handle(request: Request): Promise<Response> {
         + (principal.oauthTokenId ? ' Use projects_list to find projects with this provider.' : '')
         + ' Local CLI credentials and demo mode do not connect this cloud workspace.',
     });
-    const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-    await server.connect(transport);
-    const response = await transport.handleRequest(request, {
+    const requestOptions = {
       authInfo: {
         token: principal.apiKeyId ?? principal.oauthTokenId!,
         clientId: principal.clientId ?? principal.apiKeyId!,
         scopes: toolScopes,
       },
-    });
+    };
+    let response: Response;
+    // Preserve existing JSON responses for legacy clients. The SDK classifier
+    // routes modern envelopes to its modern entry, including malformed claims.
+    if (await isLegacyRequest(request)) {
+      const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+      await server.connect(transport);
+      response = await transport.handleRequest(request, requestOptions);
+    } else {
+      const handler = createMcpHandler(() => server, { legacy: 'reject' });
+      response = await handler.fetch(request, requestOptions);
+    }
     await diagnoseMcpRejection(request, response);
     return response;
   } catch (error) {

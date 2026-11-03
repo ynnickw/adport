@@ -1,7 +1,7 @@
 {
   "name": "@adport/mcp",
   "version": "0.7.0",
-  "description": "adport MCP server — the open control plane for paid media",
+  "description": "adport MCP server \u2014 the open control plane for paid media",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -38,9 +38,9 @@
     "@adport/provider-spotify": "workspace:*",
     "@adport/provider-tiktok": "workspace:*",
     "@adport/provider-x": "workspace:*",
-    "@modelcontextprotocol/ext-apps": "^1.7.5",
-    "@modelcontextprotocol/sdk": "^1.30.0",
-    "zod": "^4.4.3"
+    "@modelcontextprotocol/ext-apps": "^2.0.4",
+    "zod": "^4.4.3",
+    "@modelcontextprotocol/server": "^2.4.0"
   },
   "devDependencies": {
     "@types/jsdom": "^21.1.7",
@@ -48,7 +48,8 @@
     "jsdom": "26.1.0",
     "tsup": "^8.3.0",
     "typescript": "^5.8.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "@modelcontextprotocol/client": "^2.4.0"
   },
   "repository": {
     "type": "git",

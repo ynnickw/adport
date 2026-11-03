@@ -11,8 +11,8 @@ import { PinterestAdsClient, PinterestAdsProvider, pinterestTools } from '@adpor
 import { LinkedInAdsClient, LinkedInAdsProvider, linkedinTools } from '@adport/provider-linkedin';
 import { XAdsClient, XAdsProvider, xTools } from '@adport/provider-x';
 import { describe, expect, it } from 'vitest';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { Client, InMemoryTransport, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
+import { createMcpHandler } from '@modelcontextprotocol/server';
 import { createMcpServer } from '../src/index.js';
 
 describe('all-provider shared tool surface', () => {
@@ -123,8 +123,17 @@ describe('all-provider shared tool surface', () => {
       const dispatchers = names.filter(name => name === 'recommendation_apply' || /_api_(read|create|update|delete|remove)$/.test(name));
       for (const name of dispatchers) {
         expect(hostedNames).not.toContain(name);
-        expect((await hostedClient.callTool({ name, arguments: {} })).isError).toBe(true);
+        await expect(hostedClient.callTool({ name, arguments: {} })).rejects.toThrow(/not found/);
       }
     } finally { await hostedClient.close(); await hosted.close(); }
+
+    const modern = createMcpHandler(() => createMcpServer({ runtime, productionOnly: true }));
+    const modernClient = new Client({ name: 'modern-directory-test', version: '1' }, { versionNegotiation: { mode: { pin: '2026-07-28' } } });
+    try {
+      await modernClient.connect(new StreamableHTTPClientTransport(new URL('https://adport.test/mcp'), { fetch: (url, init) => modern.fetch(new Request(url, init)) }));
+      const modernTools = (await modernClient.listTools()).tools;
+      expect(modernTools.map(tool => tool.name).sort()).toEqual(names.filter(name => name !== 'recommendation_apply' && !/_api_(read|create|update|delete|remove)$/.test(name)).sort());
+      expect(modernTools.find(tool => tool.name === 'google_assets')?._meta).toMatchObject({ ui: { resourceUri: 'ui://adport/insight-card-v3.html' } });
+    } finally { await modernClient.close(); await modern.close(); }
   });
 });
