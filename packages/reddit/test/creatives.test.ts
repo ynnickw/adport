@@ -41,6 +41,20 @@ const dirs: string[] = [];
 afterEach(async () => { for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true }); });
 
 describe('Reddit named children and policy gates', () => {
+  it('uses the account-profile endpoint maximum of 100 and follows its exact continuation URL', async () => {
+    const endpoint = `/api/v3/ad_accounts/${A}/profiles`;
+    const next = `https://ads-api.reddit.com${endpoint}?page.size=100&page.token=second`;
+    const second = { id: 'profile-2', reddit_user_id: 't2_second' };
+    const { provider, calls } = fixture(call => call.url.pathname === endpoint
+      ? call.url.searchParams.has('page.token') ? { data: [second] } : { data: [profile], pagination: { next_url: next } }
+      : undefined);
+    expect(await provider.creatives.profiles(A)).toEqual([profile, second]);
+    const pages = calls.filter(call => call.url.pathname === endpoint);
+    expect(pages).toHaveLength(2);
+    expect(pages[0]!.url.searchParams.get('page.size')).toBe('100');
+    expect(pages[1]!.url.href).toBe(next);
+  });
+
   it('builds one lazy, serializable catalog without reading a provider', () => {
     const provider = new Proxy({} as RedditAdsProvider, { get() { throw new Error('Eager provider access'); } });
     const tools = redditTools(provider); expect(new Set(tools.map(t => t.name)).size).toBe(tools.length); for (const tool of tools) expect(() => z.toJSONSchema(tool.input)).not.toThrow();

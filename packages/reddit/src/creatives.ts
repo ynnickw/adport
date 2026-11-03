@@ -39,7 +39,8 @@ export class RedditCreativeService {
     return { items: data.data as Row[], truncated: Boolean(next), ...(next ? { next_cursor: next } : {}) };
   }
   async profiles(account: string) {
-    const rows = await this.client.getPaged<unknown>(`ad_accounts/${id.parse(account)}/profiles`, { 'page.size': 1000 }, 5000);
+    // Account profile pages cap at 100; business profile pages allow 1,000.
+    const rows = await this.client.getPaged<unknown>(`ad_accounts/${id.parse(account)}/profiles`, { 'page.size': 100 }, 5000);
     return rows.map(row => rowSchema.parse(row));
   }
   private async profile(account: string, profileId: string) {
