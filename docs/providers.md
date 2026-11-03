@@ -44,6 +44,12 @@ Idea results contain one native page. Continue with `next_page_token` as `page_t
 
 The REST paths, seed variants and limits follow Google's [v25 keyword planning protocol](https://github.com/googleapis/googleapis/blob/master/google/ads/googleads/v25/services/keyword_plan_idea_service.proto). Provider authorization, API quotas and account eligibility still apply.
 
+### Field metadata
+
+`google_field_metadata` looks up up to 20 exact resource or field names, such as `campaign`, `campaign.status` and `metrics.cost_micros`, through the native [GoogleAdsFieldService](https://github.com/googleapis/googleapis/blob/57aa4dbce5d23b2115b2732b10dcb7ddc8e8698d/google/ads/googleads/v25/services/google_ads_field_service.proto). It returns the connected API version, native categories, types, enum values, and select/filter/sort flags. Optional compatibility lists include `selectableWith`, `attributeResources`, metrics and segments. Metadata queries have no `FROM` clause and do not fetch account performance or customer data; `account_id` selects the authorized project connection.
+
+Results contain one native page. Continue `next_page_token` as `page_token` with the same field names and compatibility option. Missing fields and omitted native values are preserved; an empty page can still have a continuation token. Compatibility is a query-building aid, not proof that a particular campaign supports a mutation or that every combination is valid.
+
 ### Shared assets and extensions
 
 `google_assets` provides a visual account-owned library with native image previews, extension copy, policy information and name-edit actions. `google_upload_image_asset` accepts checksum-bound PNG/JPEG/GIF bytes; hosted calls use the private project media library. `google_create_youtube_asset` references an existing video without uploading or publishing one. `google_create_extension_asset` creates an unattached sitelink, callout or structured snippet. Creation previews use Google's native `validate_only`; no association or ad is created by these asset tools.

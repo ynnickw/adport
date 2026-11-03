@@ -5,6 +5,7 @@ import { googlePlanningTools } from './planning.js';
 import { googleAssetTools } from './assets.js';
 import { googleAssetLinkTools } from './asset-links.js';
 import { googleLabelTools } from './labels.js';
+import { googleFieldMetadataTools } from './field-metadata.js';
 
 const statusSchema = z.enum(['ENABLED', 'PAUSED']);
 const matchTypeSchema = z.enum(['EXACT', 'PHRASE', 'BROAD']);
@@ -15,6 +16,7 @@ export function googleTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
     ...googleAssetTools(provider),
     ...googleAssetLinkTools(provider),
     ...googleLabelTools(provider),
+    ...googleFieldMetadataTools(provider),
     defineTool({
       name: 'google_ads', namespace: 'google',
       description: 'Browse Google Ads with their actual text, final URLs, serving status and creative actions. Filter by campaign or ad group. Changes requested from the creative viewer return a preview before approval.',

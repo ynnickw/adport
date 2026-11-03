@@ -59,6 +59,10 @@ export class GoogleAdsProvider implements AdProvider {
     return this.client.keywordPlanning(customerId, method, body);
   }
 
+  fieldMetadata(query: string, pageSize: number, pageToken?: string) {
+    return this.client.fieldMetadata(query, pageSize, pageToken);
+  }
+
   async listAds(input: { account_id: string; campaign_id?: string; ad_group_id?: string; limit: number }) {
     const cid = normalizeCustomerId(input.account_id);
     const conditions = ["ad_group_ad.status != 'REMOVED'"];

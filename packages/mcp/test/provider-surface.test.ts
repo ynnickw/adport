@@ -123,7 +123,7 @@ describe('all-provider shared tool surface', () => {
       expect(hostedNames).toContain('meta_list_campaigns');
       expect(hostedNames).toContain('meta_set_campaign_status');
       expect(hostedNames).toEqual(expect.arrayContaining([
-        'google_labels', 'google_label_context', 'google_label_associations', 'google_create_label', 'google_update_label', 'google_remove_label', 'google_link_label', 'google_unlink_label',
+        'google_field_metadata', 'google_labels', 'google_label_context', 'google_label_associations', 'google_create_label', 'google_update_label', 'google_remove_label', 'google_link_label', 'google_unlink_label',
         'apple_adgroups', 'apple_keywords', 'apple_negative_keywords', 'apple_ads', 'apple_creatives', 'apple_product_pages',
         'apple_create_keywords', 'apple_create_negative_keywords', 'apple_set_campaign_schedule', 'apple_create_creative', 'apple_create_ad',
         'microsoft_audience_targets', 'microsoft_add_audience_target', 'microsoft_set_audience_target_bid', 'microsoft_remove_audience_target', 'microsoft_set_audience_target_mode',

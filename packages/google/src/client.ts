@@ -129,6 +129,15 @@ export class GoogleAdsRestClient {
     return this.request(`customers/${normalizeCustomerId(customerId)}:${method}`, { method: 'POST', body });
   }
 
+  async fieldMetadata(query: string, pageSize: number, pageToken?: string) {
+    const response = await this.request<Record<string, unknown>>('googleAdsFields:search', {
+      method: 'POST', body: { query, pageSize, ...(pageToken ? { pageToken } : {}) },
+      // This is the API-wide catalog, not a manager/customer data operation.
+      loginCustomerId: null,
+    });
+    return { apiVersion: this.version, response };
+  }
+
   /** Paged GAQL search; accumulates rows up to options.maxRows (default 1000). */
   async search(
     customerId: string,
