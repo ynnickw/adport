@@ -48,6 +48,10 @@ export class GoogleAdsProvider implements AdProvider {
 
   constructor(private readonly client: GoogleAdsRestClient) {}
 
+  keywordPlanning(customerId: string, method: 'generateKeywordIdeas' | 'generateKeywordHistoricalMetrics', body: Record<string, unknown>) {
+    return this.client.keywordPlanning(customerId, method, body);
+  }
+
   async listAds(input: { account_id: string; campaign_id?: string; ad_group_id?: string; limit: number }) {
     const cid = normalizeCustomerId(input.account_id);
     const conditions = ["ad_group_ad.status != 'REMOVED'"];

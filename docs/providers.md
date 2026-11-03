@@ -36,6 +36,14 @@ Existing credential files and `google-ads.yaml` imports continue to work; any le
 
 Google refresh tokens are stored locally. If consent is still in testing mode, Google may expire the authorization after approximately seven days; publish the consent configuration or re-authorize as appropriate for your application.
 
+### Keyword planning
+
+`google_keyword_ideas` discovers keywords from a keyword seed, URL, both, or a site. `google_keyword_historical_metrics` returns historical search volumes, competition and bid estimates for supplied keywords. Both are read-only tools in the shared MCP/CLI registry; neither creates a keyword plan or campaign. Both accept the selected `account_id`, optional language and up to ten location IDs, and explicitly default to Google Search without partners.
+
+Idea results contain one native page. Continue with `next_page_token` as `page_token` and the same seed and targeting. A short or empty page can still have a continuation token. Native metrics retain their original names and integer strings, including monetary values in micros; unavailable values remain absent. Google can merge close variants, so historical results need not have one row per supplied keyword. These are historical estimates, not forecasts or delivery guarantees.
+
+The REST paths, seed variants and limits follow Google's [v25 keyword planning protocol](https://github.com/googleapis/googleapis/blob/master/google/ads/googleads/v25/services/keyword_plan_idea_service.proto). Provider authorization, API quotas and account eligibility still apply.
+
 Google can show an “unverified app” warning when your private OAuth project requests the Google Ads scope without completing verification. For the CLI, that warning concerns your BYO project and credentials are not sent to Adport Cloud. Add yourself as a test user during development. The managed cloud application's own OAuth project must complete Google's production verification before public use.
 
 ## Meta Ads

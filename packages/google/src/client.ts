@@ -89,7 +89,7 @@ export class GoogleAdsRestClient {
       authorization: `Bearer ${token}`,
       'content-type': 'application/json',
     };
-    const operatingCustomerId = path.match(/^customers\/(\d{10})\//)?.[1];
+    const operatingCustomerId = path.match(/^customers\/(\d{10})(?:\/|:)/)?.[1];
     const mappedLoginCustomerId = operatingCustomerId
       ? this.credentials.loginCustomerIds?.[operatingCustomerId]
       : undefined;
@@ -119,6 +119,14 @@ export class GoogleAdsRestClient {
       loginCustomerId: null,
     });
     return (data.resourceNames ?? []).map((name) => name.replace('customers/', ''));
+  }
+
+  async keywordPlanning(
+    customerId: string,
+    method: 'generateKeywordIdeas' | 'generateKeywordHistoricalMetrics',
+    body: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    return this.request(`customers/${normalizeCustomerId(customerId)}:${method}`, { method: 'POST', body });
   }
 
   /** Paged GAQL search; accumulates rows up to options.maxRows (default 1000). */
