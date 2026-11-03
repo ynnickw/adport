@@ -24,6 +24,7 @@ import { GoogleLabelService, GOOGLE_LABEL_WRITES } from './labels.js';
 import { GoogleConversionService, GOOGLE_CONVERSION_WRITES } from './conversions.js';
 import { GoogleDataManagerService } from './data-manager.js';
 import { GoogleExperimentService, GOOGLE_EXPERIMENT_WRITES } from './experiments.js';
+import { GooglePerformanceMaxService, GOOGLE_PMAX_WRITES } from './pmax.js';
 
 const LEVEL_RESOURCE = {
   account: 'customer',
@@ -57,6 +58,7 @@ export class GoogleAdsProvider implements AdProvider {
   readonly conversions: GoogleConversionService;
   readonly dataManager: GoogleDataManagerService;
   readonly experiments: GoogleExperimentService;
+  readonly performanceMax: GooglePerformanceMaxService;
 
   constructor(private readonly client: GoogleAdsRestClient, media?: MediaResolver) {
     this.assets = new GoogleAssetService(client, media);
@@ -65,6 +67,7 @@ export class GoogleAdsProvider implements AdProvider {
     this.conversions = new GoogleConversionService(client);
     this.dataManager = new GoogleDataManagerService(client, this.conversions);
     this.experiments = new GoogleExperimentService(client);
+    this.performanceMax = new GooglePerformanceMaxService(client);
   }
 
   keywordPlanning(customerId: string, method: 'generateKeywordIdeas' | 'generateKeywordHistoricalMetrics', body: Record<string, unknown>) {
@@ -350,6 +353,7 @@ export class GoogleAdsProvider implements AdProvider {
     if (GOOGLE_CONVERSION_WRITES.has(op.tool)) return this.conversions.plan(op);
     if (op.tool === 'google_ingest_conversion_events') return this.dataManager.plan(op);
     if (GOOGLE_EXPERIMENT_WRITES.has(op.tool)) return this.experiments.plan(op, guard);
+    if (GOOGLE_PMAX_WRITES.has(op.tool)) return this.performanceMax.plan(op, guard);
     const cid = normalizeCustomerId(op.accountId);
     // Tool input was already zod-validated at the registry boundary.
     const payload = op.payload as never;
@@ -400,7 +404,7 @@ export class GoogleAdsProvider implements AdProvider {
     const creates = structuredClone(payload.creates);
     validateCustomerReferences(creates, cid);
     const coercions: string[] = [];
-    if (guard.forcePausedCreation && service === 'campaigns') {
+    if (guard.forcePausedCreation && ['campaigns', 'adGroups', 'adGroupAds', 'assetGroups'].includes(service)) {
       for (const [index, create] of creates.entries()) {
         if (create.status !== 'PAUSED') {
           create.status = 'PAUSED';
@@ -483,6 +487,7 @@ export class GoogleAdsProvider implements AdProvider {
       coercions.push('status coerced to PAUSED by policy (paused_creation)');
     }
     const channelType = payload.channel_type ?? 'SEARCH';
+    if (channelType === 'PERFORMANCE_MAX') throw new AdportError('INVALID_INPUT', 'google: use google_create_performance_max_campaign to create the complete campaign, brand assets and asset-group hierarchy atomically');
     if (channelType !== 'SEARCH' && (payload.search_partners !== undefined || payload.display_expansion !== undefined)) {
       throw new AdportError('INVALID_INPUT', 'search_partners and display_expansion require a SEARCH campaign');
     }

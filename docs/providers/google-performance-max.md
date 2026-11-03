@@ -1,0 +1,43 @@
+# Google Performance Max
+
+Performance Max management uses the existing Google Ads connection and the shared MCP, hosted tool API and CLI registry. Every mutation needs the normal preview and identical-arguments apply token, and previews call Google's native `validateOnly`. Creation policy coerces campaigns and asset groups to PAUSED and reports each coercion.
+
+## Complete creation
+
+Use `google_create_performance_max_campaign` to create a non-shared daily budget, Performance Max campaign, campaign-level brand assets, asset group and its creative associations in one atomic request. It supports Maximize Conversions with optional target CPA in micros, or Maximize Conversion Value with optional target ROAS. Optional location/language criteria, brand colors/font, owned audience/search-theme signals and retail product filters are included in the same request. The generic `google_create_campaign` directs this channel to the complete workflow.
+
+Supply `asset_group.assets` as placements with an existing account-owned `asset_id`, or inline `text` for `HEADLINE`, `LONG_HEADLINE`, `DESCRIPTION` or `BUSINESS_NAME`. All referenced assets are verified in the selected account. Use `google_upload_image_asset` for checksum-bound project media or a local CLI file. Use `google_create_youtube_asset` to reference an existing video. YouTube upload/publishing needs a separate native API and is not performed by this workflow. `google_create_text_asset` also creates reusable, unattached immutable copy separately.
+
+For standard campaigns, provide at least three headlines, one long headline, two descriptions, one landscape marketing image, one square marketing image, one business name and one square logo, plus a final URL. Google checks language-aware text lengths, image ratios/dimensions, policy and placement eligibility. New campaigns enable brand guidelines and link business name/logos through `CampaignAsset`. Their other creative assets use `AssetGroupAsset`. The implementation creates text before references, places campaign brand links immediately after campaign creation, and keeps asset-group association operations consecutive.
+
+`allow_final_url_expansion` defaults to false, using the v25 `FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION` opt-out. Enabling it allows Google to select/generate other landing pages and related text. Other native asset-automation defaults remain in effect; opting out of final URL expansion is not an opt-out of every kind of generated asset.
+
+Retail creation supplies an already linked `merchant.merchant_id` and optional `feed_label`, and a SHOPPING `listing_filters` tree. Feed-only groups explicitly supply `assets: []`; final URLs and custom brand assets are optional for that native mode. Groups with custom assets must supply all minimum assets and a final URL matching the Merchant Center website. The workflow does not connect a Merchant Center account, upload a product catalog or accept terms. Google validates existing feed access.
+
+Campaign and group statuses default to PAUSED. If you request ENABLED while paused creation is enabled, both are coerced and reported. Child associations are enabled within the new group; they cannot serve while that group is paused. After apply, Adport checks the returned identities and reads back the created campaign/group before confirming their approved status and ownership. An unconfirmed readback returns acknowledged IDs for reconciliation and never retries creation automatically.
+
+## Read, view and edit
+
+`google_performance_max_context` reads campaign configuration, budget, brand guidelines, automation settings and owned campaign branding. `google_asset_groups` lists groups in a selected campaign with ID continuation. `google_asset_group_context` reads one complete, scoped group with its asset links, signals and listing filters. Draft entities are included. Reads fail if they cannot obtain complete configuration within their bounds.
+
+The context returns separate `campaign_snapshot_hash`, `group_snapshot_hash`, `assets_snapshot_hash`, `signals_snapshot_hash` and `listing_snapshot_hash`. Supply the corresponding `expected_*_hash` for edits. Each includes the relevant parent configuration; stale state rejects at preview and apply. These hashes do not freeze performance or every campaign criterion, and Google provides no atomic compare-and-set.
+
+`google_asset_group_creatives` displays actual group copy, owned Google image previews, landing URLs and guarded status/copy actions in supported MCP hosts. An asset group generates many creative combinations, rather than representing one fixed rendered ad. Video references remain available in the full context; the tool does not invent a downloadable video URL from a YouTube ID.
+
+`google_create_asset_group` adds a complete group to a verified existing Performance Max campaign, using `expected_campaign_hash`. A brand-guidelines campaign must already have its campaign-level business name/logos. Legacy campaigns with brand guidelines disabled keep those placements in the group. Retail groups need a SHOPPING product tree.
+
+`google_update_asset_group` changes only supplied name, final/mobile URLs, display paths and tracking fields through exact masks. Omission preserves fields; empty values clear supported fields. `path2` requires a resulting `path1`. `google_set_asset_group_status` explicitly pauses/enables a group while preserving its parent. `google_remove_asset_group` removes the group and may remove its child links/signals/filters; shared source assets, parent campaign and budget are retained.
+
+`google_update_asset_group_copy` atomically replaces supplied headline/long-headline/description sets. Matching existing text is retained, new immutable text precedes association changes, and unsupplied placements are preserved. `google_update_asset_group_assets` atomically adds supplied placements and removes exact owned links. The final set must meet minimum requirements. Retail groups can return to feed-only by unlinking all custom group assets in one request. Source assets are retained. These explicit edits preserve group/campaign status; new associations are enabled and can change serving creative combinations.
+
+`google_update_performance_max_brand_assets` atomically edits campaign-level business name/logo associations when native brand guidelines are enabled. These changes affect every group in the campaign, including serving combinations. Existing sources/statuses/budgets are preserved, and required branding must remain complete. Immutable text or images are replaced by creating/selecting new assets and changing associations; Google does not offer deletion of the source asset itself. Unattached asset-creation tools have a non-destructive MCP hint and still require the write policy gate.
+
+## Signals and product selection
+
+`google_add_asset_group_signals` adds native account-owned audience references or search themes using `expected_signals_hash`. `google_remove_asset_group_signals` removes exact current signal IDs. These guide optimization; they do not restrict delivery to only the supplied audience or queries. No customer records are uploaded or audiences created by these tools.
+
+`google_replace_asset_group_listing_filters` atomically replaces a retail SHOPPING product tree with `expected_listing_hash`. Nodes have unique `key` values, optional `parent_key`, and `SUBDIVISION`, `UNIT_INCLUDED` or `UNIT_EXCLUDED` type. The root has no case; children specify typed product brand, category/level, product type/level, custom attribute/index, item ID, channel or condition. Each subdivision needs distinct cases at one dimension/level and exactly one “other” case (omit the dimension value). Old nodes are removed children-first, then new nodes are created parents-first using temporary native resource names. This changes eligible products in serving groups while preserving product feeds, media sources, statuses and budgets.
+
+These tools cover standard and retail Performance Max hierarchy management. Local Services-specific setup, webpage feed trees, retail shared-set bundles, Merchant Center feed management and YouTube video uploads use separate native workflows.
+
+The implementation follows Google's [request ordering](https://developers.google.com/google-ads/api/performance-max/structure-requests), [asset requirements](https://developers.google.com/google-ads/api/performance-max/asset-requirements) and [asset-group retail rules](https://developers.google.com/google-ads/api/performance-max/asset-groups), with wire contracts pinned to the official [v25 asset-group resources](https://github.com/googleapis/googleapis/blob/492a18f4cccdac9f4fd7d5f5e5bea3db8b64aec0/google/ads/googleads/v25/resources/asset_group.proto).

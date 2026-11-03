@@ -9,6 +9,7 @@ import { googleFieldMetadataTools } from './field-metadata.js';
 import { googleConversionTools } from './conversions.js';
 import { googleDataManagerTools } from './data-manager.js';
 import { googleExperimentTools } from './experiments.js';
+import { googlePerformanceMaxTools } from './pmax.js';
 
 const statusSchema = z.enum(['ENABLED', 'PAUSED']);
 const matchTypeSchema = z.enum(['EXACT', 'PHRASE', 'BROAD']);
@@ -23,6 +24,7 @@ export function googleTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
     ...googleConversionTools(provider),
     ...googleDataManagerTools(provider),
     ...googleExperimentTools(provider),
+    ...googlePerformanceMaxTools(provider),
     defineTool({
       name: 'google_ads', namespace: 'google',
       description: 'Browse Google Ads with their actual text, final URLs, serving status and creative actions. Filter by campaign or ad group. Changes requested from the creative viewer return a preview before approval.',

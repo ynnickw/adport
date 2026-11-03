@@ -23,7 +23,8 @@ const createExtension = z.object({ name: name.optional(), content: extension });
 const updateExtension = z.object({ asset_id: id, content: extension });
 const uploadImage = z.object({ name: name.optional(), ...mediaSourceFields }).refine(value => Boolean(value.media_id) !== Boolean(value.file_path), 'Choose media_id or file_path');
 const youtube = z.object({ name: name.optional(), youtube_video_id: z.string().regex(/^[A-Za-z0-9_-]{11}$/) });
-export const GOOGLE_ASSET_WRITES = new Set(['google_create_extension_asset', 'google_update_extension_asset', 'google_upload_image_asset', 'google_create_youtube_asset', 'google_rename_asset']);
+const createText = z.object({ name: name.optional(), text: z.string().min(1).max(2048) }).strict();
+export const GOOGLE_ASSET_WRITES = new Set(['google_create_extension_asset', 'google_update_extension_asset', 'google_upload_image_asset', 'google_create_youtube_asset', 'google_create_text_asset', 'google_rename_asset']);
 const fields = ['asset.resource_name', 'asset.id', 'asset.name', 'asset.type', 'asset.final_urls', 'asset.image_asset.full_size.url', 'asset.image_asset.file_size', 'asset.youtube_video_asset.youtube_video_id', 'asset.text_asset.text', 'asset.callout_asset.callout_text', 'asset.sitelink_asset.link_text', 'asset.sitelink_asset.description1', 'asset.sitelink_asset.description2', 'asset.structured_snippet_asset.header', 'asset.structured_snippet_asset.values', 'asset.policy_summary.approval_status', 'asset.policy_summary.review_status'];
 const record = (value: unknown): Row => value && typeof value === 'object' && !Array.isArray(value) ? value as Row : {};
 const text = (value: unknown) => typeof value === 'string' ? value : '';
@@ -84,6 +85,9 @@ export class GoogleAssetService {
     } else if (op.tool === 'google_create_youtube_asset') {
       const parsed = youtube.parse(input); operation = { create: { ...(parsed.name ? { name: parsed.name } : {}), youtubeVideoAsset: { youtubeVideoId: parsed.youtube_video_id } } };
       summary = 'Reference an existing YouTube video as a Google asset'; changes = [`+ YouTube ${parsed.youtube_video_id}; name ${parsed.name ?? '(provider default)'}`, 'References an existing video; no video is uploaded or published and no ad is attached. Google assets cannot be deleted.'];
+    } else if (op.tool === 'google_create_text_asset') {
+      const parsed = createText.parse(input); operation = { create: { ...(parsed.name ? { name: parsed.name } : {}), textAsset: { text: parsed.text } } };
+      summary = 'Create unattached Google text asset'; changes = [`+ ${JSON.stringify(operation.create)}`, 'Shared text content is immutable. Link it separately to eligible placements; no serving association is created. Google validates placement-specific language and length rules when linked. Assets cannot be deleted.'];
     } else if (op.tool === 'google_create_extension_asset') {
       const parsed = createExtension.parse(input), create = { ...(parsed.name ? { name: parsed.name } : {}), ...extensionFields(parsed.content) };
       operation = { create }; summary = `Create Google ${parsed.content.type} asset`; changes = [`+ ${JSON.stringify(create)}`, 'Unattached shared asset; serving entities are unchanged. Google assets cannot be deleted.'];
@@ -111,11 +115,12 @@ export class GoogleAssetService {
 }
 
 export function googleAssetTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
-  const write = (name: string, description: string, payload: z.ZodObject, kind: 'create' | 'update') => guardedWriteTool({ name, namespace: 'google', provider: 'google', description, payload, kind });
+  const write = (name: string, description: string, payload: z.ZodObject, kind: 'create' | 'update') => guardedWriteTool({ name, namespace: 'google', provider: 'google', description, payload, kind, destructive: kind === 'update' });
   return [
     defineTool({ name: 'google_assets', namespace: 'google', description: 'View account-owned shared assets, extension copy, image previews and native policy status. Continue with next_cursor as after_asset_id and the same filters. Assets cannot be deleted; remove serving associations instead. Name edits use the normal preview/apply gate.', input: z.object({ account_id: z.string(), asset_ids: z.array(id).min(1).max(100).optional(), types: z.array(assetType).min(1).optional(), after_asset_id: id.optional(), limit: z.number().int().positive().max(200).default(50) }), output: creativesOutput.extend({ assets: z.array(z.record(z.string(), z.unknown())) }), annotations: { readOnly: true }, presentation: 'creatives', pagination: { cursorInput: 'after_asset_id' }, handler: input => provider.assets.list(input) }),
     write('google_upload_image_asset', 'Upload a SHA-256-bound PNG/JPEG/GIF as an unattached Google asset. Hosted calls require project media_id. Preview uses native validate_only. Assets cannot be deleted; no ad or serving association is created.', uploadImage, 'create'),
     write('google_create_youtube_asset', 'Reference an existing YouTube video ID as an unattached Google asset. Does not upload or publish a video or attach it to an ad. Assets cannot be deleted.', youtube, 'create'),
+    write('google_create_text_asset', 'Create immutable unattached text for headlines, descriptions or business name. Link separately to an eligible placement; Google validates its language-aware length rules on association. No serving change; assets cannot be deleted.', createText, 'create'),
     write('google_create_extension_asset', 'Create an unattached sitelink, callout or structured-snippet asset with native server validation. Does not attach it to serving entities. Assets cannot be deleted.', createExtension, 'create'),
     write('google_rename_asset', 'Change only an account-owned shared asset name. Content and serving associations remain unchanged.', z.object({ asset_id: id, name }), 'update'),
     write('google_update_extension_asset', 'Update supplied shared extension content of the same type. All ads using this asset, including active ads, can change. Omitted sitelink descriptions are preserved. Preview is server-validated.', updateExtension, 'update'),

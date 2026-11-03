@@ -28,11 +28,19 @@ function operation(tool: string, payload: Record<string, unknown>, kind: WriteOp
 const mutations = (calls: Call[]) => calls.filter(call => call.url.endsWith('assets:mutate'));
 
 describe('Google typed shared assets', () => {
+  it('validates immutable unattached text through native AssetService without an association or status', async () => {
+    const { provider, calls } = fixture();
+    await provider.previewWrite(operation('google_create_text_asset', { name: 'New copy', text: 'Native text fixture' }), guard);
+    expect(mutations(calls)[0]!.body).toEqual({ operations: [{ create: { name: 'New copy', textAsset: { text: 'Native text fixture' } } }], validateOnly: true, partialFailure: false });
+    expect(calls.some(call => /assetGroupAssets|campaignAssets/.test(call.url))).toBe(false);
+  });
   it('constructs all schemas lazily and does not advertise native asset deletion', () => {
     const provider = new Proxy({} as GoogleAdsProvider, { get() { throw new Error('Eager provider access'); } });
     const tools = googleTools(provider);
     expect(tools.some(tool => tool.name === 'google_upload_image_asset')).toBe(true);
     expect(tools.some(tool => /google_(delete|remove)_asset$/.test(tool.name))).toBe(false);
+    expect(tools.find(tool => tool.name === 'google_create_text_asset')!.annotations).toMatchObject({ readOnly: false, destructive: false });
+    expect(tools.find(tool => tool.name === 'google_update_extension_asset')!.annotations).toMatchObject({ readOnly: false, destructive: true });
   });
 
   it('renders native account-owned image previews and shared rename actions with truthful truncation', async () => {

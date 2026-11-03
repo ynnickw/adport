@@ -378,6 +378,14 @@ describe('GoogleAdsProvider writes', () => {
     expect(body.validateOnly).toBe(true);
     expect(body.operations[0].create.status).toBe('PAUSED');
   });
+  it.each(['adGroups', 'adGroupAds', 'assetGroups'])('does not let the local generic %s creation bypass paused policy', async service => {
+    const { impl, calls } = fakeFetch([tokenRoute, { match: url => url.endsWith(`/${service}:mutate`), reply: {} }]);
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
+    const preview = await provider.previewWrite({ tool: 'google_api_create', provider: 'google', accountId: '1234567890', kind: 'create', payload: { service, creates: [{ status: 'ENABLED' }] } }, { forcePausedCreation: true });
+    const body = JSON.parse(String(calls.at(-1)!.init.body));
+    expect(body.operations[0].create.status).toBe('PAUSED'); expect(preview.coercions).toHaveLength(1); expect(body.validateOnly).toBe(true);
+    if (service === 'assetGroups') expect(body).not.toHaveProperty('partialFailure'); else expect(body.partialFailure).toBe(false);
+  });
 
   it('policy-checks generic budget creates and rejects generic budget updates', async () => {
     const { impl } = fakeFetch([
