@@ -30,6 +30,7 @@ import { MicrosoftPlanningService } from './planning.js';
 import { MicrosoftConversionService, MICROSOFT_CONVERSION_WRITES } from './conversions.js';
 import { MicrosoftAudienceService, MICROSOFT_AUDIENCE_WRITES } from './audiences.js';
 import { MicrosoftAudienceTargetingService, MICROSOFT_AUDIENCE_TARGETING_WRITES } from './audience-targeting.js';
+import { MicrosoftOfflineReportService } from './offline-reports.js';
 
 /** DailyBudget is a double in whole account-currency units. */
 export const UNITS_TO_MICROS = 1_000_000;
@@ -68,6 +69,7 @@ export class MicrosoftAdsProvider implements AdProvider {
   readonly conversions: MicrosoftConversionService;
   readonly audiences: MicrosoftAudienceService;
   readonly audienceTargeting: MicrosoftAudienceTargetingService;
+  readonly offlineReports: MicrosoftOfflineReportService;
 
   constructor(
     private readonly client: MicrosoftAdsClient,
@@ -84,6 +86,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     this.conversions = new MicrosoftConversionService(client, (account, refresh) => this.scopeFor(account, refresh), (account, campaign) => this.lookupCampaign(account, campaign));
     this.audiences = new MicrosoftAudienceService(client, (account, refresh) => this.scopeFor(account, refresh), (account, campaign) => this.lookupCampaign(account, campaign), account => this.listCampaigns(account));
     this.audienceTargeting = new MicrosoftAudienceTargetingService(client, (account, refresh) => this.scopeFor(account, refresh), (account, campaign) => this.lookupCampaign(account, campaign), (account, audience, type) => this.audiences.get(account, audience, type));
+    this.offlineReports = new MicrosoftOfflineReportService(client, (account, refresh) => this.scopeFor(account, refresh), (account, campaign) => this.lookupCampaign(account, campaign));
   }
 
   capabilities(): ProviderCapabilities {

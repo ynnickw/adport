@@ -58,7 +58,11 @@ For a new source, `microsoft_create_uet_tag` creates one uninstalled tag in that
 
 Every native goal add or update automatically enables account `MSCLKIDAutoTaggingEnabled`, including edits to a paused goal. Previews show this setting before and after; snapshots bind its prior state. Updating conversion settings can also change reporting and automated bidding. No atomic native compare-and-set is available. Microsoft’s Deleted goal status is internal-only and there is no supported permanent goal-deletion operation here; pause an unused goal to stop its tracking.
 
-These tools manage goal configuration and uninstalled UET source creation. Offline conversion imports and adjustments, UET installation, customer sharing and enhanced-conversion event ingestion are separate workflows.
+`microsoft_offline_conversion_reports` reads daily upload success/failure aggregates in an explicit `date_range` with `start_utc` and `end_utc`. The tool bounds intervals to seven days. Native upload dates and missing counts are preserved; signed report-file URLs and pilot event/customer fields are omitted. It does not download raw conversion files.
+
+`microsoft_offline_conversion_goal_report` verifies up to 20 unique account-available OfflineConversion goal IDs before reading their aggregate/daily attribution diagnostics. Native long-string counts and decimal ratios remain exact; a ratio is not a percentage. Optional `upload_channels` uses CampaignManagementAPI, BulkAPI, WebUpload or Unknown; omitted means all channels. Successful summaries, indexed per-goal errors and `not_returned_goal_ids` are explicit. Missing results do not imply zero conversions. Input boundaries are UTC; Microsoft documents the daily upload-summary `UploadDate` as local time.
+
+These tools manage goal configuration, uninstalled UET source creation and aggregate upload diagnostics. Offline conversion imports and adjustments, UET installation, customer sharing and enhanced-conversion event ingestion are separate workflows.
 
 ## Audiences and remarketing
 

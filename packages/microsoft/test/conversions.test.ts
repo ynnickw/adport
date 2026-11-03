@@ -40,7 +40,7 @@ const writes = (calls: Call[]) => calls.filter(value => value.path === 'Conversi
 describe('Microsoft conversion goal setup', () => {
   it('defines lazy tools, requires native side-effect acknowledgement and excludes internal Deleted', () => {
     const tools = microsoftTools(new Proxy({} as MicrosoftAdsProvider, { get() { throw new Error('Eager provider access'); } }));
-    expect(tools.filter(value => /conversion_goal/.test(value.name))).toHaveLength(4);
+    expect(tools.filter(value => /conversion_goals?$/.test(value.name))).toHaveLength(4);
     const create = tools.find(value => value.name === 'microsoft_create_conversion_goal')!.input;
     expect(create.safeParse({ account_id: account, goal: offline }).success).toBe(true);
     expect(create.safeParse({ account_id: account, goal: { ...offline, expected_auto_tagging_enabled: undefined } }).success).toBe(false);
