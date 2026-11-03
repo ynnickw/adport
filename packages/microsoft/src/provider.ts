@@ -25,9 +25,12 @@ import { MicrosoftImageService, MICROSOFT_IMAGE_WRITES } from './images.js';
 import { MicrosoftExtensionService, MICROSOFT_EXTENSION_WRITES } from './extensions.js';
 import { MicrosoftTargetingService, MICROSOFT_TARGETING_WRITES } from './targeting.js';
 import { MicrosoftNegativeKeywordService, MICROSOFT_NEGATIVE_KEYWORD_WRITES } from './negative-keywords.js';
+import { MicrosoftBudgetService, MICROSOFT_BUDGET_WRITES } from './budgets.js';
 
 /** DailyBudget is a double in whole account-currency units. */
 export const UNITS_TO_MICROS = 1_000_000;
+// Omitting CampaignType silently returns Search only. REST flags are comma-separated.
+export const MICROSOFT_CAMPAIGN_TYPES = 'App, Audience, DynamicSearchAds, Hotel, ObjectiveBased, PerformanceMax, Search, Shopping';
 
 interface MicrosoftCampaign {
   Id: number | string;
@@ -38,6 +41,8 @@ interface MicrosoftCampaign {
   BudgetId?: number | string | null;
   TimeZone?: string;
   CampaignType?: string;
+  SubType?: string | null;
+  ExperimentId?: number | string | null;
 }
 
 interface WritePlan extends Omit<WritePreview, 'serverValidated'> {
@@ -48,11 +53,13 @@ export class MicrosoftAdsProvider implements AdProvider {
   readonly id = 'microsoft';
   /** accountId → parent customer id, learned from SearchAccounts. */
   private customerIds = new Map<string, string>();
+  private currencies = new Map<string, string>();
   readonly children: MicrosoftChildService;
   readonly images: MicrosoftImageService;
   readonly extensions: MicrosoftExtensionService;
   readonly targeting: MicrosoftTargetingService;
   readonly negativeKeywords: MicrosoftNegativeKeywordService;
+  readonly budgets: MicrosoftBudgetService;
 
   constructor(
     private readonly client: MicrosoftAdsClient,
@@ -64,6 +71,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     this.extensions = new MicrosoftExtensionService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign), (account, ids) => this.images.lookupMany(account, ids));
     this.targeting = new MicrosoftTargetingService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign));
     this.negativeKeywords = new MicrosoftNegativeKeywordService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign));
+    this.budgets = new MicrosoftBudgetService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign), account => this.listCampaigns(account), async account => { await this.scopeFor(account); return this.currencies.get(account); });
   }
 
   capabilities(): ProviderCapabilities {
@@ -105,6 +113,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     });
     const accounts = search.Accounts ?? [];
     for (const account of accounts) {
+      if (account.CurrencyCode) this.currencies.set(String(account.Id), account.CurrencyCode);
       if (account.ParentCustomerId !== undefined) {
         this.customerIds.set(String(account.Id), String(account.ParentCustomerId));
       }
@@ -129,7 +138,7 @@ export class MicrosoftAdsProvider implements AdProvider {
       'campaign',
       'POST',
       'Campaigns/QueryByAccountId',
-      { AccountId: accountId, ReturnAdditionalFields: null },
+      { AccountId: accountId, CampaignType: MICROSOFT_CAMPAIGN_TYPES, ReturnAdditionalFields: null },
       scope,
     );
     return data.Campaigns ?? [];
@@ -292,6 +301,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     if (MICROSOFT_EXTENSION_WRITES.has(op.tool)) return this.extensions.plan(op, guard);
     if (MICROSOFT_TARGETING_WRITES.has(op.tool)) return this.targeting.plan(op, guard);
     if (MICROSOFT_NEGATIVE_KEYWORD_WRITES.has(op.tool)) return this.negativeKeywords.plan(op);
+    if (MICROSOFT_BUDGET_WRITES.has(op.tool)) return this.budgets.plan(op);
     const payload = op.payload as never;
     switch (op.tool) {
       case 'microsoft_create_campaign':
@@ -317,6 +327,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     guard: WriteGuard,
   ): Promise<WritePlan> {
     const resource = validateMicrosoftResource(payload.resource);
+    requireTypedSharedBudgetTool(resource, payload.body);
     const body = structuredClone(payload.body);
     validateMicrosoftAccountScope(body, accountId);
     const coercions: string[] = [];
@@ -335,6 +346,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     payload: { resource: string; body: Record<string, unknown> },
   ): Promise<WritePlan> {
     const resource = validateMicrosoftResource(payload.resource);
+    requireTypedSharedBudgetTool(resource, payload.body);
     validateMicrosoftAccountScope(payload.body, accountId);
     if (containsMicrosoftBudget(payload.body)) {
       throw new AdportError('INVALID_INPUT', 'microsoft: budget updates require microsoft_set_budget for policy checks');
@@ -353,6 +365,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     payload: { resource: string; body: Record<string, unknown> },
   ): Promise<WritePlan> {
     const resource = validateMicrosoftResource(payload.resource);
+    requireTypedSharedBudgetTool(resource, payload.body);
     validateMicrosoftAccountScope(payload.body, accountId);
     return {
       summary: `Permanently delete Microsoft Advertising ${resource} resource(s)`,
@@ -524,6 +537,11 @@ function validateMicrosoftResource(resource: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function requireTypedSharedBudgetTool(resource: string, body: unknown): void {
+  const referencesSharedBudget = (value: unknown): boolean => Array.isArray(value) ? value.some(referencesSharedBudget) : isRecord(value) && Object.entries(value).some(([key, child]) => key === 'BudgetId' && child !== null && child !== undefined && String(child) !== '0' || referencesSharedBudget(child));
+  if (resource === 'Budgets' || referencesSharedBudget(body)) throw new AdportError('INVALID_INPUT', 'microsoft: shared-budget changes require the typed microsoft shared-budget tools for membership, snapshot and monetary policy checks');
 }
 
 function validateMicrosoftAccountScope(value: unknown, accountId: string): void {

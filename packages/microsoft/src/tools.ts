@@ -6,6 +6,7 @@ import { microsoftImageTools } from './images.js';
 import { microsoftExtensionTools } from './extensions.js';
 import { microsoftTargetingTools } from './targeting.js';
 import { microsoftNegativeKeywordTools } from './negative-keywords.js';
+import { microsoftBudgetTools } from './budgets.js';
 
 const statusSchema = z.enum(['Active', 'Paused']);
 
@@ -16,6 +17,7 @@ export function microsoftTools(provider: MicrosoftAdsProvider): AnyToolDefinitio
     ...microsoftExtensionTools(provider),
     ...microsoftTargetingTools(provider),
     ...microsoftNegativeKeywordTools(provider),
+    ...microsoftBudgetTools(provider),
     ...(['keyword', 'search_term'] as const).map(kind => defineTool({
       name: `microsoft_${kind}_report`, namespace: 'microsoft',
       description: `Read the native Microsoft ${kind.replace('_', ' ')} performance report through Submit/Poll/CSV. Native numeric values remain strings; empty or unavailable values are preserved.`,
@@ -43,7 +45,7 @@ export function microsoftTools(provider: MicrosoftAdsProvider): AnyToolDefinitio
       name: 'microsoft_campaigns',
       namespace: 'microsoft',
       description:
-        'List Microsoft Advertising campaigns (Id, Name, Status Active/Paused/BudgetPaused, DailyBudget in account currency, BudgetId when shared).',
+        'List all eight Microsoft Advertising campaign types (Id, Name, Status, DailyBudget in account currency, BudgetId when shared).',
       input: z.object({ account_id: z.string().describe('Ad account id') }),
       annotations: { readOnly: true },
       async handler(input) {
