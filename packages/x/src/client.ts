@@ -56,7 +56,7 @@ export class XAdsClient {
     const invalid = () => new AdportError('INVALID_INPUT', 'x: invalid resource receipt; use the receipt from the approved upload');
     if (receipt.length > 2048 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/.test(receipt)) throw invalid();
     const [payload, signature] = receipt.split('.'), expected = createHmac('sha256', this.receiptKey).update(payload!).digest(), supplied = Buffer.from(signature!, 'base64url');
-    if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) throw invalid();
+    if (supplied.toString('base64url') !== signature || expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) throw invalid();
     try { return JSON.parse(Buffer.from(payload!, 'base64url').toString('utf8')); } catch { throw invalid(); }
   }
 

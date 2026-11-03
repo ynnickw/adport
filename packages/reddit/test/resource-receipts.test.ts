@@ -31,4 +31,11 @@ describe('account-bound Reddit async resource receipts', () => {
     vi.setSystemTime(new Date('2026-11-04T00:00:00Z'));
     expect(() => restarted.verifyResourceReceipt(receipt, 'post_job', 'account', 'job')).toThrow('invalid or expired');
   });
+  it('rejects alternate base64url padding bits without accepting a second spelling of a valid signature', () => {
+    const c = client(), receipt = c.resourceReceipt('post_job', 'account', 'profile', 'job'), [payload, signature] = receipt.split('.'), alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    const alias = signature!.slice(0, -1) + alphabet[alphabet.indexOf(signature!.at(-1)!) + 1];
+    expect(Buffer.from(alias, 'base64url')).toEqual(Buffer.from(signature!, 'base64url'));
+    expect(() => c.verifyResourceReceipt(`${payload}.${alias}`, 'post_job', 'account', 'job')).toThrow('invalid or expired');
+    expect(c.verifyResourceReceipt(receipt, 'post_job', 'account', 'job')).toEqual({ profile_id: 'profile' });
+  });
 });

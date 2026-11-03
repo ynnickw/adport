@@ -65,6 +65,13 @@ describe('X current native v2 media upload and account registration', () => {
     await expect(provider.mediaUploads.status('other', receipt)).rejects.toThrow('mismatched account'); expect(calls).toHaveLength(before);
     const other = new XAdsProvider(new XAdsClient({ ...credentials, accessTokenSecret: 'another-grant' }, async () => { throw new Error('No request'); })); await expect(other.mediaUploads.status(A, receipt)).rejects.toThrow('invalid resource receipt');
   });
+  it('rejects a noncanonical signature encoding even when it decodes to the same HMAC bytes', () => {
+    const { client, calls } = fixture(), receipt = client.resourceReceipt({ kind: 'encoding-test' }), [payload, signature] = receipt.split('.'), alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    const alias = signature!.slice(0, -1) + alphabet[alphabet.indexOf(signature!.at(-1)!) + 1];
+    expect(Buffer.from(alias, 'base64url')).toEqual(Buffer.from(signature!, 'base64url'));
+    expect(() => client.verifyResourceReceipt(`${payload}.${alias}`)).toThrow('invalid resource receipt');
+    expect(calls).toEqual([]);
+  });
   it('exposes pending processing without claiming readiness and prevents early registration', async () => {
     const { provider, calls } = fixture(call => call.url.pathname.endsWith('/finalize') || call.url.pathname === '/2/media/upload' ? { data: { id: ID, media_key: KEY, processing_info: { state: 'pending', check_after_secs: 7 } } } : undefined), result = await provider.applyWrite(op('x_upload_media', upload), guard), receipt = details(result).resource_receipt;
     expect(details(result)).toMatchObject({ status: 'pending', next_tool: 'x_media_upload_status' }); await expect(provider.previewWrite(op('x_register_uploaded_media', { resource_receipt: receipt, name: 'QA' }), guard)).rejects.toThrow('not processed'); expect(writeCalls(calls)).toHaveLength(4);

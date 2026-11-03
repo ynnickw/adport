@@ -48,7 +48,7 @@ export class RedditAdsClient {
     const invalid = () => new AdportError('INVALID_INPUT', 'reddit: invalid or expired resource receipt; use the receipt returned by the approved create operation');
     if (receipt.length > 2048 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/.test(receipt)) throw invalid();
     const [payload, signature] = receipt.split('.'), expected = this.receiptMac(payload!), supplied = Buffer.from(signature!, 'base64url');
-    if (supplied.byteLength !== expected.byteLength || !timingSafeEqual(supplied, expected)) throw invalid();
+    if (supplied.toString('base64url') !== signature || supplied.byteLength !== expected.byteLength || !timingSafeEqual(supplied, expected)) throw invalid();
     let value: unknown;
     try { value = JSON.parse(Buffer.from(payload!, 'base64url').toString('utf8')); } catch { throw invalid(); }
     const data = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
