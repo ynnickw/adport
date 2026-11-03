@@ -95,7 +95,7 @@ Name/schedule edits, status, daily/total caps and bidding have separate named to
 
 `x_delete_line_item` requires its relevant promoted-post/account/media children to be removed first, then uses native DELETE and checks the returned deleted flag. Unknown product types are rejected for deletion rather than assuming all child types have been checked. All advertising writes still use the same exact-argument preview/apply gate, audit log, protected-account and budget rules. X does not provide server validation for this workflow.
 
-Published-post/card authoring, provider media uploads, audience management and measurement remain outstanding. Native promoted-post associations are created ACTIVE and cannot be updated through a PUT endpoint; a tool must account for this explicitly instead of promising ad-level PAUSED creation or an unsupported status edit. The current additions are partial API coverage. The current provider-owned [MCP reference](https://github.com/xdevplatform/docs/blob/2f701ee04b362fffcc1dfee042b11b64ab884fda/x-ads-api/mcp/reference.mdx) maps additional tool families to v12 routes; this mapping is an API comparison source, not evidence that Adport implements every route.
+Published-post/card authoring, audience management and measurement remain outstanding. Native promoted-post associations are created ACTIVE and cannot be updated through a PUT endpoint; a tool must account for this explicitly instead of promising ad-level PAUSED creation or an unsupported status edit. The current additions are partial API coverage. The current provider-owned [MCP reference](https://github.com/xdevplatform/docs/blob/2f701ee04b362fffcc1dfee042b11b64ab884fda/x-ads-api/mcp/reference.mdx) maps additional tool families to v12 routes; this mapping is an API comparison source, not evidence that Adport implements every route.
 
 ## Targeting
 
@@ -115,9 +115,23 @@ Live reads on 2026-11-03 verified placement combinations and language/location/p
 
 `x_update_draft_tweet` sends only supplied fields and preserves omitted copy/name/media/card values, author and nullcast state. An explicit empty media array or null card clears that attachment. `x_delete_draft_tweet` uses native hard deletion and verifies DELETED; a published post remains separate. Native weighted text length/content rules are checked by X on apply: the local preview explicitly is not server validation. No JavaScript string-length approximation is presented as a native post limit.
 
-Media metadata updates preserve omitted settings and verify the returned media key/type and content. Video poster changes require a ready account-owned image. Native library deletion is distinct from an ad pause or underlying byte deletion; existing posts/ads may retain media. Every mutation uses the shared two-step policy and audit path, with returned IDs retained if a receipt cannot be reconciled. Current tools do not upload bytes or create ACTIVE promoted-post associations.
+Media metadata updates preserve omitted settings and verify the returned media key/type and content. Video poster changes require a ready account-owned image. Native library deletion is distinct from an ad pause or underlying byte deletion; existing posts/ads may retain media. Every mutation uses the shared two-step policy and audit path, with returned IDs retained if a receipt cannot be reconciled. Current tools do not publish posts or create ACTIVE promoted-post associations.
 
 Live verification on 2026-11-03 covered account permissions/FULL author discovery, native media-library pagination and real image/video previews, then a named text-only QA draft create → read → copy edit → rename → delete lifecycle. Every write used the shared preview/apply gate; the exact deleted draft returned 404 afterward. Live text-only PUT omitted the unchanged name, so updates accept a partial receipt and require a complete readback to verify preservation. The temporary draft was never published or associated with an ad. Media metadata/deletion and attachment-based draft creation still need live verification.
+
+## Checksum-bound native uploads
+
+`x_upload_media` reads an immutable project media ID in hosted runtimes or an absolute local file through the CLI/stdio resolver. The exact SHA-256, content type, byte size and author appear in the preview and are verified again at apply. Hosted runtimes reject server file paths. Application limits are 5 MiB for images, 15 MiB for GIFs and 50 MiB for video; native duration/account eligibility can impose additional limits.
+
+The implementation follows the current provider-owned v2 OpenAPI: OAuth1 UserToken is supported alongside OAuth2 media.write. It signs fixed api.x.com initialize/append/finalize paths, sends 1 MiB JSON/base64 chunks, assigns the verified FULL advertiser as an additional owner, and never replays writes automatically. It does not use legacy command-style INIT/APPEND/FINALIZE parameters or expose arbitrary upload URLs.
+
+A finalized upload returns a short-lived HMAC receipt bound to the account, author, native ID/key, checksum, size and finalization state. `x_media_upload_status` requires this receipt before calling the native account-less status endpoint. Receipts expire no later than native upload expiry or 24 hours, and another grant cannot verify them. Current author association is rechecked. Processing acceptance is distinct from readiness.
+
+`x_register_uploaded_media` separately previews/apply-registers a processed upload in the same account's library and verifies complete metadata readback. Pending, incomplete, expired, wrong-account and already-registered uploads are rejected. Upload or registration failures retain safe IDs and receipts for reconciliation. A failed incomplete upload can leave bytes until native expiry; library deletion does not claim to remove global uploaded bytes. Neither upload nor registration publishes a post or attaches an ad.
+
+The first local live initialize request timed out without a returned upload ID. A separate unauthenticated connectivity check also timed out against api.x.com while ads-api.x.com remained reachable. No automatic write retry occurred. Native v2 upload/registration is contract-tested and awaiting successful live endpoint verification; earlier Ads API draft/media reads and draft lifecycle verification are separate evidence.
+
+Official contracts: [v2 OpenAPI](https://github.com/xdevplatform/docs/blob/2f701ee04b362fffcc1dfee042b11b64ab884fda/openapi.json), [chunked media upload](https://docs.x.com/x-api/media/quickstart/media-upload-chunked).
 
 ## Access and commercial boundary
 

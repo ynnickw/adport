@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AdportError, resolveDateRange, type AdProvider, type MetricName, type NormalizedQuery, type Report, type ReportRow, type StandardActions, type WriteGuard, type WriteOperation, type WritePreview, type WriteResult } from '@adport/core';
+import { AdportError, resolveDateRange, type AdProvider, type MediaResolver, type MetricName, type NormalizedQuery, type Report, type ReportRow, type StandardActions, type WriteGuard, type WriteOperation, type WritePreview, type WriteResult } from '@adport/core';
 import { XAdsClient } from './client.js';
 import { XAdsEntities } from './entities.js';
 import { XAdsAnalytics, X_PLACEMENTS, xAccountMidnight } from './analytics.js';
@@ -7,6 +7,7 @@ import { planXWrite } from './writes.js';
 import { XManagementService } from './management.js';
 import { XTargetingService } from './targeting.js';
 import { XCreativeService } from './creatives.js';
+import { XMediaService } from './media.js';
 
 type BaseMetric = 'spend' | 'impressions' | 'clicks';
 type Metrics = Partial<Record<BaseMetric, number>>;
@@ -20,16 +21,17 @@ export class XAdsProvider extends XAdsEntities implements AdProvider {
   private readonly management: XManagementService;
   readonly targeting: XTargetingService;
   readonly creatives: XCreativeService;
-  constructor(client: XAdsClient, analytics?: XAdsAnalytics) { super(client); this.analytics = analytics ?? new XAdsAnalytics(client); this.management = new XManagementService(this); this.targeting = new XTargetingService(this); this.creatives = new XCreativeService(this); }
+  readonly mediaUploads: XMediaService;
+  constructor(client: XAdsClient, analytics?: XAdsAnalytics, media?: MediaResolver) { super(client); this.analytics = analytics ?? new XAdsAnalytics(client); this.management = new XManagementService(this); this.targeting = new XTargetingService(this); this.creatives = new XCreativeService(this); this.mediaUploads = new XMediaService(this, media); }
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions { return { pauseCampaign: (accountId, campaignId) => ({ tool: 'x_set_campaign_status', input: { account_id: accountId, campaign_id: campaignId, status: 'PAUSED' } }) }; }
   async previewWrite(op: WriteOperation, guard: WriteGuard): Promise<WritePreview> {
     const { execute: _execute, ...preview } = await this.writePlan(op, guard); return { ...preview, serverValidated: false };
   }
   async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> {
-    return { applied: true, resourceIds: await (await this.writePlan(op, guard)).execute() };
+    const result = await (await this.writePlan(op, guard)).execute(); return Array.isArray(result) ? { applied: true, resourceIds: result } : result;
   }
-  private writePlan(op: WriteOperation, guard: WriteGuard) { if (/^x_(?:create_draft_tweet|update_draft_tweet|delete_draft_tweet|update_media_library|delete_media_library_item)$/.test(op.tool)) return this.creatives.plan(op, guard); if (['x_add_targeting_criterion', 'x_remove_targeting_criterion', 'x_update_targeting'].includes(op.tool)) return this.targeting.plan(op, guard); return /^x_(?:create_line_item|update_line_item|set_line_item_(?:status|budget|bidding)|delete_line_item)$/.test(op.tool) ? this.management.plan(op, guard) : planXWrite(this, op, guard); }
+  private writePlan(op: WriteOperation, guard: WriteGuard) { if (['x_upload_media', 'x_register_uploaded_media'].includes(op.tool)) return this.mediaUploads.plan(op); if (/^x_(?:create_draft_tweet|update_draft_tweet|delete_draft_tweet|update_media_library|delete_media_library_item)$/.test(op.tool)) return this.creatives.plan(op, guard); if (['x_add_targeting_criterion', 'x_remove_targeting_criterion', 'x_update_targeting'].includes(op.tool)) return this.targeting.plan(op, guard); return /^x_(?:create_line_item|update_line_item|set_line_item_(?:status|budget|bidding)|delete_line_item)$/.test(op.tool) ? this.management.plan(op, guard) : planXWrite(this, op, guard); }
   async report(query: NormalizedQuery): Promise<Report> {
     const range = resolveDateRange(query.dateRange);
     z.iso.date().parse(range.start); z.iso.date().parse(range.end);

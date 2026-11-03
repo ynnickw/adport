@@ -92,7 +92,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
   if (credentials.x && providerAllowedForOrganization('x', principal.organizationId)) {
     const { X_CONSUMER_KEY: consumerKey, X_CONSUMER_SECRET: consumerSecret } = env();
     if (!consumerKey || !consumerSecret) throw new Error('X Ads application credentials are not configured.');
-    const provider = new XAdsProvider(new XAdsClient({ consumerKey, consumerSecret, ...credentials.x }));
+    const provider = new XAdsProvider(new XAdsClient({ consumerKey, consumerSecret, ...credentials.x }), undefined, media);
     modules.push({ provider: scopeProvider(provider), tools: xTools(provider) });
   }
   if (credentials.google) {
