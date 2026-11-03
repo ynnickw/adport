@@ -10,13 +10,15 @@ import { SpotifyAdsClient, SpotifyAdsProvider, spotifyTools } from '@adport/prov
 import { PinterestAdsClient, PinterestAdsProvider, pinterestTools } from '@adport/provider-pinterest';
 import { LinkedInAdsClient, LinkedInAdsProvider, linkedinTools } from '@adport/provider-linkedin';
 import { XAdsClient, XAdsProvider, xTools } from '@adport/provider-x';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { Client, InMemoryTransport, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { createMcpHandler } from '@modelcontextprotocol/server';
 import { createMcpServer } from '../src/index.js';
 
 describe('all-provider shared tool surface', () => {
-  it('registers native read/create/update/delete tools once for both CLI and MCP adapters', async () => {
+  let runtime: Awaited<ReturnType<typeof createContext>>;
+  let names: string[];
+  beforeAll(async () => {
     const google = new GoogleAdsProvider(new GoogleAdsRestClient({
       developerToken: 'x', clientId: 'x', clientSecret: 'x', refreshToken: 'x',
     }));
@@ -37,7 +39,7 @@ describe('all-provider shared tool surface', () => {
     const linkedin = new LinkedInAdsProvider(new LinkedInAdsClient({ accessToken: 'x' }));
     const x = new XAdsProvider(new XAdsClient({ consumerKey: 'x', consumerSecret: 'x', accessToken: 'x', accessTokenSecret: 'x' }));
 
-    const runtime = await createContext({
+    runtime = await createContext({
       providerModules: [
         { provider: google, tools: googleTools(google) },
         { provider: meta, tools: metaTools(meta) },
@@ -52,8 +54,10 @@ describe('all-provider shared tool surface', () => {
         { provider: x, tools: xTools(x) },
       ],
     });
-    const names = runtime.registry.list().map((tool) => tool.name);
+    names = runtime.registry.list().map((tool) => tool.name);
+  });
 
+  it('registers native read/create/update/delete tools once for both CLI and MCP adapters', async () => {
     expect(names).toEqual(expect.arrayContaining([
       'google_gaql', 'google_api_create', 'google_api_update', 'google_api_remove',
       'meta_api_read', 'meta_api_create', 'meta_api_update', 'meta_api_delete',
@@ -106,7 +110,9 @@ describe('all-provider shared tool surface', () => {
       await client.close();
       await server.close();
     }
+  });
 
+  it('exposes named hosted tools and rejects every generic dispatcher through the SDK', async () => {
     const hosted = createMcpServer({ runtime, productionOnly: true });
     const hostedClient = new Client({ name: 'hosted-surface-test', version: '1.0.0' });
     const [hostClientTransport, hostServerTransport] = InMemoryTransport.createLinkedPair();
@@ -119,6 +125,7 @@ describe('all-provider shared tool surface', () => {
       expect(hostedNames).toEqual(expect.arrayContaining([
         'apple_adgroups', 'apple_keywords', 'apple_negative_keywords', 'apple_ads', 'apple_creatives', 'apple_product_pages',
         'apple_create_keywords', 'apple_create_negative_keywords', 'apple_set_campaign_schedule', 'apple_create_creative', 'apple_create_ad',
+        'microsoft_audience_targets', 'microsoft_add_audience_target', 'microsoft_set_audience_target_bid', 'microsoft_remove_audience_target', 'microsoft_set_audience_target_mode',
       ]));
       const dispatchers = names.filter(name => name === 'recommendation_apply' || /_api_(read|create|update|delete|remove)$/.test(name));
       for (const name of dispatchers) {
@@ -126,7 +133,9 @@ describe('all-provider shared tool surface', () => {
         await expect(hostedClient.callTool({ name, arguments: {} })).rejects.toThrow(/not found/);
       }
     } finally { await hostedClient.close(); await hosted.close(); }
+  });
 
+  it('serves the complete named catalog and widget metadata over modern streamable HTTP', async () => {
     const modern = createMcpHandler(() => createMcpServer({ runtime, productionOnly: true }));
     const modernClient = new Client({ name: 'modern-directory-test', version: '1' }, { versionNegotiation: { mode: { pin: '2026-07-28' } } });
     try {

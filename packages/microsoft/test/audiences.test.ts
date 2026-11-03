@@ -92,6 +92,7 @@ describe('Microsoft account audiences', () => {
 
   it('excludes system-owned size changes from snapshots and binds actual configuration', async () => {
     const f = fixture(); f.state.audiences.push(existing()); const first = await f.provider.audiences.get(account, '100', 'RemarketingList');
+    expect(f.calls.find(value => value.path === 'Audiences/QueryByIds')!.body).toMatchObject({ AudienceIds: ['100'], Type: 'RemarketingList' });
     f.state.audiences[0]!.SearchSize = '500'; f.state.audiences[0]!.AudienceNetworkSize = 123;
     expect((await f.provider.audiences.get(account, '100', 'RemarketingList')).snapshot_hash).toBe(first.snapshot_hash);
     f.state.audiences[0]!.Name = 'Concurrent edit';

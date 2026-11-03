@@ -29,6 +29,7 @@ import { MicrosoftBudgetService, MICROSOFT_BUDGET_WRITES } from './budgets.js';
 import { MicrosoftPlanningService } from './planning.js';
 import { MicrosoftConversionService, MICROSOFT_CONVERSION_WRITES } from './conversions.js';
 import { MicrosoftAudienceService, MICROSOFT_AUDIENCE_WRITES } from './audiences.js';
+import { MicrosoftAudienceTargetingService, MICROSOFT_AUDIENCE_TARGETING_WRITES } from './audience-targeting.js';
 
 /** DailyBudget is a double in whole account-currency units. */
 export const UNITS_TO_MICROS = 1_000_000;
@@ -66,6 +67,7 @@ export class MicrosoftAdsProvider implements AdProvider {
   readonly planning: MicrosoftPlanningService;
   readonly conversions: MicrosoftConversionService;
   readonly audiences: MicrosoftAudienceService;
+  readonly audienceTargeting: MicrosoftAudienceTargetingService;
 
   constructor(
     private readonly client: MicrosoftAdsClient,
@@ -81,6 +83,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     this.planning = new MicrosoftPlanningService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign), account => this.currencies.get(account));
     this.conversions = new MicrosoftConversionService(client, (account, refresh) => this.scopeFor(account, refresh), (account, campaign) => this.lookupCampaign(account, campaign));
     this.audiences = new MicrosoftAudienceService(client, (account, refresh) => this.scopeFor(account, refresh), (account, campaign) => this.lookupCampaign(account, campaign), account => this.listCampaigns(account));
+    this.audienceTargeting = new MicrosoftAudienceTargetingService(client, (account, refresh) => this.scopeFor(account, refresh), (account, campaign) => this.lookupCampaign(account, campaign), (account, audience, type) => this.audiences.get(account, audience, type));
   }
 
   capabilities(): ProviderCapabilities {
@@ -314,6 +317,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     if (MICROSOFT_BUDGET_WRITES.has(op.tool)) return this.budgets.plan(op);
     if (MICROSOFT_CONVERSION_WRITES.has(op.tool)) return this.conversions.plan(op, guard);
     if (MICROSOFT_AUDIENCE_WRITES.has(op.tool)) return this.audiences.plan(op);
+    if (MICROSOFT_AUDIENCE_TARGETING_WRITES.has(op.tool)) return this.audienceTargeting.plan(op, guard);
     const payload = op.payload as never;
     switch (op.tool) {
       case 'microsoft_create_campaign':
@@ -568,6 +572,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function requireTypedMutationTool(resource: string, body: unknown): void {
   const collection = resource.toLowerCase();
+  const hasFieldValue = (value: unknown, key: string, matches: (value: string) => boolean): boolean => Array.isArray(value) ? value.some(child => hasFieldValue(child, key, matches)) : isRecord(value) && Object.entries(value).some(([field, child]) => field.toLowerCase() === key && typeof child === 'string' && matches(child.trim().toLowerCase()) || hasFieldValue(child, key, matches));
+  const audienceSelectors = new Set(['audience', 'audiencecriterion', 'custom', 'customaudience', 'inmarket', 'inmarketaudience', 'product', 'productaudience', 'remarketinglist', 'similarremarketinglist', 'combinedlist', 'customerlist', 'impressionbasedremarketinglist', 'customsegment', 'aiprompt']);
+  if (['campaigncriterions', 'adgroupcriterions'].includes(collection) && (hasFieldValue(body, 'criteriontype', value => value.split(/[,\s]+/).some(value => audienceSelectors.has(value))) || hasFieldValue(body, 'type', value => ['audience', 'audiencecriterion'].includes(value)))) throw new AdportError('INVALID_INPUT', 'microsoft: audience criteria require typed audience-targeting tools for hierarchy, target-mode and opposite-level checks');
+  if (['campaigns', 'adgroups'].includes(collection) && hasFieldValue(body, 'type', value => ['target', 'targetsetting'].includes(value))) throw new AdportError('INVALID_INPUT', 'microsoft: target-setting changes require microsoft_set_audience_target_mode to preserve other targeting details');
   if (collection === 'audiences') throw new AdportError('INVALID_INPUT', 'microsoft: audience mutations require typed audience tools for Account ownership, replacement-rule semantics and deletion reference checks');
   if (collection === 'uettags') throw new AdportError('INVALID_INPUT', 'microsoft: use microsoft_create_uet_tag for new uninstalled tags; customer-wide tag edits, deletion and sharing are not exposed through single-account generic tools');
   if (collection === 'conversiongoals') throw new AdportError('INVALID_INPUT', 'microsoft: conversion-goal mutations require typed conversion tools for account scope, native auto-tagging side effects and event-criteria preservation');

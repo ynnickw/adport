@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { MicrosoftNativeService, microsoftId as id, microsoftNativeId as nativeId, microsoftRow as row, microsoftRows as rows, type MicrosoftPlan, type MicrosoftRow as Row } from './native.js';
 import type { MicrosoftAdsProvider } from './provider.js';
 
-const audienceType = z.enum(['RemarketingList', 'Custom', 'InMarket', 'Product', 'SimilarRemarketingList', 'CombinedList', 'CustomerList', 'ImpressionBasedRemarketingList', 'CustomSegment']);
+export const microsoftAudienceType = z.enum(['RemarketingList', 'Custom', 'InMarket', 'Product', 'SimilarRemarketingList', 'CombinedList', 'CustomerList', 'ImpressionBasedRemarketingList', 'CustomSegment']);
+const audienceType = microsoftAudienceType;
 const standardTypes = audienceType.options.filter(value => value !== 'CustomSegment');
 const name = z.string().min(1).max(128).refine(value => value.trim().length > 0, 'Name cannot be blank');
 const description = z.string().max(1024);
@@ -55,8 +56,8 @@ export class MicrosoftAudienceService extends MicrosoftNativeService {
   }
   private readonly campaigns: (account: string) => Promise<unknown[]>;
 
-  private async query(account: string, types: z.infer<typeof audienceType>[]): Promise<Row[]> {
-    const result = await this.request(account, 'Audiences/QueryByIds', { AudienceIds: null, Type: types.join(', '), ReturnAdditionalFields: 'NormalForm, NumberRuleItem, ImpressionBasedRemarketingList, CampaignIdsAdGroupIds' });
+  private async query(account: string, types: z.infer<typeof audienceType>[], ids: string[] | null = null): Promise<Row[]> {
+    const result = await this.request(account, 'Audiences/QueryByIds', { AudienceIds: ids, Type: types.join(', '), ReturnAdditionalFields: 'NormalForm, NumberRuleItem, ImpressionBasedRemarketingList, CampaignIdsAdGroupIds' });
     if (!Object.hasOwn(result, 'Audiences')) throw new AdportError('PROVIDER_ERROR', 'microsoft: native audience response envelope is missing');
     const values = rows(result.Audiences);
     if (new Set(values.map(value => nativeId(value.Id))).size !== values.length || values.some(value => !types.includes(audienceType.parse(value.Type)))) throw new AdportError('PROVIDER_ERROR', 'microsoft: native audience identities or types mismatch');
@@ -79,7 +80,7 @@ export class MicrosoftAudienceService extends MicrosoftNativeService {
   }
 
   private async find(account: string, audience: string, type: z.infer<typeof audienceType>): Promise<Row> {
-    const found = (await this.query(account, [type])).find(value => nativeId(value.Id) === audience);
+    const found = (await this.query(account, [type], [audience])).find(value => nativeId(value.Id) === audience);
     if (!found) throw new AdportError('INVALID_INPUT', 'microsoft: audience was not found for the selected account/type');
     return found;
   }
