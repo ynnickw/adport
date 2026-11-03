@@ -47,4 +47,17 @@ describe('MCP transport rejection diagnostics', () => {
     }
     expect(warn).not.toHaveBeenCalled();
   });
+
+  it('reports in-band discovery errors without logging error messages or successful catalog data', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const request = new Request('https://adport.test/mcp', { headers: { 'mcp-method': 'prompts/list', 'mcp-protocol-version': '2026-07-28' } });
+    const response = Response.json({ jsonrpc: '2.0', id: 1, error: { code: -32601, message: 'private-value' } });
+    await diagnoseMcpRejection(request, response);
+    expect(JSON.parse(warn.mock.calls[0]![0] as string)).toMatchObject({ status: 200, rpcMethod: 'prompts/list', reason: 'method_not_found' });
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('private-value');
+    expect((await response.json()).error.message).toBe('private-value');
+    warn.mockClear();
+    await diagnoseMcpRejection(request, Response.json({ result: { tools: [{ description: 'private-value' }] } }));
+    expect(warn).not.toHaveBeenCalled();
+  });
 });
