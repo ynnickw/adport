@@ -1,4 +1,4 @@
-import { createMcpServer, ADPORT_UI_RESOURCE_DOMAINS } from '@adport/mcp';
+import { createMcpServer, createMcpUiServer, ADPORT_UI_RESOURCE_DOMAINS } from '@adport/mcp';
 import { createMcpHandler, isLegacyRequest, WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/server';
 import { apiPrincipal } from '@/lib/cloud/auth';
 import { createTenantRuntime } from '@/lib/cloud/runtime';
@@ -10,19 +10,19 @@ import { adWritePlanLimit } from '@/lib/cloud/write-plan-limit';
 import { env } from '@/lib/env';
 import { routeMcpProjects } from '@/lib/cloud/mcp-projects';
 import { diagnoseMcpRejection } from '@/lib/mcp-transport-diagnostics';
+import { isMcpUiResourceRequest } from '@/lib/mcp-ui-request';
 
 async function handle(request: Request): Promise<Response> {
   try {
     const principal = await apiPrincipal(request);
-    const tenantRuntime = await createTenantRuntime(principal, { surface: 'mcp' });
-    const runtime = principal.oauthTokenId ? routeMcpProjects(tenantRuntime, principal) : tenantRuntime;
     const toolScopes = principal.oauthOrganizationGroupId ? principal.grantedScopes ?? principal.scopes : principal.scopes;
     // Each HTTP request has a fresh server, so initialize/clientInfo cannot
     // identify the host on subsequent resources/read requests.
     const oauthClient = principal.oauthTokenId && principal.clientId
       ? await getMcpOAuthClient(principal.clientId)
       : undefined;
-    const writeLimit = principal.oauthOrganizationGroupId ? undefined : await adWritePlanLimit(principal, env().ADPORT_CLOUD_BASE_URL);
+    const uiOnly = await isMcpUiResourceRequest(request);
+    const writeLimit = uiOnly || principal.oauthOrganizationGroupId ? undefined : await adWritePlanLimit(principal, env().ADPORT_CLOUD_BASE_URL);
     const writePlanDenial = writeLimit
       ? {
           code: 'PLAN_LIMIT',
@@ -30,13 +30,8 @@ async function handle(request: Request): Promise<Response> {
           data: { planLimit: writeLimit },
         }
       : undefined;
-    const server = createMcpServer({
-      runtime,
-      instructions: principal.oauthTokenId
-        ? 'Call projects_list to discover the projects and platforms authorized for this connection. Use project_id on operations to choose the intended project; it is required when multiple projects are available. Each project has its own accounts and policies. New connected platforms are available after their accounts are enabled, without reconnecting the assistant.'
-        : undefined,
+    const uiOptions = {
       name: 'adport-cloud',
-      productionOnly: true,
       uiDomain: mcpUiDomain(oauthClient?.redirectUris ?? [], mcpResourceUrl()),
       uiResourceDomains: [...ADPORT_UI_RESOURCE_DOMAINS, new URL(env().NEXT_PUBLIC_SUPABASE_URL).origin],
       version: '0.1.0',
@@ -45,12 +40,26 @@ async function handle(request: Request): Promise<Response> {
         mimeType: 'image/svg+xml',
         sizes: ['any'],
       }],
-      scopes: toolScopes,
-      scopeDenials: writePlanDenial ? { 'tools:write': writePlanDenial } : undefined,
-      notConnectedMessage: 'This provider is not connected or available in the selected Adport project. Open Connections in the Adport dashboard to connect a supported provider, then Accounts to enable agent access.'
-        + (principal.oauthTokenId ? ' Use projects_list to find projects with this provider.' : '')
-        + ' Local CLI credentials and demo mode do not connect this cloud workspace.',
-    });
+    };
+    let server: ReturnType<typeof createMcpServer>;
+    if (uiOnly) server = createMcpUiServer(uiOptions);
+    else {
+      const tenantRuntime = await createTenantRuntime(principal, { surface: 'mcp' });
+      const runtime = principal.oauthTokenId ? routeMcpProjects(tenantRuntime, principal) : tenantRuntime;
+      server = createMcpServer({
+        ...uiOptions,
+        runtime,
+        instructions: principal.oauthTokenId
+          ? 'Call projects_list to discover the projects and platforms authorized for this connection. Use project_id on operations to choose the intended project; it is required when multiple projects are available. Each project has its own accounts and policies. New connected platforms are available after their accounts are enabled, without reconnecting the assistant.'
+          : undefined,
+        productionOnly: true,
+        scopes: toolScopes,
+        scopeDenials: writePlanDenial ? { 'tools:write': writePlanDenial } : undefined,
+        notConnectedMessage: 'This provider is not connected or available in the selected Adport project. Open Connections in the Adport dashboard to connect a supported provider, then Accounts to enable agent access.'
+          + (principal.oauthTokenId ? ' Use projects_list to find projects with this provider.' : '')
+          + ' Local CLI credentials and demo mode do not connect this cloud workspace.',
+      });
+    }
     const requestOptions = {
       authInfo: {
         token: principal.apiKeyId ?? principal.oauthTokenId!,

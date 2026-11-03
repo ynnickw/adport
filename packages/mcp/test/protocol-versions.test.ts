@@ -7,27 +7,42 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import { createMcpHandler } from '@modelcontextprotocol/server';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { describe, expect, it } from 'vitest';
-import { createMcpServer } from '../src/index.js';
+import { createMcpServer, createMcpUiServer } from '../src/index.js';
 import { ADPORT_UI_URI } from '../src/ui.js';
 
 describe('official MCP HTTP protocol entries', () => {
-  it.each(['modern', 'legacy'] as const)('serves %s discovery, resources and guarded writes from one registry', async era => {
+  it('serves the UI resource without a runtime or any callable business tools', async () => {
+    const handler = createMcpHandler(() => createMcpUiServer({ uiDomain: 'fixture.claudemcpcontent.com' }));
+    const client = new Client({ name: 'ui-only-test', version: '1' });
+    try {
+      await client.connect(new StreamableHTTPClientTransport(new URL('https://adport.test/mcp'), { fetch: (url, init) => handler.fetch(new Request(url, init)) }));
+      const resource = (await client.readResource({ uri: ADPORT_UI_URI })).contents[0]!;
+      expect(resource).toMatchObject({ mimeType: 'text/html;profile=mcp-app', _meta: { ui: { domain: 'fixture.claudemcpcontent.com' } } });
+      expect(resource._meta).not.toHaveProperty('openai/widgetDomain');
+      await expect(client.callTool({ name: 'mock_set_campaign_status', arguments: { account_id: 'mock-1', campaign_id: 'c1', status: 'PAUSED' } })).rejects.toThrow();
+    } finally { await client.close(); await handler.close(); }
+  });
+
+  it.each(['modern', 'legacy'] as const)('serves %s static resources separately without disrupting guarded registry writes', async era => {
     const home = await mkdtemp(join(tmpdir(), 'adport-protocol-test-'));
     const previousHome = process.env.ADPORT_HOME;
     process.env.ADPORT_HOME = home;
     const runtime = await createContext({ includeMock: true });
     const handler = createMcpHandler(() => createMcpServer({ runtime }));
+    const uiHandler = createMcpHandler(() => createMcpUiServer());
     const wire: Array<{ method: unknown; protocol: string | null }> = [];
     const client = new Client({ name: 'protocol-test', version: '1' }, era === 'modern'
       ? { versionNegotiation: { mode: { pin: '2026-07-28' } } } : {});
     const transport = new StreamableHTTPClientTransport(new URL('https://adport.test/mcp'), {
       fetch: async (url, init) => {
         const request = new Request(url, init);
+        let uiOnly = false;
         if (request.method === 'POST') {
           const body = await request.clone().json() as { method?: unknown };
           wire.push({ method: body.method, protocol: request.headers.get('mcp-protocol-version') });
+          uiOnly = ['resources/read', 'resources/list', 'resources/templates/list'].includes(String(body.method));
         }
-        return handler.fetch(request);
+        return (uiOnly ? uiHandler : handler).fetch(request);
       },
     });
     try {
@@ -40,6 +55,8 @@ describe('official MCP HTTP protocol entries', () => {
       const resource = await client.readResource({ uri: ADPORT_UI_URI });
       expect(resource.contents[0]).toMatchObject({ mimeType: 'text/html;profile=mcp-app' });
       expect(resource.contents[0]).toHaveProperty('text');
+      expect((await client.listResources()).resources.map(value => value.uri)).toEqual([ADPORT_UI_URI, 'ui://adport/insight-card-v2.html']);
+      expect((await client.listResourceTemplates()).resourceTemplates).toEqual([]);
       const input = { account_id: 'mock-1', campaign_id: 'c1', status: 'PAUSED' };
       const preview = await client.callTool({ name: 'mock_set_campaign_status', arguments: input });
       expect(preview.isError).not.toBe(true);
@@ -58,6 +75,7 @@ describe('official MCP HTTP protocol entries', () => {
     } finally {
       await client.close();
       await handler.close();
+      await uiHandler.close();
       if (previousHome === undefined) delete process.env.ADPORT_HOME;
       else process.env.ADPORT_HOME = previousHome;
       await rm(home, { recursive: true, force: true });
