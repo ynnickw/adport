@@ -54,6 +54,16 @@ The REST paths, seed variants and limits follow Google's [v25 keyword planning p
 
 Google's [Asset protocol](https://github.com/googleapis/googleapis/blob/master/google/ads/googleads/v25/resources/asset.proto) and [AssetOperation](https://github.com/googleapis/googleapis/blob/master/google/ads/googleads/v25/services/asset_service.proto) provide no asset-removal operation. Assets remain in the library after unlinking; Adport does not advertise an asset-delete tool. Association status and removal follow the native [CampaignAsset](https://github.com/googleapis/googleapis/blob/master/google/ads/googleads/v25/resources/campaign_asset.proto) contract, with corresponding customer/ad-group services.
 
+### Labels
+
+`google_labels` lists enabled account-owned labels with native ID continuation. `google_label_context` reads one label and returns `snapshot_hash`; supply it as `expected_label_hash` when updating or removing that label, or changing an assignment. Metadata changes after the read reject the operation at preview and apply. The snapshot covers label metadata; Google does not provide an atomic compare-and-set or freeze assignment membership.
+
+`google_create_label` creates unattached metadata. `google_update_label` changes only supplied name, hex background color or description; omission preserves a field and an empty description clears it. `google_remove_label` removes the shared label and its assignments. Label names are 1–80 characters and descriptions at most 200. Labels have no pause state; Adport does not invent one. Every mutation uses the normal two-step policy gate and native `validate_only` preview.
+
+`google_label_associations`, `google_link_label` and `google_unlink_label` cover campaigns, ad groups, ads and ad-group criteria. The target includes the full campaign/ad-group hierarchy, checked in the selected account before use. Association lists report truncation. Unlinking preserves the label and labeled entity; removing the label affects all assignments. Classification can affect label-based reports and automation, while these tools preserve serving statuses, entity content and budgets.
+
+The wire formats follow the [v25 label service](https://github.com/googleapis/googleapis/blob/57aa4dbce5d23b2115b2732b10dcb7ddc8e8698d/google/ads/googleads/v25/services/label_service.proto) and corresponding campaign/ad-group/ad/criterion label services. Manager-to-customer labels use a different native contract and are not exposed by these named tools.
+
 Google can show an “unverified app” warning when your private OAuth project requests the Google Ads scope without completing verification. For the CLI, that warning concerns your BYO project and credentials are not sent to Adport Cloud. Add yourself as a test user during development. The managed cloud application's own OAuth project must complete Google's production verification before public use.
 
 ## Meta Ads

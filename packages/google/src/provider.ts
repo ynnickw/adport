@@ -20,6 +20,7 @@ import {
 import { GoogleAdsRestClient, normalizeCustomerId } from './client.js';
 import { GoogleAssetService, GOOGLE_ASSET_WRITES } from './assets.js';
 import { GoogleAssetLinks, GOOGLE_ASSET_LINK_WRITES } from './asset-links.js';
+import { GoogleLabelService, GOOGLE_LABEL_WRITES } from './labels.js';
 
 const LEVEL_RESOURCE = {
   account: 'customer',
@@ -37,11 +38,7 @@ const BASE_METRIC_FIELDS: Record<string, string> = {
   conversion_value: 'metrics.conversions_value',
 };
 
-interface WritePlan {
-  summary: string;
-  changes: string[];
-  coercions: string[];
-  budgetDeltas: WritePreview['budgetDeltas'];
+interface WritePlan extends Omit<WritePreview, 'serverValidated'> {
   execute: (validateOnly: boolean) => Promise<string[]>;
 }
 
@@ -50,10 +47,12 @@ export class GoogleAdsProvider implements AdProvider {
   private readonly discoveredLoginCustomerIds = new Map<string, string>();
   readonly assets: GoogleAssetService;
   readonly assetLinks: GoogleAssetLinks;
+  readonly labels: GoogleLabelService;
 
   constructor(private readonly client: GoogleAdsRestClient, media?: MediaResolver) {
     this.assets = new GoogleAssetService(client, media);
     this.assetLinks = new GoogleAssetLinks(client, this.assets);
+    this.labels = new GoogleLabelService(client);
   }
 
   keywordPlanning(customerId: string, method: 'generateKeywordIdeas' | 'generateKeywordHistoricalMetrics', body: Record<string, unknown>) {
@@ -313,6 +312,8 @@ export class GoogleAdsProvider implements AdProvider {
       changes: plan.changes,
       coercions: plan.coercions,
       budgetDeltas: plan.budgetDeltas,
+      ...(plan.fieldChanges ? { fieldChanges: plan.fieldChanges } : {}),
+      ...(plan.notes ? { notes: plan.notes } : {}),
       serverValidated: true,
     };
   }
@@ -328,6 +329,7 @@ export class GoogleAdsProvider implements AdProvider {
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
     if (GOOGLE_ASSET_WRITES.has(op.tool)) return this.assets.plan(op);
     if (GOOGLE_ASSET_LINK_WRITES.has(op.tool)) return this.assetLinks.plan(op, guard);
+    if (GOOGLE_LABEL_WRITES.has(op.tool)) return this.labels.plan(op);
     const cid = normalizeCustomerId(op.accountId);
     // Tool input was already zod-validated at the registry boundary.
     const payload = op.payload as never;
