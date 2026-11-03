@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import packageJson from '../package.json';
+import { cloudTool, uploadCloudMedia } from './cloud-media.js';
 import {
   AdportError,
   AuditLog,
@@ -82,11 +83,21 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .command('run <name>')
     .description('Invoke a tool with JSON input (the same tools the MCP server exposes)')
     .option('--input <json>', 'JSON object with the tool arguments', '{}')
-    .action(async (name: string, opts: { input: string }) => {
+    .option('--cloud-url <origin>', 'Run the same registry tool on this Adport Cloud server')
+    .option('--api-key-env <name>', 'Environment variable containing a project-scoped API key', 'ADPORT_API_KEY')
+    .action(async (name: string, opts: { input: string; cloudUrl?: string; apiKeyEnv: string }) => {
+      if (opts.cloudUrl) { io.out(json(await cloudTool(name, JSON.parse(opts.input), { cloudUrl: opts.cloudUrl, apiKeyEnv: opts.apiKeyEnv }))); return; }
       const rt = await commandRuntime();
       const result = await rt.registry.call(name, JSON.parse(opts.input), rt.ctx);
       io.out(json(result));
     });
+
+  program.command('media').description('Manage project assets without opening a dashboard')
+    .command('upload <file>').description('Preview a project upload; pass its pending ID to transfer and verify the exact file')
+    .option('--cloud-url <origin>', 'Adport Cloud origin', 'https://app.adport.dev')
+    .option('--api-key-env <name>', 'Environment variable containing a project-scoped API key', 'ADPORT_API_KEY')
+    .option('--pending-operation-id <id>', 'Apply the approved upload preview, transfer bytes and finalize through the policy gate')
+    .action(async (file: string, opts: { cloudUrl: string; apiKeyEnv: string; pendingOperationId?: string }) => { io.out(json(await uploadCloudMedia(file, opts))); });
 
   program
     .command('accounts')

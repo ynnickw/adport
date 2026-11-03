@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import type { WriteKind, WriteOperation } from '../provider.js';
-import { defineTool, type AnyToolDefinition } from './registry.js';
+import type { AdProvider, WriteKind, WriteOperation } from '../provider.js';
+import { defineTool, type AnyToolDefinition, type ToolContext } from './registry.js';
 import { writeOutput } from './outputs.js';
 
 const TWO_STEP_NOTE =
@@ -20,9 +20,11 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   kind: WriteKind;
   payload: S;
   destructive?: boolean;
+  /** Project resources use the same policy gate without inventing an ad account. */
+  contextTarget?: (ctx: ToolContext) => { provider: AdProvider; accountId: string };
 }): AnyToolDefinition {
   const input = def.payload.safeExtend({
-    account_id: z.string().min(1).describe('Target account id'),
+    ...(def.contextTarget ? {} : { account_id: z.string().min(1).describe('Target account id') }),
     pending_operation_id: z
       .string()
       .optional()
@@ -41,11 +43,12 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
         account_id: string;
         pending_operation_id?: string;
       };
-      const provider = ctx.providers.get(def.provider);
+      const target = def.contextTarget?.(ctx);
+      const provider = target?.provider ?? ctx.providers.get(def.provider);
       const op: WriteOperation = {
         tool: def.name,
         provider: def.provider,
-        accountId: account_id,
+        accountId: target?.accountId ?? account_id,
         kind: def.kind,
         payload,
       };

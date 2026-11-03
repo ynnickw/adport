@@ -4,9 +4,26 @@ import { lstat, open } from 'node:fs/promises';
 import { basename, isAbsolute } from 'node:path';
 import { z } from 'zod';
 import { AdportError } from './errors.js';
+import type { WriteOperation, WritePreview, WriteResult } from './provider.js';
+
+export const MAX_PROJECT_MEDIA_BYTES = 50 * 1024 * 1024;
+export const MAX_INLINE_MEDIA_BYTES = 1024 * 1024;
+export const PROJECT_MEDIA_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/gif', 'video/mp4', 'video/quicktime', 'video/webm', 'audio/mpeg', 'audio/wav', 'audio/ogg'] as const;
+export const mediaUploadMetadataSchema = z.object({
+  name: z.string().trim().min(1).max(240), content_type: z.enum(PROJECT_MEDIA_TYPES),
+  byte_length: z.number().int().positive().max(MAX_PROJECT_MEDIA_BYTES), sha256: z.string().regex(/^[a-f0-9]{64}$/),
+});
+const existing = { media_id: z.string().uuid(), expected_sha256: z.string().regex(/^[a-f0-9]{64}$/) };
+export const mediaWriteSchemas = {
+  media_prepare_upload: mediaUploadMetadataSchema,
+  media_upload: mediaUploadMetadataSchema.safeExtend({ byte_length: z.number().int().positive().max(MAX_INLINE_MEDIA_BYTES), data_base64: z.string().min(4).max(4 * Math.ceil(MAX_INLINE_MEDIA_BYTES / 3)).regex(/^[A-Za-z0-9+/]*={0,2}$/) }),
+  media_finalize_upload: z.object(existing),
+  media_rename: z.object({ ...existing, expected_name: z.string(), name: mediaUploadMetadataSchema.shape.name }),
+  media_delete: z.object({ ...existing, expected_name: z.string() }),
+};
 
 export const mediaSourceFields = {
-  media_id: z.string().uuid().optional().describe('Immutable media ID from the project asset library; required for hosted uploads'),
+  media_id: z.string().uuid().optional().describe('Immutable ID returned by media_upload or media_finalize_upload; required for hosted provider uploads'),
   file_path: z.string().min(1).optional().describe('Absolute local file path; local CLI/stdio only'),
   expected_sha256: z.string().regex(/^[a-fA-F0-9]{64}$/).describe('SHA-256 of the exact bytes approved for upload'),
 };
@@ -21,12 +38,18 @@ export interface MediaResolver {
 export const mediaAssetSchema = z.object({
   id: z.string().uuid(), name: z.string(), content_type: z.string(), byte_length: z.number().int().positive(),
   sha256: z.string().regex(/^[a-f0-9]{64}$/), width: z.number().int().positive().optional(), height: z.number().int().positive().optional(),
-  status: z.enum(['READY', 'PROCESSING', 'FAILED']).optional(),
+  status: z.enum(['READY', 'PROCESSING', 'FAILED', 'DELETED']).optional(),
   preview_url: z.string().url().optional(),
 });
 export type MediaAsset = z.infer<typeof mediaAssetSchema>;
 export interface MediaLibrary extends MediaResolver {
   list(input: { limit: number; cursor?: string }): Promise<{ assets: MediaAsset[]; truncated: boolean; next_cursor?: string; upload_page_url?: string }>;
+}
+export interface ManagedMediaLibrary extends MediaLibrary {
+  readonly scopeId: string;
+  get(id: string): Promise<MediaAsset>;
+  previewWrite(op: WriteOperation): Promise<WritePreview>;
+  applyWrite(op: WriteOperation): Promise<WriteResult>;
 }
 
 export function mediaContentType(bytes: Uint8Array): string | undefined {
@@ -70,7 +93,18 @@ export class LocalMediaResolver implements MediaResolver {
     if (source.media_id || !source.file_path || !isAbsolute(source.file_path)) {
       throw new AdportError('INVALID_INPUT', 'Local uploads require an absolute file_path and no media_id.');
     }
-    const maxBytes = options.maxBytes ?? 100 * 1024 * 1024;
+    return verifyMedia(await this.load(source.file_path, options.maxBytes), source.file_path, source.expected_sha256, options);
+  }
+
+  async inspect(filePath: string, options: { maxBytes?: number; contentTypes?: readonly string[] } = {}): Promise<VerifiedMedia> {
+    if (!isAbsolute(filePath)) throw new AdportError('INVALID_INPUT', 'Use an absolute local media path.');
+    const bytes = await this.load(filePath, options.maxBytes);
+    return verifyMedia(bytes, filePath, createHash('sha256').update(bytes).digest('hex'), options);
+  }
+
+  private async load(filePath: string, limit?: number): Promise<Uint8Array<ArrayBuffer>> {
+    const source = { file_path: filePath };
+    const maxBytes = limit ?? 100 * 1024 * 1024;
     const original = await lstat(source.file_path);
     if (!original.isFile() || original.isSymbolicLink()) throw new AdportError('INVALID_INPUT', 'Media must be a regular file, not a symbolic link.');
     const file = await open(source.file_path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
@@ -88,7 +122,7 @@ export class LocalMediaResolver implements MediaResolver {
         if (size > maxBytes) throw new AdportError('INVALID_INPUT', 'Media exceeds the upload size limit.');
         chunks.push(chunk.subarray(0, bytesRead));
       }
-      return verifyMedia(Buffer.concat(chunks), source.file_path, source.expected_sha256, options);
+      return Buffer.concat(chunks);
     } finally { await file.close(); }
   }
 }

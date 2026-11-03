@@ -72,6 +72,29 @@ The wire formats follow the [v25 label service](https://github.com/googleapis/go
 
 Google can show an “unverified app” warning when your private OAuth project requests the Google Ads scope without completing verification. For the CLI, that warning concerns your BYO project and credentials are not sent to Adport Cloud. Add yourself as a test user during development. The managed cloud application's own OAuth project must complete Google's production verification before public use.
 
+## Agent-managed project media
+
+Hosted agents can upload and manage private project files entirely through MCP or the tool REST API. Opening the asset dashboard is optional. Local provider uploads still accept an absolute `file_path`; a hosted server cannot read a file in the agent's computer or container.
+
+For files up to 1 MiB, preview and apply `media_upload` with `name`, `content_type`, `byte_length`, `sha256` and canonical `data_base64`. It returns a ready immutable `media_id`. For files up to 50 MiB:
+
+1. Preview and apply `media_prepare_upload` with the file's name, MIME type, exact byte length and SHA-256.
+2. Send the raw file bytes with HTTP `PUT` to the returned `result.details.upload_url`, using its returned headers. The upload capability is temporary; it is not a dashboard link. Do not send the Adport API key to the storage URL.
+3. Preview and apply `media_finalize_upload` with `media_id` and `expected_sha256`. Finalization verifies length, actual format, checksum and image decoding before making the file available.
+4. Pass the ready `media_id` and checksum to a provider upload tool such as `meta_upload_video` or `google_upload_image_asset`. Provider mutations retain their own preview/apply gate; library staging does not publish or activate an ad.
+
+`media_list` and `media_get` return metadata and temporary `preview_url` download links for ready files. Agents can fetch these links directly and verify the checksum. `media_rename` and `media_delete` require the current `expected_name` and `expected_sha256`, preventing a stale selection from silently changing a renamed source. Deletion removes the project source and blocks further reuse; provider-uploaded copies, ads and campaigns are independent. A temporary deletion record allows cleanup after outstanding upload grants expire. Replacing content means uploading a new immutable file and selecting its new ID.
+
+The CLI can handle the raw transfer and finalization without opening a browser. It uses a project-scoped API key from an environment variable:
+
+```sh
+adport media upload ./creative.mp4 --api-key-env ADPORT_API_KEY
+adport media upload ./creative.mp4 --api-key-env ADPORT_API_KEY --pending-operation-id <id-from-preview>
+adport tools run media_get --cloud-url https://app.adport.dev --input '{"media_id":"<uploaded-id>"}'
+```
+
+The first upload command only previews. The second applies that exact preview, sends the bytes directly to private storage, and verifies/finalizes through the shared guarded tools. `--cloud-url` selects a self-hosted Cloud origin. Cloud tool calls use the same registry as MCP and honor the key's project, role, plan and scopes. An agent already connected through MCP can use the upload tools with its existing project authorization.
+
 ## Meta Ads
 
 For accounts you control, use a Meta Business app with the Marketing API product and a system-user token.
