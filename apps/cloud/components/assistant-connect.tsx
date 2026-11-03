@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AGENT_SETUPS, AgentIdentityLogo, CopyButton, cursorInstallUrl } from '@/app/dashboard/agents/agent-setup-guide';
@@ -21,6 +21,7 @@ export function AssistantConnect({ baseUrl, projectName, initialAgent = 'chatgpt
   baseUrl: string; projectName: string; initialAgent?: string; listings?: AssistantListings;
   onSelectionChange?: (id: string) => void; onStatusChange?: (status: AssistantConnectionStatus) => void;
 }) {
+  const id = useId();
   const [agent, setAgent] = useState(initialAgent);
   const [status, setStatus] = useState(EMPTY_STATUS);
   const [checking, setChecking] = useState(false);
@@ -29,6 +30,29 @@ export function AssistantConnect({ baseUrl, projectName, initialAgent = 'chatgpt
   const command = selected.command(baseUrl);
   const terminal = selected.id === 'codex' || selected.id === 'claude-code';
   const listing = selected.id === 'chatgpt' || selected.id === 'claude' ? listings[selected.id] : undefined;
+
+  function selectAssistant(next: string) {
+    if (next === selected.id) return;
+    setError(undefined);
+    setStatus(EMPTY_STATUS);
+    onStatusChange?.(EMPTY_STATUS);
+    setAgent(next);
+    onSelectionChange?.(next);
+  }
+  function navigateTabs(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const tabs = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    const index = tabs.indexOf(event.target as HTMLButtonElement);
+    if (index < 0) return;
+    const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length
+      : event.key === 'ArrowLeft' ? (index - 1 + tabs.length) % tabs.length
+      : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    selectAssistant(AGENT_SETUPS[next]!.id);
+    tabs[next]?.focus();
+    tabs[next]?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
 
   useEffect(() => {
     const controller = new AbortController();
@@ -54,16 +78,18 @@ export function AssistantConnect({ baseUrl, projectName, initialAgent = 'chatgpt
 
   const instructions = <div className="setup-connect-instructions">
     <p>{listing ? `Install Adport from the official ${selected.name} listing, then sign in.` : selected.instructions}</p>
-    {listing ? <a className="button" href={listing} target="_blank" rel="noreferrer">Add Adport to {selected.name} ↗</a> : selected.id === 'cursor' ? <a className="button small" href={cursorInstallUrl(baseUrl)}>Add to Cursor ↗</a> : selected.open ? <a className="button small" href={selected.open.href} target="_blank" rel="noreferrer">{selected.open.label} ↗</a> : null}
+    {!listing && (selected.id === 'cursor' ? <a className="button small" href={cursorInstallUrl(baseUrl)}>Add to Cursor ↗</a> : selected.open ? <a className="button small" href={selected.open.href} target="_blank" rel="noreferrer">{selected.open.label} ↗</a> : null)}
     {!listing && selected.id !== 'cursor' ? <div className="assistant-code"><span>{terminal ? 'Terminal' : 'Server URL'}</span><pre><code>{command}</code></pre><CopyButton value={command} label={terminal ? 'Copy command' : 'Copy URL'} /></div> : null}
     <p><strong>Sign in to Adport and authorize this project.</strong> <InfoTooltip label="About project authorization">Only accounts enabled in this project are available to the assistant. Authorize the project shown in the toolbar when the sign-in window opens.</InfoTooltip></p>
     {selected.id === 'codex' ? <div className="assistant-code"><pre><code>codex mcp login adport</code></pre><CopyButton value="codex mcp login adport" label="Copy sign-in command" /></div> : <p className="inline-note">{listing ? 'Enable Adport in your conversation after signing in.' : selected.nextStep}</p>}
   </div>;
 
   return <section className="setup-connect" aria-label="Connect an AI assistant">
-    <div className="setup-connect-heading"><h2>AI assistant</h2><div className="setup-connection-status" role="status"><span className={'status ' + (status.verified ? 'success' : 'neutral')}>{status.verified ? 'Read verified' : status.authorized ? 'Waiting for first read' : 'Waiting for sign-in'}</span><InfoTooltip label="About connection verification">Adport checks for a successful account list or nonempty performance report from this assistant in this project. Sign-in alone does not finish setup. Other members’ connections do not count. For an API key or an unrecognized client, choose Other assistant.</InfoTooltip></div></div>
-    <AssistantPicker value={agent} onChange={value => { setStatus(EMPTY_STATUS); onStatusChange?.(EMPTY_STATUS); setAgent(value); onSelectionChange?.(value); }} />
-    <div className="setup-connect-body">
+    <div className="setup-connect-heading"><h2>AI assistant</h2><div className="setup-connection-status" role="status"><span className={'status ' + (status.verified ? 'success' : 'neutral')}>{status.verified ? 'Read verified' : status.authorized ? 'Waiting for first read' : 'Waiting for sign-in'}</span><InfoTooltip label="About connection verification">Adport checks for a successful account list or nonempty performance report from this assistant in this project. Sign-in alone does not finish setup. Other members’ connections do not count. For an API key or an unrecognized client, choose Other assistant.</InfoTooltip></div>{listing ? <a className="button secondary small setup-listing-button" href={listing} target="_blank" rel="noreferrer" aria-label={`Add Adport from the official ${selected.name} connector`}><AgentIdentityLogo name={selected.name} />Add to {selected.name} <span aria-hidden="true">↗</span></a> : null}</div>
+    <div className="setup-assistant-tabs" role="tablist" aria-label="Choose your AI assistant" onKeyDown={navigateTabs}>
+      {AGENT_SETUPS.map(setup => <Button key={setup.id} id={`${id}-tab-${setup.id}`} type="button" role="tab" aria-selected={selected.id === setup.id} aria-controls={`${id}-panel`} tabIndex={selected.id === setup.id ? 0 : -1} onClick={() => selectAssistant(setup.id)}><AgentIdentityLogo name={setup.name} /><span>{setup.id === 'mcp' ? 'Other' : setup.name}</span></Button>)}
+    </div>
+    <div className="setup-connect-body" id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-tab-${selected.id}`} tabIndex={0}>
       {!status.authorized ? instructions : null}
       {status.authorized && !status.verified ? <p className="inline-note">{checking ? 'Checking connection…' : 'Ask your first question below to verify access. Status updates automatically.'}</p> : null}
       {error ? <p className="error-text" role="alert">{error}</p> : null}
