@@ -5,7 +5,8 @@ import { BillingForm } from './billing-form';
 import { CheckoutStatus } from './checkout-status';
 import { PageHeader, formatDate } from '@/components/ui';
 import { PlanUsage } from '@/components/plan-usage';
-import { PricingComparison, PAID_PLAN_IDS, type PaidPlanId } from '@/components/pricing-comparison';
+import { PAID_PLAN_IDS, type PaidPlanId } from '@/components/pricing-comparison';
+import { DashboardPricing } from '@/components/dashboard-pricing';
 import { getOrganizationUsage } from '@/lib/cloud/usage';
 import { listOrganizationProjects } from '@/lib/cloud/workspaces';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
@@ -55,23 +56,25 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
   const setupDestination = requestedPlan && !hasSubscription ? queryPath(interval) : '/dashboard';
   const canManageOrganization = ['owner', 'admin'].includes(tenant.organizationRole);
   const projectUsage = canManageOrganization ? (await listOrganizationProjects(tenant.userId, tenant.organizationGroupId)).filter(project => !project.archivedAt) : undefined;
-  const actions: Partial<Record<PaidPlanId, React.ReactNode>> = {};
-  const notes: Partial<Record<PaidPlanId, React.ReactNode>> = {};
+  const actions: Record<BillingInterval, Partial<Record<PaidPlanId, React.ReactNode>>> = { monthly: {}, annual: {} };
+  const notes: Record<BillingInterval, Partial<Record<PaidPlanId, React.ReactNode>>> = { monthly: {}, annual: {} };
   const primaryPlan = requestedPlan ?? recommendedUpgradePlan(entitlement.plan.id);
-  for (const id of PAID_PLAN_IDS) {
-    const selected = entitlement.plan.id === id && (!hasSubscription || !subscriptionInterval || interval === subscriptionInterval);
-    const scheduled = details?.scheduled?.planId === id && details.scheduled.interval === interval;
-    const ready = billingPlanConfigured(id, interval);
-    const className = 'pricing-action' + (primaryPlan === id ? ' pricing-action-primary' : '');
-    const changeLabel = planChangeLabel(entitlement.plan.id, id, interval);
-    if (scheduled) actions[id] = <span className="pricing-action pricing-action-current">Change scheduled</span>;
-    else if (selected) actions[id] = <span className="pricing-action pricing-action-current">Current plan</span>;
-    else if (!canManage) actions[id] = <span className="pricing-action pricing-action-current">Owner approval needed</span>;
-    else if (hasSubscription && ready) actions[id] = <BillingForm action={changeProjectSubscriptionForm.bind(null, tenant.organizationId, id, interval)} label={changeLabel} pendingLabel="Opening plan change…" className={className} />;
-    else if (!hasSubscription && ready && !checkoutPending) actions[id] = <BillingForm action={startProjectSubscriptionForm.bind(null, tenant.organizationId, id, interval)} label={complimentary ? changeLabel : requestedPlan === id ? `Continue with ${PLANS[id].name}` : trialEligible ? 'Start 7-day free trial' : `Subscribe to ${PLANS[id].name}`} pendingLabel="Opening checkout…" className={className} />;
-    else actions[id] = <span className="pricing-action pricing-action-current">{checkoutPending ? 'Confirming your plan…' : 'Checkout unavailable'}</span>;
-    notes[id] = scheduled ? `Starts ${formatDate(details!.scheduled!.startsAt)}` : selected ? complimentary ? 'Complimentary access' : subscriptionInterval ? `Billed ${subscriptionInterval === 'annual' ? 'yearly' : 'monthly'}` : 'Your current plan'
-      : !canManage ? 'Your organization owner can change plans.' : hasSubscription ? 'Review the price and effective date in Stripe.' : complimentary ? 'Review the price in Stripe before subscribing.' : trialEligible ? '7-day free trial · cancel anytime' : 'Cancel anytime';
+  for (const optionInterval of ['monthly', 'annual'] as const) {
+    for (const id of PAID_PLAN_IDS) {
+      const selected = entitlement.plan.id === id && (!hasSubscription || !subscriptionInterval || optionInterval === subscriptionInterval);
+      const scheduled = details?.scheduled?.planId === id && details.scheduled.interval === optionInterval;
+      const ready = billingPlanConfigured(id, optionInterval);
+      const className = 'pricing-action' + (primaryPlan === id ? ' pricing-action-primary' : '');
+      const changeLabel = planChangeLabel(entitlement.plan.id, id, optionInterval);
+      if (scheduled) actions[optionInterval][id] = <span className="pricing-action pricing-action-current">Change scheduled</span>;
+      else if (selected) actions[optionInterval][id] = <span className="pricing-action pricing-action-current">Current plan</span>;
+      else if (!canManage) actions[optionInterval][id] = <span className="pricing-action pricing-action-current">Owner approval needed</span>;
+      else if (hasSubscription && ready) actions[optionInterval][id] = <BillingForm action={changeProjectSubscriptionForm.bind(null, tenant.organizationId, id, optionInterval)} label={changeLabel} pendingLabel="Opening plan change…" className={className} />;
+      else if (!hasSubscription && ready && !checkoutPending) actions[optionInterval][id] = <BillingForm action={startProjectSubscriptionForm.bind(null, tenant.organizationId, id, optionInterval)} label={complimentary ? changeLabel : requestedPlan === id ? `Continue with ${PLANS[id].name}` : trialEligible ? 'Start 7-day free trial' : `Subscribe to ${PLANS[id].name}`} pendingLabel="Opening checkout…" className={className} />;
+      else actions[optionInterval][id] = <span className="pricing-action pricing-action-current">{checkoutPending ? 'Confirming your plan…' : 'Checkout unavailable'}</span>;
+      notes[optionInterval][id] = scheduled ? `Starts ${formatDate(details!.scheduled!.startsAt)}` : selected ? complimentary ? 'Complimentary access' : subscriptionInterval ? `Billed ${subscriptionInterval === 'annual' ? 'yearly' : 'monthly'}` : 'Your current plan'
+        : !canManage ? 'Your organization owner can change plans.' : hasSubscription ? 'Review the price and effective date in Stripe.' : complimentary ? 'Review the price in Stripe before subscribing.' : trialEligible ? '7-day free trial · cancel anytime' : 'Cancel anytime';
+    }
   }
   let freeAction: React.ReactNode;
   if (canManage && entitlement.plan.id !== 'reader') {
@@ -80,10 +83,8 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
       : <BillingForm action={changeProjectSubscriptionForm.bind(null, tenant.organizationId, 'reader', interval)} label="Downgrade to Free" pendingLabel="Opening cancellation…" className="pricing-action" />;
     else if (complimentary && !entitlement.providerCustomerId) freeAction = <BillingForm action={changeProjectSubscriptionForm.bind(null, tenant.organizationId, 'reader', interval)} label="Switch to Free" pendingLabel="Switching…" className="pricing-action" confirmation={{ title: 'Switch to Free?', description: 'Your complimentary access will end. Free includes 3 active ad accounts, read-only ad tools, and 30 days of audit history. Your campaigns keep running.', confirmLabel: 'Switch to Free' }} />;
   }
-  const pricing = <div className="dashboard-pricing">
-    <PricingComparison variant="dashboard" currentPlanId={entitlement.plan.id} requestedPlan={requestedPlan} interval={interval} billingLinks={{ monthly: queryPath('monthly'), annual: queryPath('annual') }} actions={actions} notes={notes} canManageBilling={canManage} freeAction={freeAction} freeNote={hasSubscription ? 'Review the end date in Stripe before confirming.' : complimentary ? 'Your current access stays until you confirm.' : undefined}
-      context={intent ? <div className="paywall-context"><p>{INTENT_COPY[intent]} {requestedPlan ? `${PLANS[requestedPlan].name} is recommended for this request.` : ''}</p></div> : undefined} />
-  </div>;
+  const pricing = <DashboardPricing key={`${tenant.organizationId}:${interval}`} currentPlanId={entitlement.plan.id} requestedPlan={requestedPlan} initialInterval={interval} billingLinks={{ monthly: queryPath('monthly'), annual: queryPath('annual') }} actions={actions} notes={notes} canManageBilling={canManage} freeAction={freeAction}
+    context={intent ? <div className="paywall-context"><p>{INTENT_COPY[intent]} {requestedPlan ? `${PLANS[requestedPlan].name} is recommended for this request.` : ''}</p></div> : undefined} />;
   return <main className="page plan-page">
     <PageHeader title="Plan & billing" description="One subscription covers every project in your organization. Active accounts and editing-member allowances are shared across projects. Read-only viewers are free." action={!tenant.onboardingCompletedAt && canManage ? <Link className="button secondary" href={'/onboarding?resume=1&return_to=' + encodeURIComponent(setupDestination)}>Continue setup</Link> : undefined} />
     {query.checkout === 'complete' ? <CheckoutStatus ready={subscriptionReady} planName={entitlement.plan.name} /> : null}
