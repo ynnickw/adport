@@ -471,6 +471,8 @@ describe('shipped MCP iframe', () => {
     ui.message({ jsonrpc: '2.0', id: request.id, result: { isError: true, content: [] } });
     await Promise.resolve();
     expect(ui.app.innerHTML).toContain('could not confirm the change');
+    expect(ui.app.innerHTML).toContain('Outcome unconfirmed');
+    expect(ui.app.innerHTML).not.toMatch(/Nothing has been changed|Preview · Not applied/);
     expect(ui.app.innerHTML).not.toContain('Applied.');
   });
 
@@ -486,7 +488,31 @@ describe('shipped MCP iframe', () => {
     ui.elapse();
     await Promise.resolve();
     expect(ui.app.innerHTML).toContain('may have succeeded; check its status before retrying');
+    expect(ui.app.innerHTML).toContain('Outcome unconfirmed');
+    expect(ui.app.innerHTML).not.toMatch(/Nothing has been changed|Preview · Not applied/);
     expect(ui.app.innerHTML).not.toContain('Applied.');
+  });
+
+  it('shows escaped provider error text and shares an unconfirmed outcome without an apply token', async () => {
+    const ui = widget();
+    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('x_upload_media', 'operation', {
+      pending_operation_id: 'pending-upload', preview: { summary: 'Upload QA image' },
+    }, { arguments: { account_id: 'account', project_id: 'project', media_id: 'media' } }) } });
+    ui.approvals[0]!.click();
+    const request = ui.sent.at(-1) as { id: number };
+    ui.message({ jsonrpc: '2.0', id: request.id, result: { isError: true, content: [{ type: 'text', text: JSON.stringify({ error: 'PROVIDER_ERROR', message: 'X upload rejected <script>unsafe</script>' }) }] } });
+    await Promise.resolve();
+    expect(ui.app.innerHTML).toContain('X upload rejected &lt;script&gt;unsafe&lt;/script&gt;');
+    expect(ui.app.innerHTML).not.toContain('<script>unsafe</script>');
+    const update = ui.sent.at(-1);
+    expect(update).toMatchObject({ method: 'ui/update-model-context', params: { structuredContent: { adport_operation: {
+      tool: 'x_upload_media', status: 'unconfirmed', account_id: 'account', project_id: 'project',
+      message: 'X upload rejected <script>unsafe</script> Check its status before retrying.',
+    } } } });
+    expect(JSON.stringify(update)).not.toContain('pending-upload');
+    const writes = ui.sent.filter((value: unknown) => (value as { method?: string }).method === 'tools/call');
+    ui.approvals[0]!.click();
+    expect(ui.sent.filter((value: unknown) => (value as { method?: string }).method === 'tools/call')).toEqual(writes);
   });
 
   it('uses the native ChatGPT bridge without dispatching a duplicate write and renders text-only results', async () => {

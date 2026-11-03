@@ -293,9 +293,10 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       const table=comparisons.length?'<table class="comparison" aria-label="Before and after"><thead><tr><th scope="col">Change</th><th scope="col">Before</th><th scope="col">After</th></tr></thead><tbody>'+comparisons.map(v=>'<tr><td>'+esc(v.label)+'</td><td>'+esc(v.before)+'</td><td class="'+(v.before!==v.after?'changed':'')+'">'+esc(v.after)+'</td></tr>').join('')+'</tbody></table>':'<p class="notice">No change details were returned. Review the tool response before applying.</p>';
       const approval=meta.approval;
       const canApprove=typeof pending==='string' && pending.length>0 && typeof preview.summary==='string' && preview.summary.trim() && approval?.arguments && typeof approval.arguments==='object' && !Array.isArray(approval.arguments) && typeof meta.tool==='string';
-      const action=canApprove?'<div class="approval"><button class="approve" data-approve="true" aria-label="Hold to approve and apply" '+(state.approving || state.approvalError?'disabled':'')+'>'+(state.approving?'Applying…':state.approvalError?'Check result in chat':'Hold to apply')+'</button><span class="context">Hold for 0.9s · release to cancel. Expires '+esc(data.expires_at || 'soon')+'</span></div>':'';
-      const body=(title?'<p class="operation-name">'+esc(title)+'</p>':'')+table+(changes.length>12?'<p class="notice">Showing 12 of '+changes.length+' changes. All changes are in Details.</p>':'')+coercions.map(v=>'<p class="adjustment">'+esc(v)+'</p>').join('')+(state.approvalError?'<p class="notice" role="alert">'+esc(state.approvalError)+'</p>':'')+action+(applied?'<p class="notice">Applied. '+esc(preview.summary || 'The change was submitted.')+'</p>'+(resources.length?'<p class="context">Resource'+(resources.length===1?'':'s')+': '+resources.slice(0,20).map(esc).join(', ')+(resources.length>20?' · '+(resources.length-20)+' more in the tool result':'')+'</p>':''):'')+'<details><summary>Details</summary><p>'+esc(validation)+'</p><p>'+esc(preview.summary || 'No change details returned.')+'</p>'+changes.map(v=>'<p>'+esc(v)+'</p>').join('')+(pending?'<p>Nothing has been changed. Apply requires the matching pending operation token before it expires.</p>':'')+'<p>'+esc(meta.tool || '')+'</p></details>';
-      app.innerHTML = chrome(body, applied?'Applied':pending?'Preview · Not applied':'Result');
+      const action=canApprove?'<div class="approval"><button class="approve" data-approve="true" aria-label="Hold to approve and apply" '+(state.approving || state.approvalError?'disabled':'')+'>'+(state.approving?'Applying…':state.approvalError?'Verify result before retrying':'Hold to apply')+'</button><span class="context">Hold for 0.9s · release to cancel. Expires '+esc(data.expires_at || 'soon')+'</span></div>':'';
+      const pendingNotice=state.approvalError?'An apply was attempted. Its outcome is unconfirmed; check the provider before retrying.':state.approving?'An apply is in progress. Wait for confirmation before taking another action.':'Nothing has been changed. Apply requires the matching pending operation token before it expires.';
+      const body=(title?'<p class="operation-name">'+esc(title)+'</p>':'')+table+(changes.length>12?'<p class="notice">Showing 12 of '+changes.length+' changes. All changes are in Details.</p>':'')+coercions.map(v=>'<p class="adjustment">'+esc(v)+'</p>').join('')+(state.approvalError?'<p class="notice" role="alert">'+esc(state.approvalError)+'</p>':'')+action+(applied?'<p class="notice">Applied. '+esc(preview.summary || 'The change was submitted.')+'</p>'+(resources.length?'<p class="context">Resource'+(resources.length===1?'':'s')+': '+resources.slice(0,20).map(esc).join(', ')+(resources.length>20?' · '+(resources.length-20)+' more in the tool result':'')+'</p>':''):'')+'<details><summary>Details</summary><p>'+esc(validation)+'</p><p>'+esc(preview.summary || 'No change details returned.')+'</p>'+changes.map(v=>'<p>'+esc(v)+'</p>').join('')+(pending?'<p>'+esc(pendingNotice)+'</p>':'')+'<p>'+esc(meta.tool || '')+'</p></details>';
+      app.innerHTML = chrome(body, applied?'Applied':state.approvalError?'Outcome unconfirmed':state.approving?'Applying':pending?'Preview · Not applied':'Result');
       if (canApprove) app.querySelectorAll('[data-approve]').forEach(button=>bindHold(button,()=>approve(meta.tool,approval.arguments,pending)));
     }
     function bindHold(button,complete) {
@@ -427,7 +428,10 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       } else send({jsonrpc:'2.0',id:requestId,method:'tools/call',params:{name:tool,arguments:parameters}});
       try {
         const result=await response;
-        if (!result || result.isError) throw new Error('Adport could not confirm the change. Check its status before retrying.');
+        if (!result || result.isError) {
+          const failure=resultValue(result);
+          throw new Error(typeof failure?.message==='string' && failure.message.trim()?failure.message.slice(0,2000)+' Check its status before retrying.':'Adport could not confirm the change. Check its status before retrying.');
+        }
         let value=result.structuredContent || result;
         if (!result.structuredContent && Array.isArray(result.content)) {
           for (const item of result.content) {if (item.type==='text') {try {value=JSON.parse(item.text);break;} catch {}}}
@@ -443,6 +447,9 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       } catch (error) {
         state.approving=false;state.approvalError=error?.message || 'The change could not be confirmed. Check its status before retrying.';
         render(state.result);
+        const facts={tool,status:'unconfirmed',...(typeof args.project_id==='string'?{project_id:args.project_id}:{}),...(typeof args.account_id==='string'?{account_id:args.account_id}:{}),message:state.approvalError};
+        if (typeof window.openai?.setWidgetState==='function') Promise.resolve().then(()=>window.openai.setWidgetState({lastOperation:facts})).catch(()=>{});
+        else send({jsonrpc:'2.0',id:id++,method:'ui/update-model-context',params:{structuredContent:{adport_operation:facts}}});
       }
     }
     function renderInsights(data) {
