@@ -127,6 +127,7 @@ describe('all-provider shared tool surface', () => {
         'apple_create_keywords', 'apple_create_negative_keywords', 'apple_set_campaign_schedule', 'apple_create_creative', 'apple_create_ad',
         'microsoft_audience_targets', 'microsoft_add_audience_target', 'microsoft_set_audience_target_bid', 'microsoft_remove_audience_target', 'microsoft_set_audience_target_mode',
         'microsoft_offline_conversion_reports', 'microsoft_offline_conversion_goal_report',
+        'microsoft_experiments', 'microsoft_experiment_base_context', 'microsoft_get_experiment', 'microsoft_create_experiment', 'microsoft_update_experiment', 'microsoft_end_experiment', 'microsoft_delete_experiment',
       ]));
       const dispatchers = names.filter(name => name === 'recommendation_apply' || /_api_(read|create|update|delete|remove)$/.test(name));
       for (const name of dispatchers) {

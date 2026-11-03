@@ -31,6 +31,7 @@ import { MicrosoftConversionService, MICROSOFT_CONVERSION_WRITES } from './conve
 import { MicrosoftAudienceService, MICROSOFT_AUDIENCE_WRITES } from './audiences.js';
 import { MicrosoftAudienceTargetingService, MICROSOFT_AUDIENCE_TARGETING_WRITES } from './audience-targeting.js';
 import { MicrosoftOfflineReportService } from './offline-reports.js';
+import { MicrosoftExperimentService, MICROSOFT_EXPERIMENT_WRITES } from './experiments.js';
 
 /** DailyBudget is a double in whole account-currency units. */
 export const UNITS_TO_MICROS = 1_000_000;
@@ -70,6 +71,7 @@ export class MicrosoftAdsProvider implements AdProvider {
   readonly audiences: MicrosoftAudienceService;
   readonly audienceTargeting: MicrosoftAudienceTargetingService;
   readonly offlineReports: MicrosoftOfflineReportService;
+  readonly experiments: MicrosoftExperimentService;
 
   constructor(
     private readonly client: MicrosoftAdsClient,
@@ -87,6 +89,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     this.audiences = new MicrosoftAudienceService(client, (account, refresh) => this.scopeFor(account, refresh), (account, campaign) => this.lookupCampaign(account, campaign), account => this.listCampaigns(account));
     this.audienceTargeting = new MicrosoftAudienceTargetingService(client, (account, refresh) => this.scopeFor(account, refresh), (account, campaign) => this.lookupCampaign(account, campaign), (account, audience, type) => this.audiences.get(account, audience, type));
     this.offlineReports = new MicrosoftOfflineReportService(client, (account, refresh) => this.scopeFor(account, refresh), (account, campaign) => this.lookupCampaign(account, campaign));
+    this.experiments = new MicrosoftExperimentService(client, (account, refresh) => this.scopeFor(account, refresh), (account, campaign) => this.lookupCampaign(account, campaign), account => this.listCampaigns(account), async account => { await this.scopeFor(account); return this.currencies.get(account); });
   }
 
   capabilities(): ProviderCapabilities {
@@ -321,6 +324,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     if (MICROSOFT_CONVERSION_WRITES.has(op.tool)) return this.conversions.plan(op, guard);
     if (MICROSOFT_AUDIENCE_WRITES.has(op.tool)) return this.audiences.plan(op);
     if (MICROSOFT_AUDIENCE_TARGETING_WRITES.has(op.tool)) return this.audienceTargeting.plan(op, guard);
+    if (MICROSOFT_EXPERIMENT_WRITES.has(op.tool)) return this.experiments.plan(op, guard);
     const payload = op.payload as never;
     switch (op.tool) {
       case 'microsoft_create_campaign':
@@ -490,9 +494,11 @@ export class MicrosoftAdsProvider implements AdProvider {
     payload: { campaign_id: string; status: 'Active' | 'Paused' },
   ): Promise<WritePlan> {
     const current = await this.lookupCampaign(accountId, payload.campaign_id);
+    if (current.ExperimentId && String(current.ExperimentId) !== '0') throw new AdportError('INVALID_INPUT', 'microsoft: experiment campaign status is inherited; change the base campaign status instead');
     return {
       summary: `Set Microsoft campaign "${current.Name}" status ${current.Status} → ${payload.status}`,
       changes: [`~ campaign ${payload.campaign_id} Status ${current.Status} → ${payload.status}`],
+      notes: ['Related active or scheduled campaign-copy experiments follow the base serving status. Completed experiments cannot be restarted by unpausing the base.'],
       coercions: [],
       budgetDeltas: [],
       execute: async () => {
@@ -507,6 +513,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     payload: { campaign_id: string; daily_budget: number },
   ): Promise<WritePlan> {
     const current = await this.lookupCampaign(accountId, payload.campaign_id);
+    if (current.ExperimentId && String(current.ExperimentId) !== '0') throw new AdportError('INVALID_INPUT', 'microsoft: experiment campaign budget is inherited; change the base campaign budget instead');
     if (current.BudgetId && Number(current.BudgetId) > 0) {
       throw new AdportError(
         'PROVIDER_ERROR',
@@ -517,6 +524,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     return {
       summary: `Change Microsoft campaign "${current.Name}" daily budget ${current.DailyBudget ?? '(unset)'} → ${payload.daily_budget}`,
       changes: [`~ campaign ${payload.campaign_id} DailyBudget ${current.DailyBudget ?? '(unset)'} → ${payload.daily_budget}`],
+      notes: ['For related campaign-copy experiments, this changes the base total daily allocation before its traffic/budget split. The experiment campaign inherits that budget rather than receiving an additional independent pool.'],
       coercions: [],
       budgetDeltas: [
         {
@@ -580,6 +588,7 @@ function requireTypedMutationTool(resource: string, body: unknown): void {
   if (['campaigncriterions', 'adgroupcriterions'].includes(collection) && (hasFieldValue(body, 'criteriontype', value => value.split(/[,\s]+/).some(value => audienceSelectors.has(value))) || hasFieldValue(body, 'type', value => ['audience', 'audiencecriterion'].includes(value)))) throw new AdportError('INVALID_INPUT', 'microsoft: audience criteria require typed audience-targeting tools for hierarchy, target-mode and opposite-level checks');
   if (['campaigns', 'adgroups'].includes(collection) && hasFieldValue(body, 'type', value => ['target', 'targetsetting'].includes(value))) throw new AdportError('INVALID_INPUT', 'microsoft: target-setting changes require microsoft_set_audience_target_mode to preserve other targeting details');
   if (collection === 'audiences') throw new AdportError('INVALID_INPUT', 'microsoft: audience mutations require typed audience tools for Account ownership, replacement-rule semantics and deletion reference checks');
+  if (collection === 'experiments') throw new AdportError('INVALID_INPUT', 'microsoft: experiments require typed tools for inherited pause/budget policy, ownership, snapshots and coupled campaign effects; promotion and graduation need separate reviewed workflows');
   if (collection === 'uettags') throw new AdportError('INVALID_INPUT', 'microsoft: use microsoft_create_uet_tag for new uninstalled tags; customer-wide tag edits, deletion and sharing are not exposed through single-account generic tools');
   if (collection === 'conversiongoals') throw new AdportError('INVALID_INPUT', 'microsoft: conversion-goal mutations require typed conversion tools for account scope, native auto-tagging side effects and event-criteria preservation');
   const referencesSharedBudget = (value: unknown): boolean => Array.isArray(value) ? value.some(referencesSharedBudget) : isRecord(value) && Object.entries(value).some(([key, child]) => key.toLowerCase() === 'budgetid' && child !== null && child !== undefined && String(child) !== '0' || referencesSharedBudget(child));

@@ -12,6 +12,7 @@ import { microsoftConversionTools } from './conversions.js';
 import { microsoftAudienceTools } from './audiences.js';
 import { microsoftAudienceTargetingTools } from './audience-targeting.js';
 import { microsoftOfflineReportTools } from './offline-reports.js';
+import { microsoftExperimentTools } from './experiments.js';
 
 const statusSchema = z.enum(['Active', 'Paused']);
 
@@ -28,6 +29,7 @@ export function microsoftTools(provider: MicrosoftAdsProvider): AnyToolDefinitio
     ...microsoftAudienceTools(provider),
     ...microsoftAudienceTargetingTools(provider),
     ...microsoftOfflineReportTools(provider),
+    ...microsoftExperimentTools(provider),
     ...(['keyword', 'search_term'] as const).map(kind => defineTool({
       name: `microsoft_${kind}_report`, namespace: 'microsoft',
       description: `Read the native Microsoft ${kind.replace('_', ' ')} performance report through Submit/Poll/CSV. Native numeric values remain strings; empty or unavailable values are preserved.`,
@@ -81,7 +83,7 @@ export function microsoftTools(provider: MicrosoftAdsProvider): AnyToolDefinitio
     guardedWriteTool({
       name: 'microsoft_set_campaign_status',
       namespace: 'microsoft',
-      description: 'Activate or pause a Microsoft Advertising campaign.',
+      description: 'Activate or pause a Microsoft Advertising base campaign; related active/scheduled experiments inherit its serving status. Direct experiment-campaign status edits are refused.',
       provider: 'microsoft',
       kind: 'update',
       payload: z.object({ campaign_id: z.string(), status: statusSchema }),
@@ -90,7 +92,7 @@ export function microsoftTools(provider: MicrosoftAdsProvider): AnyToolDefinitio
       name: 'microsoft_set_budget',
       namespace: 'microsoft',
       description:
-        "Change a Microsoft campaign's DailyBudget (float, account currency). Fails clearly for shared budgets.",
+        "Change a Microsoft base campaign's DailyBudget (float, account currency). Related campaign-copy experiments split this total pool. Direct experiment-campaign edits and shared budgets are refused.",
       provider: 'microsoft',
       kind: 'update',
       payload: z.object({ campaign_id: z.string(), daily_budget: z.number().positive() }),
