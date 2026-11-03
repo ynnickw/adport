@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/server';
+import { createMcpHandler, McpServer, WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/server';
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { diagnoseMcpRejection } from '@/lib/mcp-transport-diagnostics';
 
 afterEach(() => vi.restoreAllMocks());
@@ -58,6 +59,66 @@ describe('MCP transport rejection diagnostics', () => {
     expect((await response.json()).error.message).toBe('private-value');
     warn.mockClear();
     await diagnoseMcpRejection(request, Response.json({ result: { tools: [{ description: 'private-value' }] } }));
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('classifies a native modern SDK SSE resource error while preserving the client response', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const handler = createMcpHandler(() => {
+      const server = new McpServer({ name: 'diagnostics-test', version: '1' });
+      server.registerResource('fixture', 'ui://diagnostics/known', {}, async () => ({ contents: [] }));
+      return server;
+    }, { responseMode: 'sse' });
+    const client = new Client({ name: 'diagnostics-test', version: '1' }, { versionNegotiation: { mode: { pin: '2026-07-28' } } });
+    const contentTypes: Array<string | null> = [];
+    try {
+      await client.connect(new StreamableHTTPClientTransport(new URL('https://adport.test/mcp'), {
+        fetch: async (url, init) => {
+          const request = new Request(url, init);
+          const response = await handler.fetch(request);
+          contentTypes.push(response.headers.get('content-type'));
+          await diagnoseMcpRejection(request, response);
+          return response;
+        },
+      }));
+      await expect(client.readResource({ uri: 'ui://diagnostics/private-value' })).rejects.toThrow();
+      expect(contentTypes.at(-1)).toContain('text/event-stream');
+      expect(warn).toHaveBeenCalledOnce();
+      expect(JSON.parse(warn.mock.calls[0]![0] as string)).toMatchObject({ status: 200, rpcMethod: 'resources/read', rpcCode: -32602, reason: 'invalid_params' });
+      expect(JSON.stringify(warn.mock.calls)).not.toContain('private-value');
+    } finally { await client.close(); await handler.close(); }
+  });
+
+  it('handles split CRLF SSE frames and notifications without logging private messages', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const chunks = [
+      ': keepalive\r\n\r\nevent: message\r\ndata: {"method":"notifications/private-value"}\r\n\r',
+      '\nevent: message\r\ndata: {"id":"private-value","error":{"code":-32601,"message":"private-value"}}\r\n\r\n',
+    ];
+    const body = new ReadableStream<Uint8Array>({ start(controller) {
+      for (const chunk of chunks) controller.enqueue(new TextEncoder().encode(chunk));
+      controller.close();
+    } });
+    const response = new Response(body, { headers: { 'content-type': 'text/event-stream' } });
+    await diagnoseMcpRejection(new Request('https://adport.test/mcp', { headers: { 'mcp-method': 'tools/list' } }), response);
+    expect(JSON.parse(warn.mock.calls[0]![0] as string)).toMatchObject({ reason: 'method_not_found' });
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('private-value');
+    expect(await response.text()).toBe(chunks.join(''));
+  });
+
+  it('bounds inspection of oversized catalogs and open SSE streams without consuming the host response', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const request = new Request('https://adport.test/mcp', { headers: { 'mcp-method': 'tools/list' } });
+    const large = `data: ${JSON.stringify({ result: { tools: ['private-value'.repeat(6000)] } })}\n\n`;
+    const response = new Response(large, { headers: { 'content-type': 'text/event-stream' } });
+    await diagnoseMcpRejection(request, response);
+    expect(await response.text()).toBe(large);
+    let streamController: ReadableStreamDefaultController<Uint8Array>;
+    const open = new Response(new ReadableStream<Uint8Array>({ start(controller) { streamController = controller; } }), { headers: { 'content-type': 'text/event-stream' } });
+    await diagnoseMcpRejection(request, open);
+    streamController!.enqueue(new TextEncoder().encode(': still open\n\n'));
+    streamController!.close();
+    expect(await open.text()).toBe(': still open\n\n');
     expect(warn).not.toHaveBeenCalled();
   });
 });
