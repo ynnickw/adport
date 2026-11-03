@@ -9,6 +9,7 @@ import { mcpUiDomain } from '@/lib/mcp-ui-domain';
 import { adWritePlanLimit } from '@/lib/cloud/write-plan-limit';
 import { env } from '@/lib/env';
 import { routeMcpProjects } from '@/lib/cloud/mcp-projects';
+import { diagnoseMcpRejection } from '@/lib/mcp-transport-diagnostics';
 
 async function handle(request: Request): Promise<Response> {
   try {
@@ -52,13 +53,15 @@ async function handle(request: Request): Promise<Response> {
     });
     const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     await server.connect(transport);
-    return await transport.handleRequest(request, {
+    const response = await transport.handleRequest(request, {
       authInfo: {
         token: principal.apiKeyId ?? principal.oauthTokenId!,
         clientId: principal.clientId ?? principal.apiKeyId!,
         scopes: toolScopes,
       },
     });
+    await diagnoseMcpRejection(request, response);
+    return response;
   } catch (error) {
     const status = error instanceof HttpError ? error.status : 401;
     const message = error instanceof Error ? error.message : 'Unauthorized';
@@ -66,7 +69,9 @@ async function handle(request: Request): Promise<Response> {
     if (status === 401) {
       headers.set('www-authenticate', `Bearer resource_metadata="${protectedResourceMetadataUrl()}", scope="tools:read tools:write"`);
     }
-    return Response.json({ error: message }, { status, headers });
+    const response = Response.json({ error: message }, { status, headers });
+    await diagnoseMcpRejection(request, response, 'request_setup');
+    return response;
   }
 }
 
