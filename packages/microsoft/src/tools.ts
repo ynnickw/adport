@@ -93,7 +93,7 @@ export function microsoftTools(provider: MicrosoftAdsProvider): AnyToolDefinitio
       name: 'microsoft_api_create',
       namespace: 'microsoft',
       description:
-        'Create through any Microsoft Advertising Campaign Management v13 collection using the documented API body. Active statuses are forced to Paused and budget fields are policy-checked.',
+        'Create through Microsoft Campaign Management v13 using its documented API body. Under paused creation, campaigns/ad groups/ads/keywords receive explicit Paused status, including omitted status. Budget fields are policy-checked; shared budgets, conversion goals and UET tags require typed tools.',
       provider: 'microsoft',
       kind: 'create',
       payload: z.object({ resource: z.string().min(2), body: z.record(z.string(), z.unknown()) }),

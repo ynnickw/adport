@@ -34,6 +34,8 @@ Assignment compares the campaign's current effective daily limit with the destin
 
 Generic API writes reject shared-budget resources and references, so their monetary and membership checks cannot be bypassed. Native partial failures or uncertain readbacks must be reconciled before retrying; a returned resource ID is not permission to repeat a creation.
 
+The local generic adapter applies collection/property guards consistently across casing. With paused creation enabled, generic Campaigns, AdGroups, Ads and Keywords requests require native arrays of resource objects and send canonical `Status: "Paused"` even when it was omitted. Status aliases are removed from the outgoing copy; original approved arguments stay unchanged. Hosted tools use the named operations rather than generic dispatchers.
+
 ## Keyword planning
 
 `microsoft_keyword_ideas` and `microsoft_keyword_historical_metrics` use Ad Insight's native `KeywordIdeas/Query` operation with expanding or nonexpanding seeds. Supply English, French or German, native location IDs, and a supported search network. Ideas accept keyword, HTTPS URL or known native category seeds; history requires keywords. The native category-catalog endpoint returned `UnsupportedEndpoint` as deprecated during live verification, so no typed category lookup is advertised.

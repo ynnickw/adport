@@ -339,7 +339,22 @@ export class MicrosoftAdsProvider implements AdProvider {
     const body = structuredClone(payload.body);
     validateMicrosoftAccountScope(body, accountId);
     const coercions: string[] = [];
-    if (guard.forcePausedCreation) coerceMicrosoftCreatedStatuses(body, coercions);
+    if (guard.forcePausedCreation) {
+      const collection = resource.toLowerCase();
+      if (['campaigns', 'adgroups', 'ads', 'keywords'].includes(collection)) {
+        const keys = Object.keys(body).filter(key => key.toLowerCase() === collection);
+        if (!keys.length || keys.some(key => !Array.isArray(body[key]))) throw new AdportError('INVALID_INPUT', `microsoft: ${resource} creation needs its native collection array so paused_creation can be enforced`);
+        for (const key of keys) for (const [index, item] of (body[key] as unknown[]).entries()) {
+          if (!isRecord(item)) throw new AdportError('INVALID_INPUT', `microsoft: ${resource} creation needs resource objects`);
+          const statuses = Object.keys(item).filter(key => key.toLowerCase() === 'status');
+          if (statuses.length === 1 && statuses[0] === 'Status' && item.Status === 'Paused') continue;
+          for (const status of statuses) delete item[status];
+          item.Status = 'Paused';
+          coercions.push(`body.${key}[${index}].Status coerced to Paused by policy (paused_creation)`);
+        }
+      }
+      coerceMicrosoftCreatedStatuses(body, coercions);
+    }
     return {
       summary: `Create Microsoft Advertising ${resource} resource(s)`,
       changes: [`+ POST /${resource} ${JSON.stringify(body)}`],
@@ -548,20 +563,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function requireTypedMutationTool(resource: string, body: unknown): void {
-  if (resource === 'UetTags') throw new AdportError('INVALID_INPUT', 'microsoft: use microsoft_create_uet_tag for new uninstalled tags; customer-wide tag edits, deletion and sharing are not exposed through single-account generic tools');
-  if (resource === 'ConversionGoals') throw new AdportError('INVALID_INPUT', 'microsoft: conversion-goal mutations require typed conversion tools for account scope, native auto-tagging side effects and event-criteria preservation');
-  const referencesSharedBudget = (value: unknown): boolean => Array.isArray(value) ? value.some(referencesSharedBudget) : isRecord(value) && Object.entries(value).some(([key, child]) => key === 'BudgetId' && child !== null && child !== undefined && String(child) !== '0' || referencesSharedBudget(child));
-  if (resource === 'Budgets' || referencesSharedBudget(body)) throw new AdportError('INVALID_INPUT', 'microsoft: shared-budget changes require the typed microsoft shared-budget tools for membership, snapshot and monetary policy checks');
+  const collection = resource.toLowerCase();
+  if (collection === 'uettags') throw new AdportError('INVALID_INPUT', 'microsoft: use microsoft_create_uet_tag for new uninstalled tags; customer-wide tag edits, deletion and sharing are not exposed through single-account generic tools');
+  if (collection === 'conversiongoals') throw new AdportError('INVALID_INPUT', 'microsoft: conversion-goal mutations require typed conversion tools for account scope, native auto-tagging side effects and event-criteria preservation');
+  const referencesSharedBudget = (value: unknown): boolean => Array.isArray(value) ? value.some(referencesSharedBudget) : isRecord(value) && Object.entries(value).some(([key, child]) => key.toLowerCase() === 'budgetid' && child !== null && child !== undefined && String(child) !== '0' || referencesSharedBudget(child));
+  if (collection === 'budgets' || referencesSharedBudget(body)) throw new AdportError('INVALID_INPUT', 'microsoft: shared-budget changes require the typed microsoft shared-budget tools for membership, snapshot and monetary policy checks');
 }
 
 function validateMicrosoftAccountScope(value: unknown, accountId: string): void {
   if (Array.isArray(value)) return value.forEach((item) => validateMicrosoftAccountScope(item, accountId));
   if (!isRecord(value)) return;
   for (const [key, child] of Object.entries(value)) {
-    if (key === 'AccountId' && String(child) !== accountId) {
+    if (key.toLowerCase() === 'accountid' && String(child) !== accountId) {
       throw new AdportError('INVALID_INPUT', `microsoft: body AccountId ${String(child)} does not match selected account ${accountId}`);
     }
-    if (key === 'AccountIds' && Array.isArray(child) && child.some((id) => String(id) !== accountId)) {
+    if (key.toLowerCase() === 'accountids' && (!Array.isArray(child) || child.some((id) => String(id) !== accountId))) {
       throw new AdportError('INVALID_INPUT', `microsoft: body AccountIds must contain only selected account ${accountId}`);
     }
     validateMicrosoftAccountScope(child, accountId);
@@ -572,8 +588,9 @@ function coerceMicrosoftCreatedStatuses(value: unknown, coercions: string[], pat
   if (Array.isArray(value)) return value.forEach((item, index) => coerceMicrosoftCreatedStatuses(item, coercions, `${path}[${index}]`));
   if (!isRecord(value)) return;
   for (const [key, child] of Object.entries(value)) {
-    if (key === 'Status' && child === 'Active') {
-      value[key] = 'Paused';
+    if (key.toLowerCase() === 'status' && typeof child === 'string' && ['active', 'paused'].includes(child.toLowerCase()) && (key !== 'Status' || child !== 'Paused')) {
+      delete value[key];
+      value.Status = 'Paused';
       coercions.push(`${path}.${key} coerced to Paused by policy (paused_creation)`);
     } else coerceMicrosoftCreatedStatuses(child, coercions, `${path}.${key}`);
   }
