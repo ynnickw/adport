@@ -30,9 +30,12 @@ async function consent(projectId: string, decision = 'allow') {
 }
 
 describe('project consent', () => {
-  it('keeps a single project selected by default and explains the scope of All projects', () => {
-    const html = renderToStaticMarkup(<ConsentView clientName="Claude" redirectHost="claude.ai" scopes={['tools:read']} projects={[{ id: project, name: 'Client', organizationId: company, organizationName: 'Company' }]} hidden={[]} />);
-    expect(html).toContain(`name="project_id" value="${project}"`);
+  it('defaults to All projects in the current organization and explains its scope', () => {
+    const html = renderToStaticMarkup(<ConsentView clientName="Claude" redirectHost="claude.ai" scopes={['tools:read']} projects={[
+      { id: 'other-project', name: 'Other client', organizationId: 'other-company', organizationName: 'Other company' },
+      { id: project, name: 'Client', organizationId: company, organizationName: 'Company' },
+    ]} defaultProjectId={project} hidden={[]} />);
+    expect(html).toContain(`name="project_id" value="all:${company}"`);
     expect(html).toContain('All projects includes current and future projects you can access in that organization.');
   });
 
