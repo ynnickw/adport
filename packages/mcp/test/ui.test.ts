@@ -610,7 +610,7 @@ describe('shipped MCP iframe', () => {
     if (!native) { const request = ui.sent.at(-1) as { id: number }; ui.message({ jsonrpc: '2.0', id: request.id, result: { structuredContent: outcome } }); }
     for (let i = 0; i < 10; i++) await Promise.resolve();
     expect(ui.app.innerHTML).toContain('Processing pending');
-    expect(ui.app.innerHTML).toContain('Processing and conversion matching are not confirmed');
+    expect(ui.app.innerHTML).toContain('Processing is not confirmed');
     expect(ui.app.innerHTML).not.toContain('Applied.'); expect(ui.app.innerHTML).not.toContain('Hold to apply');
     const context = native ? states[0] : ui.sent.find((value: any) => value.method === 'ui/update-model-context');
     expect(JSON.stringify(context)).toContain('"processing_status":"ACCEPTED_FOR_PROCESSING","processed":false');

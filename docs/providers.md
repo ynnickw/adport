@@ -74,6 +74,8 @@ Google can show an “unverified app” warning when your private OAuth project 
 
 See [Google conversion management](providers/google-conversions.md) for tracking ownership, conversion configuration, Data Manager event ingestion and asynchronous diagnostics, and legacy click/call/adjustment imports. Data Manager permission is an explicit opt-in through `adport connect google --data-manager` or the hosted Google connection's **Enable conversion imports** action.
 
+See [Google experiments](providers/google-experiments.md) for system-managed draft setup, arm edits, native lifecycle actions and asynchronous status/errors. Scheduling remains blocked under paused creation. Drafts are available through the explicit `include_drafts` option on GAQL and ad reads.
+
 ## Agent-managed project media
 
 Hosted agents can upload and manage private project files entirely through MCP or the tool REST API. Opening the asset dashboard is optional. Local provider uploads still accept an absolute `file_path`; a hosted server cannot read a file in the agent's computer or container.

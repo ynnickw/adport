@@ -24,6 +24,8 @@ export interface SearchOptions {
   maxRows?: number;
   /** Override the manager context for this search; null explicitly omits it. */
   loginCustomerId?: string | null;
+  /** Explicitly include native in-design experiment campaigns and their children. */
+  includeDrafts?: boolean;
 }
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -213,7 +215,7 @@ export class GoogleAdsRestClient {
     do {
       const data = await this.request<{ results?: Array<Record<string, unknown>>; nextPageToken?: string }>(
         `customers/${normalizeCustomerId(customerId)}/googleAds:search`,
-        { method: 'POST', body: { query, pageToken }, loginCustomerId: options.loginCustomerId },
+        { method: 'POST', body: { query: options.includeDrafts ? `${query}${/\bPARAMETERS\b/i.test(query) ? ',' : ' PARAMETERS'} include_drafts=true` : query, pageToken }, loginCustomerId: options.loginCustomerId },
       );
       rows.push(...(data.results ?? []));
       pageToken = data.nextPageToken;
@@ -229,9 +231,9 @@ export class GoogleAdsRestClient {
     customerId: string,
     service: string,
     operations: Array<Record<string, unknown>>,
-    { validateOnly }: { validateOnly: boolean },
-  ): Promise<{ results?: Array<{ resourceName?: string }> }> {
-    const body: Record<string, unknown> = { operations, validateOnly };
+    { validateOnly, responseContentType }: { validateOnly: boolean; responseContentType?: 'MUTABLE_RESOURCE' },
+  ): Promise<{ results?: Array<{ resourceName?: string; experimentArm?: Record<string, unknown> }> }> {
+    const body: Record<string, unknown> = { operations, validateOnly, ...(responseContentType ? { responseContentType } : {}) };
     // CustomerManagerLinkService does not expose partial_failure in its mutate
     // request, unlike most resource-specific Google Ads mutate services.
     if (service !== 'customerManagerLinks') body.partialFailure = false;
@@ -241,15 +243,32 @@ export class GoogleAdsRestClient {
     });
   }
 
+  async experimentAction(customerId: string, experimentId: string, action: 'endExperiment' | 'scheduleExperiment' | 'promoteExperiment' | 'graduateExperiment', payload: Record<string, unknown>, validateOnly: boolean): Promise<Record<string, unknown>> {
+    if (!/^[1-9]\d*$/.test(experimentId) || !['endExperiment', 'scheduleExperiment', 'promoteExperiment', 'graduateExperiment'].includes(action)) throw new AdportError('INVALID_INPUT', 'google: invalid experiment action');
+    return this.request(`customers/${normalizeCustomerId(customerId)}/experiments/${experimentId}:${action}`, { method: 'POST', body: { ...payload, validateOnly } });
+  }
+
+  async experimentAsyncErrors(customerId: string, experimentId: string, pageSize: number, pageToken?: string): Promise<Record<string, unknown>> {
+    if (!/^[1-9]\d*$/.test(experimentId)) throw new AdportError('INVALID_INPUT', 'google: invalid experiment ID');
+    const query = new URLSearchParams({ pageSize: String(pageSize), ...(pageToken ? { pageToken } : {}) });
+    return this.request(`customers/${normalizeCustomerId(customerId)}/experiments/${experimentId}:listExperimentAsyncErrors?${query}`, { method: 'GET' });
+  }
+
+  async experimentOperation(customerId: string, operationName: string): Promise<Record<string, unknown>> {
+    const account = normalizeCustomerId(customerId), prefix = `customers/${account}/operations/`, key = operationName.startsWith(prefix) ? operationName.slice(prefix.length) : '';
+    if (!key || key.length > 512 || /[\s/\\?#%]/.test(key) || key === '.' || key === '..') throw new AdportError('INVALID_INPUT', 'google: operation is not scoped to the selected account');
+    return this.request(`${prefix}${encodeURIComponent(key)}`, { method: 'GET' });
+  }
+
   /** Cross-service atomic mutate (e.g. budget + campaign with temp resource ids). */
   async googleAdsMutate(
     customerId: string,
     mutateOperations: Array<Record<string, unknown>>,
-    { validateOnly }: { validateOnly: boolean },
+    { validateOnly, responseContentType }: { validateOnly: boolean; responseContentType?: 'MUTABLE_RESOURCE' },
   ): Promise<{ mutateOperationResponses?: Array<Record<string, { resourceName?: string }>> }> {
     return this.request(`customers/${normalizeCustomerId(customerId)}/googleAds:mutate`, {
       method: 'POST',
-      body: { mutateOperations, validateOnly, partialFailure: false },
+      body: { mutateOperations, validateOnly, partialFailure: false, ...(responseContentType ? { responseContentType } : {}) },
     });
   }
 }

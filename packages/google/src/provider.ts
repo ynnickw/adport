@@ -23,6 +23,7 @@ import { GoogleAssetLinks, GOOGLE_ASSET_LINK_WRITES } from './asset-links.js';
 import { GoogleLabelService, GOOGLE_LABEL_WRITES } from './labels.js';
 import { GoogleConversionService, GOOGLE_CONVERSION_WRITES } from './conversions.js';
 import { GoogleDataManagerService } from './data-manager.js';
+import { GoogleExperimentService, GOOGLE_EXPERIMENT_WRITES } from './experiments.js';
 
 const LEVEL_RESOURCE = {
   account: 'customer',
@@ -41,6 +42,7 @@ const BASE_METRIC_FIELDS: Record<string, string> = {
 };
 
 interface WritePlan extends Omit<WritePreview, 'serverValidated'> {
+  serverValidated?: boolean;
   execute: (validateOnly: boolean) => Promise<string[]>;
   resultDetails?: () => unknown;
   resultWarnings?: () => string[];
@@ -54,6 +56,7 @@ export class GoogleAdsProvider implements AdProvider {
   readonly labels: GoogleLabelService;
   readonly conversions: GoogleConversionService;
   readonly dataManager: GoogleDataManagerService;
+  readonly experiments: GoogleExperimentService;
 
   constructor(private readonly client: GoogleAdsRestClient, media?: MediaResolver) {
     this.assets = new GoogleAssetService(client, media);
@@ -61,6 +64,7 @@ export class GoogleAdsProvider implements AdProvider {
     this.labels = new GoogleLabelService(client);
     this.conversions = new GoogleConversionService(client);
     this.dataManager = new GoogleDataManagerService(client, this.conversions);
+    this.experiments = new GoogleExperimentService(client);
   }
 
   keywordPlanning(customerId: string, method: 'generateKeywordIdeas' | 'generateKeywordHistoricalMetrics', body: Record<string, unknown>) {
@@ -71,14 +75,14 @@ export class GoogleAdsProvider implements AdProvider {
     return this.client.fieldMetadata(query, pageSize, pageToken);
   }
 
-  async listAds(input: { account_id: string; campaign_id?: string; ad_group_id?: string; limit: number }) {
+  async listAds(input: { account_id: string; campaign_id?: string; ad_group_id?: string; limit: number; include_drafts?: boolean }) {
     const cid = normalizeCustomerId(input.account_id);
     const conditions = ["ad_group_ad.status != 'REMOVED'"];
     if (input.campaign_id) conditions.push(`campaign.id = ${input.campaign_id}`);
     if (input.ad_group_id) conditions.push(`ad_group.id = ${input.ad_group_id}`);
     const rows = await this.client.search(cid,
       `SELECT campaign.id, ad_group.id, ad_group_ad.ad.id, ad_group_ad.ad.name, ad_group_ad.ad.type, ad_group_ad.status, ad_group_ad.ad.final_urls, ad_group_ad.ad.responsive_search_ad.headlines, ad_group_ad.ad.responsive_search_ad.descriptions FROM ad_group_ad WHERE ${conditions.join(' AND ')} LIMIT ${input.limit + 1}`,
-      { maxRows: input.limit + 1 });
+      { maxRows: input.limit + 1, includeDrafts: input.include_drafts });
     const textAssets = (value: unknown): string[] => Array.isArray(value)
       ? value.flatMap(item => item && typeof item === 'object' && 'text' in item && typeof item.text === 'string' ? [item.text] : []) : [];
     return creativesOutput.parse({
@@ -307,13 +311,14 @@ export class GoogleAdsProvider implements AdProvider {
     conditions?: string[];
     order_by?: string[];
     limit?: number;
+    include_drafts?: boolean;
   }): Promise<Array<Record<string, unknown>>> {
     const limit = Math.min(input.limit ?? 200, 10_000);
     let query = `SELECT ${input.fields.join(', ')} FROM ${input.resource}`;
     if (input.conditions?.length) query += ` WHERE ${input.conditions.join(' AND ')}`;
     if (input.order_by?.length) query += ` ORDER BY ${input.order_by.join(', ')}`;
     query += ` LIMIT ${limit} PARAMETERS omit_unselected_resource_names=true`;
-    return this.client.search(input.customer_id, query, { maxRows: limit });
+    return this.client.search(input.customer_id, query, { maxRows: limit, includeDrafts: input.include_drafts });
   }
 
   async previewWrite(op: WriteOperation, guard: WriteGuard): Promise<WritePreview> {
@@ -326,7 +331,7 @@ export class GoogleAdsProvider implements AdProvider {
       budgetDeltas: plan.budgetDeltas,
       ...(plan.fieldChanges ? { fieldChanges: plan.fieldChanges } : {}),
       ...(plan.notes ? { notes: plan.notes } : {}),
-      serverValidated: true,
+      serverValidated: plan.serverValidated ?? true,
     };
   }
 
@@ -344,6 +349,7 @@ export class GoogleAdsProvider implements AdProvider {
     if (GOOGLE_LABEL_WRITES.has(op.tool)) return this.labels.plan(op);
     if (GOOGLE_CONVERSION_WRITES.has(op.tool)) return this.conversions.plan(op);
     if (op.tool === 'google_ingest_conversion_events') return this.dataManager.plan(op);
+    if (GOOGLE_EXPERIMENT_WRITES.has(op.tool)) return this.experiments.plan(op, guard);
     const cid = normalizeCustomerId(op.accountId);
     // Tool input was already zod-validated at the registry boundary.
     const payload = op.payload as never;
@@ -734,7 +740,7 @@ export class GoogleAdsProvider implements AdProvider {
     const resourceName = `customers/${cid}/adGroupAds/${payload.ad_group_id}~${payload.ad_id}`;
     const rows = await this.client.search(cid,
       `SELECT ad_group_ad.resource_name, ad_group_ad.status FROM ad_group_ad WHERE ad_group.id = ${payload.ad_group_id} AND ad_group_ad.ad.id = ${payload.ad_id} LIMIT 2`,
-      { maxRows: 2 });
+      { maxRows: 2, includeDrafts: true });
     const current = rows[0]?.adGroupAd as { resourceName?: string; status?: string } | undefined;
     if (rows.length !== 1 || current?.resourceName !== resourceName || current.status === 'REMOVED') {
       throw new AdportError('INVALID_INPUT', 'google: ad was not found in the selected account and ad group, or has been removed');
@@ -761,7 +767,7 @@ export class GoogleAdsProvider implements AdProvider {
     type Ad = { id: string; type: string; finalUrls?: string[]; responsiveSearchAd?: { headlines?: TextAsset[]; descriptions?: TextAsset[]; path1?: string; path2?: string } };
     const rows = await this.client.search(cid,
       `SELECT ad_group_ad.resource_name, ad_group_ad.ad.id, ad_group_ad.ad.type, ad_group_ad.ad.final_urls, ad_group_ad.ad.responsive_search_ad.headlines, ad_group_ad.ad.responsive_search_ad.descriptions, ad_group_ad.ad.responsive_search_ad.path1, ad_group_ad.ad.responsive_search_ad.path2 FROM ad_group_ad WHERE ad_group.id = ${payload.ad_group_id} AND ad_group_ad.ad.id = ${payload.ad_id} AND ad_group_ad.status != 'REMOVED' LIMIT 2`,
-      { maxRows: 2 });
+      { maxRows: 2, includeDrafts: true });
     const groupAd = rows[0]?.adGroupAd as { resourceName?: string; ad?: Ad } | undefined;
     if (rows.length !== 1 || groupAd?.resourceName !== `customers/${cid}/adGroupAds/${payload.ad_group_id}~${payload.ad_id}` || groupAd.ad?.type !== 'RESPONSIVE_SEARCH_AD') {
       throw new AdportError('INVALID_INPUT', 'google: responsive search ad was not found in the selected account and ad group');
@@ -962,10 +968,11 @@ export class GoogleAdsProvider implements AdProvider {
     cid: string,
     campaignId: string,
   ): Promise<{ name: string; strategyType: string; cpcBidCeilingMicros?: number }> {
+    if (!/^\d+$/.test(campaignId)) throw new AdportError('INVALID_INPUT', 'google: invalid campaign ID');
     const rows = await this.client.search(
       cid,
-      `SELECT campaign.name, campaign.bidding_strategy_type, campaign.target_spend.cpc_bid_ceiling_micros, campaign.target_impression_share.cpc_bid_ceiling_micros FROM campaign WHERE campaign.id = ${Number(campaignId)} LIMIT 1`,
-      { maxRows: 1 },
+      `SELECT campaign.name, campaign.bidding_strategy_type, campaign.target_spend.cpc_bid_ceiling_micros, campaign.target_impression_share.cpc_bid_ceiling_micros FROM campaign WHERE campaign.id = ${campaignId} LIMIT 1`,
+      { maxRows: 1, includeDrafts: true },
     );
     const row = rows[0];
     if (!row) {
@@ -990,10 +997,11 @@ export class GoogleAdsProvider implements AdProvider {
     cid: string,
     campaignId: string,
   ): Promise<{ name: string; status: string; budgetResource: string; budgetMicros: number; budgetShared: boolean }> {
+    if (!/^\d+$/.test(campaignId)) throw new AdportError('INVALID_INPUT', 'google: invalid campaign ID');
     const rows = await this.client.search(
       cid,
-      `SELECT campaign.name, campaign.status, campaign.campaign_budget, campaign_budget.resource_name, campaign_budget.amount_micros, campaign_budget.explicitly_shared FROM campaign WHERE campaign.id = ${Number(campaignId)} LIMIT 1`,
-      { maxRows: 1 },
+      `SELECT campaign.name, campaign.status, campaign.campaign_budget, campaign_budget.resource_name, campaign_budget.amount_micros, campaign_budget.explicitly_shared FROM campaign WHERE campaign.id = ${campaignId} LIMIT 1`,
+      { maxRows: 1, includeDrafts: true },
     );
     const row = rows[0];
     if (!row) {

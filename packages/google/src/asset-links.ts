@@ -26,7 +26,7 @@ export class GoogleAssetLinks {
     const config = configs[input.scope];
     if (!config.parent) return;
     const expected = `customers/${account}/${config.parentService}/${input.parent_id}`;
-    const rows = await this.client.search(account, `SELECT ${config.parent}.id, ${config.parent}.resource_name, ${config.parent}.status FROM ${config.parent} WHERE ${config.parent}.id = ${input.parent_id} LIMIT 2`, { maxRows: 2 });
+    const rows = await this.client.search(account, `SELECT ${config.parent}.id, ${config.parent}.resource_name, ${config.parent}.status FROM ${config.parent} WHERE ${config.parent}.id = ${input.parent_id} LIMIT 2`, { maxRows: 2, includeDrafts: true });
     const key = config.parent === 'ad_group' ? 'adGroup' : 'campaign', value = record(rows[0]?.[key]);
     if (rows.length !== 1 || value.resourceName !== expected || !['ENABLED', 'PAUSED'].includes(String(value.status))) throw new AdportError('INVALID_INPUT', 'google: asset-link parent is not an available entity in this account');
   }
@@ -35,7 +35,7 @@ export class GoogleAssetLinks {
     if (c.parent) conditions.push(`${c.resource}.${c.parent} = 'customers/${account}/${c.parentService}/${input.parent_id}'`);
     if (assetId) conditions.push(`${c.resource}.asset = 'customers/${account}/assets/${assetId}'`);
     if (fieldType) conditions.push(`${c.resource}.field_type = '${fieldType}'`);
-    return (await this.client.search(account, `SELECT ${c.resource}.resource_name, ${c.resource}.asset, ${c.resource}.field_type, ${c.resource}.status FROM ${c.resource} WHERE ${conditions.join(' AND ')} LIMIT ${limit}`, { maxRows: limit })).map(row => record(row[c.key]));
+    return (await this.client.search(account, `SELECT ${c.resource}.resource_name, ${c.resource}.asset, ${c.resource}.field_type, ${c.resource}.status FROM ${c.resource} WHERE ${conditions.join(' AND ')} LIMIT ${limit}`, { maxRows: limit, includeDrafts: input.scope !== 'CUSTOMER' })).map(row => record(row[c.key]));
   }
   async list(input: z.infer<typeof target> & { account_id: string; limit: number }) {
     const account = normalizeCustomerId(input.account_id), parsed = target.parse(input);

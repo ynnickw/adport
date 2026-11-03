@@ -8,6 +8,7 @@ import { googleLabelTools } from './labels.js';
 import { googleFieldMetadataTools } from './field-metadata.js';
 import { googleConversionTools } from './conversions.js';
 import { googleDataManagerTools } from './data-manager.js';
+import { googleExperimentTools } from './experiments.js';
 
 const statusSchema = z.enum(['ENABLED', 'PAUSED']);
 const matchTypeSchema = z.enum(['EXACT', 'PHRASE', 'BROAD']);
@@ -21,6 +22,7 @@ export function googleTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
     ...googleFieldMetadataTools(provider),
     ...googleConversionTools(provider),
     ...googleDataManagerTools(provider),
+    ...googleExperimentTools(provider),
     defineTool({
       name: 'google_ads', namespace: 'google',
       description: 'Browse Google Ads with their actual text, final URLs, serving status and creative actions. Filter by campaign or ad group. Changes requested from the creative viewer return a preview before approval.',
@@ -28,6 +30,7 @@ export function googleTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
         account_id: z.string(),
         campaign_id: z.string().regex(/^\d+$/).optional(),
         ad_group_id: z.string().regex(/^\d+$/).optional(),
+        include_drafts: z.boolean().optional().describe('Include in-design experiment draft ads; off by default'),
         limit: z.number().int().positive().max(200).default(50),
       }),
       output: creativesOutput,
@@ -48,6 +51,7 @@ export function googleTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
         fields: z.array(z.string()).min(1),
         conditions: z.array(z.string()).optional(),
         order_by: z.array(z.string()).optional(),
+        include_drafts: z.boolean().optional().describe('Include in-design experiment draft campaigns and children; off by default'),
         limit: z.number().int().positive().max(10_000).default(200),
       }),
       annotations: { readOnly: true },

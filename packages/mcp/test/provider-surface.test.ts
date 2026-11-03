@@ -128,6 +128,7 @@ describe('all-provider shared tool surface', () => {
       expect(hostedNames).toContain('meta_list_campaigns');
       expect(hostedNames).toContain('meta_set_campaign_status');
       expect(hostedNames).toEqual(expect.arrayContaining([
+        'google_experiments', 'google_experiment_context', 'google_experiment_async_errors', 'google_experiment_operation', 'google_create_experiment', 'google_update_experiment', 'google_add_experiment_arms', 'google_update_experiment_arms', 'google_remove_experiment_arms', 'google_remove_experiment', 'google_schedule_experiment', 'google_end_experiment', 'google_promote_experiment', 'google_graduate_experiment',
         'google_field_metadata', 'google_labels', 'google_label_context', 'google_label_associations', 'google_create_label', 'google_update_label', 'google_remove_label', 'google_link_label', 'google_unlink_label',
         'apple_adgroups', 'apple_keywords', 'apple_negative_keywords', 'apple_ads', 'apple_creatives', 'apple_product_pages',
         'apple_create_keywords', 'apple_create_negative_keywords', 'apple_set_campaign_schedule', 'apple_create_creative', 'apple_create_ad',
@@ -150,7 +151,7 @@ describe('all-provider shared tool surface', () => {
       await modernClient.connect(new StreamableHTTPClientTransport(new URL('https://adport.test/mcp'), { fetch: (url, init) => modern.fetch(new Request(url, init)) }));
       const modernTools = (await modernClient.listTools()).tools;
       expect(modernTools.map(tool => tool.name).sort()).toEqual(names.filter(name => name !== 'recommendation_apply' && !/_api_(read|create|update|delete|remove)$/.test(name)).sort());
-      expect(modernTools.find(tool => tool.name === 'google_assets')?._meta).toMatchObject({ ui: { resourceUri: 'ui://adport/insight-card-v5.html' } });
+      expect(modernTools.find(tool => tool.name === 'google_assets')?._meta).toMatchObject({ ui: { resourceUri: 'ui://adport/insight-card-v6.html' } });
     } finally { await modernClient.close(); await modern.close(); }
   });
 });
