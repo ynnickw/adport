@@ -432,13 +432,46 @@ select { min-width: 11rem; border: 1px solid var(--line); border-radius: 999px; 
 
 /* Shared landing-page pricing. Keep card geometry in website/pricing.css. */
 .pricing-surface {
-  --paper: #f5f5f7; --raised: #ffffff; --ink: #1d1d1f; --ink-soft: #424245; --muted: #6e6e73;
-  --rule: #dcdce1; --rule-strong: #c7c7cc; --go: #1a7f4b; --go-wash: rgba(26, 127, 75, .1);
-  --sans: var(--font-overpass), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: var(--ink); font-family: var(--sans); font-size: 1.0625rem; line-height: 1.6;
+  --raised: #ffffff; --rule: var(--line); --go: var(--success); --go-wash: var(--success-soft);
+  --sans: var(--font-sans);
+  color: var(--ink); font-family: var(--font-sans); font-size: inherit; line-height: 1.5;
 }
 :where(.pricing-surface) :where(h1, h2, h3, p, dl, dd, figure, ol, ul) { margin: 0; }
-.dashboard-pricing { background: #f5f5f7; border-radius: 1.2rem; margin-block: 2rem; container-type: inline-size; }
+.dashboard-pricing { margin-block: 2rem; container-type: inline-size; }
+.dashboard-pricing > .cloud-pricing { width: 100%; padding: 0; }
+.dashboard-pricing .pricing-heading { max-width: none; margin: 0 0 1.25rem; text-align: left; }
+.dashboard-pricing .pricing-heading :is(h1, h2), .dashboard-pricing .pricing-comparison .pricing-heading h2 { margin: 0 0 .35rem; font-size: 1.1rem; font-weight: 670; line-height: 1.3; letter-spacing: -.025em; }
+.dashboard-pricing .pricing-heading > p:last-child { font-size: .8125rem; line-height: 1.6; color: var(--muted); }
+.dashboard-pricing .pricing-billing { justify-content: flex-start; margin: 0 0 1.25rem; }
+.dashboard-pricing .pricing-billing a { padding: .4rem .8rem; font-size: .75rem; }
+.dashboard-pricing .pricing-cards { gap: 1rem; }
+.dashboard-pricing .pricing-card { border-radius: var(--radius); }
+.dashboard-pricing .pricing-card-featured { box-shadow: none; }
+.dashboard-pricing .pricing-card-header, .dashboard-pricing .pricing-card-featured .pricing-card-header { min-height: 0; padding: 1.1rem 1.15rem 0; border: 0; border-radius: 0; background: transparent; }
+.dashboard-pricing .pricing-card h3 { margin: 0; font-size: 1rem; font-weight: 700; }
+.dashboard-pricing .pricing-card-body { padding: .85rem 1.15rem 1.15rem; }
+.dashboard-pricing .pricing-amount strong { font-size: 2rem; letter-spacing: -.045em; }
+.dashboard-pricing .pricing-amount > span, .dashboard-pricing .pricing-billing-note { font-size: .75rem; }
+.dashboard-pricing .pricing-billing-note { margin: .25rem 0 0; }
+.dashboard-pricing .pricing-limits { gap: .4rem; margin: 1.15rem 0; font-size: .8125rem; }
+.dashboard-pricing .pricing-limits strong { min-width: 1.65rem; font-size: .875rem; font-weight: 700; }
+.dashboard-pricing .pricing-action, .dashboard-pricing .pricing-card-body > .billing-action-form > .pricing-action { min-height: 2.5rem; padding: .5rem .75rem; border-radius: .4rem; font-size: .75rem; }
+.dashboard-pricing .pricing-trial-note { margin-top: .6rem; font-size: .6875rem; }
+.dashboard-pricing .pricing-recommended { top: .8rem; right: .8rem; left: auto; transform: none; padding: .2rem .5rem; font-size: .5625rem; }
+.dashboard-pricing .pricing-shared-note { max-width: none; text-align: left; font-size: .75rem; line-height: 1.65; }
+.dashboard-pricing .pricing-paid-features { margin: 1rem 0 1.5rem; }
+.dashboard-pricing .pricing-free { gap: 1.25rem; margin-top: 0; padding: 1rem 1.15rem; border-radius: var(--radius); }
+.dashboard-pricing .pricing-free-label { padding: 0; margin: 0 0 .3rem; background: transparent; color: var(--ink); font-size: .875rem; }
+.dashboard-pricing .pricing-free p { font-size: .75rem; }
+.dashboard-pricing .pricing-free .pricing-amount strong { font-size: 1.4rem; }
+.dashboard-pricing .pricing-details { margin-top: 1.5rem; border-block: 1px solid var(--line-soft); }
+.dashboard-pricing .pricing-details > summary { padding: 1rem 0; cursor: pointer; font-size: .8125rem; font-weight: 650; }
+.dashboard-pricing .pricing-comparison { padding: .5rem 0 1.25rem; }
+.dashboard-pricing .comparison-table { font-size: .75rem; }
+.dashboard-pricing .comparison-table thead th { position: static; background: var(--paper); }
+.dashboard-pricing .pricing-enterprise { margin-top: 1.5rem; padding: 1rem 1.15rem; border-radius: var(--radius); background: var(--paper); }
+.dashboard-pricing .pricing-enterprise h3 { font-size: .95rem; }
+.dashboard-pricing .pricing-enterprise p { font-size: .75rem; }
 .pricing-surface .pricing-billing a { border-radius: 999px; padding: .7rem 1.15rem; color: var(--muted); font: 650 .875rem var(--sans); }
 .pricing-surface .pricing-billing a[aria-current="true"] { background: var(--ink); color: var(--raised); }
 .pricing-surface .pricing-billing a > span { margin-left: .35rem; color: var(--signal-ink); font-size: .6875rem; }
@@ -455,7 +488,7 @@ select { min-width: 11rem; border: 1px solid var(--line); border-radius: 999px; 
 .upgrade-owner-note { margin: 1.25rem 0; padding: .85rem 1rem; border-radius: .5rem; background: #f6f6f3; color: var(--muted); font-size: .8125rem; line-height: 1.65; }
 .inline-upgrade-button { display: inline; padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; text-decoration: underline; text-underline-offset: .2em; }
 .account-picker-upgrade { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem 1rem; width: 100%; padding: .25rem 0; font-size: .75rem; color: var(--muted); }
-@container (max-width: 50rem) { .dashboard-pricing .pricing-cards { grid-template-columns: 1fr; max-width: 31rem; margin-inline: auto; gap: 2rem; } .dashboard-pricing .pricing-free { align-items: stretch; flex-direction: column; max-width: 31rem; margin-inline: auto; } }
+@container (max-width: 42rem) { .dashboard-pricing .pricing-cards { grid-template-columns: 1fr; } .dashboard-pricing .pricing-free { align-items: stretch; flex-direction: column; } .dashboard-pricing .pricing-free > div:last-child { grid-template-columns: auto 1fr; } }
 
 /* ── Direct support ─────────────────────────────────────────────────── */
 .support-fab { position: fixed; z-index: 50; right: 1.35rem; bottom: 1.35rem; display: flex; align-items: center; gap: 0.6rem; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--ink); padding: 0.35rem 0.8rem 0.35rem 0.35rem; box-shadow: var(--shadow-float); font-size: 0.8125rem; font-weight: 650; }

@@ -8,12 +8,36 @@ import { subscriptionCheckoutUrl } from '@/lib/cloud/billing-checkout';
 import { getOrganizationEntitlement, type BillingInterval, type PlanId } from '@/lib/cloud/plans';
 import { env } from '@/lib/env';
 import { requireOrganizationAdmin } from '@/lib/cloud/workspaces';
+import { endComplimentaryPlan, subscriptionPlanChangeUrl } from '@/lib/cloud/billing-plan-changes';
+import { revalidatePath } from 'next/cache';
 
 function requireOwner(role: string | undefined): void {
   if (role !== 'owner') throw new Error('Only the workspace owner can manage billing.');
 }
 
 export interface BillingActionState { error?: string; }
+
+export async function changeProjectSubscriptionForm(projectId: string | undefined, plan: PlanId, interval: BillingInterval, _state: BillingActionState, _form: FormData): Promise<BillingActionState> {
+  let url: string;
+  try {
+    if (!['reader', 'operator', 'premium', 'agency'].includes(plan) || !['monthly', 'annual'].includes(interval)) throw new Error('Invalid billing option.');
+    const principal = await sessionPrincipal(projectId);
+    requireOwner(principal.role);
+    const entitlement = await getOrganizationEntitlement(principal.organizationId);
+    const billingOrganizationId = entitlement.billingOrganizationId ?? principal.organizationId;
+    const organization = await requireOrganizationAdmin(principal.userId!, billingOrganizationId);
+    requireOwner(organization.role);
+    if (plan === 'reader' && !entitlement.providerSubscriptionId && !entitlement.providerCustomerId) {
+      await endComplimentaryPlan(billingOrganizationId, principal.userId!);
+      revalidatePath('/dashboard', 'layout');
+      return {};
+    }
+    url = await subscriptionPlanChangeUrl(entitlement, billingOrganizationId, plan as 'reader' | 'operator' | 'premium' | 'agency', interval);
+  } catch {
+    return { error: 'Your plan change could not be opened. Refresh billing and try again, or contact support.' };
+  }
+  redirect(url);
+}
 
 async function checkoutUrl(plan: PlanId, interval: BillingInterval, projectId?: string): Promise<string> {
   if (plan !== 'operator' && plan !== 'premium' && plan !== 'agency') throw new Error('Choose Pro, Growth, or Business.');

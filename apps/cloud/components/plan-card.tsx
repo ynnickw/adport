@@ -11,27 +11,28 @@ const COPY = {
 
 function Check() { return <span className="comparison-check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6" /></svg></span>; }
 
-export function PlanCard({ planId, interval = 'monthly', badge, featured = false, action, note }: {
+export function PlanCard({ planId, interval = 'monthly', badge, featured = false, action, note, compact = false }: {
   planId: UpgradePlanId; interval?: 'monthly' | 'annual'; badge?: string; featured?: boolean;
   action?: React.ReactNode; note?: React.ReactNode;
+  compact?: boolean;
 }) {
   const plan = catalog[planId];
   const price = interval === 'annual' && plan.annualPriceEur !== null ? (plan.annualPriceEur / 12).toFixed(2) : plan.monthlyPriceEur;
   const features = ['Preview and approve ad changes', 'Budget caps & protected accounts', `${plan.maxRetentionDays}-day audit history`, 'Unlimited isolated projects', 'Free read-only viewers', 'MCP, CLI, REST & dashboard'];
   return <article className={`pricing-card${featured ? ' pricing-card-featured' : ''}`} aria-label={`${plan.name} plan`}>
     {badge ? <span className="pricing-recommended">{badge}</span> : null}
-    <header className="pricing-card-header"><p className="pricing-eyebrow">{COPY[planId]![0]}</p><h3>{plan.name}</h3><p className="pricing-description">{COPY[planId]![1]}</p></header>
+    <header className="pricing-card-header">{!compact ? <p className="pricing-eyebrow">{COPY[planId]![0]}</p> : null}<h3>{plan.name}</h3>{!compact ? <p className="pricing-description">{COPY[planId]![1]}</p> : null}</header>
     <div className="pricing-card-body">
       <div className="pricing-amount">{price === null ? <strong className="pricing-custom-amount">Let’s talk</strong> : <><strong>€{price}</strong><span>/ month</span></>}</div>
       <p className="pricing-billing-note">{price === null ? 'A plan tailored to your organization' : interval === 'annual' ? `€${plan.annualPriceEur} billed yearly` : 'Billed monthly'}</p>
-      <div className="pricing-limits"><span><strong>{plan.maxActiveAccounts ?? 'Unlimited'}</strong> active ad accounts</span><span><strong>{plan.maxMembers ?? 'Unlimited'}</strong> editing members</span></div>
+      <div className="pricing-limits"><span><strong>{plan.maxActiveAccounts ?? 'Unlimited'}</strong> active ad accounts</span><span><strong>{plan.maxMembers ?? 'Unlimited'}</strong> editing members</span>{compact ? <span><strong>{plan.maxRetentionDays}</strong> days of audit history</span> : null}</div>
       {action}{note ? <p className="pricing-trial-note">{note}</p> : null}
-      <p className="pricing-list-title">Included with {plan.name}</p>
+      {!compact ? <><p className="pricing-list-title">Included with {plan.name}</p>
       <ul className="pricing-features">{features.map(feature => <li key={feature}><Check /><span>{feature}</span></li>)}
           <li className="pricing-platform-feature"><span className="pricing-platform-label"><Check /><span>Ad platforms</span></span><PricingProviderStack planName={plan.name} /></li>
           <li className="pricing-ai-feature"><span className="pricing-platform-label"><Check /><span>ChatGPT &amp; Claude</span></span><PricingAgentMarks /></li>
           <li className="pricing-ai-feature"><span className="pricing-platform-label"><Check /><span>Any MCP client</span></span><PricingAgentMarks mcp /></li>
-      </ul>
+      </ul></> : null}
     </div>
   </article>;
 }
