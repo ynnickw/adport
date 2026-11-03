@@ -2,12 +2,14 @@ import { DATE_PRESETS, defineTool, guardedWriteTool, type AnyToolDefinition } fr
 import { z } from 'zod';
 import type { MicrosoftAdsProvider } from './provider.js';
 import { microsoftChildTools } from './child-tools.js';
+import { microsoftImageTools } from './images.js';
 
 const statusSchema = z.enum(['Active', 'Paused']);
 
 export function microsoftTools(provider: MicrosoftAdsProvider): AnyToolDefinition[] {
   return [
     ...microsoftChildTools(provider),
+    ...microsoftImageTools(provider),
     ...(['keyword', 'search_term'] as const).map(kind => defineTool({
       name: `microsoft_${kind}_report`, namespace: 'microsoft',
       description: `Read the native Microsoft ${kind.replace('_', ' ')} performance report through Submit/Poll/CSV. Native numeric values remain strings; empty or unavailable values are preserved.`,

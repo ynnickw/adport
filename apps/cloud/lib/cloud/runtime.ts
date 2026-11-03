@@ -126,7 +126,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
       const rotated: ProviderCredentialMap['microsoft'] = { ...stored, refreshToken };
       await updateProviderCredential(principal.organizationId, 'microsoft', rotated);
     });
-    const provider = new MicrosoftAdsProvider(client);
+    const provider = new MicrosoftAdsProvider(client, {}, media);
     modules.push({ provider: scopeProvider(provider), tools: microsoftTools(provider) });
   }
   if (credentials.reddit) {

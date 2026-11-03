@@ -109,6 +109,10 @@ Adport persists rotated Microsoft refresh tokens after use. Public-client refres
 
 Microsoft may show an unverified-publisher notice or require administrator consent based on your Entra application and tenant policy. For the CLI, that identity belongs to your application; the Adport Cloud broker uses an Adport-owned Entra application with its own publisher verification.
 
+`microsoft_images` and `microsoft_get_library_image` expose the selected account's image library, native previews and creation-time alt text. `microsoft_upload_image` accepts a SHA-256-bound static PNG, JPEG or GIF, up to 76,800 bytes; hosted calls require a project `media_id`. It creates an unattached asset and verifies the returned ID and requested alt text through the account library. Microsoft converts PNG to JPEG and validates dimensions and animation. These operations use the same guarded preview/apply flow from the CLI, MCP and creative gallery.
+
+`microsoft_image_extension_associations` reports image-extension uses only. An empty result does not establish that a responsive ad is not using the image. `microsoft_delete_image` verifies account ownership, blocks known extension references, relies on Microsoft's atomic rejection of any assigned media, and confirms disappearance. Existing-image alt-text updates are not exposed: a live update was accepted but did not change the readback. Replacement uploads and explicit reference changes are required instead. These contracts were checked against the [official media reference](https://learn.microsoft.com/en-us/advertising/campaign-management-service/image?view=bingads-13) and SDK; library reads and creation-time alt text were live-verified on 2026-11-03.
+
 ## Reddit Ads
 
 Reddit uses OAuth 2.0 with a confidential developer application and requires an honest, uniquely identifying `User-Agent` on every request.

@@ -1,10 +1,12 @@
 import {
   AdportError,
+  LocalMediaResolver,
   METRICS,
   resolveDateRange,
   type Account,
   type AdProvider,
   type MetricName,
+  type MediaResolver,
   type NormalizedQuery,
   type ProviderCapabilities,
   type Report,
@@ -19,6 +21,7 @@ import { unzipSync } from 'fflate';
 import { formatPartialErrors, MicrosoftAdsClient, type MicrosoftService } from './client.js';
 import { parseCsv } from './csv.js';
 import { MicrosoftChildService } from './children.js';
+import { MicrosoftImageService, MICROSOFT_IMAGE_WRITES } from './images.js';
 
 /** DailyBudget is a double in whole account-currency units. */
 export const UNITS_TO_MICROS = 1_000_000;
@@ -47,12 +50,15 @@ export class MicrosoftAdsProvider implements AdProvider {
   /** accountId → parent customer id, learned from SearchAccounts. */
   private customerIds = new Map<string, string>();
   readonly children: MicrosoftChildService;
+  readonly images: MicrosoftImageService;
 
   constructor(
     private readonly client: MicrosoftAdsClient,
     private readonly options: { pollIntervalMs?: number; pollMaxAttempts?: number } = {},
+    media: MediaResolver = new LocalMediaResolver(),
   ) {
     this.children = new MicrosoftChildService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign));
+    this.images = new MicrosoftImageService(client, account => this.scopeFor(account), media);
   }
 
   capabilities(): ProviderCapabilities {
@@ -275,6 +281,7 @@ export class MicrosoftAdsProvider implements AdProvider {
   }
 
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
+    if (MICROSOFT_IMAGE_WRITES.has(op.tool)) return this.images.plan(op);
     const payload = op.payload as never;
     switch (op.tool) {
       case 'microsoft_create_campaign':
