@@ -171,4 +171,19 @@ describe('Microsoft account audiences', () => {
       expect(await f.provider.audiences.usage(account, '100')).toMatchObject({ complete: true, associations: [{ campaign_id: '9', criterion: { Id: '700' } }] });
     }
   });
+
+  it('checks Performance Max campaign exclusions as well as its separate audience-signal library', async () => {
+    const f = fixture(); f.state.audiences.push(existing()); f.state.campaigns = [{ Id: '9', CampaignType: 'PerformanceMax' }];
+    f.state.associations.push({ Id: '700', CampaignId: '9', Type: 'NegativeCampaignCriterion', Criterion: { Type: 'AudienceCriterion', AudienceId: '100', AudienceType: 'RemarketingList' } });
+    expect(await f.provider.audiences.usage(account, '100')).toMatchObject({ complete: true, ad_groups_scanned: 0, associations: [{ campaign_id: '9', criterion: { Id: '700', Type: 'NegativeCampaignCriterion' } }] });
+    expect(f.calls.some(value => value.path.startsWith('AdGroups/'))).toBe(false);
+    const current = await f.provider.audiences.get(account, '100', 'RemarketingList');
+    await expect(f.provider.applyWrite(op('microsoft_delete_remarketing_list', { audience_id: '100', expected_snapshot_hash: current.snapshot_hash }, 'remove'), guard)).rejects.toThrow('is referenced'); expect(writes(f.calls)).toHaveLength(0);
+  });
+
+  it('blocks a deletion cascade when a derived similar list has wider ownership', async () => {
+    const f = fixture(); f.state.audiences.push(existing(), existing('101', { Type: 'SimilarRemarketingList', SourceId: '100', Scope: 'Customer', ParentId: '9001' }));
+    const current = await f.provider.audiences.get(account, '100', 'RemarketingList');
+    await expect(f.provider.applyWrite(op('microsoft_delete_remarketing_list', { audience_id: '100', expected_snapshot_hash: current.snapshot_hash }, 'remove'), guard)).rejects.toThrow('wider or unverifiable ownership'); expect(writes(f.calls)).toHaveLength(0);
+  });
 });

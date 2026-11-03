@@ -100,7 +100,9 @@ export class MicrosoftAudienceService extends MicrosoftNativeService {
 
   async usage(account: string, audience: string) {
     await this.owned(account, audience);
-    const lists = await this.query(account, ['SimilarRemarketingList', 'CombinedList']), derived = lists.filter(value => value.Type === 'SimilarRemarketingList' && String(value.SourceId) === audience).map(value => nativeId(value.Id)), ids = [audience, ...derived];
+    const lists = await this.query(account, ['SimilarRemarketingList', 'CombinedList']), derivedLists = lists.filter(value => value.Type === 'SimilarRemarketingList' && String(value.SourceId) === audience);
+    if (derivedLists.some(value => value.Scope !== 'Account' || nativeId(value.ParentId) !== account || this.shared(value))) throw new AdportError('INVALID_INPUT', 'microsoft: a derived similar audience has wider or unverifiable ownership/sharing; single-account deletion use check is incomplete');
+    const derived = derivedLists.map(value => nativeId(value.Id)), ids = [audience, ...derived];
     const combined = lists.filter(value => value.Type === 'CombinedList' && rows(value.CombinationRules).some(rule => Array.isArray(rule.AudienceIds) && rule.AudienceIds.some(value => ids.includes(nativeId(value))))).map(value => nativeId(value.Id));
     const groupsResult = await this.request(account, 'AudienceGroups/QueryByIds', { AudienceGroupIds: null });
     if (!Object.hasOwn(groupsResult, 'AudienceGroups')) throw new AdportError('PROVIDER_ERROR', 'microsoft: audience-signal inventory is unavailable; deletion use check is incomplete');
@@ -111,12 +113,16 @@ export class MicrosoftAudienceService extends MicrosoftNativeService {
     if (campaigns.length > 200) throw new AdportError('INVALID_INPUT', 'microsoft: audience use check exceeds 200 campaigns; no deletion was submitted');
     let groupCount = 0;
     for (const campaign of campaigns) {
-      // Performance Max audience references are checked in the account's audience-signal library above.
-      if (campaign.CampaignType === 'PerformanceMax') continue;
-      if (!['Search', 'Audience', 'DynamicSearchAds', 'Shopping'].includes(String(campaign.CampaignType))) throw new AdportError('INVALID_INPUT', 'microsoft: audience use check encountered an unsupported campaign type; no deletion was submitted');
-      const campaignId = nativeId(campaign.Id), groupsResult = await this.request(account, 'AdGroups/QueryByCampaignId', { CampaignId: campaignId });
-      if (!Object.hasOwn(groupsResult, 'AdGroups')) throw new AdportError('PROVIDER_ERROR', 'microsoft: ad-group inventory is unavailable; audience use check is incomplete');
-      const groups = rows(groupsResult.AdGroups); groupCount += groups.length;
+      if (!['Search', 'Audience', 'DynamicSearchAds', 'Shopping', 'PerformanceMax'].includes(String(campaign.CampaignType))) throw new AdportError('INVALID_INPUT', 'microsoft: audience use check encountered an unsupported campaign type; no deletion was submitted');
+      const campaignId = nativeId(campaign.Id);
+      let groups: Row[] = [];
+      // Performance Max uses audience signals and negative campaign criteria, without ordinary ad groups.
+      if (campaign.CampaignType !== 'PerformanceMax') {
+        const result = await this.request(account, 'AdGroups/QueryByCampaignId', { CampaignId: campaignId });
+        if (!Object.hasOwn(result, 'AdGroups')) throw new AdportError('PROVIDER_ERROR', 'microsoft: ad-group inventory is unavailable; audience use check is incomplete');
+        groups = rows(result.AdGroups);
+      }
+      groupCount += groups.length;
       if (groupCount > 2000) throw new AdportError('INVALID_INPUT', 'microsoft: audience use check exceeds 2000 ad groups; no deletion was submitted');
       for (const type of ['RemarketingList', ...(derived.length ? ['SimilarRemarketingList'] : [])]) {
         for (const group of [undefined, ...groups]) {
