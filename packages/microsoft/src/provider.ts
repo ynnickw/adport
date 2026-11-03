@@ -39,11 +39,7 @@ interface MicrosoftCampaign {
   CampaignType?: string;
 }
 
-interface WritePlan {
-  summary: string;
-  changes: string[];
-  coercions: string[];
-  budgetDeltas: WritePreview['budgetDeltas'];
+interface WritePlan extends Omit<WritePreview, 'serverValidated'> {
   execute: () => Promise<string[]>;
 }
 
@@ -274,6 +270,8 @@ export class MicrosoftAdsProvider implements AdProvider {
     return {
       summary: plan.summary,
       changes: plan.changes,
+      ...(plan.fieldChanges ? { fieldChanges: plan.fieldChanges } : {}),
+      ...(plan.notes ? { notes: plan.notes } : {}),
       coercions: plan.coercions,
       budgetDeltas: plan.budgetDeltas,
       serverValidated: false,

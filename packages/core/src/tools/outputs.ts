@@ -53,6 +53,8 @@ export const auditOutput = z.object({
 
 const preview = z.object({
   summary: z.string(), changes: z.array(z.string()), coercions: z.array(z.string()),
+  fieldChanges: z.array(z.object({ field: z.string().min(1), before: z.string(), after: z.string() })).max(100).optional(),
+  notes: z.array(z.string()).optional(),
   budgetDeltas: z.array(z.object({
     target: z.string(), currency: z.string().optional(), fromMicros: z.number().optional(), toMicros: z.number(),
   })),

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { WriteOperation } from '@adport/core';
+import { z } from 'zod';
 import { MicrosoftAdsClient } from '../src/client.js';
 import { MicrosoftAdsProvider } from '../src/provider.js';
 import { microsoftTools } from '../src/tools.js';
@@ -83,7 +84,11 @@ describe('Microsoft shared ad extensions', () => {
 
   it('preserves all omitted mutable sitelink fields and omits native read-only Version during PUT', async () => {
     const f = fixture(), before = f.state.extensions[0]!, operation = op('microsoft_update_ad_extension', { ...reference, display_text: 'Updated QA' });
-    await f.provider.previewWrite(operation, guard);
+    const preview = await f.provider.previewWrite(operation, guard);
+    expect(preview.fieldChanges).toEqual([{ field: 'Link text', before: 'Account library', after: 'Updated QA' }]);
+    expect(preview.notes).toEqual([expect.stringContaining('Every entity using this extension')]);
+    const output = microsoftTools(f.provider).find(tool => tool.name === operation.tool)!.output!;
+    expect(z.parse(output, { status: 'pending_validation', applied: false, preview })).toMatchObject({ preview: { fieldChanges: preview.fieldChanges } });
     expect(f.calls.some(value => value.init.method === 'PUT')).toBe(false);
     expect(await f.provider.applyWrite(operation, guard)).toEqual({ applied: true, resourceIds: ['42'] });
     const sent = (f.calls.find(value => value.init.method === 'PUT')!.body.AdExtensions as Row[])[0]!;

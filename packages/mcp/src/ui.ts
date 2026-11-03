@@ -269,15 +269,18 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       const changes = arr(preview.changes), coercions = arr(preview.coercions), deltas = arr(preview.budgetDeltas);
       // Review amounts must preserve micros; rounded report totals are not suitable for consent.
       const comparisons=deltas.map(v=>{const currency=currencyOf(v);return {label:(v.target || 'Budget')+(currency?' · '+currency:' (account units)'),before:available(v.fromMicros)?money(v.fromMicros/1e6,currency,6):'—',after:available(v.toMicros)?money(v.toMicros/1e6,currency,6):'—'};});
+      const fields=arr(preview.fieldChanges);
+      const explicit=fields.length && fields.every(v=>v && typeof v.field==='string' && v.field.trim() && typeof v.before==='string' && typeof v.after==='string')?fields:[];
+      for (const field of explicit.slice(0,12)) comparisons.push({label:field.field,before:field.before,after:field.after});
       // Split only explicit field/value arrows. Freeform JSON updates still
       // show the proposed payload, but never claim a previous value.
-      for (const change of changes) {
+      for (const change of explicit.length?[]:changes) {
         const match=String(change).match(/^~\s+(?:.+?\s+)?(status|configured_status|bidding_strategy|delivery|bid|dailyBudget\.value|DailyBudget|value)\s*:?\s*(.*?)\s*→\s*(.+)$/i);
         if (match) { const label=match[1].replaceAll('_',' ').replace(/([a-z])([A-Z])/g,'$1 $2');comparisons.push({label:label[0].toUpperCase()+label.slice(1),before:match[2].trim() || '—',after:match[3].trim()}); }
       }
       // Other provider plans still have a concrete change list. Show the
       // proposed effect without pretending we fetched the previous object.
-      for (const change of changes.slice(0,12)) {
+      for (const change of explicit.length?[]:changes.slice(0,12)) {
         const value=String(change).trim();
         if (/^~\s+(?:.+?\s+)?(status|configured_status|bidding_strategy|delivery|bid|dailyBudget\.value|DailyBudget|value)\s*:?\s*.*?\s*→\s*.+$/i.test(value)) continue;
         if (deltas.length && /\b(budget|amount_micros)\b/i.test(value) && /\s*→\s*/.test(value)) continue;
@@ -296,7 +299,9 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       const canApprove=typeof pending==='string' && pending.length>0 && typeof preview.summary==='string' && preview.summary.trim() && approval?.arguments && typeof approval.arguments==='object' && !Array.isArray(approval.arguments) && typeof meta.tool==='string';
       const action=canApprove?'<div class="approval"><button class="approve" data-approve="true" aria-label="Hold to approve and apply" '+(state.approving || state.approvalError?'disabled':'')+'>'+(state.approving?'Applying…':state.approvalError?'Verify result before retrying':'Hold to apply')+'</button><span class="context">Hold for 0.9s · release to cancel. Expires '+esc(data.expires_at || 'soon')+'</span></div>':'';
       const pendingNotice=state.approvalError?'An apply was attempted. Its outcome is unconfirmed; check the provider before retrying.':state.approving?'An apply is in progress. Wait for confirmation before taking another action.':'Nothing has been changed. Apply requires the matching pending operation token before it expires.';
-      const body=(title?'<p class="operation-name">'+esc(title)+'</p>':'')+table+(changes.length>12?'<p class="notice">Showing 12 of '+changes.length+' changes. All changes are in Details.</p>':'')+coercions.map(v=>'<p class="adjustment">'+esc(v)+'</p>').join('')+(state.approvalError?'<p class="notice" role="alert">'+esc(state.approvalError)+'</p>':'')+action+(applied?'<p class="notice">Applied. '+esc(preview.summary || 'The change was submitted.')+'</p>'+(resources.length?'<p class="context">Resource'+(resources.length===1?'':'s')+': '+resources.slice(0,20).map(esc).join(', ')+(resources.length>20?' · '+(resources.length-20)+' more in the tool result':'')+'</p>':''):'')+'<details><summary>Details</summary><p>'+esc(validation)+'</p><p>'+esc(preview.summary || 'No change details returned.')+'</p>'+changes.map(v=>'<p>'+esc(v)+'</p>').join('')+(pending?'<p>'+esc(pendingNotice)+'</p>':'')+'<p>'+esc(meta.tool || '')+'</p></details>';
+      const count=explicit.length || changes.length;
+      const notes=explicit.length?arr(preview.notes).filter(v=>typeof v==='string').map(v=>'<p class="notice">'+esc(v)+'</p>').join(''):'';
+      const body=(title?'<p class="operation-name">'+esc(title)+'</p>':'')+table+(count>12?'<p class="notice">Showing 12 of '+count+' changes. All changes are in Details.</p>':'')+notes+coercions.map(v=>'<p class="adjustment">'+esc(v)+'</p>').join('')+(state.approvalError?'<p class="notice" role="alert">'+esc(state.approvalError)+'</p>':'')+action+(applied?'<p class="notice">Applied. '+esc(preview.summary || 'The change was submitted.')+'</p>'+(resources.length?'<p class="context">Resource'+(resources.length===1?'':'s')+': '+resources.slice(0,20).map(esc).join(', ')+(resources.length>20?' · '+(resources.length-20)+' more in the tool result':'')+'</p>':''):'')+'<details><summary>Details</summary><p>'+esc(validation)+'</p><p>'+esc(preview.summary || 'No change details returned.')+'</p>'+changes.map(v=>'<p>'+esc(v)+'</p>').join('')+(pending?'<p>'+esc(pendingNotice)+'</p>':'')+'<p>'+esc(meta.tool || '')+'</p></details>';
       app.innerHTML = chrome(body, applied?'Applied':state.approvalError?'Outcome unconfirmed':state.approving?'Applying':pending?'Preview · Not applied':'Result');
       if (canApprove) app.querySelectorAll('[data-approve]').forEach(button=>bindHold(button,()=>approve(meta.tool,approval.arguments,pending)));
     }

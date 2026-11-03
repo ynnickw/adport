@@ -2,6 +2,8 @@
 
 Every Adport mutation uses the same `ToolRegistry` definition and the same policy engine, whether invoked from the CLI, stdio MCP server, cloud REST API, or remote MCP endpoint. A provider or adapter must not expose a separate write path.
 
+Providers can add `fieldChanges` to a preview when they have read the previous values. These explicit field/before/after strings drive the widget comparison; the UI does not infer creative copy changes by parsing arrows or JSON. Optional `notes` describe shared impact. The complete native change list remains in Details and in the shared CLI/MCP response, and authoritative budget comparisons continue to use integer micros.
+
 ## Two-step operation
 
 1. Call a write tool without `pending_operation_id`. Adport checks static policy, asks the provider to build or validate a write plan, applies required coercions such as paused creation, checks budget deltas, writes a `validated` audit event, and returns the preview plus a pending id and expiry.

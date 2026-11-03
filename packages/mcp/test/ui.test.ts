@@ -349,6 +349,33 @@ describe('shipped MCP iframe', () => {
     expect(visible).toContain('<td>PAUSED</td><td class="">PAUSED</td>');
   });
 
+  it('renders explicit creative field comparisons without parsing copy arrows or exposing the whole payload', () => {
+    const ui = widget();
+    ui.render('operation', { pending_operation_id: 'test', preview: {
+      summary: 'Update shared extension',
+      changes: ['~ {"Id":"native-id","AlternativeText":"A → B"} → full native replacement'],
+      fieldChanges: [{ field: 'Alternative text', before: 'A → B', after: '<img src=x onerror=alert(1)> → C' }],
+      notes: ['Every entity using this shared extension can change.'],
+      budgetDeltas: [{ target: 'Budget', fromMicros: 1000001, toMicros: 1000002 }],
+      serverValidated: false,
+    } });
+    const visible = ui.app.innerHTML.split('<details>')[0]!;
+    expect(visible).toContain('<td>Alternative text</td><td>A → B</td>');
+    expect(visible).toContain('&lt;img src=x onerror=alert(1)&gt; → C');
+    expect(visible).toContain('<td>1.000001</td><td class="changed">1.000002</td>');
+    expect(visible).toContain('Every entity using this shared extension can change.');
+    expect(visible).not.toContain('native-id');
+    expect(visible).not.toContain('Not provided');
+    expect(visible).not.toContain('<img src=x');
+    expect(ui.app.innerHTML).toContain('full native replacement');
+  });
+
+  it('falls back to the complete legacy change list when structured review fields are malformed', () => {
+    const ui = widget();
+    ui.render('operation', { preview: { summary: 'Update', changes: ['~ full actual native payload'], fieldChanges: [{ field: 'Copy', before: 'Old', after: ['invalid'] }] } });
+    expect(ui.app.innerHTML.split('<details>')[0]).toContain('full actual native payload');
+  });
+
   it('compares authoritative budget deltas and keeps coercions visible', () => {
     const ui = widget();
     ui.render('operation', { pending_operation_id: 'test', preview: {

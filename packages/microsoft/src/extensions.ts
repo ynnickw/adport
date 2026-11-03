@@ -16,6 +16,8 @@ const content = z.discriminatedUnion('extension_type', [
   z.object({ extension_type: z.literal('ImageAdExtension'), ...image }),
 ]);
 const fields: Record<string, string> = { text: 'Text', display_text: 'DisplayText', final_urls: 'FinalUrls', description1: 'Description1', description2: 'Description2', header: 'Header', values: 'Values', alternative_text: 'AlternativeText', image_ids: 'ImageMediaIds', description: 'Description' };
+const labels: Record<string, string> = { Text: 'Callout text', DisplayText: 'Link text', FinalUrls: 'Landing pages', Description1: 'Description 1', Description2: 'Description 2', Header: 'Localized header', Values: 'Snippet values', AlternativeText: 'Alternative text', ImageMediaIds: 'Source images', Description: 'Internal description' };
+const reviewValue = (value: unknown): string => value === null || value === undefined ? '—' : typeof value === 'string' ? value : JSON.stringify(value);
 const reference = z.object({ extension_id: id, extension_type: extensionType });
 const versioned = reference.extend({ expected_version: z.number().int().positive() });
 const update = versioned.extend({
@@ -160,7 +162,12 @@ export class MicrosoftExtensionService extends MicrosoftNativeService {
       });
       await this.verifyImages(op.accountId, value);
       if (input.extension_type === 'SitelinkAdExtension') this.nativeContent({ extension_type: input.extension_type, display_text: value.DisplayText, description1: value.Description1, description2: value.Description2 });
-      return { summary: `Update shared Microsoft extension ${input.extension_id}`, changes: [`~ ${JSON.stringify(current)} → ${JSON.stringify(value)}`, 'Every entity using this extension can change, including active ads. Existing scheduling, device preference and tracking fields are preserved. Native extension Version is read-only.'], coercions: [], budgetDeltas: [], execute: async () => {
+      const impact = 'Every entity using this extension can change, including active ads. Existing scheduling, device preference and tracking fields are preserved. Native extension Version is read-only.';
+      const fieldChanges = Object.keys(supplied).filter(key => key !== 'Type').flatMap(key => {
+        const before = key === 'ImageMediaIds' ? this.imageIds(current) : current[key], after = supplied[key];
+        return JSON.stringify(before ?? null) === JSON.stringify(after ?? null) ? [] : [{ field: labels[key] ?? key, before: reviewValue(before), after: reviewValue(after) }];
+      });
+      return { summary: `Update shared Microsoft extension ${input.extension_id}`, changes: [`~ ${JSON.stringify(current)} → ${JSON.stringify(value)}`, impact], fieldChanges, notes: [impact], coercions: [], budgetDeltas: [], execute: async () => {
         await this.request(op.accountId, 'AdExtensions', { AccountId: op.accountId, AdExtensions: [value] }, 'PUT');
         await this.confirm(op.accountId, input.extension_id, input.extension_type, value, input.expected_version);
         return [input.extension_id];

@@ -33,6 +33,10 @@ export interface BudgetDelta {
 export interface WritePreview {
   summary: string;
   changes: string[];
+  /** Explicit values read by the provider; never inferred from freeform change text. */
+  fieldChanges?: Array<{ field: string; before: string; after: string }>;
+  /** Review context shown alongside structured fields; full changes remain in Details. */
+  notes?: string[];
   /** Adjustments the guard forced (e.g. "status coerced to PAUSED"). Never silent. */
   coercions: string[];
   budgetDeltas: BudgetDelta[];
