@@ -29,6 +29,20 @@ Access-only tokens are supported; reauthorize/import when they expire. LinkedIn 
 
 Analytics uses `timeGranularity=ALL`, explicit inclusive UTC start/end dates and one account per request. Fields: `costInLocalCurrency`, `impressions`, chargeable `clicks`, `externalWebsiteConversions`, and `conversionValueInLocalCurrency`. Attribution follows the advertiser's conversion rules; no arbitrary cross-provider attribution window is imposed.
 
+## Text creatives and native images
+
+`linkedin_creatives` provides an account-scoped, paged creative gallery using the native criteria finder. Text creatives include actual headline, description, destination and an owned image preview. `linkedin_get_creative` verifies both creative account and campaign hierarchy. Returned finder filters and page tokens are checked; a denied image read preserves the creative with a warning. API version `202608` returns sponsored-post content references instead of enriched post copy. These references are retained explicitly; a reference alone is not a rendered creative or a verified authoring flow for image/video/carousel posts.
+
+`linkedin_create_text_ad` creates native text content under a `TEXT_AD` campaign, paused by policy. It requires explicit non-political advertiser confirmation. Copy limits are 25 characters for the headline and 75 for the description. `linkedin_update_text_ad` merges supplied fields into the existing text content, preserving omitted image, copy and destination; unknown current content fields cause rejection rather than silent removal. Updates can trigger creative review. Native POST partial updates use `patch.$set`, and creation/copy/name/status mutations verify returned settings through a separate owned-resource read. A failed receipt retains the resource ID for reconciliation and is never retried automatically.
+
+`linkedin_rename_creative` changes only the name. `linkedin_set_creative_status` pauses, activates or archives a creative; activation requires explicit non-political advertiser confirmation. The widget offers pause/archive actions without inferring that confirmation. Parent campaign delivery remains separate. The API can reject pausing an in-review creative; local preview does not guarantee provider acceptance.
+
+`linkedin_delete_creative` sends native DELETE for a creative in DRAFT or under a DRAFT campaign. For other supported states it sets `PENDING_DELETION` and reports this as a request, rather than completed deletion. Already removed/canceled/pending resources are rejected. This does not remove the underlying sponsored post or image.
+
+`linkedin_upload_image` reads checksum-bound local or project PNG/JPEG/GIF bytes, initializes an account-owned image and media-library entry, then transfers the exact bytes to the native LinkedIn upload URL after approval. Hosted calls require project media IDs. No upload is initialized during preview. Credentials are sent only to the reviewed native LinkedIn upload origin/path, with redirects disabled. Upload acceptance does not imply processing readiness: use `linkedin_get_image` and wait for `AVAILABLE`. Each ad format has its own dimensions and file-size requirements; text ads specify a 100×100 JPG/PNG of at most 2 MB. Images registered to a foreign account are rejected.
+
+These tools do not request new OAuth permissions. Company Page content, inline sponsored posts, video/document uploads, targeting edits/discovery, audiences, conversion setup and campaign-group management need their own implementation, grant checks and live verification. This is partial API coverage.
+
 The current analytics endpoint does **not** support pagination and returns at most 15,000 elements. Results at that ceiling are marked potentially truncated. Older ALL queries can be expanded to month boundaries by LinkedIn; Adport checks returned dates and refuses to label an expanded period as the requested range. Missing metrics stay absent. An empty analytics response can mean no activity **or** insufficient reporting access; account discovery alone does not prove reporting permission.
 
 ## Official contract sources
@@ -38,9 +52,12 @@ Reviewed 2026-08-31; requests pin `Linkedin-Version: 202608` and `X-Restli-Proto
 - [Account schema and cursor search](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads/account-structure/create-and-manage-accounts?view=li-lms-2026-08)
 - [Campaign schema, creation, budget updates and consent requirements](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads/account-structure/create-and-manage-campaigns?view=li-lms-2026-08)
 - [Campaign groups](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads/account-structure/create-and-manage-campaign-groups?view=li-lms-2026-08)
+- [Creatives, native status/deletion and criteria finder](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads/account-structure/create-and-manage-creatives?view=li-lms-2026-08)
+- [Text-ad creation and content updates](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads/advertising-targeting/version/text-ads-integrations?view=li-lms-2026-08)
+- [Native images and media-library metadata](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/images-api?view=li-lms-2026-08)
 - [Targeting criteria structure](https://learn.microsoft.com/en-us/linkedin/shared/references/v2/ads/targeting-criteria)
 - [Reporting behavior](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads-reporting/ads-reporting?view=li-lms-2026-08) and [metric response schemas](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads-reporting/ads-reporting-schema?view=li-lms-2026-08)
 - [Rest.li URL encoding](https://learn.microsoft.com/en-us/linkedin/shared/api-guide/concepts/protocol-version)
 - [Authorization-code flow](https://learn.microsoft.com/en-us/linkedin/shared/authentication/authorization-code-flow) and [programmatic refresh](https://learn.microsoft.com/en-us/linkedin/shared/authentication/programmatic-refresh-tokens)
 
-Tests use synthetic fixtures shaped by these references and assert outgoing URLs, headers, bodies, response contracts and policy behavior. They are not live-account tests. No live LinkedIn API call or app approval has been verified yet. Cloud connection support and application setup remain separate work.
+Tests use synthetic fixtures shaped by these references and assert outgoing URLs, headers, bodies, response contracts and policy behavior. Existing authorized hosted MCP account/campaign/campaign-group reads succeeded on 2026-11-03; that account returned no campaigns. A local LinkedIn credential is unavailable. The new creative/image endpoint flows and native host widgets still need live verification through an appropriately scoped existing connection. Provider approval status and additional format permissions are not established by the baseline reads.

@@ -69,14 +69,36 @@ export class LinkedInAdsClient {
     const response = await this.request(path, 'POST', {}, { patch: { $set: fields } }, true);
     if (response.status !== 204) throw new AdportError('PROVIDER_ERROR', 'linkedin: partial update did not return 204; inspect the account before retrying');
   }
-  private async request(path: string, method: 'GET' | 'POST', params: Record<string, RestliValue>, body?: unknown, partial = false, retry = true): Promise<Response> {
-    if (!/^[a-zA-Z]+(?:\/[a-zA-Z0-9]+)*$/.test(path)) throw new AdportError('INVALID_INPUT', 'linkedin: invalid API resource path');
+  async createCreative(path: string, body: unknown): Promise<string> {
+    const response = await this.request(path, 'POST', {}, body), raw = response.headers.get('x-restli-id');
+    let id: string | undefined;
+    try { id = raw ? decodeURIComponent(raw) : undefined; } catch { /* Invalid receipt remains a provider error. */ }
+    if (response.status !== 201 || !id || !/^urn:li:sponsoredCreative:[1-9]\d*$/.test(id)) throw new AdportError('PROVIDER_ERROR', 'linkedin: creative create did not return 201 and a valid sponsoredCreative URN; inspect the account before retrying');
+    return id;
+  }
+  async action<T>(path: string, action: string, body: unknown, schema: z.ZodType<T>): Promise<T> {
+    const response = await this.request(path, 'POST', { action }, body), parsed = schema.safeParse(await response.json());
+    if (!parsed.success) throw new AdportError('PROVIDER_ERROR', 'linkedin: malformed action response; inspect the account before retrying');
+    return parsed.data;
+  }
+  async remove(path: string): Promise<void> {
+    const response = await this.request(path, 'DELETE', {});
+    if (response.status !== 204) throw new AdportError('PROVIDER_ERROR', 'linkedin: delete did not return 204; inspect the account before retrying');
+  }
+  async uploadImage(url: string, bytes: Uint8Array<ArrayBuffer>): Promise<void> {
+    const target = new URL(url);
+    if (target.origin !== 'https://www.linkedin.com' || !target.pathname.startsWith('/dms-uploads/') || target.username || target.password || target.hash) throw new AdportError('PROVIDER_ERROR', 'linkedin: unrecognized native image upload destination');
+    const response = await this.fetchImpl(target.href, { method: 'PUT', headers: { authorization: `Bearer ${await this.accessToken()}`, 'content-type': 'application/octet-stream' }, body: bytes, redirect: 'error', signal: AbortSignal.timeout(60_000) });
+    if (!response.ok) throw new AdportError('PROVIDER_ERROR', `linkedin: image upload HTTP ${response.status}; inspect its initialized image before retrying`);
+  }
+  private async request(path: string, method: 'GET' | 'POST' | 'DELETE', params: Record<string, RestliValue>, body?: unknown, partial = false, retry = true): Promise<Response> {
+    if (!/^[a-zA-Z]+(?:\/(?:[a-zA-Z0-9]+|urn%3Ali%3A[a-zA-Z]+%3A[a-zA-Z0-9_-]+))*$/.test(path)) throw new AdportError('INVALID_INPUT', 'linkedin: invalid API resource path');
     const query = Object.entries(params).map(([key, value]) => `${encodeURIComponent(key)}=${key === 'fields' && typeof value === 'string' ? value.split(',').map(restli).join(',') : restli(value)}`).join('&');
     const url = new URL(path, LINKEDIN_API_BASE); url.search = query;
     const token = await this.accessToken();
     const response = await this.fetchImpl(url.href, {
       method, headers: { authorization: `Bearer ${token}`, 'Linkedin-Version': LINKEDIN_API_VERSION, 'X-Restli-Protocol-Version': '2.0.0',
-        ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...(partial ? { 'X-RestLi-Method': 'PARTIAL_UPDATE' } : {}) },
+        ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...(partial ? { 'X-RestLi-Method': 'PARTIAL_UPDATE' } : method === 'DELETE' ? { 'X-RestLi-Method': 'DELETE' } : params.q ? { 'X-RestLi-Method': 'FINDER' } : {}) },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}), redirect: 'error', signal: AbortSignal.timeout(30_000),
     });
     if (response.status === 401 && method === 'GET' && retry && this.canRefresh()) {

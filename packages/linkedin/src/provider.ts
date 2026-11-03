@@ -1,9 +1,10 @@
 import { z } from 'zod';
-import { AdportError, resolveDateRange, type Account, type AdProvider, type MetricName, type NormalizedQuery, type Report, type ReportRow, type StandardActions, type WriteGuard, type WriteOperation, type WritePreview, type WriteResult } from '@adport/core';
+import { AdportError, resolveDateRange, type Account, type AdProvider, type MediaResolver, type MetricName, type NormalizedQuery, type Report, type ReportRow, type StandardActions, type WriteGuard, type WriteOperation, type WritePreview, type WriteResult } from '@adport/core';
 import { LinkedInAdsClient, type RestliValue } from './client.js';
 import { accountSchema, campaignSchema, createCampaignSchema, groupSchema, linkedinId, NON_DISCRIMINATION_NOTICE, NON_POLITICAL_CONSENT, reportRowSchema, setBudgetSchema, setStatusSchema } from './schemas.js';
+import { LinkedInCreativeService } from './creatives.js';
 
-interface Plan extends Omit<WritePreview, 'serverValidated'> { execute: () => Promise<string[]> }
+interface Plan extends Omit<WritePreview, 'serverValidated'> { execute: () => Promise<string[] | WriteResult> }
 const FIELDS = { spend: 'costInLocalCurrency', impressions: 'impressions', clicks: 'clicks', conversions: 'externalWebsiteConversions', conversion_value: 'conversionValueInLocalCurrency' } as const;
 const DERIVED = { ctr: ['clicks', 'impressions', 100], cpc: ['spend', 'clicks', 1], cpm: ['spend', 'impressions', 1000], cpa: ['spend', 'conversions', 1], roas: ['conversion_value', 'spend', 1] } as const;
 const STATUS = ['ACTIVE', 'PAUSED', 'ARCHIVED', 'COMPLETED', 'CANCELED', 'DRAFT', 'PENDING_DELETION', 'REMOVED'];
@@ -25,7 +26,8 @@ export function microsToDecimal(value: number): string {
 
 export class LinkedInAdsProvider implements AdProvider {
   readonly id = 'linkedin';
-  constructor(private readonly client: LinkedInAdsClient) {}
+  readonly creatives: LinkedInCreativeService;
+  constructor(private readonly client: LinkedInAdsClient, media?: MediaResolver) { this.creatives = new LinkedInCreativeService(client, this, media); }
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions { return { pauseCampaign: (accountId, campaignId) => ({ tool: 'linkedin_set_campaign_status', input: { account_id: accountId, campaign_id: campaignId, status: 'PAUSED' } }) }; }
   private async search<T extends { id: number }>(path: string, schema: z.ZodType<T>, search?: RestliValue): Promise<T[]> {
@@ -114,8 +116,9 @@ export class LinkedInAdsProvider implements AdProvider {
   async previewWrite(op: WriteOperation, guard: WriteGuard): Promise<WritePreview> {
     const { execute: _execute, ...preview } = await this.plan(op, guard); return { ...preview, serverValidated: false };
   }
-  async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> { return { applied: true, resourceIds: await (await this.plan(op, guard)).execute() }; }
+  async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> { const result = await (await this.plan(op, guard)).execute(); return Array.isArray(result) ? { applied: true, resourceIds: result } : result; }
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<Plan> {
+    if (/^linkedin_(?:create_text_ad|update_text_ad|rename_creative|set_creative_status|delete_creative|upload_image)$/.test(op.tool)) return this.creatives.plan(op, guard);
     const accountId = linkedinId.parse(op.accountId), base = `adAccounts/${accountId}/adCampaigns`;
     if (op.provider !== this.id) throw new AdportError('INVALID_INPUT', 'linkedin: provider mismatch');
     if (op.tool === 'linkedin_create_campaign' && op.kind === 'create') {

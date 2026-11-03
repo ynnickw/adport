@@ -42,6 +42,8 @@ Snapchat's `snapchat_creatives` displays native copy and image/video media. Copy
 
 Reddit's `reddit_ads`, `reddit_posts` and `reddit_assets` render native copy/media and processing readiness. Its edit action stages a new post copy; attaching that post to an ad is a separate approval. Exact project files use a checksum-checked private provider source because Reddit fetches media by URL. See [Reddit campaign setup](reddit-campaign-setup.md) for async receipts, profile scope and native import semantics.
 
+LinkedIn's `linkedin_creatives` displays actual text-ad copy and referenced images with bound copy/name/status actions. Activation requires explicit advertiser confirmation through the named status tool. Copy edits preserve omitted fields and verify readback. Referenced sponsored posts remain identified as references when source content is unavailable under the pinned API version. See [LinkedIn setup](providers/linkedin.md) for format and permission limits.
+
 Microsoft exposes named ad-group, keyword and responsive search ad workflows, including status changes and partial copy/bid updates. Ad-group creation asks for an explicit language. Reads request the optional `AdGroupType` field to verify RSA compatibility. RSA updates retain positional pinning and omit read-only text-asset IDs. Batch failures report successful resource IDs so callers can reconcile partially applied requests before retrying.
 
 Microsoft's normalized `report` supports account, campaign, ad-group and ad levels. `microsoft_keyword_report` and `microsoft_search_term_report` return native CSV fields as strings, including empty or suppressed values. Account ratios use spend/revenue totals even when a caller requests only ROAS. Missing conversion or revenue data is kept unavailable.

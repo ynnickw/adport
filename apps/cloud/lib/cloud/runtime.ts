@@ -86,7 +86,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     modules.push({ provider: scopeProvider(provider), tools: pinterestTools(provider) });
   }
   if (credentials.linkedin && providerAllowedForOrganization('linkedin', principal.organizationId)) {
-    const provider = new LinkedInAdsProvider(new LinkedInAdsClient({ ...cloudProviderApp('linkedin'), ...credentials.linkedin, onTokens: persistTokens('linkedin') }));
+    const provider = new LinkedInAdsProvider(new LinkedInAdsClient({ ...cloudProviderApp('linkedin'), ...credentials.linkedin, onTokens: persistTokens('linkedin') }), media);
     modules.push({ provider: scopeProvider(provider), tools: linkedinTools(provider) });
   }
   if (credentials.x && providerAllowedForOrganization('x', principal.organizationId)) {

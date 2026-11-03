@@ -103,7 +103,7 @@ All 11 providers have local connection commands, normalized reports, and guarded
 | Snapchat Ads | `snapchat` | [Campaign hierarchy, creative/media, targeting, audiences, measurement](docs/snapchat-campaign-setup.md) |
 | Spotify Ads | `spotify` | [Reports, unpublished drafts, campaign status, ad-set delivery](docs/providers/spotify.md) |
 | Pinterest Ads | `pinterest` | [Discovery, reports, campaigns, budgets, status](docs/providers/pinterest.md) |
-| LinkedIn Ads | `linkedin` | [Discovery, reports, campaigns, budgets, status](docs/providers/linkedin.md) |
+| LinkedIn Ads | `linkedin` | [Campaigns, reports, text creatives, image upload, budgets and status](docs/providers/linkedin.md) |
 | X Ads | `x` | [Discovery, analytics, campaigns, budgets, status](docs/providers/x.md) |
 
 Provider application approval, account access, and available metrics depend on the platform. The [connection guides](docs/providers.md) record prerequisites and testing limits. Reports preserve currency and attribution differences; see [reporting semantics](docs/reporting-semantics.md) before comparing providers.
