@@ -1,4 +1,8 @@
 import { AdportError } from '@adport/core';
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
+export const GOOGLE_DATA_MANAGER_SCOPE = 'https://www.googleapis.com/auth/datamanager';
+export const isDataManagerFieldPath = (value: unknown): value is string => typeof value === 'string' && value.length <= 256 && /^(?:events|destinations|consent|encoding|encryptionInfo)(?:\[\d+\])?(?:\.[A-Za-z][A-Za-z0-9_]*(?:\[\d+\])?)*$/.test(value);
 
 /**
  * Matches the google-ads.yaml naming conventions so credentials translate 1:1.
@@ -41,7 +45,7 @@ export function normalizeCustomerId(id: string): string {
  * exactly what goes over the wire.
  */
 export class GoogleAdsRestClient {
-  private accessToken?: { token: string; expiresAt: number };
+  private accessToken?: { token: string; expiresAt: number; scopes?: string[] };
 
   constructor(
     private readonly credentials: GoogleCredentials,
@@ -75,9 +79,62 @@ export class GoogleAdsRestClient {
         safeJson(body),
       );
     }
-    const data = (await response.json()) as { access_token: string; expires_in: number };
-    this.accessToken = { token: data.access_token, expiresAt: Date.now() + (data.expires_in - 60) * 1000 };
+    const data = (await response.json()) as { access_token: string; expires_in: number; scope?: string };
+    this.accessToken = { token: data.access_token, expiresAt: Date.now() + (data.expires_in - 60) * 1000, ...(typeof data.scope === 'string' ? { scopes: data.scope.split(/\s+/).filter(Boolean) } : {}) };
     return this.accessToken.token;
+  }
+
+  dataManagerLoginAccount(customerId: string): string {
+    const account = normalizeCustomerId(customerId);
+    return normalizeCustomerId(this.credentials.loginCustomerIds?.[account] ?? this.credentials.loginCustomerId ?? account);
+  }
+
+  async dataManagerAccess() {
+    await this.getAccessToken();
+    const scopes = this.accessToken?.scopes;
+    return { required_scope: GOOGLE_DATA_MANAGER_SCOPE, scope_status: scopes ? scopes.includes(GOOGLE_DATA_MANAGER_SCOPE) ? 'GRANTED' as const : 'MISSING' as const : 'UNKNOWN' as const };
+  }
+
+  private dataManagerReceiptKey(): Buffer {
+    return createHmac('sha256', this.credentials.clientSecret).update('adport.google.datamanager.v1\0').update(this.credentials.clientId).update('\0').update(this.credentials.refreshToken).digest();
+  }
+
+  dataManagerReceipt(value: Record<string, unknown>): string {
+    const payload = Buffer.from(JSON.stringify(value)).toString('base64url');
+    return `${payload}.${createHmac('sha256', this.dataManagerReceiptKey()).update(payload).digest('base64url')}`;
+  }
+
+  verifyDataManagerReceipt(receipt: string): unknown {
+    const invalid = () => new AdportError('INVALID_INPUT', 'google: invalid Data Manager receipt; use the receipt from the approved ingestion');
+    if (receipt.length > 4096 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/.test(receipt)) throw invalid();
+    const [payload, signature] = receipt.split('.'), expected = createHmac('sha256', this.dataManagerReceiptKey()).update(payload!).digest(), supplied = Buffer.from(signature!, 'base64url');
+    if (supplied.toString('base64url') !== signature || expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) throw invalid();
+    try { return JSON.parse(Buffer.from(payload!, 'base64url').toString('utf8')); } catch { throw invalid(); }
+  }
+
+  async dataManagerRequest(method: 'ingest' | 'status', input: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (method !== 'ingest' && method !== 'status') throw new AdportError('INVALID_INPUT', 'google: unsupported Data Manager route');
+    const access = await this.dataManagerAccess();
+    if (access.scope_status === 'MISSING') throw new AdportError('NOT_CONNECTED', 'google: the existing OAuth grant does not include Data Manager. Reauthorize explicitly with the datamanager scope; existing Ads access is unchanged.', access);
+    const token = await this.getAccessToken(), url = new URL(`https://datamanager.googleapis.com/v1/${method === 'ingest' ? 'events:ingest' : 'requestStatus:retrieve'}`);
+    if (method === 'status') url.searchParams.set('requestId', String(input.requestId));
+    let response: Response;
+    try {
+      response = await this.fetchImpl(url, { method: method === 'ingest' ? 'POST' : 'GET', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, ...(method === 'ingest' ? { body: JSON.stringify(input) } : {}), redirect: 'error', signal: AbortSignal.timeout(30_000) });
+    } catch { throw new AdportError('PROVIDER_ERROR', 'google: Data Manager response was not confirmed; the request was not retried. Reconcile an ingestion before sending it again.'); }
+    let body: unknown;
+    try { body = await response.json(); } catch { throw new AdportError('PROVIDER_ERROR', 'google: invalid Data Manager response; do not assume ingestion or retry automatically'); }
+    if (!response.ok) {
+      const object = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+      const error = object(object(body).error), details = Array.isArray(error.details) ? error.details.map(object) : [];
+      // Native descriptions may echo identifiers. Keep only enum codes and field paths.
+      const reasons = details.flatMap(value => typeof value.reason === 'string' && /^[A-Z][A-Z0-9_]{0,127}$/.test(value.reason) ? [value.reason] : []).slice(0, 30);
+      const fields = details.flatMap(value => Array.isArray(value.fieldViolations) ? value.fieldViolations.map(object).flatMap(item => isDataManagerFieldPath(item.field) ? [item.field] : []) : []).slice(0, 100);
+      const status = typeof error.status === 'string' && /^[A-Z_]{1,64}$/.test(error.status) ? error.status : 'UNKNOWN';
+      throw new AdportError('PROVIDER_ERROR', `google: Data Manager rejected the request (HTTP ${response.status}; ${status}${reasons.length ? `; ${reasons.join(', ')}` : ''}). No automatic retry.`, { http_status: response.status, status, reasons, fields });
+    }
+    if (body === null || typeof body !== 'object' || Array.isArray(body)) throw new AdportError('PROVIDER_ERROR', 'google: invalid Data Manager response object');
+    return body as Record<string, unknown>;
   }
 
   private async request<T>(

@@ -7,6 +7,7 @@ import {
   buildGoogleAuthorizationUrl,
   exchangeGoogleCode,
   GOOGLE_ADS_SCOPE,
+  GOOGLE_DATA_MANAGER_SCOPE,
   googleConfigured,
   revokeGoogleToken,
 } from './google-oauth';
@@ -381,7 +382,21 @@ const reddit: OAuthAdapter<'reddit'> = {
 
 const adapters = { google, meta, tiktok, microsoft, reddit, apple, ...extraOAuthAdapters, x: xOAuthAdapter } satisfies { [P in OAuthProvider]: OAuthAdapter<P> };
 
-export function oauthAdapter<P extends OAuthProvider>(provider: P): OAuthAdapter<P> {
+export function oauthAdapter<P extends OAuthProvider>(provider: P, options: { googleDataManager?: boolean } = {}): OAuthAdapter<P> {
+  if (options.googleDataManager) {
+    if (provider !== 'google') throw new Error('Data Manager authorization is supported only for Google.');
+    return {
+      ...google,
+      flowLabel: 'Google OAuth 2.0 with additional Data Manager permission',
+      scopes: [GOOGLE_ADS_SCOPE, GOOGLE_DATA_MANAGER_SCOPE],
+      authorizationUrl: input => buildGoogleAuthorizationUrl(input, true),
+      async exchange({ code, verifier }) {
+        const tokens = await exchangeGoogleCode(code, verifier);
+        if (!tokens.scopes?.includes(GOOGLE_ADS_SCOPE) || !tokens.scopes.includes(GOOGLE_DATA_MANAGER_SCOPE)) throw new Error('Google did not confirm both Ads and Data Manager permission. The previous connection was preserved.');
+        return { refreshToken: tokens.refreshToken };
+      },
+    } as OAuthAdapter<P>;
+  }
   return adapters[provider] as unknown as OAuthAdapter<P>;
 }
 

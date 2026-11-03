@@ -105,6 +105,20 @@ describe('hosted provider OAuth broker', () => {
     expect(() => oauthAdapter('reddit').authorizationUrl({ state: 's', challenge: 'c' })).toThrow(/REDDIT_CLIENT_ID/);
   });
 
+  it('requests Data Manager only for explicit Google authorization and refuses an unconfirmed grant before persistence', async () => {
+    Object.assign(process.env, APP_ENV); resetEnvForTests();
+    const adapter = oauthAdapter('google', { googleDataManager: true });
+    const url = new URL(adapter.authorizationUrl({ state: 'bound-state', challenge: 'pkce' }));
+    expect(url.searchParams.get('scope')?.split(' ')).toEqual(['https://www.googleapis.com/auth/adwords', 'https://www.googleapis.com/auth/datamanager']);
+    expect(url.searchParams.get('include_granted_scopes')).toBe('false');
+    expect(() => oauthAdapter('meta', { googleDataManager: true })).toThrow('only for Google');
+    const request = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ access_token: 'access', refresh_token: 'refresh', scope: 'https://www.googleapis.com/auth/adwords' }));
+    await expect(adapter.exchange({ code: 'code', verifier: 'verifier' })).rejects.toThrow('previous connection was preserved');
+    request.mockResolvedValueOnce(Response.json({ access_token: 'access', refresh_token: 'refresh', scope: adapter.scopes.join(' ') }));
+    expect(await adapter.exchange({ code: 'code', verifier: 'verifier' })).toEqual({ refreshToken: 'refresh' });
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
   it('injects the Adport-owned application identity into tenant grants at runtime', () => {
     Object.assign(process.env, APP_ENV);
     resetEnvForTests();

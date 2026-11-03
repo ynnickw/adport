@@ -601,6 +601,23 @@ describe('shipped MCP iframe', () => {
     expect(native ? calls : ui.sent.filter((value: any) => value.method === 'tools/call')).toHaveLength(1);
   });
 
+  it.each([false, true])('distinguishes async acceptance from processed conversions in both widget bridges (ChatGPT=%s)', async native => {
+    const outcome = { status: 'applied', applied: true, preview: { summary: 'Ingest conversion events' }, result: { resourceIds: ['conversion-action'], details: { status: 'ACCEPTED_FOR_PROCESSING', processed: false, next_tool: 'google_conversion_request_status', resource_receipt: 'signed-status-receipt' } } };
+    const states: unknown[] = [];
+    const ui = widget(native ? { callTool: async () => ({ structuredContent: outcome }), setWidgetState: (value: unknown) => { states.push(value); } } : undefined);
+    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('google_ingest_conversion_events', 'operation', { pending_operation_id: 'consumed-event-token', preview: { summary: 'Ingest conversion events' } }, { arguments: { account_id: '123', project_id: 'project-b', events: [{ transaction_id: 'private-transaction' }] } }) } });
+    ui.approvals[0]!.click();
+    if (!native) { const request = ui.sent.at(-1) as { id: number }; ui.message({ jsonrpc: '2.0', id: request.id, result: { structuredContent: outcome } }); }
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    expect(ui.app.innerHTML).toContain('Processing pending');
+    expect(ui.app.innerHTML).toContain('Processing and conversion matching are not confirmed');
+    expect(ui.app.innerHTML).not.toContain('Applied.'); expect(ui.app.innerHTML).not.toContain('Hold to apply');
+    const context = native ? states[0] : ui.sent.find((value: any) => value.method === 'ui/update-model-context');
+    expect(JSON.stringify(context)).toContain('"processing_status":"ACCEPTED_FOR_PROCESSING","processed":false');
+    expect(JSON.stringify(context)).toContain('signed-status-receipt');
+    expect(JSON.stringify(context)).not.toMatch(/consumed-event-token|private-transaction/);
+  });
+
   it('shows upload eligibility notes even when the preview has no editable before/after fields', () => {
     const ui = widget();
     ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('google_upload_click_conversions', 'operation', { pending_operation_id: 'preview-only', preview: { summary: 'Upload conversion records', changes: ['+ 2 records'], notes: ['Legacy click imports are restricted; new integrations require Data Manager.'] } }) } });

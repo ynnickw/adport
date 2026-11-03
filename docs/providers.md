@@ -72,7 +72,7 @@ The wire formats follow the [v25 label service](https://github.com/googleapis/go
 
 Google can show an “unverified app” warning when your private OAuth project requests the Google Ads scope without completing verification. For the CLI, that warning concerns your BYO project and credentials are not sent to Adport Cloud. Add yourself as a test user during development. The managed cloud application's own OAuth project must complete Google's production verification before public use.
 
-See [Google conversion management](providers/google-conversions.md) for tracking ownership, conversion configuration and guarded legacy click/call/adjustment imports. New click integrations require the separate Data Manager API.
+See [Google conversion management](providers/google-conversions.md) for tracking ownership, conversion configuration, Data Manager event ingestion and asynchronous diagnostics, and legacy click/call/adjustment imports. Data Manager permission is an explicit opt-in through `adport connect google --data-manager` or the hosted Google connection's **Enable conversion imports** action.
 
 ## Agent-managed project media
 

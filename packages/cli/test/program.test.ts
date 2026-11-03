@@ -42,6 +42,9 @@ afterEach(() => {
 });
 
 describe('adport CLI', () => {
+  it('rejects the Google-only Data Manager opt-in for other providers before connecting', async () => {
+    await expect(run('connect', 'meta', '--data-manager', '--no-browser')).rejects.toThrow('only for Google');
+  });
   it('does not expose mock tools without explicit demo mode', async () => {
     await runWithoutDemo('tools', 'list', '--json');
     const tools = JSON.parse(out.join('\n')) as Array<{ name: string }>;

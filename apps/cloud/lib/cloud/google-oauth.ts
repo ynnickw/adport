@@ -1,6 +1,8 @@
 import 'server-only';
 import { createHash, randomBytes } from 'node:crypto';
 import { env, googleEnv } from '@/lib/env';
+import { GOOGLE_DATA_MANAGER_SCOPE } from '@adport/provider-google';
+export { GOOGLE_DATA_MANAGER_SCOPE };
 
 export const GOOGLE_ADS_SCOPE = 'https://www.googleapis.com/auth/adwords';
 
@@ -19,14 +21,14 @@ export function googleRedirectUri(): string {
   return new URL('/api/oauth/google/callback', googleEnv().ADPORT_CLOUD_BASE_URL).toString();
 }
 
-export function buildGoogleAuthorizationUrl(input: { state: string; challenge: string }): string {
+export function buildGoogleAuthorizationUrl(input: { state: string; challenge: string }, dataManager = false): string {
   const config = googleEnv();
   const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
   url.search = new URLSearchParams({
     client_id: config.GOOGLE_ADS_CLIENT_ID,
     redirect_uri: googleRedirectUri(),
     response_type: 'code',
-    scope: GOOGLE_ADS_SCOPE,
+    scope: [GOOGLE_ADS_SCOPE, ...(dataManager ? [GOOGLE_DATA_MANAGER_SCOPE] : [])].join(' '),
     access_type: 'offline',
     prompt: 'consent',
     include_granted_scopes: 'false',
@@ -37,7 +39,7 @@ export function buildGoogleAuthorizationUrl(input: { state: string; challenge: s
   return url.toString();
 }
 
-export async function exchangeGoogleCode(code: string, verifier: string): Promise<{ refreshToken: string; accessToken: string }> {
+export async function exchangeGoogleCode(code: string, verifier: string): Promise<{ refreshToken: string; accessToken: string; scopes?: string[] }> {
   const config = googleEnv();
   const response = await fetch(config.GOOGLE_OAUTH_TOKEN_URL, {
     method: 'POST',
@@ -52,11 +54,11 @@ export async function exchangeGoogleCode(code: string, verifier: string): Promis
     }),
     cache: 'no-store',
   });
-  const payload = (await response.json()) as { access_token?: string; refresh_token?: string; error?: string };
+  const payload = (await response.json()) as { access_token?: string; refresh_token?: string; error?: string; scope?: string };
   if (!response.ok || !payload.access_token || !payload.refresh_token) {
     throw new Error(`Google OAuth exchange failed${payload.error ? `: ${payload.error}` : ''}.`);
   }
-  return { accessToken: payload.access_token, refreshToken: payload.refresh_token };
+  return { accessToken: payload.access_token, refreshToken: payload.refresh_token, ...(typeof payload.scope === 'string' ? { scopes: payload.scope.split(/\s+/).filter(Boolean) } : {}) };
 }
 
 export async function revokeGoogleToken(refreshToken: string): Promise<void> {

@@ -5,6 +5,7 @@ import { providerLabel } from '@/lib/cloud/providers';
 import { listConnections } from '@/lib/cloud/repository';
 import { OAUTH_PROVIDERS } from '@/lib/cloud/types';
 import { ProviderConnections, type OAuthProviderView } from './provider-connections';
+import { GOOGLE_DATA_MANAGER_SCOPE } from '@/lib/cloud/google-oauth';
 import { isSyntheticReviewer } from '@/lib/cloud/synthetic-reviewer';
 import { SyntheticReviewer } from '@/components/synthetic-reviewer';
 
@@ -34,6 +35,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
           status: connection.status,
           accountSelectionId: connection.accountSelectionId,
           accountSelectionUnavailable: connection.accountSelectionUnavailable,
+          dataManagerEnabled: connection.provider === 'google' && connection.scopes.includes(GOOGLE_DATA_MANAGER_SCOPE),
           externalLabel: connection.externalLabel,
           lastError: connection.lastError,
           connectedAt: connection.connectedAt.toISOString(),

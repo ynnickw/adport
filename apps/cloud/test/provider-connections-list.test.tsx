@@ -17,6 +17,15 @@ function render(options: { canManage?: boolean; available?: boolean; connections
 }
 
 describe('compact provider connection list', () => {
+  it('offers conversion permission separately and retains it on later Google reconnection', () => {
+    const basic = render();
+    expect(basic).toContain('Authorize Google conversion imports with additional Data Manager permission');
+    expect(basic).toContain('/api/oauth/google/start?organization_id=org&amp;data_manager=1');
+    const enabled = render({ connections: [{ ...connection, dataManagerEnabled: true }] });
+    expect(enabled).not.toContain('Enable conversion imports');
+    expect(enabled).toContain('/api/oauth/google/start?organization_id=org&amp;data_manager=1');
+    expect(render({ canManage: false })).not.toContain('Enable conversion imports');
+  });
   it('renders every provider as a list row without card descriptions or OAuth flow details', () => {
     const html = render();
     expect(html.match(/class="connection-row"/g)).toHaveLength(11);

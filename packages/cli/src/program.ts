@@ -237,10 +237,12 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .command('connect <provider>')
     .description('Connect an ad account (guided wizard)')
     .option('--no-browser', 'Print auth URLs instead of opening a browser')
-    .action(async (provider: string, opts: { browser: boolean }) => {
+    .option('--data-manager', 'Google only: explicitly request the additional Data Manager OAuth scope')
+    .action(async (provider: string, opts: { browser: boolean; dataManager?: boolean }) => {
+      if (opts.dataManager && provider !== 'google') throw new Error('--data-manager is supported only for Google');
       if (provider === 'google') {
         const { connectGoogle } = await import('./connect/google.js');
-        await connectGoogle({ openBrowser: opts.browser, io });
+        await connectGoogle({ openBrowser: opts.browser, dataManager: opts.dataManager, io });
         return;
       }
       if (provider === 'meta') {

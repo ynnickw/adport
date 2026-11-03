@@ -64,6 +64,7 @@ export async function createOAuthTransaction(input: {
   state: string;
   verifier: string;
   returnPath?: string;
+  googleDataManager?: boolean;
 }): Promise<void> {
   const aad = `oauth:${input.organizationId}:${input.userId}:${input.provider}`;
   await db()`
@@ -71,7 +72,7 @@ export async function createOAuthTransaction(input: {
       (organization_id, user_id, provider, state_hash, verifier_ciphertext, return_path, expires_at)
     values
       (${input.organizationId}, ${input.userId}, ${input.provider}, ${digestState(input.state)},
-       ${encryptSecret({ verifier: input.verifier }, aad)}, ${input.returnPath ?? '/dashboard/connections'}, now() + interval '10 minutes')
+       ${encryptSecret({ verifier: input.verifier, ...(input.provider === 'google' && input.googleDataManager ? { googleDataManager: true } : {}) }, aad)}, ${input.returnPath ?? '/dashboard/connections'}, now() + interval '10 minutes')
   `;
 }
 
@@ -79,6 +80,7 @@ export async function consumeOAuthTransaction(provider: OAuthProvider, state: st
   organizationId: string;
   verifier: string;
   returnPath: string;
+  googleDataManager?: boolean;
 }> {
   return db().begin(async (sql) => {
     const rows = await sql<Array<{
@@ -101,8 +103,8 @@ export async function consumeOAuthTransaction(provider: OAuthProvider, state: st
     }
     await sql`update private.oauth_transactions set consumed_at = now() where id = ${transaction.id}`;
     const aad = `oauth:${transaction.organizationId}:${userId}:${provider}`;
-    const secret = decryptSecret<{ verifier: string }>(transaction.verifierCiphertext, aad);
-    return { organizationId: transaction.organizationId, verifier: secret.verifier, returnPath: transaction.returnPath };
+    const secret = decryptSecret<{ verifier: string; googleDataManager?: boolean }>(transaction.verifierCiphertext, aad);
+    return { organizationId: transaction.organizationId, verifier: secret.verifier, returnPath: transaction.returnPath, ...(provider === 'google' && secret.googleDataManager === true ? { googleDataManager: true } : {}) };
   });
 }
 
