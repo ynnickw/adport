@@ -42,7 +42,7 @@ export class MicrosoftNativeService {
     });
     if (errors.length) {
       const negativeIds = Array.isArray(result.NegativeKeywordIds) ? result.NegativeKeywordIds.flatMap(group => group && typeof group === 'object' && Array.isArray(microsoftRow(group).Ids) ? [microsoftRow(group).Ids] : []) : [];
-      const ids = [result.CampaignCriterionIds, result.AdExtensionIdentities, result.BudgetIds, ...negativeIds].flatMap(value => Array.isArray(value) ? value.flatMap(item => {
+      const ids = [result.CampaignCriterionIds, result.AdExtensionIdentities, result.BudgetIds, result.ConversionGoalIds, ...negativeIds].flatMap(value => Array.isArray(value) ? value.flatMap(item => {
         const id = item && typeof item === 'object' ? microsoftRow(item).Id : item;
         return id === null || id === undefined ? [] : [microsoftNativeId(id)];
       }) : []);

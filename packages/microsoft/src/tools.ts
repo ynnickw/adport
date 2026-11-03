@@ -8,6 +8,7 @@ import { microsoftTargetingTools } from './targeting.js';
 import { microsoftNegativeKeywordTools } from './negative-keywords.js';
 import { microsoftBudgetTools } from './budgets.js';
 import { microsoftPlanningTools } from './planning.js';
+import { microsoftConversionTools } from './conversions.js';
 
 const statusSchema = z.enum(['Active', 'Paused']);
 
@@ -20,6 +21,7 @@ export function microsoftTools(provider: MicrosoftAdsProvider): AnyToolDefinitio
     ...microsoftNegativeKeywordTools(provider),
     ...microsoftBudgetTools(provider),
     ...microsoftPlanningTools(provider),
+    ...microsoftConversionTools(provider),
     ...(['keyword', 'search_term'] as const).map(kind => defineTool({
       name: `microsoft_${kind}_report`, namespace: 'microsoft',
       description: `Read the native Microsoft ${kind.replace('_', ' ')} performance report through Submit/Poll/CSV. Native numeric values remain strings; empty or unavailable values are preserved.`,

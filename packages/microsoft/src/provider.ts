@@ -27,6 +27,7 @@ import { MicrosoftTargetingService, MICROSOFT_TARGETING_WRITES } from './targeti
 import { MicrosoftNegativeKeywordService, MICROSOFT_NEGATIVE_KEYWORD_WRITES } from './negative-keywords.js';
 import { MicrosoftBudgetService, MICROSOFT_BUDGET_WRITES } from './budgets.js';
 import { MicrosoftPlanningService } from './planning.js';
+import { MicrosoftConversionService, MICROSOFT_CONVERSION_WRITES } from './conversions.js';
 
 /** DailyBudget is a double in whole account-currency units. */
 export const UNITS_TO_MICROS = 1_000_000;
@@ -62,6 +63,7 @@ export class MicrosoftAdsProvider implements AdProvider {
   readonly negativeKeywords: MicrosoftNegativeKeywordService;
   readonly budgets: MicrosoftBudgetService;
   readonly planning: MicrosoftPlanningService;
+  readonly conversions: MicrosoftConversionService;
 
   constructor(
     private readonly client: MicrosoftAdsClient,
@@ -75,6 +77,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     this.negativeKeywords = new MicrosoftNegativeKeywordService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign));
     this.budgets = new MicrosoftBudgetService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign), account => this.listCampaigns(account), async account => { await this.scopeFor(account); return this.currencies.get(account); });
     this.planning = new MicrosoftPlanningService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign), account => this.currencies.get(account));
+    this.conversions = new MicrosoftConversionService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign));
   }
 
   capabilities(): ProviderCapabilities {
@@ -305,6 +308,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     if (MICROSOFT_TARGETING_WRITES.has(op.tool)) return this.targeting.plan(op, guard);
     if (MICROSOFT_NEGATIVE_KEYWORD_WRITES.has(op.tool)) return this.negativeKeywords.plan(op);
     if (MICROSOFT_BUDGET_WRITES.has(op.tool)) return this.budgets.plan(op);
+    if (MICROSOFT_CONVERSION_WRITES.has(op.tool)) return this.conversions.plan(op, guard);
     const payload = op.payload as never;
     switch (op.tool) {
       case 'microsoft_create_campaign':
@@ -330,7 +334,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     guard: WriteGuard,
   ): Promise<WritePlan> {
     const resource = validateMicrosoftResource(payload.resource);
-    requireTypedSharedBudgetTool(resource, payload.body);
+    requireTypedMutationTool(resource, payload.body);
     const body = structuredClone(payload.body);
     validateMicrosoftAccountScope(body, accountId);
     const coercions: string[] = [];
@@ -349,7 +353,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     payload: { resource: string; body: Record<string, unknown> },
   ): Promise<WritePlan> {
     const resource = validateMicrosoftResource(payload.resource);
-    requireTypedSharedBudgetTool(resource, payload.body);
+    requireTypedMutationTool(resource, payload.body);
     validateMicrosoftAccountScope(payload.body, accountId);
     if (containsMicrosoftBudget(payload.body)) {
       throw new AdportError('INVALID_INPUT', 'microsoft: budget updates require microsoft_set_budget for policy checks');
@@ -368,7 +372,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     payload: { resource: string; body: Record<string, unknown> },
   ): Promise<WritePlan> {
     const resource = validateMicrosoftResource(payload.resource);
-    requireTypedSharedBudgetTool(resource, payload.body);
+    requireTypedMutationTool(resource, payload.body);
     validateMicrosoftAccountScope(payload.body, accountId);
     return {
       summary: `Permanently delete Microsoft Advertising ${resource} resource(s)`,
@@ -542,7 +546,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function requireTypedSharedBudgetTool(resource: string, body: unknown): void {
+function requireTypedMutationTool(resource: string, body: unknown): void {
+  if (resource === 'ConversionGoals') throw new AdportError('INVALID_INPUT', 'microsoft: conversion-goal mutations require typed conversion tools for account scope, native auto-tagging side effects and event-criteria preservation');
   const referencesSharedBudget = (value: unknown): boolean => Array.isArray(value) ? value.some(referencesSharedBudget) : isRecord(value) && Object.entries(value).some(([key, child]) => key === 'BudgetId' && child !== null && child !== undefined && String(child) !== '0' || referencesSharedBudget(child));
   if (resource === 'Budgets' || referencesSharedBudget(body)) throw new AdportError('INVALID_INPUT', 'microsoft: shared-budget changes require the typed microsoft shared-budget tools for membership, snapshot and monetary policy checks');
 }

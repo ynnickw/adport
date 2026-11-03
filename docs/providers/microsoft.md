@@ -42,8 +42,20 @@ Monthly counts remain native, newest-first, including strings and missing values
 
 `microsoft_keyword_traffic_estimates` accepts hypothetical Phrase/Broad keywords, a default maximum CPC with optional keyword overrides, language/location/network criteria, and optional daily budget and exclusions. It returns native minimum/maximum estimates. Currency is reported when known. These requests create no resources and change no campaign settings; estimates are not observed results or performance guarantees.
 
+## Conversion goals
+
+`microsoft_conversion_goals` and `microsoft_get_conversion_goal` return native configuration, tracking status, click-ID auto-tagging state and a configuration snapshot. The default list excludes pilot-only InStoreTransaction goals; requesting that type on an ineligible customer can reject the entire native query. Customer-scoped goals can be visible in a selected account, but single-account tools refuse to modify them because they affect other accounts.
+
+`microsoft_create_conversion_goal` creates an Account-scoped URL, Event or OfflineConversion goal. Put its configuration in `goal`; supply `expected_auto_tagging_enabled` from a goal read. Creation defaults to Paused and excluded from bidding, with native paused-creation coercions reported. URL/Event goals require a UET tag already available in the native customer/account context. Creating a goal does not install tracking or submit conversion events.
+
+`microsoft_update_conversion_goal` edits supported Account-scoped goals using `expected_snapshot_hash`. Omitted status and optional settings are preserved. Event goals have a native exception: omitted action/category/label/value conditions are deleted by the API. Adport resends their complete existing pairs for metadata/status edits. Supplying `event_conditions` explicitly replaces the whole condition set. The hash excludes system-owned `TrackingStatus`, so a tag-verification or recording-status transition does not invalidate an otherwise unchanged configuration.
+
+Every native goal add or update automatically enables account `MSCLKIDAutoTaggingEnabled`, including edits to a paused goal. Previews show this setting before and after; snapshots bind its prior state. Updating conversion settings can also change reporting and automated bidding. No atomic native compare-and-set is available. Microsoft’s Deleted goal status is internal-only and there is no supported permanent goal-deletion operation here; pause an unused goal to stop its tracking.
+
+These tools manage goal configuration. Offline conversion imports and adjustments, UET installation, customer sharing and enhanced-conversion event ingestion are separate workflows.
+
 ## Coverage limits
 
-These workflows do not represent the entire Microsoft API. Shared negative-keyword lists, additional extension formats, ad-group targeting, broader planning/recommendation APIs, conversion goals, offline conversions, audience management and experiments require their own implementations. Platform eligibility and the connection's native permissions still apply.
+These workflows do not represent the entire Microsoft API. Shared negative-keyword lists, additional extension formats, ad-group targeting, broader planning/recommendation APIs, additional conversion formats, offline imports/adjustments, audience management and experiments require their own implementations. Platform eligibility and the connection's native permissions still apply.
 
 Contracts are checked against the official [Microsoft Advertising API documentation](https://learn.microsoft.com/en-us/advertising/guides/?view=bingads-13), including [Budget](https://learn.microsoft.com/en-us/advertising/campaign-management-service/budget?view=bingads-13), [Campaign](https://learn.microsoft.com/en-us/advertising/campaign-management-service/campaign?view=bingads-13) and [GetCampaignsByAccountId](https://learn.microsoft.com/en-us/advertising/campaign-management-service/getcampaignsbyaccountid?view=bingads-13).
