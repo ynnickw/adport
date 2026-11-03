@@ -73,8 +73,9 @@ client registrations change.
 
 The dashboard project selector is an HTTP-only preference, checked against
 current membership on every request. It cannot retarget an MCP or API-key
-connection. OAuth consent can choose one project or **All projects** in an
-organization. Single-project grants and API keys remain bound to their project;
+connection. OAuth consent defaults to **All projects** in the current organization,
+with the option to choose a single project instead.
+Single-project grants and API keys remain bound to their project;
 existing connections never gain broader access automatically.
 
 All-project grants include current and future projects the user can access in
