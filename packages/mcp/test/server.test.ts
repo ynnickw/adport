@@ -78,7 +78,7 @@ describe('adport MCP server', () => {
     expect(second.structuredContent).toHaveProperty('applied', true);
     expect(second.structuredContent).not.toHaveProperty('_adport.approval');
   });
-  it('uses the host sandbox domain consistently without changing the OpenAI domain', async () => {
+  it('uses the host sandbox domain without a conflicting OpenAI origin alias', async () => {
     const runtime = await createContext({ providerModules: [] });
     const uiDomain = '0123456789abcdef0123456789abcdef.claudemcpcontent.com';
     const server = createMcpServer({ runtime, uiDomain });
@@ -92,8 +92,8 @@ describe('adport MCP server', () => {
       for (const resource of [listing, content]) {
         expect(resource?._meta).toMatchObject({
           ui: { domain: uiDomain, csp: { connectDomains: [], resourceDomains: ADPORT_UI_RESOURCE_DOMAINS } },
-          'openai/widgetDomain': ADPORT_UI_DOMAIN,
         });
+        expect(resource?._meta).not.toHaveProperty('openai/widgetDomain');
       }
     } finally { await hostClient.close(); await server.close(); }
   });

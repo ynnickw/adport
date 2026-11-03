@@ -100,26 +100,25 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
     ? { ...(value && typeof value === 'object' && !Array.isArray(value) ? value : { value }), data_source: 'synthetic' }
     : value;
   const server = new McpServer({ name, version, ...(icons ? { icons } : {}) }, { instructions });
+  const resourceMeta = {
+    ui: { domain: uiDomain, prefersBorder: false, csp: { connectDomains: [], resourceDomains: [...uiResourceDomains] } },
+    // The OpenAI compatibility alias must not contradict another host's origin.
+    ...(uiDomain.startsWith('https://') ? { 'openai/widgetDomain': uiDomain } : {}),
+  };
   registerAppResource(
     server,
     'Adport insight card',
     ADPORT_UI_URI,
     {
       description: 'Responsive Adport accounts, performance, recommendations, and guarded-change view.',
-      _meta: {
-        ui: { domain: uiDomain, prefersBorder: false, csp: { connectDomains: [], resourceDomains: [...uiResourceDomains] } },
-        'openai/widgetDomain': ADPORT_UI_DOMAIN,
-      },
+      _meta: resourceMeta,
     },
     async () => ({
       contents: [{
         uri: ADPORT_UI_URI,
         mimeType: RESOURCE_MIME_TYPE,
         text: ADPORT_UI_HTML,
-        _meta: {
-          ui: { domain: uiDomain, prefersBorder: false, csp: { connectDomains: [], resourceDomains: [...uiResourceDomains] } },
-          'openai/widgetDomain': ADPORT_UI_DOMAIN,
-        },
+        _meta: resourceMeta,
       }],
     }),
   );
