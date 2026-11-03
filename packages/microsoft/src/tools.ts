@@ -3,6 +3,8 @@ import { z } from 'zod';
 import type { MicrosoftAdsProvider } from './provider.js';
 import { microsoftChildTools } from './child-tools.js';
 import { microsoftImageTools } from './images.js';
+import { microsoftExtensionTools } from './extensions.js';
+import { microsoftTargetingTools } from './targeting.js';
 
 const statusSchema = z.enum(['Active', 'Paused']);
 
@@ -10,6 +12,8 @@ export function microsoftTools(provider: MicrosoftAdsProvider): AnyToolDefinitio
   return [
     ...microsoftChildTools(provider),
     ...microsoftImageTools(provider),
+    ...microsoftExtensionTools(provider),
+    ...microsoftTargetingTools(provider),
     ...(['keyword', 'search_term'] as const).map(kind => defineTool({
       name: `microsoft_${kind}_report`, namespace: 'microsoft',
       description: `Read the native Microsoft ${kind.replace('_', ' ')} performance report through Submit/Poll/CSV. Native numeric values remain strings; empty or unavailable values are preserved.`,

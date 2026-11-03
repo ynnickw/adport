@@ -22,6 +22,8 @@ import { formatPartialErrors, MicrosoftAdsClient, type MicrosoftService } from '
 import { parseCsv } from './csv.js';
 import { MicrosoftChildService } from './children.js';
 import { MicrosoftImageService, MICROSOFT_IMAGE_WRITES } from './images.js';
+import { MicrosoftExtensionService, MICROSOFT_EXTENSION_WRITES } from './extensions.js';
+import { MicrosoftTargetingService, MICROSOFT_TARGETING_WRITES } from './targeting.js';
 
 /** DailyBudget is a double in whole account-currency units. */
 export const UNITS_TO_MICROS = 1_000_000;
@@ -51,6 +53,8 @@ export class MicrosoftAdsProvider implements AdProvider {
   private customerIds = new Map<string, string>();
   readonly children: MicrosoftChildService;
   readonly images: MicrosoftImageService;
+  readonly extensions: MicrosoftExtensionService;
+  readonly targeting: MicrosoftTargetingService;
 
   constructor(
     private readonly client: MicrosoftAdsClient,
@@ -59,6 +63,8 @@ export class MicrosoftAdsProvider implements AdProvider {
   ) {
     this.children = new MicrosoftChildService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign));
     this.images = new MicrosoftImageService(client, account => this.scopeFor(account), media);
+    this.extensions = new MicrosoftExtensionService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign), (account, ids) => this.images.lookupMany(account, ids));
+    this.targeting = new MicrosoftTargetingService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign));
   }
 
   capabilities(): ProviderCapabilities {
@@ -282,6 +288,8 @@ export class MicrosoftAdsProvider implements AdProvider {
 
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
     if (MICROSOFT_IMAGE_WRITES.has(op.tool)) return this.images.plan(op);
+    if (MICROSOFT_EXTENSION_WRITES.has(op.tool)) return this.extensions.plan(op, guard);
+    if (MICROSOFT_TARGETING_WRITES.has(op.tool)) return this.targeting.plan(op, guard);
     const payload = op.payload as never;
     switch (op.tool) {
       case 'microsoft_create_campaign':

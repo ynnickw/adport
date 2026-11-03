@@ -94,6 +94,21 @@ export class MicrosoftImageService {
     return this.gallery(input.account_id, [await this.owned(input.account_id, input.image_id)], false);
   }
 
+  async lookupMany(account: string, imageIds: string[]) {
+    const wanted = new Set(imageIds.map(value => id.parse(value))), found: Row[] = [], seen = new Set<string>();
+    for (let page = 0; wanted.size && page < 5; page++) {
+      const values = await this.page(account, page, 1000);
+      for (const value of values) {
+        const key = nativeId(value.Id);
+        if (seen.has(key)) throw new AdportError('PROVIDER_ERROR', 'microsoft: image-library pagination did not advance');
+        seen.add(key);
+        if (wanted.delete(key)) found.push(value);
+      }
+      if (values.length < 1000) break;
+    }
+    return { ...this.gallery(account, found, wanted.size > 0), missing_image_ids: [...wanted] };
+  }
+
   async extensionUses(input: { account_id: string; image_id: string }) {
     await this.owned(input.account_id, input.image_id);
     const result = await this.request(input.account_id, 'MediaAssociations/Query', { MediaEnabledEntities: 'ImageAdExtension', MediaIds: [input.image_id] });
