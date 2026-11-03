@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PLANS } from '@/lib/cloud/plans';
 
-const mocks = vi.hoisted(() => ({ tenant: vi.fn(), entitlement: vi.fn() }));
+const mocks = vi.hoisted(() => ({ tenant: vi.fn(), entitlement: vi.fn(), pricing: vi.fn() }));
 vi.mock('@/lib/cloud/dashboard', () => ({ requireDashboardTenant: mocks.tenant }));
 vi.mock('@/lib/cloud/plans', async original => ({ ...await original<typeof import('@/lib/cloud/plans')>(), getOrganizationEntitlement: mocks.entitlement }));
 vi.mock('@/lib/cloud/usage', () => ({ getOrganizationUsage: async () => ({ activeAccounts: 3, editingMembers: 1 }) }));
@@ -12,6 +12,10 @@ vi.mock('@/app/dashboard/billing/actions', () => ({ startProjectSubscriptionForm
 vi.mock('@/app/dashboard/projects/actions', () => ({ selectProjectAction: () => undefined }));
 vi.mock('@/app/dashboard/billing/billing-form', () => ({ BillingForm: ({ label }: { label: string }) => <button>{label}</button> }));
 vi.mock('@/components/plan-usage', () => ({ PlanUsage: () => <div>Plan usage</div> }));
+vi.mock('@/components/dashboard-pricing', async original => {
+  const { DashboardPricing } = await original<typeof import('@/components/dashboard-pricing')>();
+  return { DashboardPricing: (props: React.ComponentProps<typeof DashboardPricing>) => { mocks.pricing(props); return <DashboardPricing {...props} />; } };
+});
 import BillingPage from '@/app/dashboard/billing/page';
 
 const tenant = { organizationId: 'project-a', organizationGroupId: 'company-a', organizationGroupName: 'Acme', organizationRole: 'owner', userId: 'owner', onboardingCompletedAt: new Date(), projects: [
@@ -38,8 +42,13 @@ describe('dashboard pricing presentation', () => {
     const html = await render({ billing: 'annual', intent: 'active_accounts', plan: 'premium' });
     for (const total of [190, 390, 790]) expect(html).toContain(`€${total} billed yearly`);
     expect(html).toContain('Continue with Growth');
-    expect(html).toContain('intent=active_accounts');
-    expect(html).toContain('projectId=project-a');
+    const links = mocks.pricing.mock.calls.at(-1)![0].billingLinks;
+    for (const interval of ['monthly', 'annual']) {
+      const params = new URL(links[interval], 'https://app.adport.test').searchParams;
+      expect(params.get('intent')).toBe('active_accounts');
+      expect(params.get('projectId')).toBe('project-a');
+      expect(params.get('billing')).toBe(interval);
+    }
   });
   it('gives teammates plan details while reserving checkout for the organization owner', async () => {
     mocks.tenant.mockResolvedValue({ ...tenant, organizationRole: 'admin' });
