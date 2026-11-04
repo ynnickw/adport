@@ -3,6 +3,7 @@ import { AdportError, defineTool, guardedWriteTool, type AnyToolDefinition, type
 import { z } from 'zod';
 import type { TikTokClient } from './client.js';
 import type { TikTokAdsProvider } from './provider.js';
+import { nativeListComplete } from './pagination.js';
 
 const id = z.string().regex(/^\d+$/);
 const nativeId = z.union([id, z.number().int().positive().safe()]).transform(String);
@@ -47,11 +48,10 @@ export class TikTokAudienceService {
     if (records.length > input.page_size || new Set(records.map(item => item.saved_audience_id)).size !== records.length || records.some(item => item.advertiser_id !== undefined && item.advertiser_id !== input.account_id || input.saved_audience_ids && !input.saved_audience_ids.includes(item.saved_audience_id))) throw new AdportError('PROVIDER_ERROR', 'tiktok: saved-audience response does not match the selected advertiser, IDs or page size');
     const page = data.page_info;
     if (page && (page.page !== input.page || page.page_size !== input.page_size)) throw new AdportError('PROVIDER_ERROR', 'tiktok: saved-audience pagination does not match the requested page');
-    const contradictory = page && (page.total_number !== undefined && page.total_number < records.length || page.total_page !== undefined && page.total_page < input.page && records.length > 0);
-    const complete = !page || contradictory || page.total_page === undefined ? null : input.page >= page.total_page;
+    const complete = nativeListComplete(page, records.length);
     return { ...data, saved_audiences: records.map(item => ({ ...item, snapshot_hash: snapshot(input.account_id, item) })), complete, truncated: complete !== true,
       ...(complete === false ? { next_page: input.page + 1 } : {}),
-      ...(!page || contradictory || page.total_page === undefined ? { pagination_note: 'Native pagination is missing or contradictory; completeness is unknown.' } : {}),
+      ...(complete === null ? { pagination_note: 'Native pagination is missing or contradictory; completeness is unknown.' } : {}),
     };
   }
 
