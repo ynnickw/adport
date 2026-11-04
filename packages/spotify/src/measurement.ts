@@ -63,8 +63,8 @@ export class SpotifyMeasurementService {
     ensure(!proof.dataset_id || datasetId === proof.dataset_id, 'created resource dataset binding changed; reconcile the original IDs');
     return { resource, datasetId };
   }
-  private sharing(scope: Scope, row: { shared_ad_accounts?: Array<{ id: string; name?: string }> }) {
-    return { shared_ad_accounts: row.shared_ad_accounts?.filter(a => a.id === scope.account_id), other_shared_account_count: row.shared_ad_accounts ? row.shared_ad_accounts.filter(a => a.id !== scope.account_id).length : null };
+  private sharing(scope: Scope, row: { shared_ad_accounts?: Array<{ id: string; name?: string }> | null }) {
+    return { shared_ad_accounts: row.shared_ad_accounts === null ? null : row.shared_ad_accounts?.filter(a => a.id === scope.account_id), other_shared_account_count: row.shared_ad_accounts ? row.shared_ad_accounts.filter(a => a.id !== scope.account_id).length : null };
   }
   private publicDataset(scope: Scope, row: Dataset, snapshot = true) { return { ...row, ...this.sharing(scope, row), ...(snapshot ? { configuration_hash: digest(scope, 'dataset', row) } : {}) }; }
   private publicMobile(scope: Scope, row: Mobile, snapshot = true) { return { ...row, ...this.sharing(scope, row), ...(snapshot ? { configuration_hash: digest(scope, 'mobile_app', row) } : {}) }; }
@@ -109,7 +109,7 @@ export class SpotifyMeasurementService {
     }
     throw new AdportError('INVALID_INPUT', 'spotify: mobile app is not shared with the selected account or bound to its approved creation receipt');
   }
-  private exclusive(scope: Scope, row: { shared_ad_accounts?: Array<{ id: string }> }) {
+  private exclusive(scope: Scope, row: { shared_ad_accounts?: Array<{ id: string }> | null }) {
     if (!row.shared_ad_accounts || row.shared_ad_accounts.some(a => a.id !== scope.account_id)) throw new AdportError('INVALID_INPUT', 'spotify: business-wide configuration changes require verified sharing restricted to this selected account');
   }
   private expected(scope: Scope, kind: string, value: unknown, hash: string) { if (digest(scope, kind, value) !== hash) throw new AdportError('INVALID_INPUT', 'spotify: measurement configuration changed; obtain a fresh snapshot before a new preview'); }
@@ -194,7 +194,10 @@ export class SpotifyMeasurementService {
       let receipt = this.bind(scope, kind, id, requestedDataset ?? nativeDataset), knownDataset = requestedDataset ?? nativeDataset;
       try {
         const bound = this.proof(scope.account_id, receipt)!, { resource, datasetId } = await this.createdNative(scope, bound);
-        ensure(Object.entries(body).every(([key, value]) => same({ [key]: (resource as Row)[key] }, { [key]: value })), 'created measurement fields differ from the request');
+        const observed = resource as Row;
+        // Spotify returns null for unused matching fields; only verified AAM-off makes them ineffective.
+        ensure(Object.entries(body).every(([key, value]) => kind === 'pixel' && key === 'aam_fields' && Array.isArray(value) && !value.length && observed.aam_opt_in === false && observed[key] == null
+          || same({ [key]: observed[key] }, { [key]: value })), 'created measurement fields differ from the request');
         ensure(!requestedDataset || datasetId === requestedDataset, 'created integration has a different dataset');
         if (kind === 'mobile_app') {
           const mobile = resource as Mobile;this.exclusive(scope, mobile);

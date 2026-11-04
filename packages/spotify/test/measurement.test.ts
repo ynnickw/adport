@@ -14,7 +14,7 @@ const PIXEL = { id: P, integration_id: I, dataset_id: D, name: 'QA Pixel', domai
 const CAPI = { capi_connection_id: C, integration_id: CI, dataset_id: D, name: 'QA CAPI', events_received: [], access_token: 'native-capi-secret-must-not-escape' };
 const APP = { id: M, name: 'QA Mobile', platform: 'IOS', platform_app_id: '123456789', mobile_measurement_partner: 'SINGULAR', shared_ad_accounts: [{ id: A, name: 'Selected' }], link_token: 'native-link-secret-must-not-escape' };
 type Row = Record<string, unknown>;
-type Options = { empty?: boolean; foreignShares?: boolean; missingShares?: boolean; missingPaging?: boolean; badIdentity?: boolean; shareFailure?: boolean; updateIgnored?: boolean; readbackDenied?: boolean; postDenied?: boolean; corruptRouting?: boolean; datasetResponse?: Row; mobileResponse?: Row; diagnosticResponse?: Row };
+type Options = { empty?: boolean; foreignShares?: boolean; missingShares?: boolean; missingPaging?: boolean; nullPixelMetadata?: boolean; pixelMatchingEnabled?: boolean; badIdentity?: boolean; shareFailure?: boolean; updateIgnored?: boolean; readbackDenied?: boolean; postDenied?: boolean; corruptRouting?: boolean; datasetResponse?: Row; mobileResponse?: Row; diagnosticResponse?: Row };
 function fixture(options: Options = {}) {
   const pixels = new Map<string, Row>(), capis = new Map<string, Row>(), apps = new Map<string, Row>(), datasets = new Map<string, Row>();
   if (!options.empty) {
@@ -42,7 +42,7 @@ function fixture(options: Options = {}) {
       return Response.json(options.mobileResponse ?? { mobile_apps: rows.slice(offset, offset + limit), paging: { offset, total_results: rows.length } });
     }
     if (path === `${base}/pixels` && method === 'POST') {
-      written = true;const datasetId = String(body!.dataset_id ?? N), pixel = { ...PIXEL, ...body, dataset_id: options.corruptRouting ? null : datasetId };pixels.set(P, pixel);
+      written = true;const datasetId = String(body!.dataset_id ?? N), pixel = { ...PIXEL, ...body, dataset_id: options.corruptRouting ? null : datasetId, ...(options.nullPixelMetadata ? { integration_id: null, aam_fields: null, auto_capture_fields: null, events_received: null } : {}), ...(options.pixelMatchingEnabled ? { aam_opt_in: true } : {}) };pixels.set(P, pixel);
       const dataset = datasets.get(datasetId) ?? { id: datasetId, name: 'Native auto dataset', shared_ad_accounts: [], ad_set_count: 0 };dataset.pixel = pixel;datasets.set(datasetId, dataset);
       return Response.json(pixel, { status: 201 });
     }
@@ -126,6 +126,31 @@ describe('Spotify account-scoped measurement resources', () => {
   it('rejects an unshared arbitrary business dataset before revealing its contents', async () => {
     const f = fixture();f.datasets.get(D)!.shared_ad_accounts = [{ id: F, name: 'Private' }];
     await expect(f.provider.measurement.getDataset({ account_id: A, dataset_id: D })).rejects.toThrow('not shared');expect(f.writes()).toHaveLength(0);
+  });
+  it('preserves native null Pixel metadata and does not invent an integration or activity', async () => {
+    const f = fixture();Object.assign(f.pixels.get(P)!, { integration_id: null, aam_fields: null, auto_capture_fields: null, events_received: null });
+    expect((await f.provider.measurement.getPixel({ account_id: A, dataset_id: D })).pixel).toMatchObject({ id: P, integration_id: null, aam_opt_in: false, aam_fields: null, auto_capture_fields: null, events_received: null });
+    expect(f.writes()).toHaveLength(0);
+  });
+  it('keeps null sharing unknown and rejects metadata edits without verified exclusivity', async () => {
+    const f = fixture();f.datasets.get(D)!.shared_ad_accounts = null;
+    const current = (await f.provider.measurement.getDataset({ account_id: A, dataset_id: D })).dataset;
+    expect(current).toMatchObject({ shared_ad_accounts: null, other_shared_account_count: null });
+    await expect(f.provider.previewWrite(f.op('spotify_update_dataset', { dataset_id: D, expected_configuration_hash: current.configuration_hash, name: 'Changed' }), guard)).rejects.toThrow('restricted');
+    expect(f.writes()).toHaveLength(0);
+  });
+  it('verifies AAM-off creation with native null optional fields and no duplicate POST', async () => {
+    const f = fixture({ empty: true, nullPixelMetadata: true });
+    const result = await f.provider.applyWrite(f.op('spotify_create_pixel', { name: 'QA Pixel', domain: 'https://example.com' }), guard);
+    expect(result).toMatchObject({ applied: true, resourceIds: [P, N] });
+    expect(f.writes()).toHaveLength(2);
+    expect(f.writes().filter(call => call.url.pathname.endsWith('/pixels'))).toHaveLength(1);
+    expect(await f.provider.measurement.created({ account_id: A, resource_receipt: details(result).resource_receipt })).toMatchObject({ pixel: { aam_opt_in: false, aam_fields: null, integration_id: null } });
+  });
+  it('never treats null fields as verified AAM-off when native matching was enabled', async () => {
+    const f = fixture({ empty: true, nullPixelMetadata: true, pixelMatchingEnabled: true });
+    await expect(f.provider.applyWrite(f.op('spotify_create_pixel', { name: 'QA Pixel', domain: 'https://example.com' }), guard)).rejects.toThrow('unconfirmed');
+    expect(f.writes()).toHaveLength(1);
   });
   it('does not authorize business-wide metadata updates for a multi-account shared resource', async () => {
     const f = fixture({ foreignShares: true }), current = (await f.provider.measurement.getDataset({ account_id: A, dataset_id: D })).dataset;
