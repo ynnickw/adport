@@ -31,6 +31,7 @@ export interface AnyToolDefinition {
   input: z.ZodObject<z.ZodRawShape>;
   /** Successful result contract, shared by all transports. Errors use their own envelope. */
   output?: z.ZodType;
+  presentation?: 'creatives' | 'planning' | 'records' | 'receipt';
   annotations: ToolAnnotations;
   handler: (input: never, ctx: ToolContext) => Promise<unknown>;
 }
@@ -41,6 +42,7 @@ export function defineTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   description: string;
   input: S;
   output?: z.ZodType;
+  presentation?: AnyToolDefinition['presentation'];
   annotations?: ToolAnnotations;
   handler: (input: z.infer<S>, ctx: ToolContext) => Promise<unknown>;
 }): AnyToolDefinition {

@@ -5,6 +5,7 @@ import { AdportError } from '../errors.js';
 import { defineTool, type AnyToolDefinition } from './registry.js';
 import { summarizeReport } from '../report-summary.js';
 import { accountsOutput, reportOutput } from './outputs.js';
+import { reportPeriods } from '../report-dates.js';
 
 const dateRangeSchema = z.union([
   z.enum(DATE_PRESETS),
@@ -54,18 +55,21 @@ export function builtinTools(): AnyToolDefinition[] {
       description:
         'Cross-platform performance report with normalized metrics (spend, clicks, conversions, ROAS, ...). ' +
         'Rows are capped by `limit`; the response says when it truncated. ' +
-        'Use summary.groups for currency-separated totals and spend-weighted ROAS; never average row ratios or combine currencies. Null metrics are unavailable.',
+        'Use summary.groups for currency-separated totals and spend-weighted ROAS; never average row ratios or combine currencies. Null metrics are unavailable. ' +
+        'Use granularity=day for real daily observations, up to 31 days; this makes one report read per provider per day.',
       input: z.object({
         provider: z.string().optional().describe('Limit to one provider id.'),
         account_ids: z.array(z.string()).optional().describe('Filter to available accounts. Cross-provider requests route each ID only to its matching provider; set provider to disambiguate shared IDs.'),
         level: z.enum(ENTITY_LEVELS).default('campaign'),
         metrics: z.array(z.enum(METRICS)).min(1).default(['spend', 'impressions', 'clicks', 'conversions']),
         date_range: dateRangeSchema.default('last_7_days'),
+        granularity: z.enum(['total', 'day']).default('total').describe('Daily observations use exact-date provider reads; missing days are not invented as zero.'),
         limit: z.number().int().positive().max(1000).default(100),
         continue_on_error: z.boolean().default(false).describe('Return successful providers plus per-provider errors instead of failing the whole read.'),
       }),
       annotations: { readOnly: true, openWorld: false },
       async handler(input, ctx) {
+        const periods = reportPeriods(input.date_range, input.granularity);
         const providers = selectConnectedProviders(ctx.providers, input.provider);
         const query: NormalizedQuery = {
           accountIds: input.account_ids,
@@ -75,7 +79,7 @@ export function builtinTools(): AnyToolDefinition[] {
           limit: input.limit,
         };
         const rows: ReportRow[] = [];
-        const errors: Array<{ provider: string; message: string }> = [];
+        const errors: Array<{ provider: string; message: string; date?: string }> = [];
         const warnings: Array<{ provider: string; message: string }> = [];
         const accountMetadata = new Map<string, Account[]>();
         const routedIds = new Map<string, string[]>();
@@ -112,10 +116,19 @@ export function builtinTools(): AnyToolDefinition[] {
           const accountIds = routedIds.get(provider.id) ?? query.accountIds;
           if (accountIds?.length === 0) continue;
           try {
-            const report = await provider.report({ ...query, accountIds });
-            providerTruncated ||= report.truncated === true;
+            const providerRows: ReportRow[] = [];
+            for (const period of periods) {
+              try {
+                const report = await provider.report({ ...query, accountIds, dateRange: input.granularity === 'day' ? period : query.dateRange });
+                providerTruncated ||= report.truncated === true;
+                providerRows.push(...report.rows.map(row => input.granularity === 'day' ? { ...row, date: period.start } : row));
+              } catch (error) {
+                if (!input.continue_on_error) throw error;
+                errors.push({ provider: provider.id, message: error instanceof Error ? error.message : String(error), ...(input.granularity === 'day' ? { date: period.start } : {}) });
+              }
+            }
             let accounts: Account[] = accountMetadata.get(provider.id) ?? [];
-            if (!accountMetadata.has(provider.id) && report.rows.some((row) => !row.currency)) {
+            if (!accountMetadata.has(provider.id) && providerRows.some((row) => !row.currency)) {
               try {
                 accounts = await provider.listAccounts();
               } catch {
@@ -124,7 +137,7 @@ export function builtinTools(): AnyToolDefinition[] {
               }
             }
             const currencies = new Map(accounts.filter((a) => a.provider === provider.id).map((a) => [a.id, a.currency]));
-            rows.push(...report.rows.map((row) => {
+            rows.push(...providerRows.map((row) => {
               const currency = row.currency || currencies.get(row.accountId);
               return currency ? { ...row, currency } : row;
             }));
@@ -135,7 +148,7 @@ export function builtinTools(): AnyToolDefinition[] {
         }
         const truncated = providerTruncated || rows.length > input.limit;
         const returnedRows = rows.slice(0, input.limit);
-        return { rows: returnedRows, summary: summarizeReport(returnedRows, !truncated && errors.length === 0), truncated, errors, warnings, date_range: input.date_range };
+        return { rows: returnedRows, summary: summarizeReport(returnedRows, !truncated && errors.length === 0), truncated, errors, warnings, date_range: input.date_range, granularity: input.granularity, resolved_date_range: { start: periods[0]!.start, end: periods.at(-1)!.end } };
       },
     }),
   ];

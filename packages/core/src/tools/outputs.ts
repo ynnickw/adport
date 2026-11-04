@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { DATE_PRESETS, ENTITY_LEVELS, METRICS } from '../model.js';
 
 const dateRange = z.object({ start: z.string(), end: z.string() });
-const providerError = z.object({ provider: z.string(), message: z.string() });
+const providerError = z.object({ provider: z.string(), message: z.string(), date: z.string().optional() });
 const metrics = z.object(Object.fromEntries(METRICS.map(name => [name, z.number().nullable().optional()])));
 const entity = z.object({ level: z.string(), id: z.string(), name: z.string(), status: z.string().optional() });
 const action = z.object({ tool: z.string(), input: z.record(z.string(), z.unknown()) });
@@ -18,6 +18,7 @@ export const accountsOutput = z.object({
 export const reportOutput = z.object({
   rows: z.array(z.object({
     provider: z.string(), accountId: z.string(), currency: z.string().optional(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     entity: entity.extend({ level: z.enum(ENTITY_LEVELS) }), metrics,
   })),
   summary: z.object({
@@ -35,6 +36,8 @@ export const reportOutput = z.object({
   }),
   truncated: z.boolean(), errors: z.array(providerError), warnings: z.array(providerError),
   date_range: z.union([z.enum(DATE_PRESETS), dateRange]),
+  granularity: z.enum(['total', 'day']).optional(),
+  resolved_date_range: dateRange.optional(),
 });
 
 export const findingOutput = z.object({

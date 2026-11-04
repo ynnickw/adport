@@ -14,7 +14,7 @@ vi.mock('@/lib/cloud/auth', () => ({ apiPrincipal: mocks.principal }));
 vi.mock('@/lib/cloud/runtime', () => ({ createTenantRuntime: mocks.runtime }));
 vi.mock('@/lib/cloud/mcp-projects', () => ({ routeMcpProjects: (runtime: unknown) => runtime }));
 vi.mock('@/lib/cloud/mcp-oauth-repository', () => ({ getMcpOAuthClient: mocks.oauthClient }));
-vi.mock('@adport/mcp', () => ({ createMcpServer: mocks.server }));
+vi.mock('@adport/mcp', () => ({ createMcpServer: mocks.server, ADPORT_UI_RESOURCE_DOMAINS: [] }));
 vi.mock('@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js', () => ({
   WebStandardStreamableHTTPServerTransport: class {
     async handleRequest() { return Response.json({ ok: true }); }
