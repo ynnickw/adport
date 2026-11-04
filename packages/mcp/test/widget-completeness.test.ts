@@ -11,6 +11,17 @@ function mount(view: AdportView, data: unknown, tool = 'pinterest_keywords', des
 }
 
 describe('compact record, recommendation, receipt and trend views', () => {
+  it.each(['tiktok_get_saved_audience', 'tiktok_saved_audiences'])('shows native saved-audience names and keeps targeting arrays inside one record: %s', tool => {
+    const audience = { saved_audience_id: '9007199254740993123', saved_audience_name: 'Synthetic targeting', location_ids: ['6252001'], languages: ['en'], snapshot_hash: 'private-snapshot' };
+    const { dom, document, callTool } = mount('records', tool === 'tiktok_saved_audiences' ? { saved_audiences: [audience], complete: true } : { audience }, tool, { provider: 'tiktok' });
+    try {
+      expect(document.querySelectorAll('.record-row')).toHaveLength(1);
+      expect(document.querySelector('.record-name strong')?.textContent).toBe('Synthetic targeting');
+      expect(document.querySelector('.record-list')?.textContent).not.toMatch(/private-snapshot|9007199254740993123|Record 1/);
+      expect(document.querySelector('details')?.textContent).toContain('9007199254740993123');
+      expect(document.querySelector('.operation-heading .logo.tiktok svg')).not.toBeNull();expect(callTool).not.toHaveBeenCalled();
+    } finally { dom.window.close(); }
+  });
   it.each(Object.keys(PROVIDER_LOGOS))('retains the real %s provider mark on generic tool results', provider => {
     const { dom, document } = mount('data', { items: [{ name: 'Example record', status: 'ACTIVE' }] }, provider+'_records', { provider });
     try { expect(document.querySelector('.operation-heading .logo.'+provider+' svg')).not.toBeNull(); }
