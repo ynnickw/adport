@@ -3,10 +3,11 @@ import { mediaCoverSource, mediaCoverUrl } from '@/lib/cloud/media-cover';
 import { GET } from '@/app/api/media/cover/route';
 import { pdfCover } from '@/lib/cloud/pdf-cover';
 import sharp from 'sharp';
+import { existsSync } from 'node:fs';
 
 const origin = 'https://example.supabase.co';
 const source = origin+'/storage/v1/object/sign/creative-media/0350a0a1-567d-427e-a479-c3a385cd3da6/ccd3710c-594a-4c31-8cc0-3f0317213154?token=temporary-read-grant';
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 describe('private PDF cover rendering', () => {
   it('accepts only the existing exact Storage read capability and never an arbitrary URL', async () => {
@@ -41,6 +42,12 @@ describe('private PDF cover rendering', () => {
     const width = Buffer.from(image).readUInt32BE(16), height = Buffer.from(image).readUInt32BE(20);
     const pixel = await sharp(image).extract({ left: Math.floor(width / 4), top: Math.floor(height / 2), width: 1, height: 1 }).raw().toBuffer();
     expect(pixel[0]).toBeGreaterThan(180); expect(pixel[1]).toBeLessThan(80); expect(pixel[2]).toBeLessThan(80);
+    // CI builds first: exercise the same standalone package layout used on Vercel.
+    if (existsSync('.pdf-renderer/worker.mjs')) {
+      vi.stubEnv('NODE_ENV', 'production');
+      expect(Buffer.from(await pdfCover(new Uint8Array(Buffer.from(pdf))))).toEqual(Buffer.from(image));
+      vi.unstubAllEnvs();
+    }
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(Buffer.from(pdf), { headers: { 'content-type': 'application/pdf' } })));
     const response = await GET(new Request('https://app.adport.test/api/media/cover?source='+encodeURIComponent(source)));
     expect(response.status).toBe(200); expect(response.headers.get('content-type')).toBe('image/png');

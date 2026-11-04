@@ -3,7 +3,7 @@ import { mediaCoverSource } from '@/lib/cloud/media-cover';
 import { pdfCover } from '@/lib/cloud/pdf-cover';
 
 export const runtime = 'nodejs';
-export const maxDuration = 20;
+export const maxDuration = 30;
 const MAX_BYTES = 50 * 1024 * 1024;
 let active = 0;
 const queue: Array<() => void> = [];
