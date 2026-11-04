@@ -7,15 +7,15 @@ import { AssetCard } from './asset-card';
 import { AssetPreview } from './asset-preview';
 import { AssetRemoval } from './asset-removal';
 import { LibraryDialog } from './library-dialog';
-import { formatBytes, mediaAction, responseJson, uploadProjectFile } from './media-client';
+import { formatBytes, mediaAction, responseJson, uploadProjectFile, type MediaPlatform } from './media-client';
 import { useLibraryFiles } from './use-library-files';
 import styles from './assets.module.css';
 
 type UploadJob = { id: string; name: string; size: number; state: string; percent?: number; mediaId?: string; error?: string };
 function UploadIcon() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5" /></svg>; }
 
-export function AssetLibrary({ projectId, projectName, initialAssets, truncated, initialCursor, canUpload, acceptedTypes, maxBytes, storageOrigin }: {
-  projectId: string; projectName: string; initialAssets: MediaAsset[]; truncated: boolean; initialCursor?: string; canUpload: boolean; acceptedTypes: string[]; maxBytes: number; storageOrigin: string;
+export function AssetLibrary({ projectId, projectName, connectedPlatforms, initialAssets, truncated, initialCursor, canUpload, acceptedTypes, maxBytes, storageOrigin }: {
+  projectId: string; projectName: string; connectedPlatforms: readonly MediaPlatform[]; initialAssets: MediaAsset[]; truncated: boolean; initialCursor?: string; canUpload: boolean; acceptedTypes: string[]; maxBytes: number; storageOrigin: string;
 }) {
   const [query, setQuery] = useState(''), [kind, setKind] = useState(''), [tag, setTag] = useState('');
   const files = useLibraryFiles(projectId, { assets: initialAssets, truncated, next_cursor: initialCursor }, { query: query.trim(), kind, tag });
@@ -76,7 +76,7 @@ export function AssetLibrary({ projectId, projectName, initialAssets, truncated,
     </div>
     {uploadJobs.some(job => job.state !== 'Removed') ? <section className={styles.queue} aria-label="Upload queue"><div className={styles.queueHeading}><strong>{activeUploads ? `${activeUploads} ${activeUploads === 1 ? 'file' : 'files'} in progress` : 'Recent uploads'}</strong><button type="button" onClick={() => setUploadJobs(current => current.filter(job => !['Ready', 'Removed'].includes(job.state)))}>Clear completed</button></div><div className={styles.queueItems}>{uploadJobs.filter(job => job.state !== 'Removed').map(job => <div key={job.id} className={styles.queueItem}><div><strong>{job.name}</strong><small>{formatBytes(job.size)}{job.error ? ` · ${job.error}` : ''}</small></div><span data-status={job.state}>{job.state}{job.state === 'Uploading' && job.percent !== undefined ? ` ${job.percent}%` : ''}</span>{!['Ready', 'Needs review', 'Queued'].includes(job.state) ? <progress max={100} value={job.percent} aria-label={`Upload progress for ${job.name}`} /> : null}{job.state === 'Queued' ? <button type="button" aria-label={`Remove ${job.name} from queue`} onClick={() => { pendingFiles.current = pendingFiles.current.filter(value => value.job.id !== job.id); updateJob(job.id, { state: 'Removed' }); }}>×</button> : job.state === 'Needs review' && job.mediaId ? <button type="button" onClick={() => void verify(job)}>Verify upload</button> : null}</div>)}</div></section> : null}
     {error || files.error ? <p role="alert" className={styles.error}>{error || files.error}</p> : null}
-    {files.assets.length ? <div className={styles.grid} aria-busy={files.loading}>{files.assets.map(asset => <AssetCard key={asset.id} asset={asset} projectId={projectId} canEdit={canUpload} onPreview={setPreview} onUpdate={updateAsset} onRemove={removeAsset} onTag={setTag} />)}</div>
+    {files.assets.length ? <div className={styles.grid} aria-busy={files.loading}>{files.assets.map(asset => <AssetCard key={asset.id} asset={asset} projectId={projectId} connectedPlatforms={connectedPlatforms} canEdit={canUpload} onPreview={setPreview} onUpdate={updateAsset} onRemove={removeAsset} onTag={setTag} />)}</div>
       : <section className={styles.empty}><UploadIcon /><h2>{files.loading ? 'Loading files…' : filtered ? 'No matching files' : 'No files yet'}</h2><p>{filtered ? 'Try another search or clear a filter.' : `Drop files here or upload them to ${projectName}. Your assistant handles the rest.`}</p></section>}
     {files.truncated ? <button className={`button secondary ${styles.loadMore}`} type="button" disabled={files.loading || files.loadingMore || !files.next_cursor} onClick={() => void files.more()}>{files.loadingMore ? 'Loading…' : 'Load more'}</button> : null}
     {removing ? <AssetRemoval projectId={projectId} assets={removing} onRemoved={files.remove} onClose={() => setRemoving(null)} /> : null}

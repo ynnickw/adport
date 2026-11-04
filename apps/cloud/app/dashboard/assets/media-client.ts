@@ -1,5 +1,7 @@
 import type { MediaAsset } from '@adport/core';
 
+export type MediaPlatform = NonNullable<MediaAsset['platforms']>[number];
+
 export async function responseJson<T>(response: Response): Promise<T> {
   const value = await response.json();
   if (!response.ok) throw new Error(typeof value.error === 'string' ? value.error : 'This library action could not be completed.');

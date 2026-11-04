@@ -47,6 +47,13 @@
 .assetMenu form > div { display:flex; justify-content:flex-end; }
 .assetMenu :global(.button) { padding:.4rem .65rem; font-size:.75rem; }
 .assetMenu p { margin:0; font-size:.72rem; color:#963d30; line-height:1.5; }
+.platformTags { border:0; padding:0; margin:0 0 .3rem; min-width:0; }
+.platformTags legend { font-weight:600; margin-bottom:.5rem; padding:0; }
+.platformTags > div { display:flex; flex-wrap:wrap; gap:.35rem; }
+.platformTags button { display:inline-flex; align-items:center; gap:.3rem; border:1px solid var(--line); border-radius:999px; padding:.35rem .5rem; background:var(--paper); color:var(--muted); font-size:.7rem; line-height:1.25; }
+.platformTags button[aria-pressed="true"] { border-color:var(--orange); background:var(--orange-soft); color:var(--ink); }
+.platformTags :global(.provider-logo) { width:14px; height:14px; padding:0; border:0; background:transparent; border-radius:2px; }
+.platformTags svg { width:14px; height:14px; flex:none; }
 .menuLinks { display:grid; gap:.6rem; border-top:1px solid var(--line-soft); margin-top:.8rem; padding-top:.75rem; }
 .menuLinks a,.menuLinks button { padding:0; border:0; background:none; color:var(--muted); text-decoration:none; text-align:left; font-size:.75rem; }
 .empty { display:grid; justify-items:center; text-align:center; padding:4rem 1rem; border:1px dashed var(--line); border-radius:.65rem; background:#fdfdfa; }

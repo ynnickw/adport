@@ -10,7 +10,7 @@ vi.mock('@/app/dashboard/assets/media-client', async original => ({ ...await ori
 const sha256 = 'a'.repeat(64), projectId = '22222222-2222-4222-8222-222222222222';
 function source(index: number, fields: Partial<MediaAsset> = {}): MediaAsset { return { id: `11111111-1111-4111-8111-${String(index).padStart(12, '0')}`, name: `File ${index}.png`, content_type: 'image/png', byte_length: 1024, sha256, status: 'READY', metadata_version: 3, platforms: ['meta'], tags: ['launch'], preview_url: `https://qa.supabase.co/source-${index}?token=old`, ...fields }; }
 const asset = source(1, { name: 'Launch.png' });
-const props = { projectId, projectName: 'QA', initialAssets: [asset], truncated: false, canUpload: true, acceptedTypes: ['image/png'], maxBytes: 50 * 1024 * 1024, storageOrigin: 'https://qa.supabase.co' };
+const props = { projectId, projectName: 'QA', connectedPlatforms: ['meta', 'apple'] as const, initialAssets: [asset], truncated: false, canUpload: true, acceptedTypes: ['image/png'], maxBytes: 50 * 1024 * 1024, storageOrigin: 'https://qa.supabase.co' };
 beforeEach(() => {
   vi.resetAllMocks(); vi.stubGlobal('fetch', vi.fn(async () => Response.json({ assets: [asset], truncated: false })));
   HTMLDialogElement.prototype.showModal = function() { this.setAttribute('open', ''); }; HTMLDialogElement.prototype.close = function() { this.removeAttribute('open'); };
@@ -45,6 +45,29 @@ describe('simple agent-first creative library', () => {
     expect(screen.getByRole('button', { name: 'summer' })).toBeTruthy(); expect(fetch).not.toHaveBeenCalled();
     expect(screen.getByAltText('Launch.png')).toBe(image); expect(view.container.querySelector('video')).toBe(player);
     expect(player?.getAttribute('src')).toBe(`${video.preview_url}#t=0.1`);
+  });
+
+  it('offers only connected platform tags and preserves other existing labels when saving without reloading media', async () => {
+    const labeled = { ...asset, platforms: ['meta', 'google'] as MediaAsset['platforms'] }, video = source(2, { content_type: 'video/mp4' });
+    mocks.change.mockResolvedValue({ status: 'applied', result: { details: { asset: { ...labeled, platforms: ['apple', 'google', 'meta'], metadata_version: 4 } } } });
+    const view = render(<AssetLibrary {...props} initialAssets={[labeled, video]} />);
+    await waitFor(() => expect(view.container.querySelector('video')).not.toBeNull()); const player = view.container.querySelector('video');
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Launch.png' }));
+    expect(screen.getByRole('button', { name: 'Meta Ads', pressed: true })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Apple Ads', pressed: false })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Google Ads' })).toBeNull(); expect(screen.queryByRole('button', { name: 'TikTok Ads' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Apple Ads' }));
+    expect(mocks.change).not.toHaveBeenCalled(); expect(fetch).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save tags' })); await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(mocks.change).toHaveBeenCalledExactlyOnceWith(projectId, 'media_update_metadata', { media_id: asset.id, expected_sha256: sha256, expected_version: 3, tags: ['launch'], platforms: ['meta', 'google', 'apple'] });
+    expect(view.container.querySelector('video')).toBe(player); expect(fetch).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Launch.png' })); expect(screen.getByRole('button', { name: 'Apple Ads', pressed: true })).toBeTruthy();
+  });
+
+  it('keeps custom tags available without suggesting platforms when none are connected', () => {
+    render(<AssetLibrary {...props} connectedPlatforms={[]} />); fireEvent.click(screen.getByRole('button', { name: 'Actions for Launch.png' }));
+    expect(screen.queryByRole('group', { name: 'Platforms' })).toBeNull(); expect(screen.queryByRole('button', { name: 'Meta Ads' })).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Tags' })).toHaveProperty('value', 'launch');
   });
 
   it('opens and closes a preview immediately without fetching details or resetting gallery media', async () => {
