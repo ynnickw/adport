@@ -20,7 +20,7 @@ function fixture() {
     const replaced = override?.(call); if (replaced) return replaced;
     if (url.hostname === 'www.linkedin.com') return new Response(null, { status: url.pathname.includes('uploadedVideo') ? 200 : 201, headers: { etag: `"part-${++state.uploads}"` } });
     if (url.pathname === `/rest/adAccounts/${A}`) return Response.json(state.account);
-    if (url.searchParams.get('action') === 'initializeUpload') return Response.json({ value: url.pathname.endsWith('videos') ? { video: V, uploadToken: '', uploadUrlsExpireAt: Date.now() + 60_000, uploadInstructions: state.parts } : { document: D, uploadUrl: 'https://www.linkedin.com/dms-uploads/QA_document/ads-uploadedDocument/0?capability=fixture', uploadUrlExpiresAt: Date.now() + 60_000 } });
+    if (url.searchParams.get('action') === 'initializeUpload') return Response.json({ value: url.pathname.endsWith('videos') ? { video: V, uploadToken: '', uploadUrlsExpireAt: Date.now() + 60_000, uploadInstructions: state.parts } : { document: D, uploadUrl: 'https://www.linkedin.com/dms-uploads/opaque-upload-id/uploaded-document/0?capability=fixture', uploadUrlExpiresAt: Date.now() + 60_000 } });
     if (url.searchParams.get('action') === 'finalizeUpload') return new Response(null, { status: 200 });
     if (init.method === 'POST') { Object.assign(state.videos[0].mediaLibraryMetadata, body!.patch.mediaLibraryMetadata.$set); return new Response(null, { status: 204 }); }
     if (url.pathname === '/rest/videos') return Response.json({ elements: state.videos, paging: { start: Number(url.searchParams.get('start') ?? 0), count: 100, total: state.videos.length } });
@@ -56,6 +56,13 @@ describe('LinkedIn multipart video and PDF media', () => {
     if (reason === 'oversize-part') f.state.parts = [{ ...f.state.parts[0], lastByte: f.bytes.length - 1 }];
     await expect(f.provider.applyWrite(f.upload('video'), guard)).rejects.toMatchObject({ code: 'PROVIDER_ERROR', details: { resource_ids: [V], stage: 'validate upload instructions' } });
     expect(mutations(f)).toHaveLength(1);
+  });
+  it('sends only remaining source bytes when the final native part cap extends beyond EOF', async () => {
+    const f = fixture(); f.state.parts[1].lastByte = 8 * 1024 * 1024 - 1;
+    await f.provider.applyWrite(f.upload('video'), guard);
+    const transferred = f.calls.filter(c => c.url.hostname === 'www.linkedin.com').map(c => Buffer.from(c.init.body as Uint8Array));
+    expect(transferred.map(v => v.length)).toEqual([4194304, 80000]);
+    expect(Buffer.concat(transferred).equals(f.bytes)).toBe(true);
   });
   it.each(['', '""', 'duplicate', 'failure'] as const)('does not finalize or replay after a missing/invalid part acknowledgement: %s', async etag => {
     const f = fixture(); f.override(c => c.url.hostname === 'www.linkedin.com' ? new Response(null, { status: etag === 'failure' ? 500 : 200, headers: { etag: etag === 'duplicate' ? 'same' : etag } }) : undefined);

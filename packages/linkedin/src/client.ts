@@ -97,7 +97,9 @@ export class LinkedInAdsClient {
   validateMediaUpload(url: string, kind: 'video' | 'document', resource: string): URL {
     const target = new URL(url), key = resource.split(':').at(-1)!;
     const path = kind === 'video' ? `/dms-uploads/${key}/uploadedVideo` : undefined;
-    if (target.origin !== 'https://www.linkedin.com' || target.username || target.password || target.hash || (kind === 'video' ? target.pathname !== path : !/^\/dms-uploads\/[A-Za-z0-9_-]+\/ads-uploadedDocument\/0$/.test(target.pathname))) throw new AdportError('PROVIDER_ERROR', 'linkedin: unrecognized native media upload destination');
+    // Document upload purpose/path segments are opaque, not a versioned REST
+    // route. Initialization chooses them; callers cannot supply an upload URL.
+    if (target.origin !== 'https://www.linkedin.com' || target.username || target.password || target.hash || (kind === 'video' ? target.pathname !== path : !/^\/dms-uploads\/[A-Za-z0-9_-]+\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+$/.test(target.pathname))) throw new AdportError('PROVIDER_ERROR', 'linkedin: unrecognized native media upload destination');
     return target;
   }
   async uploadMedia(url: string, bytes: Uint8Array<ArrayBuffer>, kind: 'video' | 'document', resource: string): Promise<string> {
