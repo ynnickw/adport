@@ -102,6 +102,36 @@ Both upload tools return `UPLOAD_ACCEPTED` with `processing_complete: false`. Fo
 
 The current analytics endpoint does **not** support pagination and returns at most 15,000 elements. Results at that ceiling are marked potentially truncated. Older ALL queries can be expanded to month boundaries by LinkedIn; Adport checks returned dates and refuses to label an expanded period as the requested range. Missing metrics stay absent. An empty analytics response can mean no activity **or** insufficient reporting access; account discovery alone does not prove reporting permission.
 
+## Saved audience templates
+
+`linkedin_saved_audiences` uses the native account finder, sort and Rest.li
+offset pagination. It verifies the selected advertiser, returns
+`account_snapshot_hash` for creation and a snapshot for each template, and keeps
+native reach estimates approximate. Missing paging metadata leaves collection
+completeness unknown. `linkedin_get_saved_audience` verifies one exact template
+and returns the snapshot required for edits or deletion.
+
+`linkedin_create_saved_audience` requires `expected_account_hash` from the list
+response. `linkedin_update_saved_audience` and
+`linkedin_delete_saved_audience` require `expected_snapshot_hash`. Creation and
+updates are independently read back before success is reported. Names allow up
+to 100 characters, descriptions up to 500. An empty description clears its text;
+supplied targeting criteria replaces the entire definition and omitted fields
+are preserved. Account and read-only fields cannot be edited. Reviews show only
+observed previous values, leaving missing ones unspecified.
+
+These are saved targeting definitions, rather than contact-list uploads.
+Applying criteria to a campaign uses the separate guarded campaign update.
+Existing `r_ads`/`rw_ads` permissions and the native advertiser role remain
+authoritative; a viewer cannot write. All mutations use preview/apply approval,
+and writes are never retried automatically. Native deletion requires 204 and has
+no restore endpoint. An uncertain create/update retains any returned template ID
+for reconciliation before another request.
+
+Contracts checked on 2026-11-04 against LinkedIn's [saved-audience templates](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads/advertising-targeting/saved-audience-templates?view=li-lms-2026-08)
+and [Rest.li pagination](https://learn.microsoft.com/en-us/linkedin/shared/api-guide/concepts/pagination).
+Mock wire tests do not establish live grant eligibility or successful writes.
+
 ## Official contract sources
 
 Core contracts reviewed 2026-08-31; sponsored content and descriptive metadata reviewed 2026-11-04. Requests pin `Linkedin-Version: 202608` and `X-Restli-Protocol-Version: 2.0.0`; individual creative metadata reads explicitly use `202610`.

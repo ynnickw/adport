@@ -15,15 +15,15 @@ fixture. No production accounts or provider writes are used.
 
 | View | Hosted tools | Content |
 | --- | ---: | --- |
-| Operation | 335 | Structured review and guarded approval |
-| Data | 189 | Generic native records, arrays, values, and full details |
+| Operation | 338 | Structured review and guarded approval |
+| Data | 191 | Generic native records, arrays, values, and full details |
 | Creatives | 36 | View-only media previews and ad copy |
 | Insights | 4 | Findings and their lifecycle |
 | Planning | 3 | Native estimates and existing paging |
 | Accounts | 1 | Connected accounts and provider errors |
 | Report | 1 | Existing currency-separated summaries and charts |
 
-There are 569 hosted tools and 592 local registry tools. Local generic API
+There are 574 hosted tools and 597 local registry tools. Local generic API
 dispatchers remain excluded from the hosted surface. Newly registered reads get
 the data fallback unless they declare a specialized presentation.
 

@@ -7,10 +7,12 @@ import { linkedinManagementTools } from './management-tools.js';
 import { linkedinMediaTools } from './media.js';
 import { linkedinSponsoredTools } from './sponsored-tools.js';
 import { linkedinPlanningTools } from './planning.js';
+import { linkedinAudienceTools } from './audiences.js';
 
 export function linkedinTools(provider: LinkedInAdsProvider): AnyToolDefinition[] {
   return [
     ...linkedinPlanningTools(provider),
+    ...linkedinAudienceTools(provider),
     ...linkedinCreativeTools(provider),
     ...linkedinManagementTools(provider),
     ...linkedinMediaTools(provider),
