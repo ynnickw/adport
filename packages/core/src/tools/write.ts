@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { WriteKind, WriteOperation } from '../provider.js';
 import { defineTool, type AnyToolDefinition } from './registry.js';
 import { writeOutput } from './outputs.js';
+import { reviewWrite } from './review.js';
 
 const TWO_STEP_NOTE =
   'Two-step write: call WITHOUT pending_operation_id to get a dry-run preview and a pending_operation_id; ' +
@@ -56,13 +57,13 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
           applied: false,
           pending_operation_id: outcome.pendingOperationId,
           expires_at: outcome.expiresAt,
-          preview: outcome.preview,
+          preview: { ...outcome.preview, review: reviewWrite(op, outcome.preview) },
           next_step:
             'Review the preview. To apply, call this tool again with the same arguments plus pending_operation_id.',
         };
       }
       const outcome = await ctx.engine.apply(provider, op, pending_operation_id);
-      return { status: 'applied', applied: true, result: outcome.result, preview: outcome.preview };
+      return { status: 'applied', applied: true, result: outcome.result, preview: { ...outcome.preview, review: reviewWrite(op, outcome.preview) } };
     },
   });
 }
