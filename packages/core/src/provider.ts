@@ -1,5 +1,6 @@
 import { AdportError } from './errors.js';
 import type { NormalizedQuery, Report } from './model.js';
+import type { WriteReview } from './tools/review.js';
 
 export interface Account {
   provider: string;
@@ -38,6 +39,11 @@ export interface WritePreview {
   budgetDeltas: BudgetDelta[];
   /** True when the platform validated the operation server-side (dry run). */
   serverValidated: boolean;
+  /** Observed provider values, when the preview can report both sides. */
+  fieldChanges?: Array<{ field: string; before: string; after: string }>;
+  notes?: string[];
+  /** Structured review, shared by the CLI and every graphical adapter. */
+  review?: WriteReview;
 }
 
 export interface WriteResult {
