@@ -1,10 +1,10 @@
 export const TREND_UI_STYLES = String.raw`
     .report-trend { min-width:0; margin:12px 0 0 }
-    .report-trend svg { display:block; width:100%; overflow:visible }
-    .report-trend text { fill:var(--muted); font-family:var(--sans); font-size:11px }
-    .report-trend .trend-line { fill:none; stroke:var(--orange); stroke-width:2; stroke-linejoin:round }
-    .report-trend circle { fill:var(--orange) }
-    .report-trend .trend-grid { stroke:var(--line); stroke-width:1 }
+    [data-report-trend] svg { display:block; width:100%; overflow:visible }
+    [data-report-trend] text { fill:var(--muted); font-family:var(--sans); font-size:11px }
+    [data-report-trend] .trend-line { fill:none; stroke:var(--orange); stroke-width:2; stroke-linejoin:round }
+    [data-report-trend] circle { fill:var(--orange) }
+    [data-report-trend] .trend-grid { stroke:var(--line); stroke-width:1 }
 `;
 
 export const TREND_UI_SCRIPT = String.raw`

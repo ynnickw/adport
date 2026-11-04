@@ -30,9 +30,9 @@ export const RECORD_UI_STYLES = String.raw`
 `;
 
 export const RECORD_UI_SCRIPT = String.raw`
-    function providerMarks(values,meta) {
+    function providerMarks(values,meta,label='Platforms') {
       const providers=[...new Set(arr(values).filter(value=>typeof value==='string'&&value))];
-      return providers.length?'<div class="record-providers" role="group" aria-label="Connected platforms">'+providers.map(provider=>{
+      return providers.length?'<div class="record-providers" role="group" aria-label="'+esc(label)+'">'+providers.map(provider=>{
         const name=providerName(provider,meta.providerNames||{});
         return providerSvg[provider]?'<span class="record-provider" role="img" aria-label="'+esc(name)+'" title="'+esc(name)+'">'+logo(provider)+'</span>':'<span class="record-provider-name">'+esc(name)+'</span>';
       }).join('')+'</div>':'';
@@ -43,7 +43,7 @@ export const RECORD_UI_SCRIPT = String.raw`
         const organization=typeof project.organization_name==='string'&&project.organization_name.trim().toLowerCase()!==name.trim().toLowerCase()?project.organization_name:'';
         const subtitle=[organization,project.role?human(String(project.role)):null].filter(Boolean).join(' · ');
         let url;try { const value=new URL(project.logo_url);if(value.protocol==='https:'&&!value.username&&!value.password)url=value.href; }catch {}
-        return '<article class="project-row"><span class="project-logo" aria-hidden="true" data-project-initial="'+esc(initial)+'">'+(url?'<img src="'+esc(url)+'" alt="" referrerpolicy="no-referrer">':esc(initial))+'</span><div class="project-copy"><strong>'+esc(name)+'</strong>'+(subtitle?'<p>'+esc(subtitle)+'</p>':'')+'</div>'+(providerMarks(project.providers,meta)||'<p class="record-providers project-platforms-empty">No connected platforms</p>')+'</article>';
+        return '<article class="project-row"><span class="project-logo" aria-hidden="true" data-project-initial="'+esc(initial)+'">'+(url?'<img src="'+esc(url)+'" alt="" referrerpolicy="no-referrer">':esc(initial))+'</span><div class="project-copy"><strong>'+esc(name)+'</strong>'+(subtitle?'<p>'+esc(subtitle)+'</p>':'')+'</div>'+(providerMarks(project.providers,meta,'Connected platforms')||'<p class="record-providers project-platforms-empty">No connected platforms</p>')+'</article>';
       }).join('');
       const clean={...data};delete clean._adport;
       app.innerHTML=chrome(operationHeader('Projects','')+notices(data)+(projects.length?'<div class="record-list" role="region" aria-label="Authorized projects" tabindex="0">'+rows+'</div>':'<p class="operation-note">No accessible projects were returned.</p>')+(projects.length>1000?'<p class="operation-note">Showing 1,000 of '+projects.length+' projects. The full response is in Details.</p>':'')+'<details><summary>Details</summary><pre>'+esc(JSON.stringify(clean,null,2))+'</pre></details>',projects.length+' project'+(projects.length===1?'':'s'));
