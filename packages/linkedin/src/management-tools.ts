@@ -10,6 +10,21 @@ export const metadata = { name: name.optional(), start_time: time.optional(), en
 export const updateCampaign = z.object({ campaign_id: id, ...metadata }).refine(v => Object.keys(v).length > 1, 'Provide campaign changes');
 export const updateGroup = z.object({ campaign_group_id: id, ...metadata }).refine(v => Object.keys(v).length > 1, 'Provide campaign-group changes');
 export const targetingUpdate = z.object({ campaign_id: id, targeting_criteria: targetingSchema.optional(), audience_expansion_enabled: z.boolean().optional() }).refine(v => v.targeting_criteria !== undefined || v.audience_expansion_enabled !== undefined, 'Provide targeting or explicit expansion settings');
+export const isGeoFacet = (facet: string) => ['urn:li:adTargetingFacet:locations', 'urn:li:adTargetingFacet:profileLocations'].includes(facet);
+export const targetingEntitiesInput = z.object({
+  account_id: id,
+  facet: z.string().regex(/^urn:li:adTargetingFacet:[A-Za-z]+$/),
+  query: z.string().trim().min(1).max(255).optional().describe('Search text selects native typeahead; required for locations/profileLocations.'),
+  entity_type: z.enum(['AGE', 'COMPANY', 'COMPANY_SIZE', 'DEGREE', 'FIELD_OF_STUDY', 'FUNCTION', 'GENDER', 'GROUP', 'INDUSTRY', 'INTEREST', 'LOCALE', 'SCHOOL', 'SENIORITY', 'SKILL', 'TITLE', 'YEARS_OF_EXPERIENCE', 'MEMBER_BEHAVIOR']).optional(),
+  use_case: z.literal('CONNECTED_TELEVISION_ONLY_CAMPAIGN').optional(),
+  locale: z.object({ language: z.string().regex(/^[a-z]{2}$/), country: z.string().regex(/^[A-Z]{2}$/) }).strict().optional(),
+  start: z.number().int().nonnegative().safe().default(0),
+  count: z.number().int().min(1).max(100).default(50),
+}).strict().superRefine((value, ctx) => {
+  if (!value.query && isGeoFacet(value.facet)) ctx.addIssue({ code: 'custom', path: ['query'], message: 'Location facets require a typeahead query after the Bing Geo migration' });
+  if (!value.query && (value.entity_type || value.use_case)) ctx.addIssue({ code: 'custom', path: ['query'], message: 'entity_type/use_case require a typeahead query' });
+  if (!Number.isSafeInteger(value.start + value.count)) ctx.addIssue({ code: 'custom', path: ['start'], message: 'Pagination offset exceeds the safe integer range' });
+});
 
 export function linkedinManagementTools(provider: LinkedInAdsProvider): AnyToolDefinition[] {
   const account = { account_id: id };
@@ -19,7 +34,7 @@ export function linkedinManagementTools(provider: LinkedInAdsProvider): AnyToolD
     read('linkedin_get_campaign', 'Read exact account-owned campaign settings, native targeting, bid, budgets and schedule.', z.object({ ...account, campaign_id: id }), v => provider.getCampaign(v.account_id, v.campaign_id)),
     read('linkedin_get_campaign_group', 'Read one account-owned campaign group, including shared/dynamic budget settings and schedule.', z.object({ ...account, campaign_group_id: id }), v => provider.management.group(v.account_id, v.campaign_group_id)),
     read('linkedin_targeting_facets', `Read available native targeting facets and supported entity finders. ${NON_DISCRIMINATION_NOTICE}`, z.object(account), v => provider.management.facets(v.account_id)),
-    read('linkedin_targeting_entities', 'Read the native adTargetingFacet finder for a selected facet and locale, using offset pagination. Typeahead/similar-entity finders remain separate.', z.object({ ...account, facet: z.string().regex(/^urn:li:adTargetingFacet:[A-Za-z]+$/), locale: z.object({ language: z.string().regex(/^[a-z]{2}$/), country: z.string().regex(/^[A-Z]{2}$/) }).optional(), start: z.number().int().nonnegative().default(0), count: z.number().int().min(1).max(100).default(50) }), v => provider.management.entities(v)),
+    read('linkedin_targeting_entities', `Search native targeting entities with query (typeahead), or browse a supported facet without query. Locations/profileLocations require query and return modern geo URNs. Missing or contradictory paging is reported as unknown completeness. ${NON_DISCRIMINATION_NOTICE}`, targetingEntitiesInput, v => provider.management.entities(v)),
     write('linkedin_create_campaign_group', 'Create a native DRAFT campaign group. paused_creation coerces requested ACTIVE to non-serving DRAFT because LinkedIn does not create groups as PAUSED. Optional total cap uses micros.', groupCreate, 'create'),
     write('linkedin_update_campaign_group', 'Edit supplied group name/start/end fields, preserving the existing schedule. Does not change status or budgeting mode.', updateGroup),
     write('linkedin_set_campaign_group_status', 'Pause, activate or archive an owned group. Activation requires explicit advertiser confirmation; affects eligibility of all contained campaigns.', z.object({ campaign_group_id: id, status: z.enum(['ACTIVE', 'PAUSED', 'ARCHIVED']), non_political_consent: z.literal(true).optional() })),

@@ -6,6 +6,7 @@ import { AuditLog, DEFAULT_POLICY, PendingStore, PolicyEngine, createContext, ty
 import { LinkedInAdsClient } from '../src/client.js';
 import { LinkedInAdsProvider } from '../src/provider.js';
 import { linkedinTools } from '../src/tools.js';
+import { targetingEntitiesInput } from '../src/management-tools.js';
 
 // Reviewed against LinkedIn-owned Marketing202608 campaign/group, targeting
 // entity and Rest.li docs, fetched2026-11-03. These are wire-contract fixtures.
@@ -39,11 +40,69 @@ function fixture(handler?: (call: Call) => unknown) {
 const dirs: string[] = [];
 afterEach(async () => { for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true }); });
 
+describe('LinkedIn targeting finder wire contracts (official Marketing202608 docs, checked 2026-11-04)', () => {
+  const facet = 'urn:li:adTargetingFacet:locations';
+  const entity = { urn: 'urn:li:geo:101282230', name: 'Germany', facetUrn: facet };
+  const response = (value: unknown) => fixture(call => call.url.pathname.endsWith('/adTargetingEntities') ? value : undefined);
+  it('retains native browsing for supported non-geographic facets', async () => {
+    const { provider, calls } = response({ elements: [{ urn: 'urn:li:industry:4', facetUrn: 'urn:li:adTargetingFacet:industries' }], paging: { start: 0, count: 50, total: 1 } });
+    await provider.management.entities({ account_id: A, facet: 'urn:li:adTargetingFacet:industries' });
+    expect(Object.fromEntries(calls.at(-1)!.url.searchParams)).toEqual({ q: 'adTargetingFacet', facet: 'urn:li:adTargetingFacet:industries', queryVersion: 'QUERY_USES_URNS', start: '0', count: '50' });
+  });
+  it('encodes typeahead search text and documented optional filters without adding a second finder', async () => {
+    const { provider, calls } = response({ elements: [], paging: { start: 0, count: 50, total: 0 } });
+    await provider.management.entities({ account_id: A, facet: 'urn:li:adTargetingFacet:fieldsOfStudy', query: 'eco & (business), +', entity_type: 'FIELD_OF_STUDY', use_case: 'CONNECTED_TELEVISION_ONLY_CAMPAIGN' });
+    expect(Object.fromEntries(calls.at(-1)!.url.searchParams)).toMatchObject({ q: 'typeahead', query: 'eco & (business), +', entityType: 'FIELD_OF_STUDY', useCase: 'CONNECTED_TELEVISION_ONLY_CAMPAIGN' });
+    expect(calls.at(-1)!.url.searchParams.has('entities')).toBe(false); expect(writes(calls)).toEqual([]);
+  });
+  it.each(['locations', 'profileLocations'])('requires a modern typeahead query for %s before any provider request', async geo => {
+    const { provider, calls } = fixture();
+    await expect(provider.management.entities({ account_id: A, facet: `urn:li:adTargetingFacet:${geo}` })).rejects.toThrow('typeahead query'); expect(calls).toEqual([]);
+  });
+  it.each([
+    { query: ' ' }, { query: 'x'.repeat(256) }, { entity_type: 'SKILL' }, { use_case: 'CONNECTED_TELEVISION_ONLY_CAMPAIGN' },
+    { query: 'geo', entity_type: 'LOCATION' }, { count: 101 }, { start: Number.MAX_SAFE_INTEGER }, { query: 'geo', ignored_filter: true },
+  ])('rejects empty, unsupported or silently ignored finder input: %j', invalid => {
+    expect(targetingEntitiesInput.safeParse({ account_id: A, facet: 'urn:li:adTargetingFacet:industries', ...invalid }).success).toBe(false);
+  });
+  it.each([
+    { ...entity, urn: 'urn:li:countryGroup:EU' }, { name: 'Germany', facetUrn: facet }, { ...entity, facetUrn: 'urn:li:adTargetingFacet:profileLocations' },
+  ])('rejects legacy, missing and foreign-facet location identifiers', async native => {
+    const { provider, calls } = response({ elements: [native], paging: { start: 0, count: 50, total: 1 } });
+    await expect(provider.management.entities({ account_id: A, facet, query: 'Germany' })).rejects.toThrow(/geo URN|different facet/); expect(writes(calls)).toEqual([]);
+  });
+  it('advances native offset pages by requested count, even with a short page and a next link', async () => {
+    const { provider } = response({ elements: [entity], paging: { start: 10, count: 10, total: 30, links: [{ rel: 'next', href: 'https://api.linkedin.com/rest/adTargetingEntities?start=20' }] } });
+    expect(await provider.management.entities({ account_id: A, facet, query: 'Germany', start: 10, count: 10 })).toMatchObject({ complete: false, truncated: true, next_start: 20 });
+  });
+  it('preserves a contradictory native total without inventing completeness or continuation', async () => {
+    const { provider } = response({ elements: [entity], paging: { start: 0, count: 10, total: 0 } });
+    const value = await provider.management.entities({ account_id: A, facet, query: 'Germany', count: 10 });
+    expect(value).toMatchObject({ paging: { total: 0 }, complete: null, truncated: null, notes: [expect.stringContaining('contradicts')] }); expect(value).not.toHaveProperty('next_start');
+  });
+  it('offers another verified full page while retaining unknown completeness for a placeholder total', async () => {
+    const { provider } = response({ elements: [entity], paging: { start: 0, count: 1, total: 0 } });
+    expect(await provider.management.entities({ account_id: A, facet, query: 'Germany', count: 1 })).toMatchObject({ complete: null, truncated: true, next_start: 1 });
+  });
+  it.each([undefined, { start: 0, count: 2147483647 }])('does not fabricate an offset when native paging is absent or its count changed', async paging => {
+    const { provider } = response({ elements: [entity], ...(paging ? { paging } : {}) });
+    const value = await provider.management.entities({ account_id: A, facet, query: 'Germany', count: 1 });
+    expect(value).toMatchObject({ complete: null, truncated: null }); expect(value).not.toHaveProperty('next_start');
+  });
+  it.each([
+    { elements: [entity], paging: { start: 0, count: 10 } },
+    { elements: [entity, entity], paging: { start: 10, count: 1 } },
+  ])('rejects ignored offsets and oversized pages instead of repeating entities', async native => {
+    const { provider } = response(native);
+    await expect(provider.management.entities({ account_id: A, facet, query: 'Germany', start: 10, count: 1 })).rejects.toThrow(/offset|page size/);
+  });
+});
+
 describe('LinkedIn targeting, metadata and monetary updates', () => {
   it('uses native facet/entity discovery with URN output, locale and bounded paging', async () => {
     const { provider, calls } = fixture(); expect((await provider.management.facets(A)).elements).toHaveLength(1);
-    const result = await provider.management.entities({ account_id: A, facet: 'urn:li:adTargetingFacet:locations', locale: { language: 'de', country: 'DE' }, start: 0, count: 50 }); expect(result.truncated).toBe(false);
-    const url = calls.at(-1)!.url; expect(Object.fromEntries(url.searchParams)).toMatchObject({ q: 'adTargetingFacet', facet: 'urn:li:adTargetingFacet:locations', queryVersion: 'QUERY_USES_URNS', locale: '(language:de,country:DE)', start: '0', count: '50' }); expect(calls.at(-1)!.init.headers).toMatchObject({ 'X-RestLi-Method': 'FINDER' });
+    const result = await provider.management.entities({ account_id: A, facet: 'urn:li:adTargetingFacet:locations', query: ' Germany ', locale: { language: 'de', country: 'DE' }, start: 0, count: 50 }); expect(result).toMatchObject({ complete: true, truncated: false });
+    const url = calls.at(-1)!.url; expect(Object.fromEntries(url.searchParams)).toMatchObject({ q: 'typeahead', query: 'Germany', facet: 'urn:li:adTargetingFacet:locations', queryVersion: 'QUERY_USES_URNS', locale: '(language:de,country:DE)', start: '0', count: '50' }); expect(calls.at(-1)!.init.headers).toMatchObject({ 'X-RestLi-Method': 'FINDER', 'Linkedin-Version': '202608', 'X-Restli-Protocol-Version': '2.0.0' });
   });
   it('preserves an omitted exclusion and expansion flag when replacing include clauses', async () => {
     const { provider, calls } = fixture(), include = { and: [{ or: { 'urn:li:adTargetingFacet:locations': ['urn:li:geo:103644278'] } }] };

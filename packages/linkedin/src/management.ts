@@ -1,7 +1,7 @@
 import { AdportError, type WriteGuard, type WriteOperation, type WritePreview, type WriteResult } from '@adport/core';
 import { z } from 'zod';
 import { LinkedInAdsClient } from './client.js';
-import { groupCreate, targetingUpdate, updateCampaign, updateGroup } from './management-tools.js';
+import { groupCreate, isGeoFacet, targetingEntitiesInput, targetingUpdate, updateCampaign, updateGroup } from './management-tools.js';
 import { decimalToMicros, microsToDecimal, type LinkedInAdsProvider } from './provider.js';
 import { groupSchema, linkedinId as id, moneySchema, NON_DISCRIMINATION_NOTICE, NON_POLITICAL_CONSENT, targetingSchema } from './schemas.js';
 
@@ -23,12 +23,29 @@ export class LinkedInManagementService {
     await this.provider.getAccount(account);
     return this.client.get('adTargetingFacets', z.object({ elements: z.array(z.record(z.string(), z.unknown())) }));
   }
-  async entities(input: { account_id: string; facet: string; locale?: { language: string; country: string }; start: number; count: number }) {
+  async entities(raw: z.input<typeof targetingEntitiesInput>) {
+    const input = targetingEntitiesInput.parse(raw);
     await this.provider.getAccount(input.account_id);
-    const value = await this.client.get('adTargetingEntities', z.looseObject({ elements: z.array(z.record(z.string(), z.unknown())), paging: z.object({ start: z.number().int().nonnegative(), count: z.number().int().nonnegative(), total: z.number().int().nonnegative().optional(), links: z.array(z.looseObject({ rel: z.string() })).optional() }).optional() }), { q: 'adTargetingFacet', facet: input.facet, queryVersion: 'QUERY_USES_URNS', ...(input.locale ? { locale: input.locale } : {}), start: input.start, count: input.count });
+    const value = await this.client.get('adTargetingEntities', z.looseObject({ elements: z.array(z.record(z.string(), z.unknown())), paging: z.looseObject({ start: z.number().int().nonnegative().safe(), count: z.number().int().nonnegative().safe(), total: z.number().int().nonnegative().safe().optional(), links: z.array(z.looseObject({ rel: z.string() })).optional() }).optional() }), { q: input.query ? 'typeahead' : 'adTargetingFacet', facet: input.facet, queryVersion: 'QUERY_USES_URNS', ...(input.query ? { query: input.query } : {}), ...(input.entity_type ? { entityType: input.entity_type } : {}), ...(input.use_case ? { useCase: input.use_case } : {}), ...(input.locale ? { locale: input.locale } : {}), start: input.start, count: input.count });
     if (value.paging && value.paging.start !== input.start) throw new AdportError('PROVIDER_ERROR', 'linkedin: targeting pagination changed its offset');
-    const next = Boolean(value.paging?.links?.some(link => link.rel === 'next')) || (value.paging?.total !== undefined ? input.start + value.elements.length < value.paging.total : value.elements.length >= input.count);
-    return { ...value, truncated: next, ...(next ? { next_start: input.start + value.elements.length } : {}) };
+    if (value.elements.length > input.count || (value.paging && value.elements.length > value.paging.count)) throw new AdportError('PROVIDER_ERROR', 'linkedin: targeting response exceeds its page size');
+    for (const entity of value.elements) {
+      if (entity.facetUrn !== undefined && entity.facetUrn !== input.facet) throw new AdportError('PROVIDER_ERROR', 'linkedin: targeting entity belongs to a different facet');
+      if (isGeoFacet(input.facet) && (typeof entity.urn !== 'string' || !/^urn:li:geo:\d+$/.test(entity.urn))) throw new AdportError('PROVIDER_ERROR', 'linkedin: location typeahead returned a missing or legacy geo URN');
+    }
+    const paging = value.paging, end = input.start + value.elements.length;
+    const linkedNext = Boolean(paging?.links?.some(link => link.rel === 'next'));
+    const contradictoryTotal = paging?.total !== undefined && (paging.total < end || (linkedNext && paging.total <= end));
+    const notes: string[] = [];
+    if (!paging) notes.push('Native paging is absent; completeness and continuation are unknown.');
+    else if (paging.count !== input.count) notes.push('Native page size differs from the request; continuation is unknown.');
+    if (contradictoryTotal) notes.push('Native total contradicts the returned records or next link; completeness is unknown.');
+    // LinkedIn can return total:0 with nonempty results. Preserve the native value;
+    // only advance a verified page by the requested count, never by its row count.
+    const canAdvance = paging?.count === input.count;
+    const more = canAdvance && (linkedNext || (!contradictoryTotal && paging?.total !== undefined ? end < paging.total : value.elements.length === input.count));
+    const complete = !paging || !canAdvance || contradictoryTotal ? null : !more;
+    return { ...value, complete, truncated: complete === null && !more ? null : more, ...(more ? { next_start: input.start + input.count } : {}), ...(notes.length ? { notes } : {}) };
   }
   private metadata(current: Row, input: { name?: string; start_time?: number; end_time?: number }): Row {
     const fields: Row = input.name !== undefined ? { name: input.name } : {};
