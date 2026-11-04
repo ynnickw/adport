@@ -61,6 +61,7 @@ export const mediaAssetSchema = z.object({
   sha256: z.string().regex(/^[a-f0-9]{64}$/), width: z.number().int().positive().optional(), height: z.number().int().positive().optional(),
   status: z.enum(['READY', 'PROCESSING', 'FAILED', 'DELETED']).optional(),
   preview_url: z.string().url().optional(),
+  preview_cover_url: z.string().url().optional(),
   tags: z.array(z.string()).optional(), platforms: z.array(mediaPlatformSchema).optional(), metadata_version: z.number().int().positive().optional(), created_at: z.string().optional(),
   upload: z.object({ part_size: z.number().int().positive(), part_count: z.number().int().positive(), received_parts: z.array(z.object({ part_index: z.number().int().nonnegative(), byte_length: z.number().int().nonnegative() })), expires_at: z.string() }).optional(),
 });

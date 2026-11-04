@@ -58,7 +58,7 @@ describe('view-only creative previews', () => {
       expect(document.querySelectorAll('img')).toHaveLength(1);
       expect(document.querySelector('img')?.getAttribute('referrerpolicy')).toBe('no-referrer');
       expect(document.querySelector('img')?.closest('a')?.getAttribute('aria-label')).toBe('View image: Image');
-      expect(document.querySelector('video')?.getAttribute('preload')).toBe('none');
+      expect(document.querySelector('video')?.getAttribute('preload')).toBe('metadata');
       expect(document.querySelector('audio')?.hasAttribute('controls')).toBe(true);
       expect(document.querySelector('video')?.hasAttribute('controls')).toBe(true);
       expect(document.querySelector('[autoplay],[onerror],.creative-destination')).toBeNull();

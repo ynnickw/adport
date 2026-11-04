@@ -34,7 +34,7 @@ export function mediaTools(): AnyToolDefinition[] {
         id: asset.id, name: asset.name, provider: 'media', account_id: '', type: asset.content_type, ...(asset.status ? { status: asset.status } : {}),
         headlines: [], descriptions: [`${sizeLabel(asset.byte_length)}${asset.width && asset.height ? ` · ${asset.width} × ${asset.height}` : ''}`, ...(asset.tags?.length ? [`Tags: ${asset.tags.join(', ')}`] : []), ...(asset.platforms?.length ? [`Platforms: ${asset.platforms.join(', ')}`] : [])], landing_urls: [],
         actions: [],
-        media: asset.preview_url && /^(image|video|audio)\//.test(asset.content_type) ? [{ type: asset.content_type.startsWith('image/') ? 'image' : asset.content_type.startsWith('video/') ? 'video' : 'audio', url: asset.preview_url, alt: asset.name }] : [],
+        media: asset.preview_cover_url && asset.preview_url ? [{ type: 'image', url: asset.preview_cover_url, open_url: asset.preview_url, alt: asset.name + ' — first page' }] : asset.preview_url && /^(image|video|audio)\//.test(asset.content_type) ? [{ type: asset.content_type.startsWith('image/') ? 'image' : asset.content_type.startsWith('video/') ? 'video' : 'audio', url: asset.preview_url, alt: asset.name }] : [],
       })) };
     },
   }),

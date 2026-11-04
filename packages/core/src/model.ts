@@ -38,6 +38,8 @@ export interface NormalizedQuery {
 export interface ReportRow {
   provider: string;
   accountId: string;
+  /** Present only for reads scoped to one exact provider reporting date. */
+  date?: string;
   /** Account currency; absent when the provider cannot supply it. Never infer FX. */
   currency?: string;
   entity: { level: EntityLevel; id: string; name: string; status?: string };

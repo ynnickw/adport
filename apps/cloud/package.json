@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "build:standalone": "next build && node scripts/prepare-standalone.mjs",
+    "build": "node scripts/prepare-pdf-renderer.mjs && next build",
+    "build:standalone": "node scripts/prepare-pdf-renderer.mjs && next build && node scripts/prepare-standalone.mjs",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -37,7 +37,9 @@
     "sharp": "0.35.3",
     "stripe": "^22.5.0",
     "zod": "^4.4.3",
-    "@modelcontextprotocol/server": "^2.4.0"
+    "@modelcontextprotocol/server": "^2.4.0",
+    "@napi-rs/canvas": "1.1.0",
+    "pdfjs-dist": "6.5.438"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.3",
