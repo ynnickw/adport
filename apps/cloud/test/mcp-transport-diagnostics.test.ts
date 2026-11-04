@@ -2,10 +2,43 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMcpHandler, McpServer, WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/server';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { diagnoseMcpRejection } from '@/lib/mcp-transport-diagnostics';
+import { inspectMcpRequest } from '@/lib/mcp-ui-request';
 
 afterEach(() => vi.restoreAllMocks());
 
 describe('MCP transport rejection diagnostics', () => {
+  it('reports a native legacy HTTP200 resource error using the pre-inspected method, leaving the response intact', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const request = new Request('https://adport.test/mcp', { method: 'POST', headers: { accept: 'application/json, text/event-stream', 'content-type': 'application/json', authorization: 'Bearer private-token' }, body: JSON.stringify({ jsonrpc: '2.0', id: 'private-id', method: 'resources/read', params: { uri: 'ui://diagnostics/private-value' } }) });
+    const shape = await inspectMcpRequest(request);
+    expect(shape).toEqual({ uiOnly: false, discoveryMethod: 'resources/read' });
+    const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+    const server = new McpServer({ name: 'legacy-diagnostics', version: '1' });
+    server.registerResource('fixture', 'ui://diagnostics/known', {}, async () => ({ contents: [] }));
+    await server.connect(transport);
+    try {
+      const response = await transport.handleRequest(request);
+      expect(response.status).toBe(200);
+      await diagnoseMcpRejection(request, response, 'transport', shape.discoveryMethod);
+      expect(warn).toHaveBeenCalledOnce();
+      expect(JSON.parse(warn.mock.calls[0]![0] as string)).toMatchObject({ status: 200, rpcMethod: 'resources/read', reason: 'invalid_params' });
+      expect(await response.json()).toHaveProperty('error');
+      expect(JSON.stringify(warn.mock.calls)).not.toMatch(/private-token|private-value|private-id|Bearer/);
+    } finally { await server.close(); }
+  });
+
+  it('does not inspect or log legacy business errors or successful discovery data', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    for (const method of ['tools/call', 'tools/list']) {
+      const request = new Request('https://adport.test/mcp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params: { private: 'private-value' } }) });
+      const shape = await inspectMcpRequest(request);
+      const response = method === 'tools/call' ? Response.json({ error: { code: -32603, message: 'private-value' } }) : Response.json({ result: { tools: [{ description: 'private-value' }] } });
+      await diagnoseMcpRejection(request, response, 'transport', shape.discoveryMethod);
+      expect(await response.json()).toBeDefined();
+    }
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['invalid JSON', '{', {}, 400, 'invalid_json'],
     ['invalid JSON-RPC', '{"secret":"private-value"}', {}, 400, 'invalid_jsonrpc'],

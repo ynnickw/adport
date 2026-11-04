@@ -1,4 +1,5 @@
 import { clearTimeout, setTimeout } from 'node:timers';
+import { isMcpDiscoveryMethod, type McpDiscoveryMethod } from './mcp-ui-request';
 
 type RejectionPhase = 'transport' | 'request_setup';
 
@@ -60,9 +61,9 @@ function rejectionReason(message: unknown): string {
 }
 
 /** Operational transport diagnostics only: never log payloads, IDs, credentials or raw errors. */
-export async function diagnoseMcpRejection(request: Request, response: Response, phase: RejectionPhase = 'transport'): Promise<void> {
-  const rpcMethod = request.headers.get('mcp-method');
-  const discoveryMethod = ['server/discover', 'tools/list', 'resources/list', 'resources/read', 'prompts/list'].includes(rpcMethod ?? '') ? rpcMethod : undefined;
+export async function diagnoseMcpRejection(request: Request, response: Response, phase: RejectionPhase = 'transport', inspectedMethod?: McpDiscoveryMethod): Promise<void> {
+  const rpcMethod = request.headers.get('mcp-method') ?? inspectedMethod;
+  const discoveryMethod = isMcpDiscoveryMethod(rpcMethod) ? rpcMethod : undefined;
   // JSON-RPC failures can have HTTP 200. Inspect only discovery exchanges;
   // ordinary provider results and account payloads are never parsed here.
   const inspectDiscovery = response.status === 200 && discoveryMethod

@@ -1,11 +1,31 @@
 import { describe, expect, it, vi } from 'vitest';
-import { isMcpUiResourceRequest } from '@/lib/mcp-ui-request';
+import { inspectMcpRequest, isMcpUiResourceRequest } from '@/lib/mcp-ui-request';
 
 const url = 'https://adport.test/mcp';
 const body = (extra: Record<string, unknown> = {}) => ({ jsonrpc: '2.0', id: 1, method: 'resources/read', params: { uri: 'ui://adport/insight-card-v3.html' }, ...extra });
 function request(value: unknown, headers: Record<string, string> = {}) { return new Request(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(value) }); }
 
 describe('bounded static MCP UI request classification', () => {
+  it.each(['server/discover', 'tools/list', 'prompts/list'])('identifies legacy %s for rejection diagnostics without granting the static UI path', async method => {
+    const input = body({ method, params: {} }), req = request(input);
+    expect(await inspectMcpRequest(req)).toEqual({ uiOnly: false, discoveryMethod: method });
+    expect(await req.json()).toEqual(input);
+  });
+
+  it('keeps unknown resources on the normal server while preserving their method for diagnostics', async () => {
+    const req = request(body({ params: { uri: 'ui://private-resource' } }));
+    expect(await inspectMcpRequest(req)).toEqual({ uiOnly: false, discoveryMethod: 'resources/read' });
+    expect(await req.json()).toEqual(body({ params: { uri: 'ui://private-resource' } }));
+  });
+
+  it('does not classify business payloads, notifications, batches or forged method headers as discovery', async () => {
+    for (const input of [body({ method: 'tools/call', params: { name: 'resources/read', arguments: { private: 'private-value' } } }), body({ id: null }), [body()]]) {
+      expect(await inspectMcpRequest(request(input))).toEqual({ uiOnly: false });
+    }
+    expect(await inspectMcpRequest(request(body({ method: 'tools/call' }), { 'mcp-method': 'resources/read' }))).toEqual({ uiOnly: false });
+    expect(await inspectMcpRequest(request(body(), { 'mcp-method': 'tools/call' }))).toEqual({ uiOnly: false });
+  });
+
   it.each([undefined, 'resources/read'])('recognizes a legacy or modern resource read and preserves its original body (%s)', async method => {
     const input = body(), req = request(input, method ? { 'mcp-method': method } : {});
     expect(await isMcpUiResourceRequest(req)).toBe(true);
