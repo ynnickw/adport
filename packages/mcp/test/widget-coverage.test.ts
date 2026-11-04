@@ -22,9 +22,11 @@ it('maps every registered tool to a branded view and supplies a structured revie
   try {
     await Promise.all([server.connect(st), client.connect(ct)]);
     const current = await client.readResource({ uri: ADPORT_UI_URI });
-    const previous = await client.readResource({ uri: 'ui://adport/insight-card-v2.html' });
-    expect(current.contents[0]?.text).toContain('Hold to apply');
-    expect(previous.contents[0]?.text).toBe(current.contents[0]?.text);
+    const legacy = await client.readResource({ uri: 'ui://adport/insight-card-v2.html' });
+    const currentText = current.contents[0] && 'text' in current.contents[0] ? current.contents[0].text : undefined;
+    const legacyText = legacy.contents[0] && 'text' in legacy.contents[0] ? legacy.contents[0].text : undefined;
+    expect(currentText).toContain('Hold to apply');
+    expect(legacyText).toBe(currentText);
     const scanned = (await client.listTools()).tools;
     expect(scanned).toHaveLength(runtime.registry.list().length);
     for (const source of runtime.registry.list()) {
