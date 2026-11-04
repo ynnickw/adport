@@ -75,6 +75,10 @@ describe('TikTok saved targeting templates', () => {
   it('rejects filtered IDs that the provider did not honor', async () => {
     await expect(fixture({ page: { saved_audiences: [source] } }).provider.audiences.get(account, '123')).rejects.toThrow('does not match');
   });
+  it('does not claim absence from an empty page without confirmed native completeness', async () => {
+    await expect(fixture({ page: { saved_audiences: [] } }).provider.audiences.get(account, audienceId)).rejects.toThrow('could not confirm absence');
+    await expect(fixture({ records: [] }).provider.audiences.get(account, audienceId)).rejects.toThrow('was not found');
+  });
   it('previews locally, then creates exact native targeting and verifies the returned template', async () => {
     const f = fixture({ records: [] }), payload = { saved_audience_name: 'Synthetic template', location_ids: ['6252001'], gender: 'GENDER_UNLIMITED', languages: [], interest_category_ids: ['123'] };
     const operation = f.op('tiktok_create_saved_audience', payload), guard = { forcePausedCreation: true };

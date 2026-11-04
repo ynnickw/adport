@@ -58,6 +58,7 @@ export class TikTokAudienceService {
   async get(account: string, audienceId: string) {
     const result = await this.list({ account_id: account, saved_audience_ids: [audienceId], page: 1, page_size: 100 });
     const audience = result.saved_audiences.find(item => item.saved_audience_id === audienceId);
+    if (!audience && result.complete !== true) throw new AdportError('PROVIDER_ERROR', 'tiktok: saved-audience lookup could not confirm absence; inspect native pagination before another operation');
     if (!audience) throw new AdportError('INVALID_INPUT', 'tiktok: saved audience was not found in the selected advertiser');
     return { audience };
   }
