@@ -22,6 +22,7 @@ describe('catalog runtime boundaries', () => {
   it('marks raw dispatchers separately from typed specialist tools', () => {
     expect(classifyTool('meta_api_read', 'meta').exposure).toBe('raw');
     expect(classifyTool('meta_create_ad', 'meta').exposure).toBe('standard');
+    expect(classifyTool('meta_advertisable_applications', 'meta').exposure).toBe('standard');
     expect(classifyTool('google_create_experiment', 'google')).toEqual({ category: 'experiments', exposure: 'specialist' });
   });
   it('keeps the complete central asset upload and metadata flow in Standard', () => {
