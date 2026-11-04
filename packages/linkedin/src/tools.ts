@@ -5,12 +5,15 @@ import { createCampaignSchema, linkedinId, NON_DISCRIMINATION_NOTICE, setBudgetS
 import { linkedinCreativeTools } from './creative-tools.js';
 import { linkedinManagementTools } from './management-tools.js';
 import { linkedinMediaTools } from './media.js';
+import { linkedinSponsoredTools } from './sponsored-tools.js';
 
 export function linkedinTools(provider: LinkedInAdsProvider): AnyToolDefinition[] {
   return [
     ...linkedinCreativeTools(provider),
     ...linkedinManagementTools(provider),
     ...linkedinMediaTools(provider),
+    ...linkedinSponsoredTools(provider),
+    defineTool({ name: 'linkedin_get_account', namespace: 'linkedin', description: 'Read exact native account settings, status and organization reference after verifying the selected account ID. Account discovery does not establish billing readiness or Page permissions.', input: z.object({ account_id: linkedinId }), annotations: { readOnly: true }, handler: input => provider.getAccount(input.account_id) }),
     defineTool({ name: 'linkedin_list_campaigns', namespace: 'linkedin', description: 'List LinkedIn campaigns, including inactive campaigns.', input: z.object({ account_id: linkedinId }), annotations: { readOnly: true }, handler: input => provider.listCampaigns(input.account_id) }),
     defineTool({ name: 'linkedin_list_campaign_groups', namespace: 'linkedin', description: 'List LinkedIn campaign groups to select a parent for campaign creation.', input: z.object({ account_id: linkedinId }), annotations: { readOnly: true }, handler: input => provider.listCampaignGroups(input.account_id) }),
     guardedWriteTool({ name: 'linkedin_create_campaign', namespace: 'linkedin', provider: 'linkedin', kind: 'create', description: `Create a paused LinkedIn campaign with account-currency budgets in micros. Explicit non-political advertiser consent required. Preview is local. ${NON_DISCRIMINATION_NOTICE}`, payload: createCampaignSchema }),

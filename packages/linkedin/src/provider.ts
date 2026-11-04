@@ -5,6 +5,8 @@ import { accountSchema, campaignSchema, createCampaignSchema, groupSchema, linke
 import { LinkedInCreativeService } from './creatives.js';
 import { LinkedInMediaService, LINKEDIN_MEDIA_WRITES } from './media.js';
 import { LinkedInManagementService } from './management.js';
+import { LinkedInSponsoredService } from './sponsored.js';
+import { LINKEDIN_SPONSORED_WRITES } from './sponsored-tools.js';
 
 interface Plan extends Omit<WritePreview, 'serverValidated'> { execute: () => Promise<string[] | WriteResult> }
 const FIELDS = { spend: 'costInLocalCurrency', impressions: 'impressions', clicks: 'clicks', conversions: 'externalWebsiteConversions', conversion_value: 'conversionValueInLocalCurrency' } as const;
@@ -31,7 +33,8 @@ export class LinkedInAdsProvider implements AdProvider {
   readonly creatives: LinkedInCreativeService;
   readonly management: LinkedInManagementService;
   readonly media: LinkedInMediaService;
-  constructor(private readonly client: LinkedInAdsClient, media?: MediaResolver) { this.creatives = new LinkedInCreativeService(client, this, media); this.management = new LinkedInManagementService(client, this); this.media = new LinkedInMediaService(client, this, media); }
+  readonly sponsored: LinkedInSponsoredService;
+  constructor(private readonly client: LinkedInAdsClient, media?: MediaResolver) { this.creatives = new LinkedInCreativeService(client, this, media); this.management = new LinkedInManagementService(client, this); this.media = new LinkedInMediaService(client, this, media); this.sponsored = new LinkedInSponsoredService(client, this); }
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions { return { pauseCampaign: (accountId, campaignId) => ({ tool: 'linkedin_set_campaign_status', input: { account_id: accountId, campaign_id: campaignId, status: 'PAUSED' } }) }; }
   private async search<T extends { id: number }>(path: string, schema: z.ZodType<T>, search?: RestliValue): Promise<T[]> {
@@ -122,6 +125,7 @@ export class LinkedInAdsProvider implements AdProvider {
   }
   async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> { const result = await (await this.plan(op, guard)).execute(); return Array.isArray(result) ? { applied: true, resourceIds: result } : result; }
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<Plan> {
+    if (LINKEDIN_SPONSORED_WRITES.has(op.tool)) return this.sponsored.plan(op, guard);
     if (LINKEDIN_MEDIA_WRITES.has(op.tool)) return this.media.plan(op);
     if (/^linkedin_(?:create_campaign_group|update_(?:campaign_group|campaign|targeting)|set_(?:campaign_group_status|campaign_group_budget|bid)|delete_(?:campaign_group|campaign))$/.test(op.tool)) return this.management.plan(op, guard);
     if (/^linkedin_(?:create_text_ad|update_(?:text_ad|image)|rename_creative|set_creative_status|delete_creative|upload_image)$/.test(op.tool)) return this.creatives.plan(op, guard);

@@ -1,8 +1,10 @@
 import { AdportError } from '@adport/core';
 import { z } from 'zod';
+import { linkedinErrorDetails } from './native-errors.js';
 
 export const LINKEDIN_API_BASE = 'https://api.linkedin.com/rest/';
 export const LINKEDIN_API_VERSION = '202608';
+export const LINKEDIN_CREATIVE_METADATA_VERSION = '202610';
 export const LINKEDIN_TOKEN_URL = 'https://www.linkedin.com/oauth/v2/accessToken';
 export interface LinkedInTokens {
   accessToken: string;
@@ -72,12 +74,30 @@ export class LinkedInAdsClient {
     const response = await this.request(path, 'POST', params, { patch }, true);
     if (response.status !== 204) throw new AdportError('PROVIDER_ERROR', 'linkedin: partial update did not return 204; inspect the account before retrying');
   }
-  async createCreative(path: string, body: unknown): Promise<string> {
-    const response = await this.request(path, 'POST', {}, body), raw = response.headers.get('x-restli-id');
+  async createCreative(path: string, body: unknown, params: Record<string, RestliValue> = {}): Promise<string> {
+    const response = await this.request(path, 'POST', params, body), raw = response.headers.get('x-restli-id');
     let id: string | undefined;
     try { id = raw ? decodeURIComponent(raw) : undefined; } catch { /* Invalid receipt remains a provider error. */ }
     if (response.status !== 201 || !id || !/^urn:li:sponsoredCreative:[1-9]\d*$/.test(id)) throw new AdportError('PROVIDER_ERROR', 'linkedin: creative create did not return 201 and a valid sponsoredCreative URN; inspect the account before retrying');
     return id;
+  }
+  async creativeMetadata<T>(path: string, schema: z.ZodType<T>): Promise<T> {
+    // Metadata exists only on single-creative GETs from 202610. Do not project it
+    // on the older finder schema or change unrelated mutation API versions.
+    const response = await this.request(path, 'GET', { fields: 'id,account,campaign,name,intendedStatus,content,metadata' }, undefined, false, true, LINKEDIN_CREATIVE_METADATA_VERSION);
+    const parsed = schema.safeParse(await response.json());
+    if (!parsed.success) throw new AdportError('PROVIDER_ERROR', 'linkedin: malformed creative metadata response');
+    return parsed.data;
+  }
+  async creativeMediaType(url: string): Promise<'image' | 'video' | undefined> {
+    const target = new URL(url);
+    if (target.protocol !== 'https:' || target.username || target.password || !(target.hostname === 'licdn.com' || target.hostname.endsWith('.licdn.com'))) return undefined;
+    // Metadata's assetURL does not declare whether a video ad's primary visual
+    // is its video or thumbnail. Check MIME without forwarding OAuth credentials.
+    const response = await this.fetchImpl(target.href, { method: 'HEAD', redirect: 'error', signal: AbortSignal.timeout(10_000) });
+    if (!response.ok) return undefined;
+    const mime = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
+    return ['image/jpeg','image/png','image/webp','image/gif','image/avif'].includes(mime ?? '') ? 'image' : ['video/mp4','video/webm','video/quicktime'].includes(mime ?? '') ? 'video' : undefined;
   }
   async action<T>(path: string, action: string, body: unknown, schema: z.ZodType<T>): Promise<T> {
     const response = await this.request(path, 'POST', { action }, body), parsed = schema.safeParse(await response.json());
@@ -114,23 +134,24 @@ export class LinkedInAdsClient {
     const response = await this.request('videos', 'POST', { action: 'finalizeUpload' }, body);
     if (response.status !== 200) throw new AdportError('PROVIDER_ERROR', 'linkedin: video finalization was not acknowledged');
   }
-  private async request(path: string, method: 'GET' | 'POST' | 'DELETE', params: Record<string, RestliValue>, body?: unknown, partial = false, retry = true): Promise<Response> {
+  private async request(path: string, method: 'GET' | 'POST' | 'DELETE', params: Record<string, RestliValue>, body?: unknown, partial = false, retry = true, version: string = LINKEDIN_API_VERSION): Promise<Response> {
     if (!/^[a-zA-Z]+(?:\/(?:[a-zA-Z0-9]+|urn%3Ali%3A[a-zA-Z]+%3A[a-zA-Z0-9_-]+))*$/.test(path)) throw new AdportError('INVALID_INPUT', 'linkedin: invalid API resource path');
     const query = Object.entries(params).map(([key, value]) => `${encodeURIComponent(key)}=${key === 'fields' && typeof value === 'string' ? value.split(',').map(restli).join(',') : restli(value)}`).join('&');
     const url = new URL(path, LINKEDIN_API_BASE); url.search = query;
     const token = await this.accessToken();
     const response = await this.fetchImpl(url.href, {
-      method, headers: { authorization: `Bearer ${token}`, 'Linkedin-Version': LINKEDIN_API_VERSION, 'X-Restli-Protocol-Version': '2.0.0',
+      method, headers: { authorization: `Bearer ${token}`, 'Linkedin-Version': version, 'X-Restli-Protocol-Version': '2.0.0',
         ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...(partial ? { 'X-RestLi-Method': 'PARTIAL_UPDATE' } : method === 'DELETE' ? { 'X-RestLi-Method': 'DELETE' } : params.q ? { 'X-RestLi-Method': 'FINDER' } : {}) },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}), redirect: 'error', signal: AbortSignal.timeout(30_000),
     });
     if (response.status === 401 && method === 'GET' && retry && this.canRefresh()) {
       if (this.tokens.accessToken === token) this.tokens.expiresAt = 0;
-      return this.request(path, method, params, body, partial, false);
+      return this.request(path, method, params, body, partial, false, version);
     }
     if (!response.ok) {
       const advice = response.status === 403 ? ' Check Advertising API approval, r_ads_reporting/rw_ads scopes and account roles; reauthorization alone may not help.' : response.status === 401 ? ' Reauthorize your own LinkedIn app; a non-refreshable token must be replaced.' : '';
-      throw new AdportError('PROVIDER_ERROR', `linkedin: HTTP ${response.status}.${advice}`);
+      const details = await linkedinErrorDetails(response, [token, this.tokens.refreshToken, this.credentials.clientSecret]);
+      throw new AdportError('PROVIDER_ERROR', `linkedin: HTTP ${response.status}${details.native_code ? ` [${details.native_code}]` : ''}.${advice}`, details);
     }
     return response;
   }
