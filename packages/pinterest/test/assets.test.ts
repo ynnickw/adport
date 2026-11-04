@@ -70,11 +70,12 @@ describe('Pinterest original assets without dashboard access', () => {
   it('PATCHes only supplied board copy, preserves visibility, and accepts explicit description clearing', async () => {
     const { provider, calls } = fixture(call => call.url.pathname === `/v5/boards/${B}` ? { ...emptyBoard, ...(call.init.method === 'PATCH' ? body(call) : {}) } : undefined);
     const current = await provider.assets.getBoard(A, B);
-    const operation = op('pinterest_update_board', { board_id: B, expected_snapshot_hash: current.snapshot_hash, description: null }, 'update');
+    const operation = op('pinterest_update_board', { board_id: B, expected_snapshot_hash: current.snapshot_hash, name: board.name, description: null }, 'update');
     const preview = await provider.previewWrite(operation, guard); expect(preview.serverValidated).toBe(false); expect(writes(calls)).toEqual([]);
+    expect(preview.fieldChanges).toEqual([{ field: 'Description', before: 'Original board copy', after: '(cleared)' }]);
     expect((await provider.applyWrite(operation, guard)).resourceIds).toEqual([B]);
     expect(writes(calls)).toHaveLength(1); expect(writes(calls)[0]!.url.pathname).toBe(`/v5/boards/${B}`); expect(writes(calls)[0]!.url.searchParams.get('ad_account_id')).toBe(A);
-    expect(writes(calls)[0]!.init.method).toBe('PATCH'); expect(body(writes(calls)[0]!)).toEqual({ description: null });
+    expect(writes(calls)[0]!.init.method).toBe('PATCH'); expect(body(writes(calls)[0]!)).toEqual({ name: 'QA', description: null });
   });
   it.each([{ name: 'Changed' }, { description: 'Changed' }, { privacy: 'PUBLIC' }, { owner: { username: 'other' } }, { is_ads_only: true }])('rejects changed board copy/visibility/ownership before any write %#', async override => {
     let changed = false;

@@ -147,11 +147,12 @@ export class PinterestAssetService {
       const patch = updateBoard.parse(input);
       if (patch.name !== undefined && (board.is_ads_only === true || board.privacy === 'PROTECTED')) throw new AdportError('INVALID_INPUT', 'pinterest: ad-only board names are assigned by Pinterest; edit only the description');
       const fields = { ...(patch.name !== undefined ? { name: patch.name } : {}), ...(patch.description !== undefined ? { description: patch.description } : {}) };
-      return plan(`Edit Pinterest board “${board.name}”`, [`Board ${board.id}; visibility ${board.privacy} is preserved. Pins, sections and delivery are unchanged.`, ...Object.entries(fields).map(([key, value]) => `${key}: ${JSON.stringify(board[key] ?? null)} → ${JSON.stringify(value)}`), 'Pinterest provides no documented conditional-write version; the current snapshot is rechecked on apply, without claiming an atomic provider compare-and-swap.'], async () => {
+      const edit = plan(`Edit Pinterest board “${board.name}”`, [`Board ${board.id}; visibility ${board.privacy} is preserved. Pins, sections and delivery are unchanged.`, ...Object.entries(fields).map(([key, value]) => `${key}: ${JSON.stringify(board[key] ?? null)} → ${JSON.stringify(value)}`), 'Pinterest provides no documented conditional-write version; the current snapshot is rechecked on apply, without claiming an atomic provider compare-and-swap.'], async () => {
         const receipt = await this.client.mutate(`boards/${board.id}`, 'PATCH', fields, boardSchema, params);
         if (receipt.id !== board.id || receipt.privacy !== board.privacy || receipt.owner.username.toLowerCase() !== board.owner.username.toLowerCase() || receipt.is_ads_only !== board.is_ads_only || Object.entries(fields).some(([key, value]) => (receipt[key] ?? null) !== value) || patch.name === undefined && receipt.name !== board.name || patch.description === undefined && (receipt.description ?? null) !== (board.description ?? null)) throw new AdportError('PROVIDER_ERROR', 'pinterest: board update receipt differs from approved copy or preserved visibility/ownership; reconcile before retrying', { resource_ids: [board.id] });
         return [board.id];
       });
+      return { ...edit, fieldChanges: Object.entries(fields).filter(([key, value]) => (board[key] ?? null) !== value).map(([key, value]) => ({ field: key === 'name' ? 'Name' : 'Description', before: String(board[key] ?? '(not set)'), after: String(value ?? '(cleared)') })) };
     }
     if (op.tool === 'pinterest_upload_video') {
       const input = source.parse(op.payload); await this.nativeOwner(account);
