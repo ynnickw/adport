@@ -60,6 +60,7 @@ describe('all-provider shared tool surface', () => {
   it('registers native read/create/update/delete tools once for both CLI and MCP adapters', async () => {
     expect(names).toEqual(expect.arrayContaining([
       'google_gaql', 'google_api_create', 'google_api_update', 'google_api_remove',
+      'linkedin_media_context', 'linkedin_videos', 'linkedin_get_library_video', 'linkedin_get_document', 'linkedin_upload_video', 'linkedin_upload_document', 'linkedin_update_video',
       'meta_api_read', 'meta_api_create', 'meta_api_update', 'meta_api_delete',
       'tiktok_api_read', 'tiktok_api_create', 'tiktok_api_update', 'tiktok_api_delete',
       'apple_api_read', 'apple_api_create', 'apple_api_update', 'apple_api_delete',

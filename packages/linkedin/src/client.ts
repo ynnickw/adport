@@ -94,6 +94,24 @@ export class LinkedInAdsClient {
     const response = await this.fetchImpl(target.href, { method: 'PUT', headers: { authorization: `Bearer ${await this.accessToken()}`, 'content-type': 'application/octet-stream' }, body: bytes, redirect: 'error', signal: AbortSignal.timeout(60_000) });
     if (!response.ok) throw new AdportError('PROVIDER_ERROR', `linkedin: image upload HTTP ${response.status}; inspect its initialized image before retrying`);
   }
+  validateMediaUpload(url: string, kind: 'video' | 'document', resource: string): URL {
+    const target = new URL(url), key = resource.split(':').at(-1)!;
+    const path = kind === 'video' ? `/dms-uploads/${key}/uploadedVideo` : undefined;
+    if (target.origin !== 'https://www.linkedin.com' || target.username || target.password || target.hash || (kind === 'video' ? target.pathname !== path : !/^\/dms-uploads\/[A-Za-z0-9_-]+\/ads-uploadedDocument\/0$/.test(target.pathname))) throw new AdportError('PROVIDER_ERROR', 'linkedin: unrecognized native media upload destination');
+    return target;
+  }
+  async uploadMedia(url: string, bytes: Uint8Array<ArrayBuffer>, kind: 'video' | 'document', resource: string): Promise<string> {
+    const target = this.validateMediaUpload(url, kind, resource);
+    const response = await this.fetchImpl(target.href, { method: 'PUT', headers: { 'content-type': 'application/octet-stream', ...(kind === 'document' ? { authorization: `Bearer ${await this.accessToken()}` } : {}) }, body: bytes, redirect: 'error', signal: AbortSignal.timeout(90_000) });
+    if (response.status !== (kind === 'video' ? 200 : 201)) throw new AdportError('PROVIDER_ERROR', 'linkedin: native media transfer was not acknowledged');
+    const etag = response.headers.get('etag')?.replace(/^"(.*)"$/, '$1');
+    if (kind === 'video' && (!etag || etag.length > 8192 || /[\r\n]/.test(etag))) throw new AdportError('PROVIDER_ERROR', 'linkedin: video part ETag was not acknowledged');
+    return etag ?? '';
+  }
+  async finalizeVideo(body: unknown): Promise<void> {
+    const response = await this.request('videos', 'POST', { action: 'finalizeUpload' }, body);
+    if (response.status !== 200) throw new AdportError('PROVIDER_ERROR', 'linkedin: video finalization was not acknowledged');
+  }
   private async request(path: string, method: 'GET' | 'POST' | 'DELETE', params: Record<string, RestliValue>, body?: unknown, partial = false, retry = true): Promise<Response> {
     if (!/^[a-zA-Z]+(?:\/(?:[a-zA-Z0-9]+|urn%3Ali%3A[a-zA-Z]+%3A[a-zA-Z0-9_-]+))*$/.test(path)) throw new AdportError('INVALID_INPUT', 'linkedin: invalid API resource path');
     const query = Object.entries(params).map(([key, value]) => `${encodeURIComponent(key)}=${key === 'fields' && typeof value === 'string' ? value.split(',').map(restli).join(',') : restli(value)}`).join('&');

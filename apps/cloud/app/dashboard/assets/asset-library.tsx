@@ -47,7 +47,7 @@ export function AssetLibrary({ projectId, projectName, initialAssets, truncated:
   }
   return <div className="stack">
     {canUpload ? <form onSubmit={upload} className={`card ${styles.upload}`} aria-busy={Boolean(progress)}>
-      <label htmlFor={inputId}>Choose an image, video or audio file <span className="muted">· up to {maxMegabytes} MB</span></label>
+      <label htmlFor={inputId}>Choose an image, video, audio or PDF file <span className="muted">· up to {maxMegabytes} MB</span></label>
       <div className={styles.controls}><Input ref={fileInput} id={inputId} type="file" accept={acceptedTypes.join(',')} required disabled={Boolean(progress)} /><Button className="button" type="submit" disabled={Boolean(progress)}>{progress || `Upload to ${projectName}`}</Button></div>
       <p className="inline-note">Files stay private to this project. Publishing an ad requires a separate preview and approval.</p>
     </form> : <p className="notice">Your role or plan allows viewing this library. Editing access is required to upload files.</p>}
@@ -55,10 +55,10 @@ export function AssetLibrary({ projectId, projectName, initialAssets, truncated:
     {assets.length ? <div className={styles.grid}>{assets.map(asset => <article className={`card ${styles.asset}`} key={asset.id}>
       <div className={styles.preview}>{asset.preview_url ? asset.content_type.startsWith('image/') ? <img src={asset.preview_url} alt={asset.name} loading="lazy" referrerPolicy="no-referrer" />
         : asset.content_type.startsWith('video/') ? <video src={asset.preview_url} controls preload="none" playsInline aria-label={asset.name} />
-          : <audio src={asset.preview_url} controls preload="none" aria-label={asset.name} /> : <span>Preview unavailable</span>}</div>
+          : asset.content_type.startsWith('audio/') ? <audio src={asset.preview_url} controls preload="none" aria-label={asset.name} /> : <a href={asset.preview_url} target="_blank" rel="noreferrer">Download {asset.name}</a> : <span>Preview unavailable</span>}</div>
       <div className={styles.details}><h2>{asset.name}</h2><p className="inline-note">{asset.content_type} · {asset.byte_length < 1024 * 1024 ? `${Math.ceil(asset.byte_length / 1024)} KB` : `${(asset.byte_length / 1024 / 1024).toFixed(1)} MB`}{asset.width && asset.height ? ` · ${asset.width} × ${asset.height}` : ''}</p>
         <details><summary>File reference</summary><p>Media ID <code>{asset.id}</code></p><p>SHA-256 <code>{asset.sha256}</code></p></details></div>
-    </article>)}</div> : <section className="card"><div className="card-body"><h2>Your creative library is ready</h2><p className="subhead">Add your first image, video or audio file to use it with your assistant.</p></div></section>}
+    </article>)}</div> : <section className="card"><div className="card-body"><h2>Your creative library is ready</h2><p className="subhead">Add your first image, video, audio or PDF file to use it with your assistant.</p></div></section>}
     {truncated ? <p className="inline-note">Showing the first 100 files. Your assistant can page through the full library.</p> : null}
   </div>;
 }

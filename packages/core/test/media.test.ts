@@ -16,6 +16,13 @@ describe('checksum-bound media', () => {
     expect(() => verifyMedia(png, 'image.png', hash(png), { contentTypes: ['video/mp4'] })).toThrow('supported media');
     expect(() => verifyMedia(png, 'image.png', hash(png), { maxBytes: 2 })).toThrow('size limit');
   });
+  it('identifies PDF bytes independently of the filename and rejects a malformed header', () => {
+    const pdf = Buffer.from('%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n');
+    expect(verifyMedia(pdf, 'misleading.png', hash(pdf), { contentTypes: ['application/pdf'] })).toMatchObject({ contentType: 'application/pdf' });
+    expect(() => verifyMedia(pdf, 'document.pdf', hash(pdf), { contentTypes: ['image/png'] })).toThrow('supported media');
+    const invalid = Buffer.from('%PDF-9.9\n<html>not a PDF</html>');
+    expect(() => verifyMedia(invalid, 'document.pdf', hash(invalid))).toThrow('supported media');
+  });
 
   it('reopens and rechecks bytes for every invocation, rejecting file replacement and symlinks', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'adport-media-'));

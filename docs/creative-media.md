@@ -4,7 +4,7 @@ Advertising writes use the same tool registry and two-step policy gate in the CL
 
 ## Project media library
 
-Agents can upload, download, inspect, rename and delete private project media through MCP or the tool REST API without opening a dashboard. The same project authorization and two-step policy gate apply to media mutations. A hosted server cannot read a file on the agent's computer or in its container; the agent transfers the bytes instead.
+Agents can upload, download, inspect, rename and delete private project media through MCP or the tool REST API without opening a dashboard. Images, video, audio and PDF sources are supported. The same project authorization and two-step policy gate apply to media mutations. A hosted server cannot read a file on the agent's computer or in its container; the agent transfers the bytes instead.
 
 For files up to 1 MiB, preview and apply `media_upload` with `name`, `content_type`, `byte_length`, `sha256` and canonical `data_base64`. The applied result includes a ready `result.details.media_id` and SHA-256 for provider uploads. For files up to 50 MiB:
 
@@ -39,7 +39,7 @@ Call `meta_upload_image`, `meta_upload_video`, `tiktok_upload_image`, `tiktok_up
 
 Local CLI/stdio uploads accept an absolute `file_path` and `expected_sha256` instead of `media_id`. Hosted calls reject local file paths. Files are read through one bounded file handle, symbolic links are rejected, and changing file bytes invalidates the approval.
 
-The library supports images, video and audio previews. Previews expire after 15 minutes. Use the native widget’s **Refresh previews** control or call `media_list` again. The control reuses the same read tool and preserves its project, account, filters and page cursor. Verified hosted files show READY with readable file sizes/dimensions; exact checksums remain in the structured asset data for provider uploads. Abandoned uploads are cleared on subsequent uploads after their signed grants expire. Project deletion queues private media removal after three hours, and the authenticated hourly cleanup job retries failures. The delay prevents an outstanding two-hour upload grant from recreating a file after cleanup.
+The library supports images, video and audio previews. PDF sources return download links through `media_get`; they are not played as audio or embedded as executable content. Previews expire after 15 minutes. Use the native widget’s **Refresh previews** control or call `media_list` again. The control reuses the same read tool and preserves its project, account, filters and page cursor. Verified hosted files show READY with readable file sizes/dimensions; exact checksums remain in the structured asset data for provider uploads. Abandoned uploads are cleared on subsequent uploads after their signed grants expire. Project deletion queues private media removal after three hours, and the authenticated hourly cleanup job retries failures. The delay prevents an outstanding two-hour upload grant from recreating a file after cleanup.
 
 ## Creative tools
 

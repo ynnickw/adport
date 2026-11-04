@@ -111,6 +111,19 @@ describeDatabase('project media signed-upload boundary', () => {
     return call(rt, tool, { ...input, pending_operation_id: preview.pending_operation_id });
   }
 
+  it('stores and transfers a checksum-bound PDF without rendering it as audio', async () => {
+    const rt = await runtime(), pdf = Buffer.from('%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n'), checksum = createHash('sha256').update(pdf).digest('hex');
+    const input = { name: 'private-document.pdf', content_type: 'application/pdf', byte_length: pdf.length, sha256: checksum, data_base64: pdf.toString('base64') };
+    const result = await apply(rt, 'media_upload', input), media_id = result.result.resourceIds[0];
+    const found = await call(rt, 'media_get', { media_id });
+    expect(found.asset).toMatchObject({ content_type: 'application/pdf', sha256: checksum, status: 'READY' });
+    expect(Buffer.from(await (await fetch(found.asset.preview_url)).arrayBuffer())).toEqual(pdf);
+    expect(Buffer.from((await owner.read({ media_id, expected_sha256: checksum }, { contentTypes: ['application/pdf'] })).bytes).equals(pdf)).toBe(true);
+    const gallery = await call(rt, 'media_list', { limit: 100 });
+    expect(gallery.creatives.find((v: any) => v.id === media_id).media).toEqual([]);
+    await expect(other.read({ media_id, expected_sha256: checksum })).rejects.toThrow('selected project');
+  });
+
   it('uploads, downloads, renames and deletes entirely through guarded agent tools with real private Storage', async () => {
     const rt = await runtime(), second = await runtime(1), readonly = await runtime(0, ['tools:read']);
     const input = { name: 'agent-inline.png', content_type: 'image/png', byte_length: bytes.byteLength, sha256, data_base64: bytes.toString('base64') };

@@ -3,6 +3,7 @@ import { AdportError, resolveDateRange, type Account, type AdProvider, type Medi
 import { LinkedInAdsClient, type RestliValue } from './client.js';
 import { accountSchema, campaignSchema, createCampaignSchema, groupSchema, linkedinId, NON_DISCRIMINATION_NOTICE, NON_POLITICAL_CONSENT, reportRowSchema, setBudgetSchema, setStatusSchema } from './schemas.js';
 import { LinkedInCreativeService } from './creatives.js';
+import { LinkedInMediaService, LINKEDIN_MEDIA_WRITES } from './media.js';
 import { LinkedInManagementService } from './management.js';
 
 interface Plan extends Omit<WritePreview, 'serverValidated'> { execute: () => Promise<string[] | WriteResult> }
@@ -29,7 +30,8 @@ export class LinkedInAdsProvider implements AdProvider {
   readonly id = 'linkedin';
   readonly creatives: LinkedInCreativeService;
   readonly management: LinkedInManagementService;
-  constructor(private readonly client: LinkedInAdsClient, media?: MediaResolver) { this.creatives = new LinkedInCreativeService(client, this, media); this.management = new LinkedInManagementService(client, this); }
+  readonly media: LinkedInMediaService;
+  constructor(private readonly client: LinkedInAdsClient, media?: MediaResolver) { this.creatives = new LinkedInCreativeService(client, this, media); this.management = new LinkedInManagementService(client, this); this.media = new LinkedInMediaService(client, this, media); }
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions { return { pauseCampaign: (accountId, campaignId) => ({ tool: 'linkedin_set_campaign_status', input: { account_id: accountId, campaign_id: campaignId, status: 'PAUSED' } }) }; }
   private async search<T extends { id: number }>(path: string, schema: z.ZodType<T>, search?: RestliValue): Promise<T[]> {
@@ -120,6 +122,7 @@ export class LinkedInAdsProvider implements AdProvider {
   }
   async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> { const result = await (await this.plan(op, guard)).execute(); return Array.isArray(result) ? { applied: true, resourceIds: result } : result; }
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<Plan> {
+    if (LINKEDIN_MEDIA_WRITES.has(op.tool)) return this.media.plan(op);
     if (/^linkedin_(?:create_campaign_group|update_(?:campaign_group|campaign|targeting)|set_(?:campaign_group_status|campaign_group_budget|bid)|delete_(?:campaign_group|campaign))$/.test(op.tool)) return this.management.plan(op, guard);
     if (/^linkedin_(?:create_text_ad|update_(?:text_ad|image)|rename_creative|set_creative_status|delete_creative|upload_image)$/.test(op.tool)) return this.creatives.plan(op, guard);
     const accountId = linkedinId.parse(op.accountId), base = `adAccounts/${accountId}/adCampaigns`;

@@ -8,7 +8,7 @@ import type { WriteOperation, WritePreview, WriteResult } from './provider.js';
 
 export const MAX_PROJECT_MEDIA_BYTES = 50 * 1024 * 1024;
 export const MAX_INLINE_MEDIA_BYTES = 1024 * 1024;
-export const PROJECT_MEDIA_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/gif', 'video/mp4', 'video/quicktime', 'video/webm', 'audio/mpeg', 'audio/wav', 'audio/ogg'] as const;
+export const PROJECT_MEDIA_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/gif', 'video/mp4', 'video/quicktime', 'video/webm', 'audio/mpeg', 'audio/wav', 'audio/ogg', 'application/pdf'] as const;
 export const mediaUploadMetadataSchema = z.object({
   name: z.string().trim().min(1).max(240), content_type: z.enum(PROJECT_MEDIA_TYPES),
   byte_length: z.number().int().positive().max(MAX_PROJECT_MEDIA_BYTES), sha256: z.string().regex(/^[a-f0-9]{64}$/),
@@ -54,6 +54,7 @@ export interface ManagedMediaLibrary extends MediaLibrary {
 
 export function mediaContentType(bytes: Uint8Array): string | undefined {
   const b = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (/^%PDF-(?:1\.[0-7]|2\.0)[\r\n]/.test(b.subarray(0, 10).toString('ascii'))) return 'application/pdf';
   if (b.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return 'image/png';
   if (b[0] === 255 && b[1] === 216 && b[2] === 255) return 'image/jpeg';
   if (b.subarray(0, 4).toString() === 'RIFF' && b.subarray(8, 12).toString() === 'WEBP') return 'image/webp';
