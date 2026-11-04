@@ -28,10 +28,10 @@ export function AssetPreview({ asset, projectId, expanded = false, onRefresh }: 
     } catch { setFailed(true); } finally { setBusy(false); }
   }
   return <div ref={ref} className={expanded ? styles.expandedPreview : styles.preview}>
-    {!failed && visible && source && image ? <img src={expanded ? source : `/api/media/preview?project_id=${encodeURIComponent(projectId)}&media_id=${asset.id}`} alt={asset.name} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} />
+    {!failed && visible && (source || !expanded) && image ? <img src={expanded ? source : `/api/media/preview?project_id=${encodeURIComponent(projectId)}&media_id=${asset.id}`} alt={asset.name} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} />
       : !failed && visible && source && video ? <><video key={expanded ? 'player' : 'thumbnail'} src={expanded ? source : `${source}#t=0.1`} controls={expanded} muted={!expanded} preload="metadata" playsInline aria-label={asset.name} onError={() => setFailed(true)} onLoadedData={event => { if (!expanded && event.currentTarget.currentTime === 0 && event.currentTarget.duration > 0.1) event.currentTarget.currentTime = 0.1; }} />{!expanded ? <span className={styles.play} aria-hidden="true">▶</span> : null}</>
         : !failed && visible && source && audio && expanded ? <audio src={source} controls preload="metadata" aria-label={asset.name} onError={() => setFailed(true)} />
-          : <div className={styles.filePlaceholder}><span aria-hidden="true">{video ? '▷' : audio ? '♫' : image ? '▧' : 'PDF'}</span><small>{failed ? 'Preview unavailable' : video ? 'Video' : audio ? 'Audio' : image ? 'Image' : 'Document'}</small>{failed && expanded ? <button type="button" className="button secondary" disabled={busy} onClick={() => void retry()}>{busy ? 'Loading…' : 'Retry preview'}</button> : null}</div>}
+          : <div className={styles.filePlaceholder}><span aria-hidden="true">{video ? '▷' : audio ? '♫' : image ? '▧' : 'PDF'}</span><small>{failed ? 'Preview unavailable' : video ? 'Video' : audio ? 'Audio' : image ? 'Image' : 'Document'}</small>{(failed || !source) && expanded && (image || video || audio) ? <button type="button" className="button secondary" disabled={busy} onClick={() => void retry()}>{busy ? 'Loading…' : 'Retry preview'}</button> : null}</div>}
     {!expanded ? <span className={styles.kindBadge}>{video ? 'Video' : audio ? 'Audio' : image ? 'Image' : 'PDF'}</span> : null}
   </div>;
 }

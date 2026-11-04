@@ -120,6 +120,18 @@ describe('simple agent-first creative library', () => {
     expect(mocks.action).toHaveBeenCalledExactlyOnceWith(projectId, 'media_get', { media_id: asset.id }); expect(mocks.change).toHaveBeenCalledTimes(1); expect(fetch).not.toHaveBeenCalled();
   });
 
+  it('hydrates only a newly uploaded file when the finalization receipt omits preview URLs', async () => {
+    const uploaded = source(8, { name: 'New.mp4', content_type: 'video/mp4', preview_url: undefined });
+    const hydrated = { ...uploaded, preview_url: 'https://qa.supabase.co/new-video' };
+    mocks.action.mockResolvedValue({ asset: hydrated });
+    mocks.upload.mockImplementation(async input => { input.ready(uploaded); return uploaded.id; });
+    render(<AssetLibrary {...props} />); const original = screen.getByAltText('Launch.png');
+    fireEvent.drop(screen.getByRole('region', { name: 'Creative files' }), { dataTransfer: { types: ['Files'], files: [new File(['data'], 'New.mp4', { type: 'video/mp4' })] } });
+    await waitFor(() => expect(document.querySelector('video')?.src).toBe(hydrated.preview_url + '#t=0.1'));
+    expect(mocks.action).toHaveBeenCalledExactlyOnceWith(projectId, 'media_get', { media_id: uploaded.id });
+    expect(fetch).not.toHaveBeenCalled(); expect(screen.getByAltText('Launch.png')).toBe(original);
+  });
+
   it('preserves read-only browsing without upload, labeling, selection or mutation controls', () => {
     render(<AssetLibrary {...props} canUpload={false} />);
     expect(screen.queryByRole('button', { name: 'Upload files' })).toBeNull(); expect(screen.queryByRole('button', { name: 'Actions for Launch.png' })).toBeNull();

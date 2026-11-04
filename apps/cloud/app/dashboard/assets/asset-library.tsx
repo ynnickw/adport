@@ -7,7 +7,7 @@ import { AssetCard } from './asset-card';
 import { AssetPreview } from './asset-preview';
 import { AssetRemoval } from './asset-removal';
 import { LibraryDialog } from './library-dialog';
-import { formatBytes, responseJson, uploadProjectFile } from './media-client';
+import { formatBytes, mediaAction, responseJson, uploadProjectFile } from './media-client';
 import { useLibraryFiles } from './use-library-files';
 import styles from './assets.module.css';
 
@@ -28,12 +28,18 @@ export function AssetLibrary({ projectId, projectName, initialAssets, truncated,
     files.update(asset);
     setPreview(current => current?.id === asset.id ? { ...current, ...asset, preview_url: asset.preview_url ?? current.preview_url } : current);
   }, [files.update]);
+  const uploadedAsset = useCallback((asset: MediaAsset) => {
+    files.update(asset, true);
+    if (!asset.preview_url) void mediaAction<{ asset: MediaAsset }>(projectId, 'media_get', { media_id: asset.id }).then(({ asset: fresh }) => {
+      if (fresh.id === asset.id && fresh.sha256 === asset.sha256 && fresh.status === 'READY') updateAsset(fresh);
+    }).catch(() => { /* The source is ready; its full preview can be retried independently. */ });
+  }, [files.update, projectId, updateAsset]);
   const removeAsset = useCallback((asset: MediaAsset) => setRemoving([asset]), []);
   function updateJob(jobId: string, values: Partial<UploadJob>) { setUploadJobs(current => current.map(job => job.id === jobId ? { ...job, ...values } : job)); }
   function drain() {
     while (workers.current < 2 && pendingFiles.current.length) {
       const next = pendingFiles.current.shift()!; workers.current++;
-      void uploadProjectFile({ projectId, storageOrigin, file: next.file, maxBytes, acceptedTypes, ready: asset => files.update(asset, true), progress: (state, percent, mediaId) => updateJob(next.job.id, { state, percent, ...(mediaId ? { mediaId } : {}) }) })
+      void uploadProjectFile({ projectId, storageOrigin, file: next.file, maxBytes, acceptedTypes, ready: uploadedAsset, progress: (state, percent, mediaId) => updateJob(next.job.id, { state, percent, ...(mediaId ? { mediaId } : {}) }) })
         .then(mediaId => updateJob(next.job.id, { state: 'Ready', percent: 100, mediaId }))
         .catch(reason => updateJob(next.job.id, { state: 'Needs review', error: reason instanceof Error ? reason.message : 'This file could not be uploaded.' }))
         .finally(() => { workers.current--; drain(); });
@@ -51,7 +57,7 @@ export function AssetLibrary({ projectId, projectName, initialAssets, truncated,
     try {
       const result = await responseJson<{ asset: MediaAsset }>(await fetch(`/api/media?project_id=${encodeURIComponent(projectId)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ media_id: job.mediaId }), signal: AbortSignal.timeout(120_000) }));
       if (result.asset?.id !== job.mediaId || result.asset.status !== 'READY') throw new Error('The file is not ready.');
-      files.update(result.asset, true); updateJob(job.id, { state: 'Ready', percent: 100 });
+      uploadedAsset(result.asset); updateJob(job.id, { state: 'Ready', percent: 100 });
     } catch (reason) { updateJob(job.id, { state: 'Needs review', error: reason instanceof Error ? reason.message : 'This upload is not ready.' }); }
     finally { verifying.current.delete(job.id); }
   }
