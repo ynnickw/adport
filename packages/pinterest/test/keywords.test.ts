@@ -98,8 +98,15 @@ describe('Pinterest keyword ownership, native lifecycle and planning', () => {
   });
   it('preserves native frequency ranges and missing metrics rather than inventing volumes', async () => {
     const { provider, calls } = fixture(call => call.url.pathname.endsWith('/keywords/metrics') ? { data: [{ keyword: 'qa one', metrics: { keyword_query_volume: '5M+' } }] } : undefined);
-    const result = await provider.keywords.metrics({ account_id: A, country_code: 'DE', keywords: ['qa one', 'qa two'] });
-    expect(Object.fromEntries(calls.at(-1)!.url.searchParams)).toEqual({ country_code: 'DE', keywords: 'qa one,qa two' }); expect(result.planning.rows).toEqual([{ keyword: 'qa one', volume: '5M+' }, { keyword: 'qa two', volume: null }]); expect(writes(calls)).toEqual([]);
+    const result = await provider.keywords.metrics({ account_id: A, country_code: 'US', keywords: ['qa one', 'qa two'] });
+    expect(Object.fromEntries(calls.at(-1)!.url.searchParams)).toEqual({ country_code: 'US', keywords: 'qa one,qa two' }); expect(result.planning.rows).toEqual([{ keyword: 'qa one', volume: '5M+' }, { keyword: 'qa two', volume: null }]); expect(writes(calls)).toEqual([]);
+  });
+  it('rejects unsupported native metrics markets without substituting a country or making a request', async () => {
+    const { provider, calls } = fixture();
+    const tool = pinterestTools(provider).find(value => value.name === 'pinterest_keyword_metrics')!;
+    expect(tool.input.safeParse({ account_id: A, country_code: 'DE', keywords: ['qa'] }).success).toBe(false);
+    await expect(provider.keywords.metrics({ account_id: A, country_code: 'DE', keywords: ['qa'] })).rejects.toThrow();
+    expect(calls).toEqual([]);
   });
   it('keeps real registry invocation behind protected-account and one-use policy gates', async () => {
     const { provider, calls } = fixture(call => call.init.method === 'POST' ? { keywords: [row], errors: [] } : undefined), context = await provider.keywords.context(A, parent);

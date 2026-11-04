@@ -58,7 +58,7 @@ Use `pinterest_keyword_context` to select an account, campaign or ad-group paren
 
 `pinterest_archive_keywords` matches the current parent and each keyword snapshot, then sends native `archived: true`. Pinterest describes this as effective deletion: archived keywords disappear from parent lists and metrics. A safe unarchive workflow cannot be established through that list, so this tool does not promise undo. Removing exclusions can broaden matching. Batch responses retain successfully returned IDs even when other items fail; never replay an uncertain creation or archive.
 
-`pinterest_keyword_metrics` reads country-wide native search-frequency ranges. Values such as `5M+` stay strings and missing entries remain unavailable; these are not account-performance counts or observed campaign results.
+`pinterest_keyword_metrics` reads country-wide native search-frequency ranges for `CA`, `GB`, `US`, `IE`, `AU` and `NZ`. Live verification found that the endpoint rejects other markets, including `DE`; the tool rejects unsupported countries without substituting a different market. Values such as `5M+` stay strings and missing entries remain unavailable; these are not account-performance counts or observed campaign results.
 
 ## Audiences and customer sources
 
