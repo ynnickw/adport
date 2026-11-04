@@ -56,16 +56,35 @@ export class SpotifyMeasurementService {
   private async rawCapi(scope: Scope, id: string) {
     const data = await this.client.get(`${this.base(scope)}/capi/${spotifyId.parse(id)}`, capiSchema);ensure(data.capi_connection_id === id, 'CAPI integration identity mismatch');return data;
   }
+  private datasetContainsResource(dataset: Dataset, kind: Receipt['kind'], id: string) {
+    return kind === 'pixel' ? dataset.pixel?.id === id : kind === 'capi' ? dataset.capi_integration?.capi_connection_id === id : false;
+  }
+  private verifyIntegrationBinding(dataset: Dataset, kind: 'pixel' | 'capi', id: string, observed: string | null | undefined) {
+    ensure(this.datasetContainsResource(dataset, kind, id) && (observed == null || observed === dataset.id), `${kind === 'pixel' ? 'Pixel' : 'CAPI'} dataset binding mismatch`);
+  }
   private async receiptNative(scope: Scope, proof: Receipt) {
     this.checkProof(scope, proof);
     const resource = proof.kind === 'pixel' ? await this.rawPixel(scope, proof.id) : proof.kind === 'capi' ? await this.rawCapi(scope, proof.id) : proof.kind === 'mobile_app' ? await this.rawMobile(scope, proof.id) : await this.rawDataset(scope, proof.id);
     const datasetId = proof.kind === 'dataset' ? proof.id : 'dataset_id' in resource && typeof resource.dataset_id === 'string' ? resource.dataset_id : undefined;
-    return { resource, datasetId };
+    let expectedDataset: Dataset | undefined, verifiedDatasetId = datasetId;
+    let parentVerificationError: { code: string; http_status?: number } | undefined;
+    // Null is missing evidence, not a conflicting edge. Inspect only the parent locked by the native creation receipt.
+    if (!datasetId && proof.dataset_id && ['pixel', 'capi'].includes(proof.kind)) {
+      try {
+        expectedDataset = await this.rawDataset(scope, proof.dataset_id);
+        if (this.datasetContainsResource(expectedDataset, proof.kind, proof.id)) verifiedDatasetId = expectedDataset.id;
+      } catch (error) {
+        if (!(error instanceof AdportError)) throw error;
+        const status = error.details && typeof error.details === 'object' && 'http_status' in error.details ? error.details.http_status : undefined;
+        parentVerificationError = { code: error.code, ...(typeof status === 'number' ? { http_status: status } : {}) };
+      }
+    }
+    return { resource, datasetId, verifiedDatasetId, expectedDataset, parentVerificationError };
   }
   private async createdNative(scope: Scope, proof: Receipt) {
-    const { resource, datasetId } = await this.receiptNative(scope, proof);
-    ensure(!proof.dataset_id || datasetId === proof.dataset_id, 'created resource dataset binding changed; reconcile the original IDs');
-    return { resource, datasetId };
+    const { resource, verifiedDatasetId } = await this.receiptNative(scope, proof);
+    ensure(!proof.dataset_id || verifiedDatasetId === proof.dataset_id, 'created resource dataset binding changed; reconcile the original IDs');
+    return { resource, datasetId: verifiedDatasetId };
   }
   private sharing(scope: Scope, row: { shared_ad_accounts?: Array<{ id: string; name?: string }> | null }) {
     return { shared_ad_accounts: row.shared_ad_accounts === null ? null : row.shared_ad_accounts?.filter(a => a.id === scope.account_id), other_shared_account_count: row.shared_ad_accounts ? row.shared_ad_accounts.filter(a => a.id !== scope.account_id).length : null };
@@ -138,11 +157,11 @@ export class SpotifyMeasurementService {
   async getDataset(input: { account_id: string; dataset_id: string; resource_receipt?: string }) { const proof = this.proof(input.account_id, input.resource_receipt), scope = await this.scope(input.account_id);return { ...scope, dataset: this.publicDataset(scope, await this.dataset(scope, input.dataset_id, proof)) }; }
   async getPixel(input: { account_id: string; dataset_id: string; resource_receipt?: string }) {
     const proof = this.proof(input.account_id, input.resource_receipt), scope = await this.scope(input.account_id), dataset = await this.dataset(scope, input.dataset_id, proof);ensure(dataset.pixel, 'dataset has no verified Pixel');
-    const pixel = await this.rawPixel(scope, dataset.pixel.id);ensure(pixel.dataset_id === dataset.id, 'Pixel dataset binding mismatch');return { ...scope, pixel: { ...pixel, configuration_hash: digest(scope, 'pixel', pixel) } };
+    const pixel = await this.rawPixel(scope, dataset.pixel.id);this.verifyIntegrationBinding(dataset, 'pixel', pixel.id, pixel.dataset_id);return { ...scope, pixel: { ...pixel, configuration_hash: digest(scope, 'pixel', pixel) }, dataset_binding: { observed_dataset_id: pixel.dataset_id ?? null, verified_dataset_id: dataset.id, verification_source: pixel.dataset_id ? 'resource' : 'dataset' } };
   }
   async getCapi(input: { account_id: string; dataset_id: string; resource_receipt?: string }) {
     const proof = this.proof(input.account_id, input.resource_receipt), scope = await this.scope(input.account_id), dataset = await this.dataset(scope, input.dataset_id, proof);ensure(dataset.capi_integration, 'dataset has no verified CAPI integration');
-    const integration = await this.rawCapi(scope, dataset.capi_integration.capi_connection_id);ensure(integration.dataset_id === dataset.id, 'CAPI dataset binding mismatch');return { ...scope, capi_integration: { ...integration, configuration_hash: digest(scope, 'capi', integration) } };
+    const integration = await this.rawCapi(scope, dataset.capi_integration.capi_connection_id);this.verifyIntegrationBinding(dataset, 'capi', integration.capi_connection_id, integration.dataset_id);return { ...scope, capi_integration: { ...integration, configuration_hash: digest(scope, 'capi', integration) }, dataset_binding: { observed_dataset_id: integration.dataset_id ?? null, verified_dataset_id: dataset.id, verification_source: integration.dataset_id ? 'resource' : 'dataset' } };
   }
   async getMobile(input: { account_id: string; mobile_app_id: string; resource_receipt?: string }) { const proof = this.proof(input.account_id, input.resource_receipt), scope = await this.scope(input.account_id);return { ...scope, mobile_app: this.publicMobile(scope, await this.mobile(scope, input.mobile_app_id, proof)) }; }
   async diagnostics(input: { account_id: string; dataset_id: string; granularities: Array<'DAILY' | 'HOURLY'>; datasource_ids?: string[]; resource_receipt?: string }) {
@@ -154,15 +173,15 @@ export class SpotifyMeasurementService {
   async created(input: { account_id: string; resource_receipt: string }) {
     const proof = this.proof(input.account_id, input.resource_receipt)!, scope = await this.scope(input.account_id), native = await this.receiptNative(scope, proof);
     const matches = proof.dataset_id ? native.datasetId === proof.dataset_id : null;
-    // A receipt authorizes its exact child. A changed/unknown binding never authorizes another parent's contents.
-    const candidate = matches !== false && native.datasetId ? await this.rawDataset(scope, native.datasetId) : undefined;
-    const dataset = candidate && (candidate.shared_ad_accounts?.some(a => a.id === scope.account_id) || this.recoverableDataset(scope, candidate, proof, native.datasetId)) ? candidate : undefined;
+    const verified = !proof.dataset_id || native.verifiedDatasetId === proof.dataset_id;
+    const candidate = verified && native.verifiedDatasetId ? native.expectedDataset ?? await this.rawDataset(scope, native.verifiedDatasetId) : undefined;
+    const dataset = candidate && (candidate.shared_ad_accounts?.some(a => a.id === scope.account_id) || this.recoverableDataset(scope, candidate, proof, native.verifiedDatasetId)) ? candidate : undefined;
     const key = proof.kind === 'capi' ? 'capi_integration' : proof.kind;
     const resource = proof.kind === 'mobile_app' ? this.publicMobile(scope, native.resource as Mobile) : proof.kind === 'dataset' ? this.publicDataset(scope, native.resource as Dataset) : { ...native.resource, configuration_hash: digest(scope, proof.kind, native.resource) };
     return { ...scope, kind: proof.kind, [key]: resource, dataset: dataset ? this.publicDataset(scope, dataset) : null,
-      dataset_binding: { expected_dataset_id: proof.dataset_id ?? null, observed_dataset_id: native.datasetId ?? null, matches_receipt: matches },
+      dataset_binding: { expected_dataset_id: proof.dataset_id ?? null, observed_dataset_id: native.datasetId ?? null, matches_receipt: matches, verified_dataset_id: dataset?.id ?? null, verification_source: dataset ? native.datasetId ? 'resource' : 'dataset' : null, ...(native.parentVerificationError ? { parent_verification_error: native.parentVerificationError } : {}) },
       needs_dataset_sharing: dataset?.shared_ad_accounts ? !dataset.shared_ad_accounts.some(a => a.id === scope.account_id) : null, resource_receipt: input.resource_receipt,
-      notes: ['Read-only reconciliation of an approved creation. No creation, share, update or event request was replayed.', ...(matches === false ? ['The native dataset binding does not match the creation receipt. Only the exact created resource was read; no dataset contents were followed. Sharing remains unverified and mutation checks remain strict.'] : [])] };
+      notes: ['Read-only reconciliation of an approved creation. No creation, share, update or event request was replayed.', ...(matches === false ? [dataset ? 'The native child omits its dataset binding. The exact receipt-bound parent independently confirms the resource relationship; the native null value is preserved.' : 'The resource relationship is unverified. No unexpected dataset contents were followed. Sharing remains unverified and mutation checks remain strict.'] : [])] };
   }
   async sharingStatus(input: { account_id: string; resource_receipt: string }) {
     const proof = this.proof(input.account_id, input.resource_receipt, 'sharing')!, scope = await this.scope(input.account_id);this.checkProof(scope, proof);
@@ -234,10 +253,10 @@ export class SpotifyMeasurementService {
       const dataset = await this.dataset(scope, input.dataset_id, proof);this.exclusive(scope, dataset);
       const { dataset_id: _id, resource_receipt: _receipt, expected_configuration_hash: _hash, ...fields } = input;body = fields;
       if (op.tool === 'spotify_update_pixel') {
-        ensure(dataset.pixel, 'dataset has no verified Pixel');const pixel = await this.rawPixel(scope, dataset.pixel.id);ensure(pixel.dataset_id === dataset.id, 'Pixel dataset binding mismatch');
+        ensure(dataset.pixel, 'dataset has no verified Pixel');const pixel = await this.rawPixel(scope, dataset.pixel.id);this.verifyIntegrationBinding(dataset, 'pixel', pixel.id, pixel.dataset_id);
         current = pixel;kind = 'pixel';id = pixel.id;path = `${this.base(scope)}/pixels/${id}`;readback = () => this.rawPixel(scope, id);
       } else if (op.tool === 'spotify_update_capi_integration') {
-        ensure(dataset.capi_integration, 'dataset has no verified CAPI integration');const capi = await this.rawCapi(scope, dataset.capi_integration.capi_connection_id);ensure(capi.dataset_id === dataset.id, 'CAPI dataset binding mismatch');
+        ensure(dataset.capi_integration, 'dataset has no verified CAPI integration');const capi = await this.rawCapi(scope, dataset.capi_integration.capi_connection_id);this.verifyIntegrationBinding(dataset, 'capi', capi.capi_connection_id, capi.dataset_id);
         current = capi;kind = 'capi';id = capi.capi_connection_id;path = `${this.base(scope)}/capi/${id}`;readback = () => this.rawCapi(scope, id);
       } else { current = dataset;kind = 'dataset';id = dataset.id;path = `${this.base(scope)}/datasets/${id}`;readback = () => this.rawDataset(scope, id); }
       this.expected(scope, kind, current, input.expected_configuration_hash);

@@ -14,7 +14,7 @@ const PIXEL = { id: P, integration_id: I, dataset_id: D, name: 'QA Pixel', domai
 const CAPI = { capi_connection_id: C, integration_id: CI, dataset_id: D, name: 'QA CAPI', events_received: [], access_token: 'native-capi-secret-must-not-escape' };
 const APP = { id: M, name: 'QA Mobile', platform: 'IOS', platform_app_id: '123456789', mobile_measurement_partner: 'SINGULAR', shared_ad_accounts: [{ id: A, name: 'Selected' }], link_token: 'native-link-secret-must-not-escape' };
 type Row = Record<string, unknown>;
-type Options = { empty?: boolean; foreignShares?: boolean; missingShares?: boolean; missingPaging?: boolean; nullPixelMetadata?: boolean; pixelMatchingEnabled?: boolean; badIdentity?: boolean; shareFailure?: boolean; updateIgnored?: boolean; readbackDenied?: boolean; postDenied?: boolean; corruptRouting?: boolean; datasetResponse?: Row; mobileResponse?: Row; diagnosticResponse?: Row };
+type Options = { empty?: boolean; foreignShares?: boolean; missingShares?: boolean; missingPaging?: boolean; nullPixelMetadata?: boolean; nullPixelBindingOnRead?: boolean; pixelMatchingEnabled?: boolean; badIdentity?: boolean; shareFailure?: boolean; updateIgnored?: boolean; readbackDenied?: boolean; postDenied?: boolean; corruptRouting?: boolean; datasetResponse?: Row; mobileResponse?: Row; diagnosticResponse?: Row };
 function fixture(options: Options = {}) {
   const pixels = new Map<string, Row>(), capis = new Map<string, Row>(), apps = new Map<string, Row>(), datasets = new Map<string, Row>();
   if (!options.empty) {
@@ -79,7 +79,7 @@ function fixture(options: Options = {}) {
       const store = resource[2] === 'datasets' ? datasets : resource[2] === 'pixels' ? pixels : resource[2] === 'capi' ? capis : apps, row = store.get(resource[3]!);
       if (!row) return Response.json({}, { status: 404 });
       if (method === 'PATCH') { written = true;if (!options.updateIgnored) Object.assign(row, body); }
-      return Response.json(row);
+      return Response.json(options.nullPixelBindingOnRead && resource[2] === 'pixels' && method === 'GET' ? { ...row, dataset_id: null } : row);
     }
     throw new Error(`Unexpected fixture request: ${method} ${path}`);
   }) as typeof fetch);
@@ -152,16 +152,54 @@ describe('Spotify account-scoped measurement resources', () => {
     await expect(f.provider.applyWrite(f.op('spotify_create_pixel', { name: 'QA Pixel', domain: 'https://example.com' }), guard)).rejects.toThrow('unconfirmed');
     expect(f.writes()).toHaveLength(1);
   });
-  it.each([null, F])('reconciles only the exact approved Pixel when its native binding is %s', async binding => {
+  it('never follows an explicitly conflicting Pixel binding', async () => {
     const f = fixture({ empty: true });
     const result = await f.provider.applyWrite(f.op('spotify_create_pixel', { name: 'QA Pixel', domain: 'https://example.com' }), guard);
-    f.pixels.get(P)!.dataset_id = binding;
+    f.pixels.get(P)!.dataset_id = F;
     const before = f.native().length;
     const read = await f.provider.measurement.created({ account_id: A, resource_receipt: details(result).resource_receipt });
-    expect(read).toMatchObject({ pixel: { id: P, dataset_id: binding }, dataset: null, needs_dataset_sharing: null,
-      dataset_binding: { expected_dataset_id: N, observed_dataset_id: binding, matches_receipt: false } });
+    expect(read).toMatchObject({ pixel: { id: P, dataset_id: F }, dataset: null, needs_dataset_sharing: null,
+      dataset_binding: { expected_dataset_id: N, observed_dataset_id: F, matches_receipt: false, verified_dataset_id: null } });
     expect(f.native().slice(before).map(call => call.url.pathname)).toEqual([`/ads/v3/ad_accounts/${A}`, `/ads/v3/businesses/${B}/pixels/${P}`]);
     await expect(f.provider.measurement.getPixel({ account_id: A, dataset_id: N })).rejects.toThrow('binding mismatch');
+    expect(f.writes()).toHaveLength(2);
+  });
+  it('independently verifies only the receipt-locked parent when native Pixel binding is null', async () => {
+    const f = fixture({ empty: true });
+    const result = await f.provider.applyWrite(f.op('spotify_create_pixel', { name: 'QA Pixel', domain: 'https://example.com' }), guard);
+    f.pixels.get(P)!.dataset_id = null;const before = f.native().length;
+    const read = await f.provider.measurement.created({ account_id: A, resource_receipt: details(result).resource_receipt });
+    expect(read).toMatchObject({ pixel: { id: P, dataset_id: null }, dataset: { id: N }, needs_dataset_sharing: false,
+      dataset_binding: { observed_dataset_id: null, matches_receipt: false, verified_dataset_id: N, verification_source: 'dataset' } });
+    expect(f.native().slice(before).map(call => call.url.pathname)).toEqual([`/ads/v3/ad_accounts/${A}`, `/ads/v3/businesses/${B}/pixels/${P}`, `/ads/v3/businesses/${B}/datasets/${N}`]);
+    const current = await f.provider.measurement.getPixel({ account_id: A, dataset_id: N });
+    await f.provider.applyWrite(f.op('spotify_update_pixel', { dataset_id: N, expected_configuration_hash: current.pixel.configuration_hash, name: 'Renamed QA' }), guard);
+    expect(f.writes().at(-1)).toMatchObject({ method: 'PATCH', body: { name: 'Renamed QA' } });
+  });
+  it('completes one Pixel creation using the native POST parent and independently verified reverse edge', async () => {
+    const f = fixture({ empty: true, nullPixelMetadata: true, nullPixelBindingOnRead: true });
+    const result = await f.provider.applyWrite(f.op('spotify_create_pixel', { name: 'QA Pixel', domain: 'https://example.com' }), guard);
+    expect(result).toMatchObject({ applied: true, resourceIds: [P, N] });
+    expect(f.writes()).toHaveLength(2);
+    expect(await f.provider.measurement.created({ account_id: A, resource_receipt: details(result).resource_receipt })).toMatchObject({ pixel: { dataset_id: null }, dataset: { id: N }, dataset_binding: { observed_dataset_id: null, verified_dataset_id: N, verification_source: 'dataset' } });
+  });
+  it('verifies CAPI through its owned parent while preserving a null child binding', async () => {
+    const f = fixture();f.capis.get(C)!.dataset_id = null;
+    const current = await f.provider.measurement.getCapi({ account_id: A, dataset_id: D });
+    expect(current).toMatchObject({ capi_integration: { dataset_id: null }, dataset_binding: { verified_dataset_id: D, verification_source: 'dataset' } });
+    expect(JSON.stringify(current)).not.toContain('native-capi-secret');
+    await f.provider.applyWrite(f.op('spotify_update_capi_integration', { dataset_id: D, expected_configuration_hash: current.capi_integration.configuration_hash, name: 'Renamed CAPI' }), guard);
+    expect(f.writes()).toHaveLength(1);expect(f.writes()[0]).toMatchObject({ method: 'PATCH', body: { name: 'Renamed CAPI' } });
+  });
+  it.each(['missing_edge', 'missing_parent'])('keeps the exact child readable but rejects unverified null binding: %s', async failure => {
+    const f = fixture({ empty: true });
+    const result = await f.provider.applyWrite(f.op('spotify_create_pixel', { name: 'QA Pixel', domain: 'https://example.com' }), guard);
+    f.pixels.get(P)!.dataset_id = null;
+    if (failure === 'missing_parent') f.datasets.delete(N);
+    else f.datasets.get(N)!.pixel = { id: 'foreign-pixel', name: 'Foreign resource must not escape' };
+    const read = await f.provider.measurement.created({ account_id: A, resource_receipt: details(result).resource_receipt });
+    expect(read).toMatchObject({ pixel: { id: P, dataset_id: null }, dataset: null, needs_dataset_sharing: null, dataset_binding: { verified_dataset_id: null } });
+    expect(JSON.stringify(read)).not.toContain('Foreign resource');
     expect(f.writes()).toHaveLength(2);
   });
   it('does not authorize business-wide metadata updates for a multi-account shared resource', async () => {
