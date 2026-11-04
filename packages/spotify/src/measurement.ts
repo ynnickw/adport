@@ -86,7 +86,7 @@ export class SpotifyMeasurementService {
     ensure(!proof.dataset_id || verifiedDatasetId === proof.dataset_id, 'created resource dataset binding changed; reconcile the original IDs');
     return { resource, datasetId: verifiedDatasetId };
   }
-  private sharing(scope: Scope, row: { shared_ad_accounts?: Array<{ id: string; name?: string }> | null }) {
+  private sharing(scope: Scope, row: { shared_ad_accounts?: Array<{ id: string; name?: string | null }> | null }) {
     return { shared_ad_accounts: row.shared_ad_accounts === null ? null : row.shared_ad_accounts?.filter(a => a.id === scope.account_id), other_shared_account_count: row.shared_ad_accounts ? row.shared_ad_accounts.filter(a => a.id !== scope.account_id).length : null };
   }
   private publicDataset(scope: Scope, row: Dataset, snapshot = true) { return { ...row, ...this.sharing(scope, row), ...(snapshot ? { configuration_hash: digest(scope, 'dataset', row) } : {}) }; }
@@ -290,8 +290,8 @@ export class SpotifyMeasurementService {
     const input = createDataset.parse(op.payload), selected: Array<{ dataset: Dataset; integration_id: string; kind: 'pixel' | 'capi'; id: string }> = [];
     for (const source of input.sources) {
       const proof = this.proof(scope.account_id, source.resource_receipt), dataset = await this.dataset(scope, source.dataset_id, proof);this.exclusive(scope, dataset);this.expected(scope, 'dataset', dataset, source.expected_configuration_hash);
-      if (dataset.pixel?.integration_id === source.integration_id) { const pixel = await this.rawPixel(scope, dataset.pixel.id);ensure(pixel.dataset_id === dataset.id, 'source Pixel has an inconsistent dataset binding');selected.push({ dataset, integration_id: source.integration_id, kind: 'pixel', id: pixel.id }); }
-      else if (dataset.capi_integration?.integration_id === source.integration_id) { const capi = await this.rawCapi(scope, dataset.capi_integration.capi_connection_id);ensure(capi.dataset_id === dataset.id, 'source CAPI has an inconsistent dataset binding');selected.push({ dataset, integration_id: source.integration_id, kind: 'capi', id: capi.capi_connection_id }); }
+      if (dataset.pixel?.integration_id === source.integration_id) { const pixel = await this.rawPixel(scope, dataset.pixel.id);this.verifyIntegrationBinding(dataset, 'pixel', pixel.id, pixel.dataset_id);selected.push({ dataset, integration_id: source.integration_id, kind: 'pixel', id: pixel.id }); }
+      else if (dataset.capi_integration?.integration_id === source.integration_id) { const capi = await this.rawCapi(scope, dataset.capi_integration.capi_connection_id);this.verifyIntegrationBinding(dataset, 'capi', capi.capi_connection_id, capi.dataset_id);selected.push({ dataset, integration_id: source.integration_id, kind: 'capi', id: capi.capi_connection_id }); }
       else throw new AdportError('INVALID_INPUT', 'spotify: integration is not present in its approved source dataset');
     }
     const body = { name: input.name, integration_ids: selected.map(s => s.integration_id) };
@@ -303,7 +303,13 @@ export class SpotifyMeasurementService {
       try {
         ensure(!selected.some(s => s.dataset.id === id), 'dataset creation returned an existing source ID');
         const actual = await this.rawDataset(scope, id);ensure(actual.name === input.name && selected.every(s => contains(actual, s.integration_id)), 'created dataset membership mismatch');
-        for (const source of selected) { const resource = source.kind === 'pixel' ? await this.rawPixel(scope, source.id) : await this.rawCapi(scope, source.id);ensure(resource.dataset_id === id, 'native regrouping left an inconsistent integration dataset binding'); }
+        const previous = new Map<string, Dataset>();
+        for (const source of selected) {
+          if (!previous.has(source.dataset.id)) previous.set(source.dataset.id, await this.rawDataset(scope, source.dataset.id));
+          ensure(!contains(previous.get(source.dataset.id)!, source.integration_id), 'native regrouping retained the integration in its source dataset');
+          if (source.kind === 'pixel') { const resource = await this.rawPixel(scope, source.id);this.verifyIntegrationBinding(actual, 'pixel', resource.id, resource.dataset_id); }
+          else { const resource = await this.rawCapi(scope, source.id);this.verifyIntegrationBinding(actual, 'capi', resource.capi_connection_id, resource.dataset_id); }
+        }
         await this.shareCreatedDataset(scope, id);
       } catch { return this.uncertain([id], receipt); }
       return this.result([id], { resource_receipt: receipt, next_tool: 'spotify_created_measurement', dataset_id: id });
@@ -320,8 +326,8 @@ export class SpotifyMeasurementService {
       const receipt = this.bind(scope, 'dataset', created.id, created.id);
       try {
         const next = await this.rawDataset(scope, created.id), previous = await this.rawDataset(scope, current.id);ensure(contains(next, input.integration_id) && !contains(previous, input.integration_id), 'integration removal readback is inconsistent');
-        if (next.pixel?.integration_id === input.integration_id) ensure((await this.rawPixel(scope, next.pixel.id)).dataset_id === next.id, 'removed Pixel has an inconsistent new dataset');
-        if (next.capi_integration?.integration_id === input.integration_id) ensure((await this.rawCapi(scope, next.capi_integration.capi_connection_id)).dataset_id === next.id, 'removed CAPI has an inconsistent new dataset');
+        if (next.pixel?.integration_id === input.integration_id) { const resource = await this.rawPixel(scope, next.pixel.id);this.verifyIntegrationBinding(next, 'pixel', resource.id, resource.dataset_id); }
+        if (next.capi_integration?.integration_id === input.integration_id) { const resource = await this.rawCapi(scope, next.capi_integration.capi_connection_id);this.verifyIntegrationBinding(next, 'capi', resource.capi_connection_id, resource.dataset_id); }
       } catch { return this.uncertain([current.id, created.id], receipt); }
       return this.result([current.id, created.id], { resource_receipt: receipt, next_tool: 'spotify_created_measurement', dataset_id: created.id });
     } };
