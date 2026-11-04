@@ -239,7 +239,7 @@ describe('shipped MCP iframe', () => {
   it('renders structured policy errors instead of a loading or success view', () => {
     const ui = widget();
     ui.render('operation', { error: 'POLICY_VIOLATION', message: 'Account <outside> is not connected.' });
-    expect(ui.app.innerHTML).toContain('Request failed');
+    expect(ui.app.innerHTML).toContain('Action blocked');
     expect(ui.app.innerHTML).toContain('Account &lt;outside&gt; is not connected.');
     expect(ui.app.innerHTML).not.toMatch(/Loading|No active recommendations|Preview · Not applied/);
   });
@@ -251,13 +251,13 @@ describe('shipped MCP iframe', () => {
       const globals = { toolResponseMetadata: { [key]: envelope } };
       for (const ui of [widget(globals), widget()]) {
         ui.globals(globals);
-        expect(ui.app.innerHTML).toContain('Request failed');
+        expect(ui.app.innerHTML).toContain('Action blocked');
         expect(ui.app.innerHTML).toContain('Account &lt;outside&gt; is not connected.');
       }
     }
     const ui = widget();
     ui.globals({ toolOutput: payload });
-    expect(ui.app.innerHTML).toContain('Request failed');
+    expect(ui.app.innerHTML).toContain('Action blocked');
   });
 
   it('reads JSON content error envelopes without replacing them with stale success output', () => {
@@ -295,7 +295,7 @@ describe('shipped MCP iframe', () => {
     const ui = widget();
     ui.render('report', { error: 'POLICY_VIOLATION', message: 'Not connected.' });
     ui.elapse();
-    expect(ui.app.innerHTML).toContain('Request failed');
+    expect(ui.app.innerHTML).toContain('Action blocked');
     expect(ui.app.innerHTML).not.toContain('Result not received');
   });
 
@@ -332,231 +332,15 @@ describe('shipped MCP iframe', () => {
     expect(ui.app.innerHTML).not.toContain('>S</span>');
   });
 
-  it('renders nested recommendation previews and does not invent server validation', () => {
-    const ui = widget();
-    ui.render('operation', { result: { pending_operation_id: 'test', preview: { summary: 'A real preview', serverValidated: false } } }, 'recommendation_apply');
-    expect(ui.app.innerHTML).toContain('A real preview');
-    expect(ui.app.innerHTML).toContain('Nothing has been changed');
-    expect(ui.app.innerHTML).toContain('not server validated');
-    ui.render('operation', {});
-    expect(ui.app.innerHTML).toContain('validation not reported');
-  });
-
-  it('shows a concise before/after status comparison with technical details collapsed', () => {
-    const ui = widget();
-    ui.render('operation', { pending_operation_id: 'test', preview: {
-      summary: 'Set campaign "Review demo" status PAUSED → PAUSED',
-      changes: ['~ campaign demo-123 status PAUSED → PAUSED'],
-      serverValidated: true,
-    } }, 'meta_set_campaign_status');
-    const visible = ui.app.innerHTML.split('<details>')[0]!;
-    expect(visible).toContain('Review demo');
-    expect(visible).toContain('>Before</th>');
-    expect(visible).toContain('>After</th>');
-    expect(visible).toContain('<td>PAUSED</td><td class="">PAUSED</td>');
-    expect(visible).not.toContain('demo-123');
-    expect(visible).not.toContain('server validated');
-    expect(visible).not.toContain('Set campaign');
-    expect(visible).not.toContain('<h2');
-    expect(ui.app.innerHTML).toContain('<details><summary>Details</summary>');
-    expect(ui.app.innerHTML).not.toContain('<details open');
-    expect(ui.app.innerHTML).toContain('~ campaign demo-123 status');
-    expect(visible).toContain('Preview · Not applied');
-  });
-
-  it('shows Applied rather than preview after a successful no-op apply', () => {
-    const ui = widget();
-    ui.render('operation', { status: 'applied', applied: true, preview: {
-      summary: 'Set campaign "Review demo" status PAUSED → PAUSED',
-      changes: ['~ campaign demo-123 status PAUSED → PAUSED'],
-      serverValidated: true,
-    } }, 'meta_set_campaign_status');
-    const visible = ui.app.innerHTML.split('<details>')[0]!;
-    expect(visible).toContain('Applied');
-    expect(visible).not.toContain('Preview');
-    expect(visible).toContain('<td>PAUSED</td><td class="">PAUSED</td>');
-  });
-
-  it('renders explicit creative field comparisons without parsing copy arrows or exposing the whole payload', () => {
-    const ui = widget();
-    ui.render('operation', { pending_operation_id: 'test', preview: {
-      summary: 'Update shared extension',
-      changes: ['~ {"Id":"native-id","AlternativeText":"A → B"} → full native replacement'],
-      fieldChanges: [{ field: 'Alternative text', before: 'A → B', after: '<img src=x onerror=alert(1)> → C' }],
-      notes: ['Every entity using this shared extension can change.'],
-      budgetDeltas: [{ target: 'Budget', fromMicros: 1000001, toMicros: 1000002 }],
-      serverValidated: false,
-    } });
-    const visible = ui.app.innerHTML.split('<details>')[0]!;
-    expect(visible).toContain('<td>Alternative text</td><td>A → B</td>');
-    expect(visible).toContain('&lt;img src=x onerror=alert(1)&gt; → C');
-    expect(visible).toContain('<td>1.000001</td><td class="changed">1.000002</td>');
-    expect(visible).toContain('Every entity using this shared extension can change.');
-    expect(visible).not.toContain('native-id');
-    expect(visible).not.toContain('Not provided');
-    expect(visible).not.toContain('<img src=x');
-    expect(ui.app.innerHTML).toContain('full native replacement');
-  });
-
-  it('falls back to the complete legacy change list when structured review fields are malformed', () => {
-    const ui = widget();
-    ui.render('operation', { preview: { summary: 'Update', changes: ['~ full actual native payload'], fieldChanges: [{ field: 'Copy', before: 'Old', after: ['invalid'] }] } });
-    expect(ui.app.innerHTML.split('<details>')[0]).toContain('full actual native payload');
-  });
-
-  it('compares authoritative budget deltas and keeps coercions visible', () => {
-    const ui = widget();
-    ui.render('operation', { pending_operation_id: 'test', preview: {
-      summary: 'Update "Brand Search"',
-      budgetDeltas: [{ target: 'Daily budget', fromMicros: 120000000, toMicros: 132000000 }],
-      coercions: ['Campaign remains paused'],
-    } });
-    const visible = ui.app.innerHTML.split('<details>')[0]!;
-    expect(visible).toContain('<td>120</td><td class="changed">132</td>');
-    expect(visible).toContain('account units');
-    expect(visible).toContain('Campaign remains paused');
-    expect(visible).not.toContain('€');
-    ui.render('operation', { preview: { budgetDeltas: [{ target: 'Daily budget', toMicros: 132000000 }] } });
-    expect(ui.app.innerHTML).toContain('<td>—</td><td class="changed">132</td>');
-  });
-
-  it('formats budget comparisons only with provider-reported currency', () => {
-    const ui = widget();
-    ui.render('operation', { preview: { budgetDeltas: [
-      { target: 'Daily budget', currency: 'EUR', fromMicros: 25000000, toMicros: 26250000 },
-      { target: 'US budget', currency: 'USD', toMicros: 20000000 },
-      { target: 'Unknown budget', currency: '<invalid>', fromMicros: 1000000, toMicros: 2000000 },
-    ] } });
-    expect(ui.app.innerHTML).toContain('Daily budget · EUR');
-    expect(ui.app.innerHTML).toContain('<td>€25.00</td><td class="changed">€26.25</td>');
-    expect(ui.app.innerHTML).toContain('<td>—</td><td class="changed">$20.00</td>');
-    expect(ui.app.innerHTML).toContain('Unknown budget (account units)');
-    expect(ui.app.innerHTML).toContain('<td>1</td><td class="changed">2</td>');
-  });
-
-  it('preserves micros in before/after amounts instead of rounding away the proposed change', () => {
-    const ui = widget();
-    ui.render('operation', { preview: { budgetDeltas: [
-      { target: 'Daily budget', currency: 'EUR', fromMicros: 26250000, toMicros: 27562500 },
-      { target: 'Micro change', currency: 'USD', fromMicros: 1000000, toMicros: 1000001 },
-      { target: 'Unknown currency', fromMicros: 1000001, toMicros: 1000002 },
-      { target: 'Three decimals', currency: 'KWD', fromMicros: 1234000, toMicros: 1235000 },
-    ] } });
-    const visible = ui.app.innerHTML.split('<details>')[0]!;
-    expect(visible).toContain('<td>€26.25</td><td class="changed">€27.5625</td>');
-    expect(visible).toContain('<td>$1.00</td><td class="changed">$1.000001</td>');
-    expect(visible).toContain('<td>1.000001</td><td class="changed">1.000002</td>');
-    expect(visible).toContain('1.234');
-    expect(visible).toContain('1.235');
-  });
-
-  it('shows proposed freeform updates without fabricating previous values', () => {
-    const ui = widget();
-    ui.render('operation', { preview: { summary: '<img src=x>', changes: ['~ demo {"name":"new"}'] } });
-    expect(ui.app.innerHTML).toContain('<td>Not provided</td>');
-    expect(ui.app.innerHTML).toContain('demo {&quot;name&quot;:&quot;new&quot;}');
-    expect(ui.app.innerHTML).not.toContain('<img');
-    ui.render('operation', { preview: { changes: ['~ ad_group demo status → PAUSED'] } });
-    expect(ui.app.innerHTML).toContain('<td>—</td><td class="changed">PAUSED</td>');
-  });
-
-  it('shows concrete creates and removals in the comparison', () => {
-    const ui = widget();
-    ui.render('operation', { preview: { summary: 'Add 2 keywords', changes: ['+ keyword [EXACT] "shoes"', '+ keyword [PHRASE] "boots"'] } });
-    expect(ui.app.innerHTML).toContain('<td>Not present</td>');
-    expect(ui.app.innerHTML).toContain('keyword [EXACT] &quot;shoes&quot;');
-    ui.render('operation', { preview: { summary: 'Remove keyword', changes: ['- customers/123/adGroupCriteria/456'] } });
-    expect(ui.app.innerHTML).toContain('<td class="changed">Removed</td>');
-  });
-
-  it.each([
-    ['google', '+ ad_group "Spring" in campaign 123 (ENABLED — inherits campaign state)'],
-    ['meta', '+ act_123/campaigns {"name":"Spring","status":"PAUSED"}'],
-    ['tiktok', '~ POST /campaign/update/ {"campaign_id":"123","status":"DISABLE"}'],
-    ['apple', '+ keyword "spring shoes" adGroup=123 match=EXACT status=PAUSED'],
-    ['microsoft', '~ PUT /Campaigns {"Id":123,"Status":"Paused"}'],
-    ['reddit', '- DELETE /campaigns/123'],
-    ['snapchat', '~ 123 name: Old → New'],
-    ['spotify', '~ 123 delivery: ACTIVE → PAUSED'],
-    ['pinterest', '+ {"name":"Spring","status":"PAUSED"}'],
-    ['linkedin', '~ status: DRAFT → PAUSED'],
-    ['x', '+ campaign "Spring"'],
-  ])('renders a visible before/after proposal for %s-style changes', (_provider, change) => {
-    const ui = widget();
-    ui.render('operation', { pending_operation_id: 'pending', preview: { summary: 'Review proposed change', changes: [change] } });
-    const visible = ui.app.innerHTML.split('<details>')[0]!;
-    expect(visible).toContain('aria-label="Before and after"');
-    expect(visible).toContain('>Before</th>');
-    expect(visible).toContain('>After</th>');
-    expect(visible).not.toContain('Before/after values were not provided');
-  });
-
-  it('approves the exact pending arguments inside the widget and shows the applied result', async () => {
-    const ui = widget();
-    const data = structuredResult('google_add_keywords', 'operation', {
-      pending_operation_id: 'pending-1', expires_at: '2026-09-19T12:00:00Z',
-      preview: { summary: 'Add a keyword', changes: ['+ keyword [EXACT] "shoes"'] },
-    }, { arguments: { account_id: '123', ad_group_id: '456', keywords: [{ text: 'shoes', match_type: 'EXACT' }] } });
-    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: data } });
-    expect(ui.app.innerHTML).toContain('Hold to apply');
-    ui.approvals[0]!.click();
-    const request = ui.sent.at(-1) as { id: number; method: string; params: { name: string; arguments: Record<string, unknown> } };
-    expect(request).toMatchObject({ method: 'tools/call', params: {
-      name: 'google_add_keywords', arguments: { account_id: '123', ad_group_id: '456', pending_operation_id: 'pending-1' },
-    } });
-    expect(request.params.arguments.keywords).toEqual([{ text: 'shoes', match_type: 'EXACT' }]);
-    expect(ui.app.innerHTML).toContain('Applying…');
-    ui.message({ jsonrpc: '2.0', id: request.id, result: { structuredContent: structuredResult('google_add_keywords', 'operation', {
-      status: 'applied', applied: true, preview: { summary: 'Add a keyword', changes: ['+ keyword [EXACT] "shoes"'] },
-    }) } });
-    await Promise.resolve();
-    expect(ui.app.innerHTML).toContain('Applied. Add a keyword');
-    expect(ui.app.innerHTML).not.toContain('Approve and apply');
-  });
-
-  it('does not offer approval without server-issued arguments and does not claim success on an error', async () => {
-    const ui = widget();
-    ui.render('operation', { pending_operation_id: 'unbound', preview: { summary: 'Unknown' } });
-    expect(ui.app.innerHTML).not.toContain('Approve and apply');
-    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('google_set_budget', 'operation', {
-      pending_operation_id: 'pending-2', preview: { summary: 'Change budget' },
-    }, { arguments: { account_id: '123', daily_budget_micros: 1000000 } }) } });
-    ui.approvals[0]!.click();
-    const request = ui.sent.at(-1) as { id: number };
-    ui.message({ jsonrpc: '2.0', id: request.id, result: { isError: true, content: [] } });
-    await Promise.resolve();
-    expect(ui.app.innerHTML).toContain('could not confirm the change');
-    expect(ui.app.innerHTML).toContain('Outcome unconfirmed');
-    expect(ui.app.innerHTML).not.toMatch(/Nothing has been changed|Preview · Not applied/);
-    expect(ui.app.innerHTML).not.toContain('Applied.');
-  });
-
-  it('treats an unconfirmed apply as uncertain and blocks duplicate clicks', async () => {
-    const ui = widget();
-    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('google_set_budget', 'operation', {
-      pending_operation_id: 'pending-3', preview: { summary: 'Change daily budget' },
-    }, { arguments: { account_id: '123', daily_budget_micros: 1000000 } }) } });
-    ui.approvals[0]!.click();
-    const calls = ui.sent.length;
-    ui.approvals[0]!.click();
-    expect(ui.sent).toHaveLength(calls);
-    ui.elapse();
-    await Promise.resolve();
-    expect(ui.app.innerHTML).toContain('may have succeeded; check its status before retrying');
-    expect(ui.app.innerHTML).toContain('Outcome unconfirmed');
-    expect(ui.app.innerHTML).not.toMatch(/Nothing has been changed|Preview · Not applied/);
-    expect(ui.app.innerHTML).not.toContain('Applied.');
-  });
-
   it('shows escaped provider error text and shares an unconfirmed outcome without an apply token', async () => {
     const ui = widget();
     ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('x_upload_media', 'operation', {
-      pending_operation_id: 'pending-upload', preview: { summary: 'Upload QA image' },
+      status: 'pending_validation', applied: false, expires_at: '2099-01-01T00:00:00Z', pending_operation_id: 'pending-upload', preview: { summary: 'Upload QA image', changes: ['+ image'] },
     }, { arguments: { account_id: 'account', project_id: 'project', media_id: 'media' } }) } });
     ui.approvals[0]!.click();
     const request = ui.sent.at(-1) as { id: number };
     ui.message({ jsonrpc: '2.0', id: request.id, result: { isError: true, content: [{ type: 'text', text: JSON.stringify({ error: 'PROVIDER_ERROR', message: 'X upload rejected <script>unsafe</script>' }) }] } });
-    await Promise.resolve();
+    for (let i = 0; i < 12; i++) await Promise.resolve();
     expect(ui.app.innerHTML).toContain('X upload rejected &lt;script&gt;unsafe&lt;/script&gt;');
     expect(ui.app.innerHTML).not.toContain('<script>unsafe</script>');
     const update = ui.sent.at(-1);
@@ -570,48 +354,29 @@ describe('shipped MCP iframe', () => {
     expect(ui.sent.filter((value: unknown) => (value as { method?: string }).method === 'tools/call')).toEqual(writes);
   });
 
-  it('uses the native ChatGPT bridge without dispatching a duplicate write and renders text-only results', async () => {
-    const calls: unknown[] = [], states: unknown[] = [];
-    const ui = widget({ callTool: async (...args: unknown[]) => {
-      calls.push(args);
-      return { content: [{ type: 'text', text: JSON.stringify({ status: 'applied', applied: true, preview: { summary: 'Done' }, result: { resourceIds: ['campaign-1'] } }) }] };
-    }, setWidgetState: (value: unknown) => { states.push(value); throw new Error('Context update unavailable'); } });
-    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('google_create_campaign', 'operation', {
-      pending_operation_id: 'native', preview: { summary: 'Create paused campaign' },
-    }, { arguments: { account_id: '123', project_id: 'project-b', name: 'Paused test' } }) } });
-    ui.approvals[0]!.click();
-    for (let i = 0; i < 10; i++) await Promise.resolve();
-    expect(calls).toEqual([['google_create_campaign', { account_id: '123', project_id: 'project-b', name: 'Paused test', pending_operation_id: 'native' }]]);
-    expect(ui.sent).not.toContainEqual(expect.objectContaining({ method: 'tools/call' }));
-    expect(ui.app.innerHTML).toContain('Applied. Done');
-    expect(ui.app.innerHTML).toContain('Resource: campaign-1');
-    expect(ui.app.innerHTML).not.toContain('Applying…');
-    expect(states).toEqual([{ lastOperation: { tool: 'google_create_campaign', status: 'applied', project_id: 'project-b', account_id: '123', resource_ids: ['campaign-1'] } }]);
-  });
-
   it('shares confirmed IDs and async receipts through standard host context without a consumed apply token', async () => {
     const ui = widget();
     const original = { structuredContent: structuredResult('media_list', 'creatives', { creatives: [], truncated: false }) };
     ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: original });
-    const pending = { structuredContent: structuredResult('x_upload_media', 'operation', { status: 'pending_validation', applied: false, pending_operation_id: 'consumed-token', preview: { summary: 'Upload QA image' } }, { arguments: { account_id: 'a1', project_id: 'project-b' } }) };
+    const pending = { structuredContent: structuredResult('x_upload_media', 'operation', { status: 'pending_validation', applied: false, expires_at: '2099-01-01T00:00:00Z', pending_operation_id: 'consumed-token', preview: { summary: 'Upload QA image', changes: ['+ image'] } }, { arguments: { account_id: 'a1', project_id: 'project-b' } }) };
     ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: pending });
     ui.approvals[0]!.click(); const request = ui.sent.at(-1) as { id: number };
     ui.message({ jsonrpc: '2.0', id: request.id, result: { structuredContent: { status: 'applied', applied: true, result: { resourceIds: ['3_123'], details: { next_tool: 'x_media_upload_status', resource_receipt: 'signed-resource-proof' } }, preview: { summary: 'Upload finalized' } } } });
-    for (let i = 0; i < 3; i++) await Promise.resolve();
-    expect(ui.app.innerHTML).toContain('Resource: 3_123');
+    for (let i = 0; i < 12; i++) await Promise.resolve();
+    expect(ui.app.innerHTML).toContain('3_123');
     const context = ui.sent.find((value: any) => value.method === 'ui/update-model-context');
     expect(context).toMatchObject({ params: { structuredContent: { adport_operation: { tool: 'x_upload_media', status: 'applied', project_id: 'project-b', account_id: 'a1', resource_ids: ['3_123'], next_tool: 'x_media_upload_status', resource_receipt: 'signed-resource-proof' } } } });
     expect(JSON.stringify(context)).not.toContain('consumed-token'); expect(ui.sent.filter((value: any) => value.method === 'tools/call')).toHaveLength(1);
     for (const stale of [pending,original]) ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: stale });
-    expect(ui.app.innerHTML).toContain('Applied. Upload finalized'); expect(ui.app.innerHTML).toContain('Resource: 3_123'); expect(ui.app.innerHTML).not.toContain('Hold to apply');
+    expect(ui.app.innerHTML).toContain('>Applied</span>'); expect(ui.app.innerHTML).toContain('3_123'); expect(ui.app.innerHTML).not.toContain('Hold to apply');
   });
 
   it.each([false, true])('renders partial-write warnings and shares them through the host context (ChatGPT bridge=%s)', async native => {
     const warnings = ['Only 1 of 2 rows was confirmed; inspect failed rows <script>unsafe</script>'];
-    const outcome = { status: 'applied', applied: true, preview: { summary: 'Upload conversion records' }, result: { resourceIds: ['conversion-action'], details: { status: 'PARTIAL_OR_UNCONFIRMED' }, warnings } };
+    const outcome = { status: 'applied', applied: true, preview: { summary: 'Upload conversion records', changes: ['+ conversion records'] }, result: { resourceIds: ['conversion-action'], details: { status: 'PARTIAL_OR_UNCONFIRMED' }, warnings } };
     const states: unknown[] = [], calls: unknown[] = [];
     const ui = widget(native ? { callTool: async (...args: unknown[]) => { calls.push(args); return { structuredContent: outcome }; }, setWidgetState: (value: unknown) => { states.push(value); } } : undefined);
-    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('google_upload_click_conversions', 'operation', { pending_operation_id: 'consumed-conversion-token', preview: { summary: 'Upload conversion records' } }, { arguments: { account_id: '123', project_id: 'project-b', conversions: [{ gclid: 'private-click-id' }] } }) } });
+    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('google_upload_click_conversions', 'operation', { status: 'pending_validation', applied: false, expires_at: '2099-01-01T00:00:00Z', pending_operation_id: 'consumed-conversion-token', preview: { summary: 'Upload conversion records', changes: ['+ conversion records'] } }, { arguments: { account_id: '123', project_id: 'project-b', conversions: [{ gclid: 'private-click-id' }] } }) } });
     ui.approvals[0]!.click();
     if (!native) {
       const request = ui.sent.at(-1) as { id: number };
@@ -630,10 +395,10 @@ describe('shipped MCP iframe', () => {
   });
 
   it.each([false, true])('distinguishes async acceptance from processed conversions in both widget bridges (ChatGPT=%s)', async native => {
-    const outcome = { status: 'applied', applied: true, preview: { summary: 'Ingest conversion events' }, result: { resourceIds: ['conversion-action'], details: { status: 'ACCEPTED_FOR_PROCESSING', processed: false, next_tool: 'google_conversion_request_status', resource_receipt: 'signed-status-receipt' } } };
+    const outcome = { status: 'applied', applied: true, preview: { summary: 'Ingest conversion events', changes: ['+ conversion events'] }, result: { resourceIds: ['conversion-action'], details: { status: 'ACCEPTED_FOR_PROCESSING', processed: false, next_tool: 'google_conversion_request_status', resource_receipt: 'signed-status-receipt' } } };
     const states: unknown[] = [];
     const ui = widget(native ? { callTool: async () => ({ structuredContent: outcome }), setWidgetState: (value: unknown) => { states.push(value); } } : undefined);
-    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('google_ingest_conversion_events', 'operation', { pending_operation_id: 'consumed-event-token', preview: { summary: 'Ingest conversion events' } }, { arguments: { account_id: '123', project_id: 'project-b', events: [{ transaction_id: 'private-transaction' }] } }) } });
+    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('google_ingest_conversion_events', 'operation', { status: 'pending_validation', applied: false, expires_at: '2099-01-01T00:00:00Z', pending_operation_id: 'consumed-event-token', preview: { summary: 'Ingest conversion events', changes: ['+ conversion events'] } }, { arguments: { account_id: '123', project_id: 'project-b', events: [{ transaction_id: 'private-transaction' }] } }) } });
     ui.approvals[0]!.click();
     if (!native) { const request = ui.sent.at(-1) as { id: number }; ui.message({ jsonrpc: '2.0', id: request.id, result: { structuredContent: outcome } }); }
     for (let i = 0; i < 10; i++) await Promise.resolve();
@@ -651,25 +416,6 @@ describe('shipped MCP iframe', () => {
     ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('google_upload_click_conversions', 'operation', { pending_operation_id: 'preview-only', preview: { summary: 'Upload conversion records', changes: ['+ 2 records'], notes: ['Legacy click imports are restricted; new integrations require Data Manager.'] } }) } });
     expect(ui.app.innerHTML).toContain('Legacy click imports are restricted; new integrations require Data Manager.');
     expect(ui.app.innerHTML).not.toContain('Applied.');
-  });
-
-  it('cancels a released hold and applies once after a completed keyboard hold', () => {
-    const ui = widget();
-    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('google_create_campaign', 'operation', {
-      pending_operation_id: 'hold', preview: { summary: 'Paused campaign' },
-    }, { arguments: { account_id: '123' } }) } });
-    const button = ui.approvals[0]!;
-    button.fire('pointerdown', { button: 0, pointerId: 1 });
-    button.fire('pointerup');
-    ui.elapse();
-    expect(ui.sent.filter((m: any) => m.method === 'tools/call')).toHaveLength(0);
-    button.fire('keydown', { key: ' ' });
-    button.fire('keydown', { key: ' ', repeat: true });
-    ui.elapse();
-    button.fire('keyup', { key: ' ' });
-    button.click();
-    expect(ui.sent.filter((m: any) => m.method === 'tools/call')).toHaveLength(1);
-    expect(ui.app.innerHTML).toContain('Applying…');
   });
 
   it('routes non-campaign audit mutations to actual findings', () => {

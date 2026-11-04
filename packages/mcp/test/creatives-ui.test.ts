@@ -80,7 +80,7 @@ describe('creative widget editor', () => {
     const calls: unknown[][] = [];
     const dom = widget(async (...args) => {
       calls.push(args);
-      return { structuredContent: { status: 'pending_validation', applied: false, pending_operation_id: 'pending',
+      return { structuredContent: { status: 'pending_validation', applied: false, expires_at: '2099-01-01T00:00:00Z', pending_operation_id: 'pending',
         preview: { summary: 'Set ad 33 status PAUSED → ENABLED', changes: ['~ ad 33 status PAUSED → ENABLED'], coercions: [], budgetDeltas: [], serverValidated: true } } };
     });
     try {
@@ -112,7 +112,7 @@ describe('creative widget editor', () => {
 
   it('preserves multiline Reddit copy and stages only a project/account-bound preview', async () => {
     const calls: unknown[][] = [], originalBody = 'First line\n\nSecond line <literal>';
-    const dom = widget(async (...args) => { calls.push(args); return { structuredContent: { status: 'pending_validation', applied: false, pending_operation_id: 'pending', preview: { summary: 'Stage a new post copy', changes: ['Original post and ad reference remain unchanged'], coercions: [], budgetDeltas: [], serverValidated: false } } }; }, { creatives: [{ ...creative, provider: 'reddit', account_id: 'a2_test', actions: [{ label: 'Stage a creative copy', tool: 'reddit_stage_post_copy', arguments: { account_id: 'a2_test', ad_id: 'ad-1', source_post_id: 't3_source', profile_id: 'profile-1' }, fields: [{ key: 'headline', label: 'Headline', type: 'text', value: 'Headline' }, { key: 'body', label: 'Body', type: 'text', value: originalBody }] }] }] });
+    const dom = widget(async (...args) => { calls.push(args); return { structuredContent: { status: 'pending_validation', applied: false, expires_at: '2099-01-01T00:00:00Z', pending_operation_id: 'pending', preview: { summary: 'Stage a new post copy', fieldChanges: [{ field: 'Headline', before: 'Headline', after: 'Edited headline' }], changes: ['Original post and ad reference remain unchanged'], coercions: [], budgetDeltas: [], serverValidated: false } } }; }, { creatives: [{ ...creative, provider: 'reddit', account_id: 'a2_test', actions: [{ label: 'Stage a creative copy', tool: 'reddit_stage_post_copy', arguments: { account_id: 'a2_test', ad_id: 'ad-1', source_post_id: 't3_source', profile_id: 'profile-1' }, fields: [{ key: 'headline', label: 'Headline', type: 'text', value: 'Headline' }, { key: 'body', label: 'Body', type: 'text', value: originalBody }] }] }] });
     try {
       const fields = dom.window.document.querySelectorAll('textarea'); expect(fields[1]!.value).toBe(originalBody); fields[0]!.value = 'Edited headline';
       dom.window.document.querySelector('form')!.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
@@ -151,7 +151,7 @@ describe('creative widget editor', () => {
       return Response.json({ data: path.endsWith('/draft_tweets') ? [{ id: draftId, user_id: '756201191646691328', text: copy, name: null, nullcast: true, card_uri: null, media_keys: [mediaKey] }] : path.endsWith(`/media_library/${mediaKey}`) ? { media_key: mediaKey, media_type: 'IMAGE', media_status: 'TRANSCODE_COMPLETED', media_url: 'https://pbs.twimg.com/media/image.jpg', deleted: false } : { id: 'a1', name: 'Account', timezone: 'UTC', approval_status: 'ACCEPTED', deleted: false }, next_cursor: null });
     }));
     const result = await provider.creatives.drafts({ account_id: 'a1' }), calls: unknown[][] = [];
-    const dom = widget(async (...args) => { calls.push(args); return { structuredContent: { status: 'pending_validation', applied: false, pending_operation_id: 'x-pending', preview: { summary: 'Edit native draft', changes: ['No publication'], coercions: [], budgetDeltas: [], serverValidated: false } } }; }, result);
+    const dom = widget(async (...args) => { calls.push(args); return { structuredContent: { status: 'pending_validation', applied: false, expires_at: '2099-01-01T00:00:00Z', pending_operation_id: 'x-pending', preview: { summary: 'Edit native draft', fieldChanges: [{ field: 'Text', before: copy, after: 'Edited\n\nCopy' }], changes: ['No publication'], coercions: [], budgetDeltas: [], serverValidated: false } } }; }, result);
     try {
       const document = dom.window.document;
       expect(document.querySelector('img')?.src).toBe('https://pbs.twimg.com/media/image.jpg');

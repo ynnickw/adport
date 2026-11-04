@@ -59,6 +59,15 @@ const preview = z.object({
     target: z.string(), currency: z.string().optional(), fromMicros: z.number().optional(), toMicros: z.number(),
   })),
   serverValidated: z.boolean(),
+  review: z.object({
+    provider: z.string(), accountId: z.string(), kind: z.enum(['create', 'update', 'remove']),
+    title: z.string(), subject: z.string().optional(),
+    fields: z.array(z.object({
+      label: z.string(), before: z.unknown().optional(), after: z.unknown(),
+      format: z.enum(['money', 'text']).optional(), currency: z.string().optional(),
+    })),
+    notices: z.array(z.string()),
+  }).optional(),
 });
 const pending = z.object({
   status: z.literal('pending_validation'), applied: z.literal(false),
