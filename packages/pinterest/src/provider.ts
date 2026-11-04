@@ -9,9 +9,10 @@ import { PinterestCreativeService } from './creatives.js';
 import { PINTEREST_ASSET_WRITES, PinterestAssetService } from './assets.js';
 import { PinterestKeywordService } from './keywords.js';
 import { PinterestAudienceService } from './audiences.js';
+import { PinterestMeasurementService } from './measurement.js';
 import { accountSchema, batchResponseSchema, campaignSchema, createCampaignSchema, entitySchema, entityStatus, pinterestId, setBudgetSchema, setStatusSchema } from './schemas.js';
 
-interface Plan extends Omit<WritePreview, 'serverValidated'> { execute: () => Promise<string[]> }
+interface Plan extends Omit<WritePreview, 'serverValidated'> { execute: () => Promise<string[]>; resultDetails?: () => unknown; resultWarnings?: () => string[] }
 const LEVEL = {
   account: { path: '', id: 'AD_ACCOUNT_ID', filter: '' },
   campaign: { path: 'campaigns', id: 'CAMPAIGN_ID', filter: 'campaign_ids' },
@@ -30,11 +31,13 @@ export class PinterestAdsProvider implements AdProvider {
   readonly assets: PinterestAssetService;
   readonly keywords: PinterestKeywordService;
   readonly audiences: PinterestAudienceService;
+  readonly measurement: PinterestMeasurementService;
   constructor(private readonly client: PinterestAdsClient, media: MediaResolver = new LocalMediaResolver()) {
     this.creatives = new PinterestCreativeService(client, (account, id) => this.getCampaign(account, id));
     this.assets = new PinterestAssetService(client, media);
     this.keywords = new PinterestKeywordService(client, (account, entity, resource) => this.creatives.getEntity(account, entity, resource));
     this.audiences = new PinterestAudienceService(client, (account, entity, resource) => this.creatives.getEntity(account, entity, resource), (account, resource) => this.assets.getPin(account, resource));
+    this.measurement = new PinterestMeasurementService(client);
   }
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions {
@@ -119,11 +122,12 @@ export class PinterestAdsProvider implements AdProvider {
     return { rows };
   }
   async previewWrite(op: WriteOperation, guard: WriteGuard): Promise<WritePreview> {
-    const { execute: _execute, ...preview } = await this.plan(op, guard);
+    const { execute: _execute, resultDetails: _details, resultWarnings: _warnings, ...preview } = await this.plan(op, guard);
     return { ...preview, serverValidated: false };
   }
   async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> {
-    return { applied: true, resourceIds: await (await this.plan(op, guard)).execute() };
+    const plan = await this.plan(op, guard), resourceIds = await plan.execute();
+    return { applied: true, resourceIds, ...(plan.resultDetails ? { details: plan.resultDetails() } : {}), ...(plan.resultWarnings ? { warnings: plan.resultWarnings() } : {}) };
   }
   private async write(accountId: string, method: 'POST' | 'PATCH', body: Record<string, unknown>) {
     const result = await this.client.mutate(`ad_accounts/${accountId}/campaigns`, method, [body], batchResponseSchema);
@@ -141,6 +145,7 @@ export class PinterestAdsProvider implements AdProvider {
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<Plan> {
     const accountId = pinterestId.parse(op.accountId);
     if (op.provider !== this.id) throw new AdportError('INVALID_INPUT', 'pinterest: provider mismatch');
+    if (this.measurement.supports(op.tool)) return this.measurement.plan(op);
     if (this.keywords.supports(op.tool)) return this.keywords.plan(op, guard);
     if (this.audiences.supports(op.tool)) return this.audiences.plan(op);
     if (PINTEREST_ASSET_WRITES.has(op.tool)) return this.assets.plan(op);

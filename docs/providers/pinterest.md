@@ -16,9 +16,49 @@ For noninteractive runtime assembly, provide the complete `PINTEREST_CLIENT_ID`,
 - Shared normalized reports at account, campaign, ad-group and ad levels.
 - Guarded campaign creation with campaign budget optimization (CBO), explicit paused creation and daily/lifetime budgets in account-currency micros. Lifetime budgets require an end time. APP_INSTALL/CTV and other restricted objectives still require Pinterest eligibility.
 - Guarded campaign status and CBO budget updates, preserving the existing budget type. Flexible daily budgets and non-CBO campaign budget changes are rejected rather than misrepresented as ordinary daily caps.
+- Conversion-tag listing/lookup/creation, OCPM-eligible event and page-visit metadata, native event-quality diagnostics, and guarded Conversions API uploads. See [measurement workflows](#measurement-workflows).
 - Every mutation uses Adport's existing preview, pending-token, exact-approval and audit flow. Pinterest does not offer server-side validation for these operations; previews are local.
 
 Named ad-group, ad, original Pin, board and media tools are documented in [Pinterest campaign setup](../pinterest-campaign-setup.md). Campaign creation alone does not create those child resources. Public Pin management is an explicit `--pin-management` connection option; secret boards and Pins additionally require `--secret-pins`. Neither option is requested by the default Ads connection.
+
+## Measurement workflows
+
+Read `pinterest_measurement_context` first. Its `snapshot_hash` binds tag creation
+and conversion-event uploads to the selected advertiser and tag configuration.
+`pinterest_conversion_tags` is an unpaged native collection with `filter_deleted`;
+`pinterest_get_conversion_tag` verifies advertiser and tag identity. Returned code
+snippets are data: Adport does not execute or install them. Tag creation defaults
+every enhanced-match flag off; enabling one requires explicit consent confirmation.
+There is no tag edit/delete tool because the native API exposes neither endpoint.
+
+`pinterest_conversion_tag_eligible_events` reads native OCPM eligibility without
+changing optimization. `pinterest_conversion_tag_page_visits` uses bookmark
+pagination. `pinterest_event_quality` requires an explicit `1d` or `14d` lookback
+and preserves native statuses, component coverage and issues without inventing a
+recommendation score.
+
+`pinterest_send_conversion_events` accepts 1–1000 web, app or offline events.
+Its default is `test: true`; applying still sends data to Pinterest. Test events
+are not recorded for reporting or optimization. Live submission additionally
+requires `confirm_live_events: true`; both modes require
+`confirm_data_rights: true`. Use captured stable event IDs for deduplication and
+prehashed lowercase SHA-256 matching fields. Pinterest requires email hashes,
+hashed mobile-advertising IDs, or both client IP address and user agent. Monetary
+values remain decimal strings with explicit ISO currency, rather than account
+budget micros. App/device fields follow the published native schemas.
+
+Previews send no event data. The approval review and audit summaries contain
+counts, mode and the exact batch checksum, omitting customer matching data,
+source URLs, order IDs and device details. Native results report row indices,
+processed/failed status and warning/error presence. Partial, contradictory or
+missing receipts never imply full success, and POSTs are never automatically
+retried. Inspect native diagnostics before considering a new submission.
+
+These wire contracts were checked against the [official OpenAPI](https://github.com/pinterest/api-description/blob/main/v5/openapi.json)
+and [Conversions API guide](https://developer.pinterest.com/docs/track-conversions/track-conversions-in-the-api/)
+on 2026-11-04. Existing OAuth `ads:read`/`ads:write` permissions are used; Adport
+does not mint a separate conversion token. Contract tests do not prove live app
+eligibility, attribution, matching or successful live-event processing.
 
 ## Contract and reporting decisions
 

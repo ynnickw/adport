@@ -72,6 +72,7 @@ describe('all-provider shared tool surface', () => {
       'snapchat_list_campaigns', 'snapchat_create_campaign', 'snapchat_set_campaign_status', 'snapchat_set_budget',
       'spotify_list_campaigns', 'spotify_get_ad_set', 'spotify_create_campaign_draft', 'spotify_set_campaign_status', 'spotify_set_budget', 'spotify_set_ad_set_delivery',
       'pinterest_list_campaigns', 'pinterest_create_campaign', 'pinterest_set_campaign_status', 'pinterest_set_budget',
+      'pinterest_measurement_context', 'pinterest_conversion_tags', 'pinterest_get_conversion_tag', 'pinterest_create_conversion_tag', 'pinterest_conversion_tag_eligible_events', 'pinterest_conversion_tag_page_visits', 'pinterest_event_quality', 'pinterest_send_conversion_events',
       'pinterest_boards', 'pinterest_get_board', 'pinterest_update_board', 'pinterest_delete_empty_board', 'pinterest_pins', 'pinterest_get_pin', 'pinterest_get_media_upload',
       'pinterest_keyword_context', 'pinterest_keywords', 'pinterest_get_keyword', 'pinterest_keyword_metrics', 'pinterest_create_keywords', 'pinterest_archive_keywords',
       'pinterest_audiences', 'pinterest_get_audience', 'pinterest_audience_usage', 'pinterest_audience_sources', 'pinterest_customer_lists', 'pinterest_get_customer_list',
