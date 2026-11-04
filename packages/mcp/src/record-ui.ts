@@ -21,6 +21,7 @@ export const RECORD_UI_STYLES = String.raw`
     .project-copy { align-self:center; min-width:0 }
     .project-copy strong { font-size:12px; line-height:1.5; overflow-wrap:anywhere }
     .project-copy p { margin:3px 0 0; color:var(--muted); font-size:11px; line-height:1.5; overflow-wrap:anywhere }
+    .project-platforms-empty { margin:0; color:var(--muted); font-size:11px }
     .project-row .record-providers { grid-column:2 }
     @media(min-width:600px) {
       .project-row { grid-template-columns:34px minmax(0,1fr) minmax(0,50%) }
@@ -42,10 +43,10 @@ export const RECORD_UI_SCRIPT = String.raw`
         const organization=typeof project.organization_name==='string'&&project.organization_name.trim().toLowerCase()!==name.trim().toLowerCase()?project.organization_name:'';
         const subtitle=[organization,project.role?human(String(project.role)):null].filter(Boolean).join(' · ');
         let url;try { const value=new URL(project.logo_url);if(value.protocol==='https:'&&!value.username&&!value.password)url=value.href; }catch {}
-        return '<article class="project-row"><span class="project-logo" aria-hidden="true" data-project-initial="'+esc(initial)+'">'+(url?'<img src="'+esc(url)+'" alt="" referrerpolicy="no-referrer">':esc(initial))+'</span><div class="project-copy"><strong>'+esc(name)+'</strong>'+(subtitle?'<p>'+esc(subtitle)+'</p>':'')+'</div>'+providerMarks(project.providers,meta)+'</article>';
+        return '<article class="project-row"><span class="project-logo" aria-hidden="true" data-project-initial="'+esc(initial)+'">'+(url?'<img src="'+esc(url)+'" alt="" referrerpolicy="no-referrer">':esc(initial))+'</span><div class="project-copy"><strong>'+esc(name)+'</strong>'+(subtitle?'<p>'+esc(subtitle)+'</p>':'')+'</div>'+(providerMarks(project.providers,meta)||'<p class="record-providers project-platforms-empty">No connected platforms</p>')+'</article>';
       }).join('');
       const clean={...data};delete clean._adport;
-      app.innerHTML=chrome(operationHeader('Projects','')+notices(data)+(projects.length?'<div class="record-list" role="region" aria-label="Authorized projects" tabindex="0">'+rows+'</div>':'<p class="operation-note">No accessible projects were returned.</p>')+'<details><summary>Details</summary><pre>'+esc(JSON.stringify(clean,null,2))+'</pre></details>',projects.length+' project'+(projects.length===1?'':'s'));
+      app.innerHTML=chrome(operationHeader('Projects','')+notices(data)+(projects.length?'<div class="record-list" role="region" aria-label="Authorized projects" tabindex="0">'+rows+'</div>':'<p class="operation-note">No accessible projects were returned.</p>')+(projects.length>1000?'<p class="operation-note">Showing 1,000 of '+projects.length+' projects. The full response is in Details.</p>':'')+'<details><summary>Details</summary><pre>'+esc(JSON.stringify(clean,null,2))+'</pre></details>',projects.length+' project'+(projects.length===1?'':'s'));
       app.querySelectorAll('.project-logo img').forEach(image=>image.addEventListener('error',()=>{const parent=image.parentElement;parent.textContent=parent.dataset.projectInitial;},{once:true}));
     }
     function recordPayload(data) {
