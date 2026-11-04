@@ -52,13 +52,13 @@ export const RECORD_UI_SCRIPT = String.raw`
     function recordPayload(data) {
       const value=data.value ?? data.data ?? data.result ?? data;
       if(!object(value))return value;
-      for(const key of ['keyword','audience','pixel','board','campaign','ad_group','ad','asset','customer_list'])if(object(value[key]))return value[key];
+      for(const key of ['keyword','audience','pixel','capi_integration','mobile_app','dataset','board','campaign','ad_group','ad','asset','customer_list'])if(object(value[key]))return value[key];
       return value;
     }
     function recordEntries(payload) {
       if(Array.isArray(payload))return payload;
       if(!object(payload))return null;
-      if(['name','value','title','id','saved_audience_name','saved_audience_id','pixel_name','pixel_id'].some(key=>Object.hasOwn(payload,key)&&!object(payload[key])&&!Array.isArray(payload[key])))return null;
+      if(['name','value','title','id','saved_audience_name','saved_audience_id','pixel_name','pixel_id','capi_connection_id'].some(key=>Object.hasOwn(payload,key)&&!object(payload[key])&&!Array.isArray(payload[key])))return null;
       const ignored=/^(_adport|notes|warnings|errors|actions|creatives|fields|media|resourceIds|resource_ids)$/;
       const keys=['items','results','records','campaigns','ad_groups','ad_sets','ads','keywords','audiences','accounts','projects','assets','data'];
       const key=keys.find(key=>Array.isArray(payload[key])) ?? Object.keys(payload).find(key=>!ignored.test(key)&&Array.isArray(payload[key]));
@@ -72,10 +72,10 @@ export const RECORD_UI_SCRIPT = String.raw`
       if(!object(value))return '<article class="record-row">'+valueHTML(value,true)+'</article>';
       const fields=dataFields(value).filter(field=>!/(?:hash|token|secret|password|authorization|pending operation|snapshot)/i.test(field.label));
       const name=fields.find(field=>/^(name|display name|title|value|keyword|keyword text|campaign name|ad group name|ad name|creative name|account name|audience name|saved audience name|pixel name)$/i.test(field.label));
-      const id=fields.find(field=>/^(id|resource name|saved audience id|pixel id)$/i.test(field.label));
+      const id=fields.find(field=>/^(id|resource name|saved audience id|pixel id|capi connection id)$/i.test(field.label));
       const status=fields.find(field=>/^(status|state|delivery status|archived)$/i.test(field.label));
       const currency=currencyOf(value)||(/^[A-Z]{3}$/.test(value.currency_code||'')?value.currency_code:currencyOf(meta));
-      const chosen=fields.filter(field=>!/^note$|^notes$|^actions$|preview url|preview cover url|logo url/i.test(field.label)&&field!==name&&field!==status&&!/^(id|saved audience id|pixel id|pixel code|account id|provider|resource name|currency|currency code)$/i.test(field.label));
+      const chosen=fields.filter(field=>!/^note$|^notes$|^actions$|preview url|preview cover url|logo url/i.test(field.label)&&field!==name&&field!==status&&!/^(id|saved audience id|pixel id|pixel code|capi connection id|account id|provider|resource name|currency|currency code)$/i.test(field.label));
       chosen.sort((a,b)=>{const priority=field=>/match type|scope|budget|bid|size|type|rule|frequency/i.test(field.label)?0:1;return priority(a)-priority(b);});
       const label=name?.after ?? id?.after ?? 'Record '+(index+1);
       const nativeProvider=typeof value.provider==='string'?value.provider:typeof value.platform==='string'&&providerSvg[value.platform]?value.platform:undefined;

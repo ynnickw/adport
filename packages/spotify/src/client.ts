@@ -1,4 +1,5 @@
 import { AdportError } from '@adport/core';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 
 export const SPOTIFY_API_BASE = 'https://api-partner.spotify.com/ads/v3/';
@@ -46,6 +47,23 @@ export class SpotifyAdsClient {
   private refreshing?: Promise<string>;
   constructor(private readonly credentials: SpotifyCredentials, private readonly fetchImpl: typeof fetch = fetch) {
     this.refreshToken = credentials.refreshToken;
+  }
+
+  measurementReceipt(value: Record<string, unknown>): string {
+    const payload = Buffer.from(JSON.stringify(value)).toString('base64url');
+    return `${payload}.${createHmac('sha256', this.measurementReceiptKey()).update(payload).digest('base64url')}`;
+  }
+  verifyMeasurementReceipt(receipt: string): unknown {
+    const invalid = () => new AdportError('INVALID_INPUT', 'spotify: invalid measurement resource receipt');
+    if (receipt.length > 4096 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/.test(receipt)) throw invalid();
+    const [payload, signature] = receipt.split('.'), supplied = Buffer.from(signature!, 'base64url');
+    const expected = createHmac('sha256', this.measurementReceiptKey()).update(payload!).digest();
+    if (Buffer.from(payload!, 'base64url').toString('base64url') !== payload || supplied.toString('base64url') !== signature || supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) throw invalid();
+    try { return JSON.parse(Buffer.from(payload!, 'base64url').toString('utf8')); } catch { throw invalid(); }
+  }
+  private measurementReceiptKey(): Buffer {
+    // Stable across OAuth refresh rotation; every use also rechecks native account/business access.
+    return createHmac('sha256', this.credentials.clientSecret).update(`adport:spotify:measurement:v1:${this.credentials.clientId}`).digest();
   }
 
   async get<T>(path: string, schema: z.ZodType<T>, params = new URLSearchParams()): Promise<T> {
