@@ -19,7 +19,7 @@ export function fileContentType(file: Pick<File, 'type' | 'name'>) {
   if (['audio/x-wav', 'audio/vnd.wave', 'audio/wave'].includes(file.type)) return 'audio/wav';
   return file.type && file.type !== 'application/octet-stream' ? file.type : extensions[file.name.split('.').at(-1)?.toLowerCase() ?? ''] ?? '';
 }
-export async function uploadProjectFile(input: { projectId: string; storageOrigin: string; file: File; maxBytes: number; acceptedTypes: string[]; progress: (state: string, percent?: number, mediaId?: string) => void }) {
+export async function uploadProjectFile(input: { projectId: string; storageOrigin: string; file: File; maxBytes: number; acceptedTypes: string[]; progress: (state: string, percent?: number, mediaId?: string) => void; ready?: (asset: MediaAsset) => void }) {
   const { file, progress, projectId } = input, contentType = fileContentType(file), endpoint = `/api/media?project_id=${encodeURIComponent(projectId)}`;
   if (!file.size || file.size > input.maxBytes || !input.acceptedTypes.includes(contentType)) throw new Error(`Choose a supported file up to ${Math.floor(input.maxBytes / 1024 / 1024)} MB.`);
   progress('Checking');
@@ -38,7 +38,9 @@ export async function uploadProjectFile(input: { projectId: string; storageOrigi
     request.send(bytes);
   });
   progress('Verifying', 100, prepared.media_id);
-  await responseJson(await fetch(endpoint, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ media_id: prepared.media_id }), signal: AbortSignal.timeout(120_000) }));
+  const finalized = await responseJson<{ asset: MediaAsset }>(await fetch(endpoint, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ media_id: prepared.media_id }), signal: AbortSignal.timeout(120_000) }));
+  if (finalized.asset?.id !== prepared.media_id || finalized.asset.sha256 !== sha256 || finalized.asset.byte_length !== file.size || finalized.asset.content_type !== contentType || finalized.asset.status !== 'READY') throw new Error('The file was not confirmed as ready. Verify this upload before sending it again.');
+  input.ready?.(finalized.asset);
   return prepared.media_id;
 }
 

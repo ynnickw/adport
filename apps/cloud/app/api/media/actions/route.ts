@@ -1,4 +1,4 @@
-import { AdportError, MEDIA_UPLOAD_TOOLS, MEDIA_PREPARATION_TOOLS } from '@adport/core';
+import { AdportError } from '@adport/core';
 import { z } from 'zod';
 import { sessionPrincipal, requireScope } from '@/lib/cloud/auth';
 import { createTenantRuntime } from '@/lib/cloud/runtime';
@@ -6,7 +6,7 @@ import { enforceRateLimit } from '@/lib/cloud/repository';
 import { env } from '@/lib/env';
 import { apiError, HttpError, noStoreJson } from '@/lib/http';
 
-const tools = new Set(['media_get', 'media_update_metadata', 'media_rename', 'media_delete', 'media_distributions', 'media_distribution_plan', ...MEDIA_UPLOAD_TOOLS, ...MEDIA_PREPARATION_TOOLS]);
+const tools = new Set(['media_get', 'media_update_metadata', 'media_delete']);
 const inputSchema = z.object({ tool: z.string().refine(value => tools.has(value)), arguments: z.record(z.string(), z.unknown()) }).strict();
 export async function POST(request: Request) {
   try {
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof AdportError && error.code === 'PROVIDER_ERROR') {
       const details = error.details && typeof error.details === 'object' ? error.details as Record<string, unknown> : {};
-      return noStoreJson({ error: 'The channel upload was not confirmed. Check distribution history before preparing another upload.', code: error.code, ...(typeof details.distribution_id === 'string' ? { distribution_id: details.distribution_id } : {}) }, 502);
+      return noStoreJson({ error: 'The file change was not confirmed. Reload this file before trying again.', code: error.code, ...(typeof details.media_id === 'string' ? { media_id: details.media_id } : {}) }, 502);
     }
     if (error instanceof SyntaxError) return apiError(new HttpError('Invalid library action.', 400));
     return apiError(error);

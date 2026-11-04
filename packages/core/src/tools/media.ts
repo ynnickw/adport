@@ -33,7 +33,7 @@ export function mediaTools(): AnyToolDefinition[] {
       return { ...result, creatives: result.assets.map(asset => ({
         id: asset.id, name: asset.name, provider: 'media', account_id: '', type: asset.content_type, ...(asset.status ? { status: asset.status } : {}),
         headlines: [], descriptions: [`${sizeLabel(asset.byte_length)}${asset.width && asset.height ? ` · ${asset.width} × ${asset.height}` : ''}`, ...(asset.tags?.length ? [`Tags: ${asset.tags.join(', ')}`] : []), ...(asset.platforms?.length ? [`Platforms: ${asset.platforms.join(', ')}`] : [])], landing_urls: [],
-        actions: asset.metadata_version ? [{ label: 'Organize asset', tool: 'media_update_metadata', arguments: { media_id: asset.id, expected_sha256: asset.sha256, expected_version: asset.metadata_version }, fields: [{ key: 'name', label: 'Name', type: 'text' as const, value: asset.name, max_length: 240 }, { key: 'tags', label: 'Tags (one per line)', type: 'text_list' as const, value: asset.tags ?? [] }, { key: 'platforms', label: 'Platform IDs (one per line)', type: 'text_list' as const, value: asset.platforms ?? [] }] }] : [],
+        actions: [],
         media: asset.preview_url && /^(image|video|audio)\//.test(asset.content_type) ? [{ type: asset.content_type.startsWith('image/') ? 'image' : asset.content_type.startsWith('video/') ? 'video' : 'audio', url: asset.preview_url, alt: asset.name }] : [],
       })) };
     },

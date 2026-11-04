@@ -16,14 +16,16 @@ beforeEach(() => {
 });
 describe('central library action adapter', () => {
   it('sends previews and identical applies through the existing shared registry in the selected project', async () => {
-    const args = { account_id: 'selected', media_id: project, expected_sha256: 'a'.repeat(64) };
-    expect((await POST(request('meta_upload_image', args))).status).toBe(200);
-    expect(mocks.session).toHaveBeenCalledWith(project); expect(mocks.scope).toHaveBeenCalledWith(expect.anything(), 'tools:write'); expect(mocks.call).toHaveBeenLastCalledWith('meta_upload_image', args, {});
-    await POST(request('meta_upload_image', { ...args, pending_operation_id: 'private-fixture' }));
-    expect(mocks.call).toHaveBeenLastCalledWith('meta_upload_image', { ...args, pending_operation_id: 'private-fixture' }, {});
+    const args = { media_id: project, expected_sha256: 'a'.repeat(64), expected_version: 1, tags: ['launch'] };
+    expect((await POST(request('media_update_metadata', args))).status).toBe(200);
+    expect(mocks.session).toHaveBeenCalledWith(project); expect(mocks.scope).toHaveBeenCalledWith(expect.anything(), 'tools:write'); expect(mocks.call).toHaveBeenLastCalledWith('media_update_metadata', args, {});
+    await POST(request('media_update_metadata', { ...args, pending_operation_id: 'private-fixture' }));
+    expect(mocks.call).toHaveBeenLastCalledWith('media_update_metadata', { ...args, pending_operation_id: 'private-fixture' }, {});
   });
   it('checks source origin and restricts this adapter to library/upload operations', async () => {
-    expect((await POST(request('meta_upload_image', {}, 'https://untrusted.test'))).status).toBe(403); expect(mocks.session).not.toHaveBeenCalled();
+    expect((await POST(request('media_update_metadata', {}, 'https://untrusted.test'))).status).toBe(403); expect(mocks.session).not.toHaveBeenCalled();
+    expect((await POST(request('meta_upload_image'))).status).toBe(400); expect(mocks.call).not.toHaveBeenCalled();
+    expect((await POST(request('media_distribution_plan'))).status).toBe(400); expect(mocks.call).not.toHaveBeenCalled();
     expect((await POST(request('meta_set_budget'))).status).toBe(400); expect(mocks.call).not.toHaveBeenCalled();
     expect((await POST(request('meta_create_campaign'))).status).toBe(400); expect(mocks.call).not.toHaveBeenCalled();
   });

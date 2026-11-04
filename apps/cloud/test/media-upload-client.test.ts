@@ -19,13 +19,14 @@ class UploadRequest {
 const progress = vi.fn();
 beforeEach(() => {
   requests.length = 0; failTransfer = false; progress.mockReset(); vi.stubGlobal('crypto', webcrypto); vi.stubGlobal('XMLHttpRequest', UploadRequest);
-  vi.stubGlobal('fetch', vi.fn(async (_url, init) => init?.method === 'POST' ? Response.json({ media_id: mediaId, upload_url: `${origin}/storage/v1/object/upload/sign/creative-media/${projectId}/${mediaId}?token=synthetic` }) : Response.json({ status: 'ready' })));
+  vi.stubGlobal('fetch', vi.fn(async (_url, init) => init?.method === 'POST' ? Response.json({ media_id: mediaId, upload_url: `${origin}/storage/v1/object/upload/sign/creative-media/${projectId}/${mediaId}?token=synthetic` }) : Response.json({ asset: { id: mediaId, name: file.name, content_type: file.type, byte_length: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'), status: 'READY' } })));
 });
 afterEach(() => vi.unstubAllGlobals());
 const input = () => ({ projectId, storageOrigin: origin, file, acceptedTypes: ['image/png'], maxBytes: 50 * 1024 * 1024, progress });
 describe('browser private-file transport', () => {
   it('binds exact SHA-256 and bytes, reports transfer progress and finalizes separately', async () => {
-    expect(await uploadProjectFile(input())).toBe(mediaId);
+    const ready = vi.fn(); expect(await uploadProjectFile({ ...input(), ready })).toBe(mediaId);
+    expect(ready).toHaveBeenCalledWith(expect.objectContaining({ id: mediaId, status: 'READY' }));
     const metadata = JSON.parse(vi.mocked(fetch).mock.calls[0]![1]!.body as string);
     expect(metadata).toEqual({ name: 'image.png', byte_length: bytes.length, content_type: 'image/png', sha256: createHash('sha256').update(bytes).digest('hex') });
     expect(requests).toHaveLength(1); expect(new Uint8Array(requests[0]!.body as ArrayBuffer)).toEqual(bytes);

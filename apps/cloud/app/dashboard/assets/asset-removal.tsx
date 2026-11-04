@@ -6,7 +6,7 @@ import { LibraryDialog } from './library-dialog';
 import { mediaAction, type Preview } from './media-client';
 import styles from './assets.module.css';
 
-export function AssetRemoval({ projectId, assets, onChange, onClose }: { projectId: string; assets: MediaAsset[]; onChange(): void; onClose(): void }) {
+export function AssetRemoval({ projectId, assets, onRemoved, onClose }: { projectId: string; assets: MediaAsset[]; onRemoved(ids: string[]): void; onClose(): void }) {
   const [previews, setPreviews] = useState<Array<{ asset: MediaAsset; args: Record<string, unknown>; preview: Preview }>>([]), [busy, setBusy] = useState(false), [finished, setFinished] = useState(false), [error, setError] = useState('');
   const lock = useRef(false);
   async function prepare() {
@@ -20,9 +20,9 @@ export function AssetRemoval({ projectId, assets, onChange, onClose }: { project
   }
   async function remove() {
     if (lock.current || finished || !previews.length) return; lock.current = true; setBusy(true); const approved = previews; setPreviews([]);
-    const failures = [];
-    for (const item of approved) { try { await mediaAction(projectId, 'media_delete', { ...item.args, pending_operation_id: item.preview.pending_operation_id }); } catch { failures.push(item.asset.name); } }
-    setFinished(true); setBusy(false); lock.current = false; onChange();
+    const failures = [], removed = [];
+    for (const item of approved) { try { const result = await mediaAction<Preview>(projectId, 'media_delete', { ...item.args, pending_operation_id: item.preview.pending_operation_id }); if (result.status !== 'applied') throw new Error('Unconfirmed removal'); removed.push(item.asset.id); } catch { failures.push(item.asset.name); } }
+    setFinished(true); setBusy(false); lock.current = false; if (removed.length) onRemoved(removed);
     if (failures.length) setError(`Check removal status for: ${failures.join(', ')}. Reload the library before another removal attempt.`); else onClose();
   }
   return <LibraryDialog title={`Remove ${assets.length === 1 ? 'creative' : `${assets.length} creatives`}`} onClose={busy ? () => {} : onClose}>
