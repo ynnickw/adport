@@ -10,9 +10,10 @@ import { adWritePlanLimit } from '@/lib/cloud/write-plan-limit';
 import { env } from '@/lib/env';
 import { routeMcpProjects } from '@/lib/cloud/mcp-projects';
 import { diagnoseMcpRejection } from '@/lib/mcp-transport-diagnostics';
-import { isMcpUiResourceRequest } from '@/lib/mcp-ui-request';
+import { inspectMcpRequest, type McpDiscoveryMethod } from '@/lib/mcp-ui-request';
 
 async function handle(request: Request): Promise<Response> {
+  let discoveryMethod: McpDiscoveryMethod | undefined;
   try {
     const principal = await apiPrincipal(request);
     const toolScopes = principal.oauthOrganizationGroupId ? principal.grantedScopes ?? principal.scopes : principal.scopes;
@@ -21,7 +22,9 @@ async function handle(request: Request): Promise<Response> {
     const oauthClient = principal.oauthTokenId && principal.clientId
       ? await getMcpOAuthClient(principal.clientId)
       : undefined;
-    const uiOnly = await isMcpUiResourceRequest(request);
+    const requestShape = await inspectMcpRequest(request);
+    const uiOnly = requestShape.uiOnly;
+    discoveryMethod = requestShape.discoveryMethod;
     const writeLimit = uiOnly || principal.oauthOrganizationGroupId ? undefined : await adWritePlanLimit(principal, env().ADPORT_CLOUD_BASE_URL);
     const writePlanDenial = writeLimit
       ? {
@@ -79,7 +82,7 @@ async function handle(request: Request): Promise<Response> {
       const handler = createMcpHandler(() => server, { legacy: 'reject' });
       response = await handler.fetch(request, requestOptions);
     }
-    await diagnoseMcpRejection(request, response);
+    await diagnoseMcpRejection(request, response, 'transport', discoveryMethod);
     return response;
   } catch (error) {
     const status = error instanceof HttpError ? error.status : 401;
@@ -89,7 +92,7 @@ async function handle(request: Request): Promise<Response> {
       headers.set('www-authenticate', `Bearer resource_metadata="${protectedResourceMetadataUrl()}", scope="tools:read tools:write"`);
     }
     const response = Response.json({ error: message }, { status, headers });
-    await diagnoseMcpRejection(request, response, 'request_setup');
+    await diagnoseMcpRejection(request, response, 'request_setup', discoveryMethod);
     return response;
   }
 }
