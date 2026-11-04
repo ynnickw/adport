@@ -1,7 +1,7 @@
 import 'server-only';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
-import { AdportError, verifyMedia, mediaUploadMetadataSchema, mediaWriteSchemas, MAX_PROJECT_MEDIA_BYTES, PROJECT_MEDIA_TYPES, type MediaAsset, type ManagedMediaLibrary, type MediaSource, type VerifiedMedia, type WriteOperation, type WritePreview, type WriteResult } from '@adport/core';
+import { AdportError, verifyMedia, mediaUploadMetadataSchema, mediaWriteSchemas, MAX_PROJECT_MEDIA_BYTES, MEDIA_UPLOAD_PART_BYTES, PROJECT_MEDIA_TYPES, type MediaAsset, type ManagedMediaLibrary, type MediaSource, type VerifiedMedia, type WriteOperation, type WritePreview, type WriteResult } from '@adport/core';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
@@ -21,6 +21,17 @@ export const mediaUploadSchema = mediaUploadMetadataSchema;
 interface StoredMedia {
   id: string; organizationId: string; name: string; objectPath: string; contentType: string; byteLength: number | string;
   sha256: string; status: 'uploading' | 'ready' | 'failed'; width: number | null; height: number | null; expiresAt: Date; deletedAt: Date | null;
+}
+const partCount = (row: Pick<StoredMedia, 'byteLength'>) => Math.ceil(Number(row.byteLength) / MEDIA_UPLOAD_PART_BYTES);
+const partPath = (row: Pick<StoredMedia, 'objectPath'>, index: number) => `${row.objectPath}.part-${index}`;
+const partPaths = (row: Pick<StoredMedia, 'objectPath' | 'byteLength'>) => Array.from({ length: partCount(row) }, (_, index) => partPath(row, index));
+const missingObject = (error: unknown) => !!error && typeof error === 'object' && ('statusCode' in error && String(error.statusCode) === '404' || 'code' in error && error.code === 'NoSuchKey');
+
+async function removeObjects(paths: string[]) {
+  for (let index = 0; index < paths.length; index += 1000) {
+    const { error } = await createAdminClient().storage.from(BUCKET).remove(paths.slice(index, index + 1000));
+    if (error) throw new HttpError('Private media byte cleanup was not confirmed. Reconcile this upload before retrying.', 502);
+  }
 }
 
 export async function inspectMediaBytes(bytes: Uint8Array<ArrayBuffer>, metadata: z.infer<typeof mediaUploadSchema>): Promise<{ file: VerifiedMedia; width?: number; height?: number }> {
@@ -54,14 +65,24 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
 
   private async asset(row: StoredMedia, includeDownload = true): Promise<MediaAsset> {
     let preview: string | undefined;
+    let upload: MediaAsset['upload'];
     if (includeDownload && row.status === 'ready' && !row.deletedAt) {
       const { data, error } = await createAdminClient().storage.from(BUCKET).createSignedUrl(row.objectPath, 900);
       if (error || !data) throw new HttpError('Media previews could not be prepared.', 502);
       preview = data.signedUrl;
     }
+    if (includeDownload && row.status === 'uploading' && !row.deletedAt) {
+      const { data, error } = await createAdminClient().storage.from(BUCKET).list(this.scopeId, { search: `${row.id}.part-`, limit: 100 });
+      if (error || !data) throw new HttpError('Upload progress could not be read.', 502);
+      const received_parts = data.flatMap(file => {
+        const index = partPaths(row).indexOf(`${this.scopeId}/${file.name}`), size: unknown = file.metadata?.size;
+        return index >= 0 && typeof size === 'number' && Number.isSafeInteger(size) && size >= 0 ? [{ part_index: index, byte_length: size }] : [];
+      }).sort((a, b) => a.part_index - b.part_index);
+      upload = { part_size: MEDIA_UPLOAD_PART_BYTES, part_count: partCount(row), received_parts, expires_at: row.expiresAt.toISOString() };
+    }
     return { id: row.id, name: row.name, content_type: row.contentType, byte_length: Number(row.byteLength), sha256: row.sha256,
       status: row.deletedAt ? 'DELETED' : row.status === 'ready' ? 'READY' : row.status === 'uploading' ? 'PROCESSING' : 'FAILED',
-      ...(row.width ? { width: row.width } : {}), ...(row.height ? { height: row.height } : {}), ...(preview ? { preview_url: preview } : {}) };
+      ...(row.width ? { width: row.width } : {}), ...(row.height ? { height: row.height } : {}), ...(preview ? { preview_url: preview } : {}), ...(upload ? { upload } : {}) };
   }
 
   async get(id: string) {
@@ -70,7 +91,7 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
   }
 
   async read(source: MediaSource, options: { maxBytes?: number; contentTypes?: readonly string[] } = {}): Promise<VerifiedMedia> {
-    if (source.file_path || !source.media_id) throw new AdportError('INVALID_INPUT', 'Hosted uploads require a project media_id; server file paths are not accepted. Stage files without a dashboard using media_upload, or media_prepare_upload → HTTP PUT → media_finalize_upload. Then pass the returned media_id and SHA-256.');
+    if (source.file_path || !source.media_id) throw new AdportError('INVALID_INPUT', 'Hosted uploads require a project media_id; server file paths are not accepted. Stage files with media_upload, or media_prepare_upload → HTTP PUT or media_upload_part → media_finalize_upload. Then pass the returned media_id and SHA-256. No dashboard is required.');
     const row = await this.record(source.media_id);
     if (row.status !== 'ready') throw new AdportError('INVALID_INPUT', 'Finish and verify the media upload before using it.');
     if (row.sha256 !== source.expected_sha256.toLowerCase()) throw new AdportError('INVALID_INPUT', 'Media SHA-256 mismatch. Select the approved project asset.');
@@ -107,11 +128,10 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
     requireScope(this.principal, 'tools:write');
     // Signed upload URLs last two hours. Wait longer before removing abandoned
     // objects so an old grant cannot recreate a deleted orphan afterward.
-    const stale = await db()<Array<{ id: string; objectPath: string }>>`select id, object_path from private.creative_media
+    const stale = await db()<Array<{ id: string; objectPath: string; byteLength: number }>>`select id, object_path, byte_length from private.creative_media
       where organization_id = ${this.principal.organizationId} and status != 'ready' and created_at < now() - interval '3 hours' limit 100`;
     if (stale.length) {
-      const { error } = await createAdminClient().storage.from(BUCKET).remove(stale.map(row => row.objectPath));
-      if (error) throw new HttpError('Abandoned uploads could not be cleared. Try again later.', 502);
+      await removeObjects(stale.flatMap(row => [row.objectPath, ...partPaths(row)]));
       await db()`delete from private.creative_media where organization_id = ${this.principal.organizationId} and id in ${db()(stale.map(row => row.id))} and status != 'ready'`;
     }
     const id = randomUUID(), objectPath = `${this.principal.organizationId}/${id}`;
@@ -130,23 +150,46 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
       await db()`update private.creative_media set status = 'failed' where id = ${id} and organization_id = ${this.principal.organizationId}`;
       throw new HttpError('The media upload could not be prepared.', 502);
     }
-    return { media_id: id, upload_url: data.signedUrl, method: 'PUT' as const, headers: { 'content-type': input.content_type, 'x-upsert': 'false' }, expires_at: new Date(Date.now() + 15 * 60_000).toISOString() };
+    return { media_id: id, upload_url: data.signedUrl, method: 'PUT' as const, headers: { 'content-type': input.content_type, 'x-upsert': 'false' }, expires_at: new Date(Date.now() + 15 * 60_000).toISOString(), mcp_upload: { tool: 'media_upload_part', part_size: MEDIA_UPLOAD_PART_BYTES, part_count: partCount({ byteLength: input.byte_length }), next_tool: 'media_finalize_upload' } };
   }
 
   private async inspectUpload(row: StoredMedia) {
     if (row.status !== 'uploading' || row.expiresAt.getTime() <= Date.now()) throw new HttpError('The upload expired. Start a new upload.', 409);
-    const { data, error } = await createAdminClient().storage.from(BUCKET).download(row.objectPath);
-    if (error || !data) throw new HttpError('Upload the file before finalizing it.', 409);
-    if (data.size !== Number(row.byteLength) || data.size > MAX_MEDIA_BYTES) throw new HttpError('The uploaded file size differs from the approved file.', 400);
-    return inspectMediaBytes(new Uint8Array(await data.arrayBuffer()), { name: row.name, content_type: row.contentType as typeof MEDIA_TYPES[number], byte_length: Number(row.byteLength), sha256: row.sha256 });
+    const storage = createAdminClient().storage.from(BUCKET), { data, error } = await storage.download(row.objectPath);
+    if (error && !missingObject(error)) throw new HttpError('The uploaded file could not be read.', 502);
+    let bytes: Uint8Array<ArrayBuffer>, assembled = false;
+    if (data) {
+      if (data.size !== Number(row.byteLength) || data.size > MAX_MEDIA_BYTES) throw new HttpError('The uploaded file size differs from the approved file.', 400);
+      bytes = new Uint8Array(await data.arrayBuffer());
+    } else {
+      const chunks: Buffer[] = [];
+      for (let index = 0; index < partCount(row); index++) {
+        const part = await storage.download(partPath(row, index));
+        if (part.error || !part.data) throw new HttpError(`Upload part ${index} before finalizing. Inspect media_get for received parts.`, missingObject(part.error) ? 409 : 502);
+        const expected = Math.min(MEDIA_UPLOAD_PART_BYTES, Number(row.byteLength) - index * MEDIA_UPLOAD_PART_BYTES);
+        if (part.data.size !== expected) throw new HttpError(`Upload part ${index} has an unexpected length.`, 400);
+        chunks.push(Buffer.from(await part.data.arrayBuffer()));
+      }
+      bytes = Buffer.concat(chunks); assembled = true;
+    }
+    return { ...await inspectMediaBytes(bytes, { name: row.name, content_type: row.contentType as typeof MEDIA_TYPES[number], byte_length: Number(row.byteLength), sha256: row.sha256 }), assembled };
   }
 
   async finalize(id: string) {
     requireScope(this.principal, 'tools:write');
     const row = await this.record(id);
     if (row.status === 'ready') return { media_id: row.id, sha256: row.sha256, status: 'ready' as const };
-    const result = await this.inspectUpload(row);
     await db().begin(async sql => {
+      const [locked] = await sql<StoredMedia[]>`select * from private.creative_media where id = ${id} and organization_id = ${this.scopeId} for update`;
+      if (!locked || locked.deletedAt) throw new HttpError('The upload is no longer available.', 409);
+      if (locked.status === 'ready') return;
+      const result = await this.inspectUpload(locked);
+      if (result.assembled) {
+        const uploaded = await createAdminClient().storage.from(BUCKET).upload(locked.objectPath, result.file.bytes, { contentType: locked.contentType, upsert: false });
+        if (uploaded.error) throw new HttpError('Assembly storage was not confirmed. Inspect media_get and prepare a fresh finalization preview; do not repeat any part writes.', 502);
+      }
+      // Keep the 100 MiB reservation until both source and temporary parts are reconciled.
+      await removeObjects(partPaths(locked));
       const updated = await sql`update private.creative_media set status = 'ready', width = ${result.width ?? null}, height = ${result.height ?? null}, finalized_at = now()
         where id = ${id} and organization_id = ${this.principal.organizationId} and status = 'uploading' and deleted_at is null and expires_at > now() returning id`;
       if (!updated.length) throw new HttpError('The upload expired or was already finalized. Reload the library.', 409);
@@ -159,7 +202,7 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
   private async plan(op: WriteOperation): Promise<WritePreview & { execute(): Promise<WriteResult> }> {
     requireScope(this.principal, 'tools:write');
     const tool = op.tool as keyof typeof mediaWriteSchemas, schema = mediaWriteSchemas[tool];
-    const kind = tool === 'media_delete' ? 'remove' : tool === 'media_rename' || tool === 'media_finalize_upload' ? 'update' : 'create';
+    const kind = tool === 'media_delete' ? 'remove' : tool === 'media_rename' || tool === 'media_finalize_upload' || tool === 'media_upload_part' ? 'update' : 'create';
     if (!Object.hasOwn(mediaWriteSchemas, tool) || !schema || op.provider !== 'media' || op.accountId !== this.scopeId || op.kind !== kind) throw new AdportError('INVALID_INPUT', 'Invalid project media operation.');
     const input = schema.parse(op.payload);
     const base = { coercions: [], budgetDeltas: [], serverValidated: false };
@@ -186,6 +229,33 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
     }
     const selected = mediaWriteSchemas.media_finalize_upload.parse(input), row = await this.record(selected.media_id);
     if (row.sha256 !== selected.expected_sha256) throw new AdportError('INVALID_INPUT', 'Media SHA-256 differs from the selected file.');
+    if (tool === 'media_upload_part') {
+      const value = mediaWriteSchemas.media_upload_part.parse(input), bytes = Buffer.from(value.data_base64, 'base64');
+      if (row.status !== 'uploading' || row.expiresAt.getTime() <= Date.now()) throw new HttpError('This upload is finalized or expired. Inspect media_get.', 409);
+      const expected = Math.min(MEDIA_UPLOAD_PART_BYTES, Number(row.byteLength) - value.part_index * MEDIA_UPLOAD_PART_BYTES);
+      if (expected <= 0 || bytes.length !== expected || bytes.toString('base64') !== value.data_base64) throw new AdportError('INVALID_INPUT', 'Use canonical base64 for the exact reserved part length and index.');
+      if (createHash('sha256').update(bytes).digest('hex') !== value.part_sha256) throw new AdportError('INVALID_INPUT', 'Part SHA-256 mismatch.');
+      const path = partPath(row, value.part_index), storage = createAdminClient().storage.from(BUCKET);
+      const checkExisting = async () => {
+        const { data, error } = await storage.download(path);
+        if (error && !missingObject(error)) throw new HttpError('Upload part could not be reconciled.', 502);
+        if (!data) return false;
+        if (data.size !== bytes.length || !Buffer.from(await data.arrayBuffer()).equals(bytes)) throw new AdportError('INVALID_INPUT', 'This immutable part already contains different bytes. Start a new upload.');
+        return true;
+      };
+      const present = await checkExisting();
+      return { ...base, summary: `Upload project media part ${value.part_index + 1}/${partCount(row)} for “${row.name}”`, changes: [`${present ? '=' : '+'} part ${value.part_index}; ${bytes.length} bytes; SHA-256 ${value.part_sha256}`], notes: ['Private temporary bytes only. No provider upload or publication. media_finalize_upload separately verifies the complete reserved checksum. Existing parts cannot be overwritten.'], execute: async () => db().begin(async sql => {
+        const [locked] = await sql<StoredMedia[]>`select * from private.creative_media where id = ${row.id} and organization_id = ${this.scopeId} for update`;
+        if (!locked || locked.deletedAt || locked.status !== 'uploading' || locked.expiresAt.getTime() <= Date.now()) throw new HttpError('This upload is finalized or expired. Inspect media_get.', 409);
+        const existing = await checkExisting();
+        if (!existing) {
+          if (!await enforceRateLimit(`media-part:${this.scopeId}`, 120)) throw new HttpError('Too many upload parts. Try again later.', 429);
+          const { error } = await storage.upload(path, bytes, { contentType: row.contentType, upsert: false });
+          if (error) throw new AdportError('PROVIDER_ERROR', 'Part storage was not confirmed. Inspect media_get before requesting a new preview; do not replay this operation.', { media_id: row.id, part_index: value.part_index });
+        }
+        return { applied: true, resourceIds: [row.id], details: { media_id: row.id, part_index: value.part_index, byte_length: bytes.length, part_sha256: value.part_sha256, already_present: existing, next_tool: 'media_finalize_upload' } };
+      }) };
+    }
     if (tool === 'media_finalize_upload') {
       if (row.status !== 'ready') await this.inspectUpload(row);
       return { ...base, summary: `Verify project media “${row.name}”`, changes: [`~ ${row.id}: ${row.status} → ready; SHA-256 ${row.sha256}`], fieldChanges: [{ field: 'File readiness', before: row.status, after: 'ready' }], notes: ['The stored bytes are decoded and checksum-verified before provider uploads can use them.'], execute: async () => { await this.finalize(row.id); return { applied: true, resourceIds: [row.id], details: { media_id: row.id, sha256: row.sha256, status: 'ready', asset: await this.asset(await this.record(row.id), false) } }; } };
@@ -203,8 +273,8 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
     return { ...base, summary: `Delete project media “${row.name}”`, changes: [`- ${row.id}; ${row.name}; SHA-256 ${row.sha256}`], fieldChanges: [{ field: 'Project source', before: row.name, after: '(deleted)' }], notes: ['Permanently removes this project source. Provider copies, ads and campaigns are unchanged. A deletion record is retained until outstanding upload grants expire.'], execute: async () => {
       const updated = await db()`update private.creative_media set deleted_at = now(), status = 'failed' where id = ${row.id} and organization_id = ${this.scopeId} and name = ${row.name} and sha256 = ${row.sha256} and deleted_at is null returning id`;
       if (!updated.length) throw new AdportError('INVALID_INPUT', 'Media changed before deletion. Read it and preview again.');
-      const removed = await createAdminClient().storage.from(BUCKET).remove([row.objectPath]);
-      if (removed.error) throw new AdportError('PROVIDER_ERROR', 'Media reuse is blocked, but byte removal was not confirmed. Scheduled cleanup will retry; reconcile this ID.', { media_id: row.id });
+      try { await removeObjects([row.objectPath, ...partPaths(row)]); }
+      catch { throw new AdportError('PROVIDER_ERROR', 'Media reuse is blocked, but byte removal was not confirmed. Scheduled cleanup will retry; reconcile this ID.', { media_id: row.id }); }
       return { applied: true, resourceIds: [row.id], details: { media_id: row.id, status: 'deleted', storage_removed: true } };
     } };
   }
@@ -229,7 +299,7 @@ export async function cleanupDeletedProjectMedia(): Promise<{ checked: number; c
         const { data, error } = await storage.list(job.projectId, { limit: 1000, offset: 0 });
         if (error || !data) throw new Error('Storage listing failed.');
         if (!data.length) { empty = true; break; }
-        if (data.some(file => !z.string().uuid().safeParse(file.name).success)) throw new Error('Unexpected media object path.');
+        if (data.some(file => !z.string().uuid().safeParse(file.name.replace(/\.part-(?:[0-9]|[1-4][0-9])$/, '')).success)) throw new Error('Unexpected media object path.');
         const removed = await storage.remove(data.map(file => `${job.projectId}/${file.name}`));
         if (removed.error) throw new Error('Storage deletion failed.');
       }

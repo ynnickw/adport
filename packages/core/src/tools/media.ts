@@ -22,7 +22,7 @@ function target(ctx: ToolContext) {
 export function mediaTools(): AnyToolDefinition[] {
   return [defineTool({
     name: 'media_list', namespace: 'core',
-    description: 'List immutable project media with SHA-256, dimensions and temporary previews. Upload without a dashboard using media_upload (base64 up to 1 MiB) or media_prepare_upload → HTTP PUT → media_finalize_upload (up to 50 MiB). Use media_id and sha256 in provider upload tools.',
+    description: 'List immutable project media with SHA-256, dimensions and temporary previews. Upload without a dashboard using media_upload (up to 1 MiB) or media_prepare_upload → HTTP PUT or media_upload_part → media_finalize_upload (up to 50 MiB). Use media_id and sha256 in provider upload tools.',
     input: z.object({ limit: z.number().int().positive().max(100).default(24), cursor: z.string().uuid().optional() }),
     output: creativesOutput.extend({ assets: z.array(mediaAssetSchema), upload_page_url: z.string().url().optional() }),
     presentation: 'creatives', pagination: { cursorInput: 'cursor' }, annotations: { readOnly: true, openWorld: false },
@@ -36,13 +36,14 @@ export function mediaTools(): AnyToolDefinition[] {
       })) };
     },
   }),
-  defineTool({ name: 'media_get', namespace: 'core', description: 'Get project media metadata, processing/deletion status and a temporary download URL for ready files. No dashboard required. Download with an HTTP GET of asset.preview_url; preserve the returned SHA-256.', input: z.object({ media_id: z.string().uuid() }), output: z.object({ asset: mediaAssetSchema }), annotations: { readOnly: true, openWorld: false }, handler: async (input, ctx) => ({ asset: await managed(ctx).get(input.media_id) }) }),
+  defineTool({ name: 'media_get', namespace: 'core', description: 'Get project media metadata, processing/deletion status and a temporary download URL for ready files. Pending uploads include part size/count and received part indexes for reconciliation. Download asset.preview_url with HTTP GET; preserve its SHA-256.', input: z.object({ media_id: z.string().uuid() }), output: z.object({ asset: mediaAssetSchema }), annotations: { readOnly: true, openWorld: false }, handler: async (input, ctx) => ({ asset: await managed(ctx).get(input.media_id) }) }),
   ...([
-    ['media_prepare_upload', 'Reserve an immutable project file up to 50 MiB. Apply returns a temporary upload_url, HTTP PUT method and required headers. Send raw bytes to that URL, then preview/apply media_finalize_upload. No dashboard, local server paths, ad account mutation or publication.'],
-    ['media_upload', 'Upload a small project file directly as canonical base64 (at most 1 MiB decoded). SHA-256, declared length and actual MIME must match. Preview verifies bytes; apply stores and verifies them, returning media_id. For larger files use media_prepare_upload and raw HTTP PUT.'],
-    ['media_finalize_upload', 'Verify a prepared raw-byte upload and mark it ready for provider tools. Requires the exact reserved checksum. Preview checks the stored bytes without finalizing; apply returns immutable media_id, SHA-256 and file metadata.'],
+    ['media_prepare_upload', 'Reserve an immutable project file up to 50 MiB. Apply returns a temporary raw HTTP PUT grant and an MCP-only media_upload_part plan. Transfer the bytes by either method, then preview/apply media_finalize_upload. No dashboard, ad account mutation or publication.'],
+    ['media_upload', 'Upload a small project file directly as canonical base64 (at most 1 MiB decoded). SHA-256, declared length and actual MIME must match. Preview verifies bytes; apply stores and verifies them, returning media_id. For larger files use media_prepare_upload with raw HTTP PUT or media_upload_part.'],
+    ['media_finalize_upload', 'Verify a prepared raw-byte or MCP-part upload and mark it ready for provider tools. Requires the reserved whole-file checksum. Preview checks stored bytes without finalizing; apply assembles parts if needed and returns immutable media_id, SHA-256 and metadata.'],
+    ['media_upload_part', 'Transfer one immutable 1 MiB base64 part through MCP after media_prepare_upload. Zero-based indexes; only the last part may be shorter. Bind the reserved whole-file checksum and exact part checksum. Preview/apply each part; inspect media_get after unknown outcomes. Finalize separately.'],
     ['media_rename', 'Rename project media metadata after matching its current name and immutable SHA-256. File bytes, ID and existing provider copies are preserved.'],
     ['media_delete', 'Permanently remove a project library source after matching its current name and SHA-256. Blocks further reuse and removes stored bytes; expired-grant cleanup retains a temporary deletion record. Does not delete provider copies, ads or campaigns.'],
-  ] as const).map(([name, description]) => guardedWriteTool({ name, namespace: 'core', provider: 'media', kind: name === 'media_delete' ? 'remove' : name === 'media_rename' || name === 'media_finalize_upload' ? 'update' : 'create', payload: mediaWriteSchemas[name], description, contextTarget: target })),
+  ] as const).map(([name, description]) => guardedWriteTool({ name, namespace: 'core', provider: 'media', kind: name === 'media_delete' ? 'remove' : name === 'media_rename' || name === 'media_finalize_upload' || name === 'media_upload_part' ? 'update' : 'create', payload: mediaWriteSchemas[name], description, destructive: name === 'media_delete', contextTarget: target })),
   ];
 }

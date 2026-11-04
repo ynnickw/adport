@@ -7,7 +7,7 @@ import { db, closeDbForTests } from '@/lib/db';
 import { cleanupDeletedProjectMedia, ProjectMediaLibrary } from '@/lib/cloud/media';
 import { resolveMembership } from '@/lib/cloud/repository';
 import { PostgresAuditStore, PostgresPendingStore } from '@/lib/cloud/repository';
-import { createContext, DEFAULT_POLICY, PolicyEngine } from '@adport/core';
+import { createContext, DEFAULT_POLICY, MEDIA_UPLOAD_PART_BYTES, PolicyEngine } from '@adport/core';
 import { createMcpServer } from '@adport/mcp';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 
@@ -33,8 +33,10 @@ describeDatabase('project media signed-upload boundary', () => {
   });
   afterAll(async () => {
     if (projects.length) {
-      const rows = await db()<Array<{ objectPath: string }>>`select object_path from private.creative_media where organization_id in ${db()(projects)}`;
-      if (rows.length) await admin.storage.from('creative-media').remove(rows.map(row => row.objectPath));
+      for (const project of projects) {
+        const { data } = await admin.storage.from('creative-media').list(project, { limit: 1000 });
+        if (data?.length) await admin.storage.from('creative-media').remove(data.map(file => `${project}/${file.name}`));
+      }
       await db()`delete from public.organizations where id in ${db()(projects)}`;
       await db()`delete from private.creative_media_cleanup where project_id in ${db()(projects)}`;
     }
@@ -87,6 +89,8 @@ describeDatabase('project media signed-upload boundary', () => {
     const prepared = await library.beginUpload({ name: 'deleted-project.png', content_type: 'image/png', byte_length: bytes.byteLength, sha256 });
     expect((await fetch(prepared.upload_url, { method: 'PUT', body: bytes, headers: { 'content-type': 'image/png' } })).ok).toBe(true);
     const [file] = await db()<Array<{ objectPath: string }>>`select object_path from private.creative_media where id = ${prepared.media_id}`;
+    const rt = await runtime(2), partial = await apply(rt, 'media_prepare_upload', { name: 'deleted-project-part.png', content_type: 'image/png', byte_length: bytes.length, sha256 });
+    await apply(rt, 'media_upload_part', { media_id: partial.result.details.media_id, expected_sha256: sha256, part_index: 0, part_sha256: sha256, data_base64: bytes.toString('base64') });
     await db()`delete from public.organizations where id = ${projectId}`;
     const [job] = await db()<Array<{ notBefore: Date }>>`select not_before from private.creative_media_cleanup where project_id = ${projectId}`;
     expect(job!.notBefore.getTime()).toBeGreaterThan(Date.now() + 2 * 60 * 60_000);
@@ -99,6 +103,7 @@ describeDatabase('project media signed-upload boundary', () => {
     await cleanupDeletedProjectMedia();
     expect(await db()`select project_id from private.creative_media_cleanup where project_id = ${projectId}`).toHaveLength(0);
     expect((await admin.storage.from('creative-media').download(file!.objectPath)).error).toBeTruthy();
+    expect((await admin.storage.from('creative-media').list(projectId)).data).toEqual([]);
   });
 
   async function runtime(index = 0, scopes = ['tools:read', 'tools:write']) {
@@ -187,5 +192,82 @@ describeDatabase('project media signed-upload boundary', () => {
       expect((await invoke('media_finalize_upload', { ...selected, pending_operation_id: finalized.pending_operation_id })).result.details.asset.status).toBe('READY');
       expect((await invoke('media_get', { media_id: grant.media_id })).asset.sha256).toBe(sha256);
     } finally { await host.close(); await server.close(); }
+  });
+
+  it('uploads out-of-order immutable parts entirely through MCP and verifies exact assembled bytes with no client HTTP transfer', async () => {
+    const rt = await runtime(), second = await runtime(1), readonly = await runtime(0, ['tools:read']);
+    const server = createMcpServer({ runtime: rt, scopes: ['tools:read','tools:write'] }), host = new Client({ name: 'mcp-only-part-upload', version: '1' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([host.connect(clientTransport), server.connect(serverTransport)]);
+    const invoke = async (name: string, args: Record<string, unknown>): Promise<any> => {
+      const result = await host.callTool({ name, arguments: args }); expect(result.isError).not.toBe(true); return result.structuredContent;
+    };
+    const approve = async (name: string, args: Record<string, unknown>) => {
+      const preview = await invoke(name, args);
+      return invoke(name, { ...args, pending_operation_id: preview.pending_operation_id });
+    };
+    const video = Buffer.alloc(MEDIA_UPLOAD_PART_BYTES * 2 + 31, 97);
+    video.writeUInt32BE(24, 0); video.write('ftypisom', 4);
+    const checksum = createHash('sha256').update(video).digest('hex');
+    const metadata = { name: 'mcp-parts.mp4', content_type: 'video/mp4', byte_length: video.length, sha256: checksum };
+    try {
+      const prepared = await approve('media_prepare_upload', metadata), media_id = prepared.result.details.media_id;
+      expect(prepared.result.details.mcp_upload).toMatchObject({ tool: 'media_upload_part', part_size: MEDIA_UPLOAD_PART_BYTES, part_count: 3 });
+      const selected = { media_id, expected_sha256: checksum };
+      const part = (index: number, source = video) => {
+        const bytes = source.subarray(index * MEDIA_UPLOAD_PART_BYTES, (index + 1) * MEDIA_UPLOAD_PART_BYTES);
+        return { ...selected, part_index: index, part_sha256: createHash('sha256').update(bytes).digest('hex'), data_base64: bytes.toString('base64') };
+      };
+      const finalPart = part(2), preview = await invoke('media_upload_part', finalPart);
+      expect((await invoke('media_get', { media_id })).asset.upload.received_parts).toEqual([]);
+      await expect(call(rt, 'media_upload_part', { ...finalPart, data_base64: 'YQ==', pending_operation_id: preview.pending_operation_id })).rejects.toMatchObject({ code: 'PENDING_MISMATCH' });
+      await expect(call(second, 'media_upload_part', finalPart)).rejects.toThrow('selected project');
+      await expect(call(readonly, 'media_upload_part', finalPart)).rejects.toThrow('tools:write');
+      await invoke('media_upload_part', { ...finalPart, pending_operation_id: preview.pending_operation_id });
+      await expect(call(rt, 'media_finalize_upload', selected)).rejects.toThrow('part 0');
+      expect((await invoke('media_get', { media_id })).asset.upload).toMatchObject({ part_count: 3, received_parts: [{ part_index: 2, byte_length: 31 }] });
+      await approve('media_upload_part', part(0));
+      expect((await approve('media_upload_part', part(0))).result.details.already_present).toBe(true);
+      const changed = Buffer.from(video); changed[20] = 98;
+      await expect(call(rt, 'media_upload_part', part(0, changed))).rejects.toThrow('different bytes');
+      await expect(call(rt, 'media_upload_part', { ...part(1), part_sha256: '0'.repeat(64) })).rejects.toThrow('Part SHA-256');
+      await expect(call(rt, 'media_upload_part', { ...part(2), part_index: 3 })).rejects.toThrow('length and index');
+      await approve('media_upload_part', part(1));
+      const finalPreview = await invoke('media_finalize_upload', selected);
+      expect((await invoke('media_get', { media_id })).asset.status).toBe('PROCESSING');
+      const finished = await invoke('media_finalize_upload', { ...selected, pending_operation_id: finalPreview.pending_operation_id });
+      expect(finished.result.details.asset).toMatchObject({ id: media_id, sha256: checksum, status: 'READY', byte_length: video.length });
+      expect(Buffer.from((await owner.read(selected)).bytes).equals(video)).toBe(true);
+      await expect(call(rt, 'media_upload_part', part(2))).rejects.toThrow('finalized or expired');
+      const objects = await admin.storage.from('creative-media').list(projects[0]!, { search: `${media_id}.part-` });
+      expect(objects.data).toEqual([]);
+      const audits = await db()<Array<{ event: string }>>`select event from public.audit_events where organization_id = ${projects[0]!} and tool = 'media_upload_part'`;
+      expect(audits.filter(row => row.event === 'applied')).toHaveLength(4);
+    } finally { await host.close(); await server.close(); }
+  });
+
+  it('never marks parts ready when the whole checksum differs, rejects expired parts, and removes partial sources on guarded deletion', async () => {
+    const rt = await runtime(), checksum = '0'.repeat(64);
+    const metadata = { name: 'wrong-parts.png', content_type: 'image/png', byte_length: bytes.length, sha256: checksum };
+    const reserved = await apply(rt, 'media_prepare_upload', metadata), media_id = reserved.result.details.media_id;
+    const selected = { media_id, expected_sha256: checksum }, part = { ...selected, part_index: 0, part_sha256: sha256, data_base64: bytes.toString('base64') };
+    await apply(rt, 'media_upload_part', part);
+    await expect(call(rt, 'media_finalize_upload', selected)).rejects.toThrow('SHA-256');
+    expect((await call(rt, 'media_get', { media_id })).asset.status).toBe('PROCESSING');
+    await db()`update private.creative_media set expires_at = now() - interval '1 minute' where id = ${media_id}`;
+    await expect(call(rt, 'media_upload_part', part)).rejects.toThrow('finalized or expired');
+    await apply(rt, 'media_delete', { ...selected, expected_name: metadata.name });
+    expect((await call(rt, 'media_get', { media_id })).asset.status).toBe('DELETED');
+    expect((await admin.storage.from('creative-media').list(projects[0]!, { search: `${media_id}.part-` })).data).toEqual([]);
+  });
+
+  it('removes expired temporary parts before releasing an abandoned upload reservation', async () => {
+    const rt = await runtime(), metadata = { name: 'abandoned-parts.png', content_type: 'image/png', byte_length: bytes.length, sha256 };
+    const prepared = await apply(rt, 'media_prepare_upload', metadata), media_id = prepared.result.details.media_id;
+    await apply(rt, 'media_upload_part', { media_id, expected_sha256: sha256, part_index: 0, part_sha256: sha256, data_base64: bytes.toString('base64') });
+    await db()`update private.creative_media set created_at = now() - interval '4 hours', expires_at = now() - interval '3 hours' where id = ${media_id}`;
+    await apply(rt, 'media_prepare_upload', { ...metadata, name: 'after-abandoned.png' });
+    expect((await admin.storage.from('creative-media').list(projects[0]!, { search: `${media_id}.part-` })).data).toEqual([]);
+    await expect(call(rt, 'media_get', { media_id })).rejects.toThrow('selected project');
   });
 });

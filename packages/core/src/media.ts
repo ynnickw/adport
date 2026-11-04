@@ -8,6 +8,7 @@ import type { WriteOperation, WritePreview, WriteResult } from './provider.js';
 
 export const MAX_PROJECT_MEDIA_BYTES = 50 * 1024 * 1024;
 export const MAX_INLINE_MEDIA_BYTES = 1024 * 1024;
+export const MEDIA_UPLOAD_PART_BYTES = MAX_INLINE_MEDIA_BYTES;
 export const PROJECT_MEDIA_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/gif', 'video/mp4', 'video/quicktime', 'video/webm', 'audio/mpeg', 'audio/wav', 'audio/ogg', 'application/pdf'] as const;
 export const mediaUploadMetadataSchema = z.object({
   name: z.string().trim().min(1).max(240), content_type: z.enum(PROJECT_MEDIA_TYPES),
@@ -18,6 +19,7 @@ export const mediaWriteSchemas = {
   media_prepare_upload: mediaUploadMetadataSchema,
   media_upload: mediaUploadMetadataSchema.safeExtend({ byte_length: z.number().int().positive().max(MAX_INLINE_MEDIA_BYTES), data_base64: z.string().min(4).max(4 * Math.ceil(MAX_INLINE_MEDIA_BYTES / 3)).regex(/^[A-Za-z0-9+/]*={0,2}$/) }),
   media_finalize_upload: z.object(existing),
+  media_upload_part: z.object({ ...existing, part_index: z.number().int().min(0).max(Math.ceil(MAX_PROJECT_MEDIA_BYTES / MEDIA_UPLOAD_PART_BYTES) - 1), part_sha256: z.string().regex(/^[a-f0-9]{64}$/), data_base64: z.string().min(4).max(4 * Math.ceil(MEDIA_UPLOAD_PART_BYTES / 3)).regex(/^[A-Za-z0-9+/]*={0,2}$/) }),
   media_rename: z.object({ ...existing, expected_name: z.string(), name: mediaUploadMetadataSchema.shape.name }),
   media_delete: z.object({ ...existing, expected_name: z.string() }),
 };
@@ -40,6 +42,7 @@ export const mediaAssetSchema = z.object({
   sha256: z.string().regex(/^[a-f0-9]{64}$/), width: z.number().int().positive().optional(), height: z.number().int().positive().optional(),
   status: z.enum(['READY', 'PROCESSING', 'FAILED', 'DELETED']).optional(),
   preview_url: z.string().url().optional(),
+  upload: z.object({ part_size: z.number().int().positive(), part_count: z.number().int().positive(), received_parts: z.array(z.object({ part_index: z.number().int().nonnegative(), byte_length: z.number().int().nonnegative() })), expires_at: z.string() }).optional(),
 });
 export type MediaAsset = z.infer<typeof mediaAssetSchema>;
 export interface MediaLibrary extends MediaResolver {

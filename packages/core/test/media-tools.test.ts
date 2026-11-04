@@ -13,8 +13,10 @@ describe('project media tools through the shared policy gate', () => {
   it('advertises agent upload paths and project writes without an invented advertising account', async () => {
     const f = fixture(), runtime = await createContext({ engine: f.engine, media: f.media('project-a') });
     const names = runtime.registry.list().map(tool => tool.name);
-    expect(names).toEqual(expect.arrayContaining(['media_list', 'media_get', 'media_prepare_upload', 'media_upload', 'media_finalize_upload', 'media_rename', 'media_delete']));
+    expect(names).toEqual(expect.arrayContaining(['media_list', 'media_get', 'media_prepare_upload', 'media_upload', 'media_upload_part', 'media_finalize_upload', 'media_rename', 'media_delete']));
     expect(runtime.registry.get('media_prepare_upload').input.shape).not.toHaveProperty('account_id');
+    for (const name of ['media_prepare_upload', 'media_upload', 'media_upload_part', 'media_finalize_upload', 'media_rename']) expect(runtime.registry.get(name).annotations).toMatchObject({ readOnly: false, destructive: false });
+    expect(runtime.registry.get('media_delete').annotations).toMatchObject({ readOnly: false, destructive: true });
     const preview = await runtime.registry.call('media_prepare_upload', metadata, runtime.ctx) as { applied: boolean; pending_operation_id: string };
     expect(preview.applied).toBe(false); expect(f.calls).toHaveLength(1);
     expect(f.calls[0]).toMatchObject({ provider: 'media', accountId: 'project-a', payload: metadata });
