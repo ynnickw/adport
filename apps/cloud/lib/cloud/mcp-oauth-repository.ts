@@ -14,6 +14,7 @@ import {
   verifyAccessTokenSignature,
 } from '@/lib/mcp-oauth';
 import type { TenantPrincipal } from './types';
+import { mcpProjectLogoUrls } from './mcp-project-logos';
 
 const ACCESS_TOKEN_SECONDS = 60 * 60;
 const REFRESH_TOKEN_SECONDS = 30 * 24 * 60 * 60;
@@ -22,10 +23,10 @@ const REFRESH_TOKEN_SECONDS = 30 * 24 * 60 * 60;
 // can complete, while retaining rotation and a bounded replay window.
 const REFRESH_TOKEN_REUSE_GRACE_SECONDS = 60;
 
-export async function listMcpProjects(principal: TenantPrincipal): Promise<AgentProject[]> {
+export async function listMcpProjects(principal: TenantPrincipal, includeLogos = false): Promise<AgentProject[]> {
   if (!principal.userId) return [];
-  const rows = await db()<Array<{ id: string; name: string; organizationName: string; role: string; providers: string[] }>>`
-    select project.id, project.name, company.name as organization_name, access.role,
+  const rows = await db()<Array<{ id: string; name: string; organizationName: string; logoPath: string | null; role: string; providers: string[] }>>`
+    select project.id, project.name, project.logo_path, company.name as organization_name, access.role,
       array(select connection.provider from public.connections connection
         where connection.organization_id = project.id and connection.status = 'connected' order by connection.provider) as providers
     from private.project_memberships access
@@ -36,7 +37,10 @@ export async function listMcpProjects(principal: TenantPrincipal): Promise<Agent
         or company.id = ${principal.oauthOrganizationGroupId ?? null})
     order by project.created_at, project.id
   `;
-  return rows.map(({ organizationName, ...project }) => ({ ...project, organization_name: organizationName }));
+  const logos = includeLogos ? await mcpProjectLogoUrls(rows) : new Map<string, string>();
+  return rows.map(({ organizationName, logoPath, ...project }) => ({ ...project, organization_name: organizationName,
+    ...(logoPath && logos.has(logoPath) ? { logo_url: logos.get(logoPath)! } : {}),
+  }));
 }
 
 export interface McpOAuthTokenPair {
