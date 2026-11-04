@@ -37,7 +37,7 @@ export const creativeSchema = z.object({
   campaign_id: z.string().optional(), ad_group_id: z.string().optional(),
   headlines: z.array(z.string()).default([]), descriptions: z.array(z.string()).default([]),
   landing_urls: z.array(landingUrl).default([]),
-  media: z.array(z.object({ type: z.enum(['image', 'video', 'audio']), url: httpsUrl, alt: z.string().optional() })).default([]),
+  media: z.array(z.object({ type: z.enum(['image', 'video', 'audio']), url: httpsUrl, alt: z.string().optional(), poster_url: httpsUrl.optional(), open_url: httpsUrl.optional() })).default([]),
   actions: z.array(creativeActionSchema).default([]),
 }).superRefine((creative, ctx) => {
   if (creative.actions.some(action => action.arguments.account_id !== creative.account_id)) ctx.addIssue({ code: 'custom', path: ['actions'], message: 'Actions must remain bound to the displayed account' });

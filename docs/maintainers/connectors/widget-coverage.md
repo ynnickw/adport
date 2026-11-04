@@ -13,19 +13,22 @@ checks every name and declared view against the actual definitions. It also
 exercises preview and apply on every guarded handler with an inert policy-engine
 fixture. No production accounts or provider writes are used.
 
-| View | Hosted tools | Content |
-| --- | ---: | --- |
-| Operation | 338 | Structured review and guarded approval |
-| Data | 191 | Generic native records, arrays, values, and full details |
-| Creatives | 36 | Media previews, ad copy, central-library upload and paging |
-| Insights | 4 | Findings and their lifecycle |
-| Planning | 3 | Native estimates and existing paging |
-| Accounts | 1 | Connected accounts and provider errors |
-| Report | 1 | Existing currency-separated summaries and charts |
+| View | Content |
+| --- | --- |
+| Operation | Structured review and guarded approval |
+| Data | Semantic fallback for native records, arrays and values |
+| Records | Compact keywords, audiences, boards and entity collections |
+| Receipt | Processing status, reported counts and individual outcomes |
+| Creatives | Media previews, ad copy, central-library upload and paging |
+| Insights | Findings, reasons and suggested actions |
+| Planning | Native estimates and existing paging |
+| Accounts | Connected accounts and provider errors |
+| Report | Currency-separated summaries, rankings or daily trends |
 
-There are 574 hosted tools and 597 local registry tools. Local generic API
-dispatchers remain excluded from the hosted surface. Newly registered reads get
-the data fallback unless they declare a specialized presentation.
+The fixture records current tool counts; the registry coverage test rejects drift.
+Local generic API dispatchers remain excluded from the hosted surface. Newly
+registered reads get the semantic data fallback unless they declare a specialized
+presentation.
 
 ## Creative previews
 
@@ -41,6 +44,31 @@ size and MIME are checked; unknown outcomes never replay bytes or an uncertain
 apply. Queue updates and appended pages preserve existing media nodes. Read-only
 grants retain paging but have no upload control. Organization and distribution
 remain agent-managed; the dashboard remains an alternative upload/browsing view.
+
+## Records, receipts, and trends
+
+Record views use the native keyword/audience/board object or record collection,
+retain match type, scope and provider notes, and expose returned rows in a bounded,
+keyboard-scrollable list. Generic collections prefer named record arrays over
+warnings/errors. Monetary fields with explicit micros/cents units are converted;
+unknown currencies remain account units. Full source responses remain in Details.
+
+Recommendations show the native reason and suggested action directly. Processing
+and bulk receipts show only reported counts, statuses and individual outcomes.
+Resource IDs do not imply processed counts. Google diagnostic counts can overlap;
+no successful count is inferred by subtraction. Acceptance remains distinct from
+processing completion, and receipt views never add retry or apply controls.
+
+`report` accepts `granularity=day` for at most 31 days. Each observation comes from
+an ordinary provider report read scoped to one exact date, preserving the existing
+account authorization. Aggregate mode remains the default and uses one read per
+provider. Daily mode can require more provider calls. Missing dates/metrics remain
+gaps; currency-separated series retain the normal report summary semantics.
+
+Project PDF covers are read-only first-page PNGs made from the existing signed
+Storage grant, without service credentials or database mutations. Rendering is
+isolated in a worker with byte, pixel, concurrency and time limits. Native video
+posters are preserved; videos without one load their first frame without autoplay.
 
 ## Review contract
 
@@ -76,7 +104,7 @@ Attempts are keyed to the pending token. A host echo cannot offer a second apply
 and a late response cannot replace a newer preview. Host facts include resource
 receipts and project/account scope, but never a reusable pending token.
 
-The widget resource is `ui://adport/insight-card-v12.html`. Previous v2–v11 URIs are
+The widget resource is `ui://adport/insight-card-v13.html`. Previous v2–v12 URIs are
 retained as aliases. Existing creative resource domains keep their configured CSP; provider logos
 and scripts are embedded.
 

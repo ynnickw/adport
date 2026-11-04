@@ -1,14 +1,18 @@
 import { MEDIA_LIBRARY_UI, MEDIA_LIBRARY_STYLES } from './media-library-ui.js';
 import { MEDIA_UPLOAD_UI } from './media-upload-ui.js';
+import { TREND_UI_SCRIPT, TREND_UI_STYLES } from './trend-ui.js';
+import { RECORD_UI_SCRIPT, RECORD_UI_STYLES } from './record-ui.js';
+import { RECEIPT_UI_SCRIPT, RECEIPT_UI_STYLES } from './receipt-ui.js';
+import { INSIGHT_UI_SCRIPT, INSIGHT_UI_STYLES } from './insight-ui.js';
 import { CREATIVE_UI_SCRIPT, CREATIVE_UI_STYLES } from './creative-ui.js';
 import { PROVIDER_LOGOS } from './provider-logos.js';
 import { OPERATION_UI_SCRIPT } from './operation-ui.js';
 
-export const ADPORT_UI_URI = 'ui://adport/insight-card-v12.html';
+export const ADPORT_UI_URI = 'ui://adport/insight-card-v13.html';
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
-export const ADPORT_UI_RESOURCE_DOMAINS = ['https://*.fbcdn.net', 'https://*.fbsbx.com', 'https://*.googleusercontent.com', 'https://tpc.googlesyndication.com', 'https://www.bing.com', 'https://*.scdn.co', 'https://*.spotifycdn.com', 'https://storage.googleapis.com', 'https://*.pinimg.com', 'https://*.redd.it', 'https://*.redditmedia.com', 'https://*.redditstatic.com', 'https://*.licdn.com', 'https://*.licdn-ei.com', 'https://pbs.twimg.com', 'https://video.twimg.com', 'https://ton.twimg.com'];
+export const ADPORT_UI_RESOURCE_DOMAINS = [ADPORT_UI_DOMAIN, 'https://*.fbcdn.net', 'https://*.fbsbx.com', 'https://*.googleusercontent.com', 'https://tpc.googlesyndication.com', 'https://www.bing.com', 'https://*.scdn.co', 'https://*.spotifycdn.com', 'https://storage.googleapis.com', 'https://*.pinimg.com', 'https://*.redd.it', 'https://*.redditmedia.com', 'https://*.redditstatic.com', 'https://*.licdn.com', 'https://*.licdn-ei.com', 'https://pbs.twimg.com', 'https://video.twimg.com', 'https://ton.twimg.com'];
 
-export type AdportView = 'accounts' | 'report' | 'operation' | 'insights' | 'creatives' | 'planning' | 'data';
+export type AdportView = 'accounts' | 'report' | 'operation' | 'insights' | 'creatives' | 'planning' | 'data' | 'records' | 'receipt';
 
 const providerNames: Record<string, string> = {
   google: 'Google Ads',
@@ -32,6 +36,7 @@ export function viewForTool(name: string, readOnly: boolean): AdportView {
   if (name === 'audit_run' || name === 'recommendation_dismiss') return 'insights';
   if (!readOnly) return 'operation';
   if (name.startsWith('recommendation') || name.startsWith('audit_')) return 'insights';
+  if (/(?:_request_status|_upload_status|_experiment_operation|_offline_conversion_diagnostics|_get_media_upload)$/.test(name)) return 'receipt';
   return 'data';
 }
 
@@ -53,6 +58,8 @@ export function toolInvocationLabels(view: AdportView): { invoking: string; invo
     case 'insights': return { invoking: 'Reviewing opportunities…', invoked: 'Opportunities ready' };
     case 'creatives': return { invoking: 'Loading creatives…', invoked: 'Creatives ready' };
     case 'planning': return { invoking: 'Loading planning estimates…', invoked: 'Planning estimates ready' };
+    case 'records': return { invoking: 'Loading records…', invoked: 'Records ready' };
+    case 'receipt': return { invoking: 'Checking processing…', invoked: 'Processing status ready' };
     case 'data': return { invoking: 'Loading data…', invoked: 'Data ready' };
   }
 }
@@ -214,6 +221,10 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     @media (max-width:420px) { .bar-row { grid-template-columns:minmax(0,1fr) auto; gap:5px }.bar-name { grid-column:1/-1 }.bar-name > span:last-child { white-space:normal }.bars { gap:12px } }
 ${CREATIVE_UI_STYLES}
 ${MEDIA_LIBRARY_STYLES}
+${RECORD_UI_STYLES}
+${RECEIPT_UI_STYLES}
+${INSIGHT_UI_STYLES}
+${TREND_UI_STYLES}
     @media (prefers-reduced-motion:reduce) { * { animation:none!important; transition:none!important } }
     :root[data-theme="dark"] { --ink:#f5f5f3;--muted:#aaa9ad;--faint:#a09fa5;--paper:#171717;--soft:#222220;--line:rgba(255,255,255,.11) }
     @media (prefers-color-scheme:dark) { :root:not([data-theme="light"]) { --ink:#f5f5f3;--muted:#aaa9ad;--faint:#a09fa5;--paper:#171717;--soft:#222220;--line:rgba(255,255,255,.11) } }
@@ -248,7 +259,8 @@ ${MEDIA_LIBRARY_STYLES}
     };
     const currencyOf = (row) => typeof row.currency === 'string' && /^[A-Z]{3}$/.test(row.currency) ? row.currency : null;
     const statusOf = (status) => !status || /unknown|unspecified/i.test(status) ? {label:'Status unavailable',tone:'neutral'} : /disabled|removed|inactive|closed|suspended/i.test(status) ? {label:status,tone:'danger'} : /paused|disable$/i.test(status) ? {label:status,tone:'warn'} : /^(enabled|active|approved|ready)$/i.test(status) ? {label:status,tone:''} : {label:status,tone:'neutral'};
-    const notices = (data) => [...arr(data.errors).map(e => (e.provider || 'Provider')+': '+(e.message || 'Read failed')), ...arr(data.warnings).map(e => e.message || 'Some metadata is unavailable'), ...(data.truncated ? ['Partial result: row limit reached. Totals and charts cover returned rows only.'] : [])].map(text => '<p class="notice">'+esc(text)+'</p>').join('');
+    const noticeText=(value,fallback)=>typeof value==='string'?value:typeof value?.message==='string'?value.message:typeof value?.reason==='string'?value.reason:fallback;
+    const notices = data => [...arr(data.errors).map(error=>(error?.provider || 'Provider')+': '+noticeText(error,'Read failed')), ...arr(data.warnings).map(warning=>noticeText(warning,'Some metadata is unavailable')), ...arr(data.notes).filter(note=>typeof note==='string'), ...(typeof data.note==='string'?[data.note]:[]), ...(data.truncated ? ['Partial result: row limit reached. Totals and charts cover returned rows only.'] : [])].map(text => '<p class="notice">'+esc(text)+'</p>').join('');
     const providerName = (id, names) => names?.[id] || String(id || 'Provider');
     const initials = (id) => ({snapchat:'S',spotify:'S',pinterest:'P',linkedin:'in',x:'X'}[id] || String(id || '?').slice(0,2).toUpperCase());
     const providerSvg = ${JSON.stringify(PROVIDER_LOGOS)};
@@ -285,12 +297,20 @@ ${MEDIA_LIBRARY_STYLES}
       const bars=ranked.length ? ranked.map(r=>'<div class="bar-row"><span class="bar-name" title="'+esc(r.entity?.name || r.entity?.id)+'">'+logo(r.provider)+'<span>'+esc(r.entity?.name || r.entity?.id || 'Entity')+'</span></span><span class="track" aria-hidden="true"><span class="fill" style="display:block;width:'+Math.max(0,metricValue(r)/max*100).toFixed(1)+'%"></span></span><span class="bar-value">'+esc(format(metricValue(r)))+'</span></div>').join('') : '<div class="empty">No '+esc(labels[metric])+' values were returned.</div>';
       const kpi=(key,label,value)=>'<button class="kpi" data-metric="'+key+'" aria-pressed="'+(metric===key)+'" aria-label="Chart '+esc(label)+'"><small>'+esc(label)+'</small><strong>'+esc(value)+'</strong></button>';
       const period=typeof data.date_range==='string' ? data.date_range.replaceAll('_',' ') : data.date_range ? data.date_range.start+' – '+data.date_range.end : 'Selected period';
-      const body=notices(data)+tabs+(rows.length ? (!currency?'<p class="notice">Currency unavailable. These values belong to this account only; no cross-account money total is calculated.</p>':'')+'<div class="kpis" role="group" aria-label="Chart metric">'+kpi('spend','Spend',spend===null?'—':money(spend,currency))+kpi('clicks','Clicks',total(rows,'clicks')===null?'—':compact(total(rows,'clicks')))+kpi('conversions','Conversions',total(rows,'conversions')===null?'—':compact(total(rows,'conversions')))+kpi('roas','ROAS',roas)+'</div><div class="panel"><div class="panel-head"><b>'+esc(labels[metric])+'</b><span>Top '+ranked.length+' of '+rows.length+' rows</span></div><div class="bars">'+bars+'</div></div>' : '<div class="empty">'+(arr(data.errors).length?'Report unavailable for the requested providers.':'No rows returned for this period.')+'</div>');
+      const dated=rows.some(row=>typeof row.date==='string');
+      const chart=dated?'<div class="report-trend"><div class="panel-head"><b>Daily '+esc(labels[metric].toLowerCase())+'</b><span>Reported observations</span></div><div data-report-trend></div><p class="operation-note">Missing or unavailable days remain gaps.</p></div>':'<div class="panel"><div class="panel-head"><b>'+esc(labels[metric])+'</b><span>Top '+ranked.length+' of '+rows.length+' rows</span></div><div class="bars">'+bars+'</div></div>';
+      const body=notices(data)+tabs+(rows.length ? (!currency?'<p class="notice">Currency unavailable. These values belong to this account only; no cross-account money total is calculated.</p>':'')+'<div class="kpis" role="group" aria-label="Chart metric">'+kpi('spend','Spend',spend===null?'—':money(spend,currency))+kpi('clicks','Clicks',total(rows,'clicks')===null?'—':compact(total(rows,'clicks')))+kpi('conversions','Conversions',total(rows,'conversions')===null?'—':compact(total(rows,'conversions')))+kpi('roas','ROAS',roas)+'</div>'+chart : '<div class="empty">'+(arr(data.errors).length?'Report unavailable for the requested providers.':'No rows returned for this period.')+'</div>');
+      trendResize?.disconnect();
       app.innerHTML=chrome(body,period+(currency?' · '+currency:''));
+      if(dated)mountReportTrend(rows,metric,currency,data);
       app.querySelectorAll('[data-group]').forEach(button=>button.addEventListener('click',()=>{state.reportGroup=choices[Number(button.dataset.group)].key;renderReport(data);}));
       app.querySelectorAll('[data-metric]').forEach(button=>button.addEventListener('click',()=>{state.reportMetric=button.dataset.metric;renderReport(data);}));
     }
 ${OPERATION_UI_SCRIPT}
+${RECEIPT_UI_SCRIPT}
+${RECORD_UI_SCRIPT}
+${INSIGHT_UI_SCRIPT}
+${TREND_UI_SCRIPT}
     async function callTool(tool,parameters,timeoutMs=30000) {
       const requestId=id++;
       return new Promise((resolve,reject)=>{
@@ -316,13 +336,8 @@ ${CREATIVE_UI_SCRIPT}
       app.innerHTML=chrome('<p class="operation-name">'+esc(planning.title || 'Planning estimates')+'</p>'+table+controls+(data.truncated?'<p class="notice">Partial native response. More estimates may exist.</p>':'')+notes,'Read-only estimates');
       app.querySelectorAll('[data-planning-page]').forEach(button=>button.addEventListener('click',()=>{if(button.disabled)return;state.planningPage+=button.dataset.planningPage==='next'?1:-1;renderPlanning(data);}));
     }
-    function renderInsights(data) {
-      const items = data.finding ? [data.finding] : arr(data.findings || data.recommendations || data.results || data.entries);
-      const body = notices(data)+(items.length ? '<div class="list">'+items.slice(0,8).map((item,i)=>'<div class="row"><div class="identity">'+(item.provider?logo(item.provider):'<span class="logo">'+(i+1)+'</span>')+'<div class="identity-copy"><b>'+esc(item.title || item.summary || item.rule || 'Opportunity')+'</b><span>'+esc(item.description || item.status || item.severity || 'Review recommended')+'</span></div></div><span class="pill '+(/high|critical/i.test(item.severity || '')?'danger':'')+'">'+esc(item.status && item.status!=='open'?item.status:item.severity || item.status || 'open')+'</span></div>').join('')+'</div><details><summary>Details · '+items.length+' findings</summary><pre>'+esc(JSON.stringify(items,null,2))+'</pre></details>' : '<div class="empty">No recommendations were returned.</div>');
-      app.innerHTML = chrome(body, items.length+' recommendation'+(items.length===1?'':'s'));
-    }
     function render(result) {
-      cancelHold();clearTimeout(expiryTimer);
+      cancelHold();clearTimeout(expiryTimer);trendResize?.disconnect();
       let data=resultData(result);
       if (!object(data)) data={value:data};
       const meta = data._adport || {};
@@ -338,6 +353,8 @@ ${CREATIVE_UI_SCRIPT}
       if (meta.view === 'accounts') return renderAccounts(data,meta);
       if (meta.view === 'report') return renderReport(data,meta);
       if (meta.view === 'operation') return renderOperation(data,meta);
+      if (meta.view === 'records') return renderRecords(data,meta);
+      if (meta.view === 'receipt') return renderReceipt(data,meta);
       if (meta.view === 'creatives') return renderCreatives(data,meta);
       if (meta.view === 'planning') return renderPlanning(data,meta);
       if (meta.view === 'insights') return renderInsights(data,meta);
@@ -346,7 +363,7 @@ ${CREATIVE_UI_SCRIPT}
     function acceptResult(result,local=false) {
       if (!result || typeof result !== 'object') return;
       const incoming=resultData(result);
-      if(!local && (uploads.running && ['media_prepare_upload','media_finalize_upload','media_get'].includes(incoming?._adport?.tool || result._meta?.adport?.tool) || mediaLibrary?.loading && incoming?._adport?.tool==='media_list' && mediaLibraryProject(incoming,incoming._adport)===mediaLibrary.project)) return;
+      if(!local && (app.querySelector('[data-media-gallery]') && uploads.items.length>0 && ['media_prepare_upload','media_finalize_upload','media_get'].includes(incoming?._adport?.tool || result._meta?.adport?.tool) || mediaLibrary?.loading && incoming?._adport?.tool==='media_list' && mediaLibraryProject(incoming,incoming._adport)===mediaLibrary.project)) return;
       const fingerprint=JSON.stringify(incoming);
       // Host state updates can echo an old tool result after a local edit/apply.
       if (!local && state.hasLocalResult && hostResults.has(fingerprint)) return;

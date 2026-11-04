@@ -142,7 +142,9 @@ describe('direct widget media upload', () => {
       f.choose(['private.png']); f.click('[data-upload-start]');
       f.dom.window.dispatchEvent(new f.dom.window.MessageEvent('message', { source: f.dom.window.parent, data: { jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: { status: 'applied', applied: true, _adport: { tool: 'media_prepare_upload', view: 'operation' } } } } }));
       expect(f.dom.window.document.querySelector('[data-upload-queue]')).not.toBeNull();
-      await vi.waitFor(() => expect(f.dom.window.document.querySelector('[data-upload-start]')).toBeNull());
+      await vi.waitFor(() => expect(f.dom.window.document.querySelector('main')!.textContent).toContain('1 saved to your library'));
+      f.dom.window.dispatchEvent(new f.dom.window.MessageEvent('message', { source: f.dom.window.parent, data: { jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: { status: 'applied', applied: true, _adport: { tool: 'media_finalize_upload', view: 'operation' } } } } }));
+      expect(f.dom.window.document.querySelector('[data-media-gallery]')).not.toBeNull();
     } finally { f.dom.window.close(); }
   });
   it('never repeats finalize after an unknown apply while the stored file is still processing', async () => {

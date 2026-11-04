@@ -115,7 +115,7 @@ describe('X native draft/media creative management', () => {
     await expect(provider.applyWrite(operation('x_create_draft_tweet', { as_user_id: U, text: 'Draft' }, 'create'), guard)).rejects.toMatchObject({ details: { resource_ids: [D] } }); expect(mutations(calls)).toHaveLength(1);
   });
   it('renders video/poster media only from native HTTPS CDN URLs and binds rename actions', async () => {
-    const { provider } = fixture(), result = await provider.creatives.library({ account_id: A, count: 2 }); expect(creativesOutput.safeParse(result).success).toBe(true); expect(result.creatives[1]!.media).toEqual([{ type: 'video', url: video.media_url }, { type: 'image', url: image.media_url, alt: 'Video poster' }]); expect(result.creatives[1]!.actions[0]!.arguments).toEqual({ account_id: A, media_key: V });
+    const { provider } = fixture(), result = await provider.creatives.library({ account_id: A, count: 2 }); expect(creativesOutput.safeParse(result).success).toBe(true); expect(result.creatives[1]!.media).toEqual([{ type: 'video', url: video.media_url, poster_url: image.media_url }]); expect(result.creatives[1]!.actions[0]!.arguments).toEqual({ account_id: A, media_key: V });
     const unsafe = fixture(call => call.url.pathname.endsWith('/media_library') ? { data: [{ ...image, media_url: 'https://attacker.example/file.jpg' }], next_cursor: null } : undefined); expect((await unsafe.provider.creatives.library({ account_id: A })).creatives[0]!.media).toEqual([]);
   });
   it('updates supplied library metadata/poster, preserves other metadata and rejects incompatible image settings', async () => {

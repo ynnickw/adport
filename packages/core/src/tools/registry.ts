@@ -35,7 +35,7 @@ export interface AnyToolDefinition {
   output?: z.ZodType;
   annotations: ToolAnnotations;
   /** Optional presentation shared by hosted and local MCP adapters. */
-  presentation?: 'creatives' | 'planning';
+  presentation?: 'creatives' | 'planning' | 'records' | 'receipt';
   /** Input field receiving the result's native next_cursor. Read-only tools only. */
   pagination?: { cursorInput: string; cursorOutput?: string };
   /** Top-level host file inputs, declared once for transport adapters. */

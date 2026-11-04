@@ -37,7 +37,7 @@ it('maps every registered tool to a branded view and supplies a structured revie
       expect(tool._meta?.['openai/outputTemplate'], source.name).toBe(ADPORT_UI_URI);
       const view = source.presentation ?? viewForTool(source.name, source.annotations.readOnly ?? false);
       if (source.name === 'projects_list') expect(view).toBe('data');
-      if (!source.presentation && source.annotations.readOnly && !/^(accounts_list|report|audit_|recommendations_)/.test(source.name)) expect(view, source.name).toBe('data');
+      if (!source.presentation && source.annotations.readOnly && !/^(accounts_list|report|audit_|recommendations_)/.test(source.name)) expect(['data','receipt']).toContain(view);
       if (source.namespace !== 'core' && source.namespace !== 'audit' && source.namespace !== 'mock') expect(PROVIDER_LOGOS[source.namespace], source.name).toContain('<svg');
     }
     // Exercise each actual guarded handler without making network requests or

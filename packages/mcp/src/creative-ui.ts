@@ -31,9 +31,9 @@ export const CREATIVE_UI_SCRIPT = String.raw`
       const mediaView=creative=>{
         const items=arr(creative.media).map(media=>{
           const url=safeUrl(media.url,true);if (!url) return '';
-          const src=esc(url.href),name=esc(media.alt || creative.name || 'Creative');
-          if (media.type==='image') return '<a class="creative-media-item" href="'+src+'" target="_blank" rel="noopener noreferrer" aria-label="View image: '+name+'"><img src="'+src+'" alt="'+name+'" loading="lazy" referrerpolicy="no-referrer"></a>';
-          if (media.type==='video') return '<div class="creative-media-item"><video src="'+src+'" controls preload="none" playsinline aria-label="'+name+'"></video></div>';
+          const src=esc(url.href),open=safeUrl(media.open_url,true)||url,poster=safeUrl(media.poster_url,true),name=esc(media.alt || creative.name || 'Creative');
+          if (media.type==='image') return '<a class="creative-media-item" href="'+esc(open.href)+'" target="_blank" rel="noopener noreferrer" aria-label="'+(creative.type==='application/pdf'?'Open document: ':'View image: ')+name+'"><img src="'+src+'" alt="'+name+'" loading="lazy" referrerpolicy="no-referrer"></a>';
+          if (media.type==='video') return '<div class="creative-media-item"><video src="'+src+'" controls preload="metadata" '+(poster?'poster="'+esc(poster.href)+'"':'data-first-frame')+' playsinline aria-label="'+name+'"></video></div>';
           if (media.type==='audio') return '<div class="creative-media-item"><audio src="'+src+'" controls preload="none" aria-label="'+name+'"></audio></div>';
           return '';
         }).join('');
@@ -46,14 +46,18 @@ export const CREATIVE_UI_SCRIPT = String.raw`
         const destination=arr(creative.landing_urls).map(value=>safeUrl(value)).find(Boolean);
         const headline=unique(creative.headlines).filter(text=>text!==name).join(' · '),copy=unique(creative.descriptions).filter(text=>text!==name&&text!==headline).join('\n');
         const active=/^(active|enabled|ready|approved)$/i.test(creative.status || '');
-        return '<article class="creative-card" data-media-id="'+esc(creative.id)+'"><div class="creative-heading">'+logo(creative.provider)+'<span class="creative-name" title="'+esc(name)+'">'+esc(name)+'</span></div>'+mediaView(creative)+'<div class="creative-copy">'+(headline?'<strong title="'+esc(headline)+'">'+esc(headline)+'</strong>':'')+(copy?'<p title="'+esc(copy)+'">'+esc(copy)+'</p>':'')+'</div><div class="creative-footer"><span class="creative-status'+(active?' creative-status-active':'')+'">'+esc(status.label)+'</span>'+(destination?'<a class="creative-destination" href="'+esc(destination.href)+'" target="_blank" rel="noopener noreferrer">'+esc(destination.hostname.replace(/^www\./,''))+'</a>':'')+'</div></article>';
+        return '<article class="creative-card" data-media-id="'+esc(creative.id)+'"><div class="creative-heading">'+(creative.provider==='media'?'':logo(creative.provider))+'<span class="creative-name" title="'+esc(name)+'">'+esc(name)+'</span></div>'+mediaView(creative)+'<div class="creative-copy">'+(headline?'<strong title="'+esc(headline)+'">'+esc(headline)+'</strong>':'')+(copy?'<p title="'+esc(copy)+'">'+esc(copy)+'</p>':'')+'</div><div class="creative-footer"><span class="creative-status'+(active?' creative-status-active':'')+'">'+esc(status.label)+'</span>'+(destination?'<a class="creative-destination" href="'+esc(destination.href)+'" target="_blank" rel="noopener noreferrer">'+esc(destination.hostname.replace(/^www\./,''))+'</a>':'')+'</div></article>';
       }).join('');
     }
     function bindCreativeErrors(root) {
-      root.querySelectorAll('.creative-media img,.creative-media video,.creative-media audio').forEach(media=>media.addEventListener('error',()=>{
-        const placeholder=document.createElement('span');placeholder.className='creative-placeholder';placeholder.textContent='Preview unavailable';
-        media.closest('.creative-media-item').replaceChildren(placeholder);
-      },{once:true}));
+      root.querySelectorAll('.creative-media img,.creative-media video,.creative-media audio').forEach(media=>{
+        if(media.dataset.previewBound) return;media.dataset.previewBound='true';
+        if(media.matches('video[data-first-frame]')) media.addEventListener('loadedmetadata',()=>{if(Number.isFinite(media.duration)&&media.duration>0)media.currentTime=Math.min(.1,media.duration/2);},{once:true});
+        media.addEventListener('error',()=>{
+          const placeholder=document.createElement('span');placeholder.className='creative-placeholder';placeholder.textContent='Preview unavailable';
+          media.closest('.creative-media-item').replaceChildren(placeholder);
+        },{once:true});
+      });
     }
     function renderCreatives(data,meta) {
       if(meta.tool==='media_list' && mediaLibraryProject(data,meta)) return renderMediaLibrary(data,meta);

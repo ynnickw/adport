@@ -64,7 +64,7 @@ export class XCreativeService {
   }
   private visual(value: Media): Creative['media'] {
     const url = safeUrl(value.media_url), poster = safeUrl(value.poster_media_url);
-    return [...(url ? [{ type: value.media_type === 'IMAGE' ? 'image' as const : 'video' as const, url }] : []), ...(poster && poster !== url ? [{ type: 'image' as const, url: poster, alt: 'Video poster' }] : [])];
+    return [...(url ? [{ type: value.media_type === 'IMAGE' ? 'image' as const : 'video' as const, url, ...(value.media_type !== 'IMAGE' && poster ? { poster_url: poster } : {}) }] : []), ...(!url && poster ? [{ type: 'image' as const, url: poster, alt: 'Video poster' }] : [])];
   }
   async library(value: z.input<typeof libraryList>) {
     const input = libraryList.parse(value); await this.entities.getAccount(input.account_id);

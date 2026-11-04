@@ -11,6 +11,7 @@ import { requireScope } from './auth';
 import { enforceRateLimit } from './repository';
 import type { TenantPrincipal } from './types';
 import { readHostFile } from './host-file';
+import { mediaCoverUrl } from './media-cover';
 
 const BUCKET = 'creative-media';
 // Compatible with the default Supabase global upload limit. Local provider
@@ -85,7 +86,9 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
     return { id: row.id, name: row.name, content_type: row.contentType, byte_length: Number(row.byteLength), sha256: row.sha256,
       status: row.deletedAt ? 'DELETED' : row.status === 'ready' ? 'READY' : row.status === 'uploading' ? 'PROCESSING' : 'FAILED',
       tags: row.tags ?? [], platforms: row.platforms ?? [], metadata_version: row.metadataVersion ?? 1, ...(row.createdAt ? { created_at: row.createdAt.toISOString() } : {}),
-      ...(row.width ? { width: row.width } : {}), ...(row.height ? { height: row.height } : {}), ...(preview ? { preview_url: preview } : {}), ...(upload ? { upload } : {}) };
+      ...(row.width ? { width: row.width } : {}), ...(row.height ? { height: row.height } : {}), ...(preview ? { preview_url: preview,
+        ...(row.contentType === 'application/pdf' ? { preview_cover_url: mediaCoverUrl(preview, env().ADPORT_CLOUD_BASE_URL, env().NEXT_PUBLIC_SUPABASE_URL) } : {}),
+      } : {}), ...(upload ? { upload } : {}) };
   }
 
   async get(id: string) {

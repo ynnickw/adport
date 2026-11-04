@@ -64,7 +64,7 @@ describe('Pinterest original assets without dashboard access', () => {
     expect(result.creatives[0]).toMatchObject({ type: 'PINTEREST_BOARD', status: 'SECRET', descriptions: ['Original board copy'], actions: [{ tool: 'pinterest_update_board', arguments: { account_id: A, board_id: B, expected_snapshot_hash: result.snapshot_hash }, fields: [{ key: 'name', value: 'QA' }, { key: 'description', value: 'Original board copy' }] }] });
     expect(calls.at(-1)!.url.searchParams.get('ad_account_id')).toBe(A); expect(writes(calls)).toEqual([]);
     const tools = pinterestTools(provider);
-    expect(tools.find(t => t.name === 'pinterest_get_board')).toMatchObject({ presentation: 'creatives', annotations: { readOnly: true } });
+    expect(tools.find(t => t.name === 'pinterest_get_board')).toMatchObject({ presentation: 'records', annotations: { readOnly: true } });
     for (const name of ['pinterest_update_board', 'pinterest_delete_empty_board']) expect(tools.find(t => t.name === name)?.annotations).toMatchObject({ readOnly: false, destructive: true });
   });
   it('PATCHes only supplied board copy, preserves visibility, and accepts explicit description clearing', async () => {

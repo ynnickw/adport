@@ -26,6 +26,7 @@ const config: NextConfig = {
   output: process.env.VERCEL ? undefined : 'standalone',
   outputFileTracingRoot: path.join(import.meta.dirname, '../..'),
   outputFileTracingIncludes: {
+    '/api/media/cover': ['./.pdf-renderer/**/*'],
     '/*': ['../../node_modules/.pnpm/@swc+helpers@0.5.23/node_modules/@swc/helpers/**/*'],
   },
   poweredByHeader: false,

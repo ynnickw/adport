@@ -61,7 +61,7 @@ export class MetaCreativeService {
       const source = url(image ? row.url : row.source, true), thumbnail = url(row.picture, true);
       return { id, account_id: account, provider: 'meta', name: text(row.name ?? row.title) || `${image ? 'Image' : 'Video'} ${id}`, type: image ? 'IMAGE' : 'VIDEO',
         headlines: [], descriptions: text(row.description) ? [text(row.description)] : [], landing_urls: [],
-        media: source ? [{ type: image ? 'image' as const : 'video' as const, url: source }] : thumbnail ? [{ type: 'image' as const, url: thumbnail }] : [],
+        media: source ? [{ type: image ? 'image' as const : 'video' as const, url: source, ...(!image && thumbnail ? { poster_url: thumbnail } : {}) }] : thumbnail ? [{ type: 'image' as const, url: thumbnail }] : [],
         actions: image ? [{ label: 'Permanently delete image', tool: 'meta_delete_image', arguments: { account_id: account, image_hash: id }, fields: [] }] : [],
       };
     }) };

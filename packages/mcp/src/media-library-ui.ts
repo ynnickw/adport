@@ -96,7 +96,7 @@ export const MEDIA_LIBRARY_UI = String.raw`
       if(!mediaLibrary || mediaLibrary.project!==item.context.project) return;
       const args=mediaLibrary.meta.refresh?.arguments || {},kind=asset.content_type==='application/pdf'?'document':asset.content_type.split('/')[0];
       if(args.kind && args.kind!==kind || args.query && !asset.name.toLowerCase().includes(args.query.toLowerCase()) || args.tag && !arr(asset.tags).includes(args.tag) || args.platform && !arr(asset.platforms).includes(args.platform)) return;
-      const creative={id:asset.id,name:asset.name,provider:'media',type:asset.content_type,status:asset.status,headlines:[],descriptions:[uploadBytes(asset.byte_length)],media:asset.preview_url && ['image','video','audio'].includes(kind)?[{type:kind,url:asset.preview_url,alt:asset.name}]:[]};
+      const creative={id:asset.id,name:asset.name,provider:'media',type:asset.content_type,status:asset.status,headlines:[],descriptions:[uploadBytes(asset.byte_length)],media:asset.preview_cover_url && asset.preview_url?[{type:'image',url:asset.preview_cover_url,open_url:asset.preview_url,alt:asset.name+' — first page'}]:asset.preview_url && ['image','video','audio'].includes(kind)?[{type:kind,url:asset.preview_url,alt:asset.name}]:[]};
       const data={...mediaLibrary.data,creatives:[creative,...arr(mediaLibrary.data.creatives).filter(value=>value.id!==asset.id)],assets:[asset,...arr(mediaLibrary.data.assets).filter(value=>value.id!==asset.id)]};
       const gallery=app.querySelector('[data-media-gallery]'),template=document.createElement('template');template.innerHTML=creativeCards([creative]);
       gallery.querySelector('.empty')?.remove();
