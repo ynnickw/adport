@@ -10,6 +10,7 @@ import { listMcpProjects } from './mcp-oauth-repository';
 export function routeMcpProjects(runtime: AdportRuntime, principal: TenantPrincipal): AdportRuntime {
   return withProjectRouting(runtime, {
     list: () => listMcpProjects(principal),
+    listForDisplay: () => listMcpProjects(principal, true),
     async resolve(projectId, tool) {
       const project = (await listMcpProjects(principal)).find(project => project.id === projectId);
       if (!project) throw new AdportError('POLICY_VIOLATION', 'This connection does not have access to that project. Use projects_list to see available projects.');

@@ -6,7 +6,7 @@ import { CREATIVE_UI_SCRIPT, CREATIVE_UI_STYLES } from './creative-ui.js';
 import { PROVIDER_LOGOS } from './provider-logos.js';
 import { OPERATION_UI_SCRIPT } from './operation-ui.js';
 
-export const ADPORT_UI_URI = 'ui://adport/insight-card-v12.html';
+export const ADPORT_UI_URI = 'ui://adport/insight-card-v13.html';
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
 export const ADPORT_UI_RESOURCE_DOMAINS = [ADPORT_UI_DOMAIN, 'https://*.fbcdn.net', 'https://*.fbsbx.com', 'https://*.googleusercontent.com', 'https://tpc.googlesyndication.com', 'https://www.bing.com', 'https://*.scdn.co', 'https://*.spotifycdn.com', 'https://storage.googleapis.com', 'https://*.pinimg.com', 'https://*.redd.it', 'https://*.redditmedia.com', 'https://*.redditstatic.com', 'https://*.licdn.com', 'https://*.licdn-ei.com', 'https://pbs.twimg.com', 'https://video.twimg.com', 'https://ton.twimg.com'];
 
@@ -269,7 +269,7 @@ ${TREND_UI_STYLES}
       const body = notices(data)+(accounts.length ? '<div class="list">'+accounts.map(a => { const status=statusOf(a.status); return '<div class="row"><div class="identity">'+logo(a.provider)+'<div class="identity-copy"><b>'+esc(a.name || 'Ad account')+'</b><span>'+esc(providerName(a.provider,names))+' · '+esc(a.id)+(a.currency ? ' · '+esc(a.currency) : '')+'</span></div></div><span class="pill '+status.tone+'">'+esc(status.label)+'</span></div>'; }).join('')+'</div>' : '<div class="empty">'+(errors.length ? 'Account inventory could not be fully loaded.' : 'No accessible ad accounts were returned.')+'</div>');
       app.innerHTML = chrome(body, accounts.length+' account'+(accounts.length===1?'':'s'));
     }
-    function renderReport(data) {
+    function renderReport(data,meta) {
       const groups = new Map();
       for (const row of arr(data.rows)) {
         const currency=currencyOf(row), key=currency || JSON.stringify([row.provider,row.accountId]);
@@ -295,13 +295,13 @@ ${TREND_UI_STYLES}
       const kpi=(key,label,value)=>'<button class="kpi" data-metric="'+key+'" aria-pressed="'+(metric===key)+'" aria-label="Chart '+esc(label)+'"><small>'+esc(label)+'</small><strong>'+esc(value)+'</strong></button>';
       const period=typeof data.date_range==='string' ? data.date_range.replaceAll('_',' ') : data.date_range ? data.date_range.start+' – '+data.date_range.end : 'Selected period';
       const dated=rows.some(row=>typeof row.date==='string');
-      const chart=dated?'<div class="report-trend"><div class="panel-head"><b>Daily '+esc(labels[metric].toLowerCase())+'</b><span>Reported observations</span></div><div data-report-trend></div><p class="operation-note">Missing or unavailable days remain gaps.</p></div>':'<div class="panel"><div class="panel-head"><b>'+esc(labels[metric])+'</b><span>Top '+ranked.length+' of '+rows.length+' rows</span></div><div class="bars">'+bars+'</div></div>';
+      const chart=dated?'<div class="report-trend"><div class="panel-head"><b>Daily '+esc(labels[metric].toLowerCase())+'</b>'+providerMarks(rows.map(row=>row.provider),meta,'Report platforms')+'</div><div data-report-trend></div><p class="operation-note">Missing or unavailable days remain gaps.</p></div>':'<div class="panel"><div class="panel-head"><b>'+esc(labels[metric])+'</b><span>Top '+ranked.length+' of '+rows.length+' rows</span></div><div class="bars">'+bars+'</div></div>';
       const body=notices(data)+tabs+(rows.length ? (!currency?'<p class="notice">Currency unavailable. These values belong to this account only; no cross-account money total is calculated.</p>':'')+'<div class="kpis" role="group" aria-label="Chart metric">'+kpi('spend','Spend',spend===null?'—':money(spend,currency))+kpi('clicks','Clicks',total(rows,'clicks')===null?'—':compact(total(rows,'clicks')))+kpi('conversions','Conversions',total(rows,'conversions')===null?'—':compact(total(rows,'conversions')))+kpi('roas','ROAS',roas)+'</div>'+chart : '<div class="empty">'+(arr(data.errors).length?'Report unavailable for the requested providers.':'No rows returned for this period.')+'</div>');
       trendResize?.disconnect();
       app.innerHTML=chrome(body,period+(currency?' · '+currency:''));
       if(dated)mountReportTrend(rows,metric,currency,data);
-      app.querySelectorAll('[data-group]').forEach(button=>button.addEventListener('click',()=>{state.reportGroup=choices[Number(button.dataset.group)].key;renderReport(data);}));
-      app.querySelectorAll('[data-metric]').forEach(button=>button.addEventListener('click',()=>{state.reportMetric=button.dataset.metric;renderReport(data);}));
+      app.querySelectorAll('[data-group]').forEach(button=>button.addEventListener('click',()=>{state.reportGroup=choices[Number(button.dataset.group)].key;renderReport(data,meta);}));
+      app.querySelectorAll('[data-metric]').forEach(button=>button.addEventListener('click',()=>{state.reportMetric=button.dataset.metric;renderReport(data,meta);}));
     }
 ${OPERATION_UI_SCRIPT}
 ${RECEIPT_UI_SCRIPT}
@@ -321,15 +321,15 @@ ${TREND_UI_SCRIPT}
       });
     }
 ${CREATIVE_UI_SCRIPT}
-    function renderPlanning(data) {
+    function renderPlanning(data,meta) {
       const planning=data.planning || {}, columns=arr(planning.columns).filter(v=>typeof v?.key==='string'&&typeof v?.label==='string').slice(0,12), rows=arr(planning.rows), pageSize=100, pages=Math.max(1,Math.ceil(rows.length/pageSize));
       state.planningPage=Math.max(0,Math.min(state.planningPage,pages-1));
       const start=state.planningPage*pageSize, shown=rows.slice(start,start+pageSize);
       const notes=arr(planning.notes).filter(v=>typeof v==='string').map(v=>'<p class="notice">'+esc(v)+'</p>').join('');
       const table=columns.length&&shown.length?'<div class="planning-scroll" tabindex="0" role="region" aria-label="Planning estimate table"><table class="planning-table"><thead><tr>'+columns.map(v=>'<th scope="col">'+esc(v.label)+'</th>').join('')+'</tr></thead><tbody>'+shown.map(row=>'<tr>'+columns.map(column=>{const value=row&&Object.hasOwn(row,column.key)?row[column.key]:null;return '<td>'+esc(value==null?'—':value)+'</td>';}).join('')+'</tr>').join('')+'</tbody></table></div>':'<div class="empty">No planning values were returned for this selection.</div>';
       const controls=pages>1?'<div class="planning-pages"><button type="button" data-planning-page="previous" '+(state.planningPage===0?'disabled':'')+'>Previous rows</button><span class="context">Rows '+(start+1)+'–'+(start+shown.length)+' of '+rows.length+'</span><button type="button" data-planning-page="next" '+(state.planningPage===pages-1?'disabled':'')+'>Next rows</button></div>':'';
-      app.innerHTML=chrome('<p class="operation-name">'+esc(planning.title || 'Planning estimates')+'</p>'+table+controls+(data.truncated?'<p class="notice">Partial native response. More estimates may exist.</p>':'')+notes,'Read-only estimates');
-      app.querySelectorAll('[data-planning-page]').forEach(button=>button.addEventListener('click',()=>{if(button.disabled)return;state.planningPage+=button.dataset.planningPage==='next'?1:-1;renderPlanning(data);}));
+      app.innerHTML=chrome(operationHeader(planning.title || 'Planning estimates','',meta.provider)+table+controls+(data.truncated?'<p class="notice">Partial native response. More estimates may exist.</p>':'')+notes,'Read-only estimates');
+      app.querySelectorAll('[data-planning-page]').forEach(button=>button.addEventListener('click',()=>{if(button.disabled)return;state.planningPage+=button.dataset.planningPage==='next'?1:-1;renderPlanning(data,meta);}));
     }
     function render(result) {
       cancelHold();clearTimeout(expiryTimer);trendResize?.disconnect();
