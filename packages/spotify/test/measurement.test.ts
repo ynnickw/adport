@@ -152,6 +152,18 @@ describe('Spotify account-scoped measurement resources', () => {
     await expect(f.provider.applyWrite(f.op('spotify_create_pixel', { name: 'QA Pixel', domain: 'https://example.com' }), guard)).rejects.toThrow('unconfirmed');
     expect(f.writes()).toHaveLength(1);
   });
+  it.each([null, F])('reconciles only the exact approved Pixel when its native binding is %s', async binding => {
+    const f = fixture({ empty: true });
+    const result = await f.provider.applyWrite(f.op('spotify_create_pixel', { name: 'QA Pixel', domain: 'https://example.com' }), guard);
+    f.pixels.get(P)!.dataset_id = binding;
+    const before = f.native().length;
+    const read = await f.provider.measurement.created({ account_id: A, resource_receipt: details(result).resource_receipt });
+    expect(read).toMatchObject({ pixel: { id: P, dataset_id: binding }, dataset: null, needs_dataset_sharing: null,
+      dataset_binding: { expected_dataset_id: N, observed_dataset_id: binding, matches_receipt: false } });
+    expect(f.native().slice(before).map(call => call.url.pathname)).toEqual([`/ads/v3/ad_accounts/${A}`, `/ads/v3/businesses/${B}/pixels/${P}`]);
+    await expect(f.provider.measurement.getPixel({ account_id: A, dataset_id: N })).rejects.toThrow('binding mismatch');
+    expect(f.writes()).toHaveLength(2);
+  });
   it('does not authorize business-wide metadata updates for a multi-account shared resource', async () => {
     const f = fixture({ foreignShares: true }), current = (await f.provider.measurement.getDataset({ account_id: A, dataset_id: D })).dataset;
     await expect(f.provider.previewWrite(f.op('spotify_update_dataset', { dataset_id: D, expected_configuration_hash: current.configuration_hash, name: 'Changed' }), guard)).rejects.toThrow('restricted to this selected account');expect(f.writes()).toHaveLength(0);

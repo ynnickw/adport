@@ -56,10 +56,14 @@ export class SpotifyMeasurementService {
   private async rawCapi(scope: Scope, id: string) {
     const data = await this.client.get(`${this.base(scope)}/capi/${spotifyId.parse(id)}`, capiSchema);ensure(data.capi_connection_id === id, 'CAPI integration identity mismatch');return data;
   }
-  private async createdNative(scope: Scope, proof: Receipt) {
+  private async receiptNative(scope: Scope, proof: Receipt) {
     this.checkProof(scope, proof);
     const resource = proof.kind === 'pixel' ? await this.rawPixel(scope, proof.id) : proof.kind === 'capi' ? await this.rawCapi(scope, proof.id) : proof.kind === 'mobile_app' ? await this.rawMobile(scope, proof.id) : await this.rawDataset(scope, proof.id);
     const datasetId = proof.kind === 'dataset' ? proof.id : 'dataset_id' in resource && typeof resource.dataset_id === 'string' ? resource.dataset_id : undefined;
+    return { resource, datasetId };
+  }
+  private async createdNative(scope: Scope, proof: Receipt) {
+    const { resource, datasetId } = await this.receiptNative(scope, proof);
     ensure(!proof.dataset_id || datasetId === proof.dataset_id, 'created resource dataset binding changed; reconcile the original IDs');
     return { resource, datasetId };
   }
@@ -148,12 +152,17 @@ export class SpotifyMeasurementService {
     return { ...scope, ...data, notes: ['Diagnostics can lag implementation by at least 20 minutes. Received activity is not proof of campaign attribution, optimization or delivery. Missing or suppressed values remain native; this read sends no events.'] };
   }
   async created(input: { account_id: string; resource_receipt: string }) {
-    const proof = this.proof(input.account_id, input.resource_receipt)!, scope = await this.scope(input.account_id), native = await this.createdNative(scope, proof);
-    const candidate = native.datasetId ? await this.rawDataset(scope, native.datasetId) : undefined;
+    const proof = this.proof(input.account_id, input.resource_receipt)!, scope = await this.scope(input.account_id), native = await this.receiptNative(scope, proof);
+    const matches = proof.dataset_id ? native.datasetId === proof.dataset_id : null;
+    // A receipt authorizes its exact child. A changed/unknown binding never authorizes another parent's contents.
+    const candidate = matches !== false && native.datasetId ? await this.rawDataset(scope, native.datasetId) : undefined;
     const dataset = candidate && (candidate.shared_ad_accounts?.some(a => a.id === scope.account_id) || this.recoverableDataset(scope, candidate, proof, native.datasetId)) ? candidate : undefined;
     const key = proof.kind === 'capi' ? 'capi_integration' : proof.kind;
     const resource = proof.kind === 'mobile_app' ? this.publicMobile(scope, native.resource as Mobile) : proof.kind === 'dataset' ? this.publicDataset(scope, native.resource as Dataset) : { ...native.resource, configuration_hash: digest(scope, proof.kind, native.resource) };
-    return { ...scope, kind: proof.kind, [key]: resource, dataset: dataset ? this.publicDataset(scope, dataset) : null, needs_dataset_sharing: dataset?.shared_ad_accounts ? !dataset.shared_ad_accounts.some(a => a.id === scope.account_id) : null, resource_receipt: input.resource_receipt, notes: ['Read-only reconciliation of an approved creation. No creation, share, update or event request was replayed.'] };
+    return { ...scope, kind: proof.kind, [key]: resource, dataset: dataset ? this.publicDataset(scope, dataset) : null,
+      dataset_binding: { expected_dataset_id: proof.dataset_id ?? null, observed_dataset_id: native.datasetId ?? null, matches_receipt: matches },
+      needs_dataset_sharing: dataset?.shared_ad_accounts ? !dataset.shared_ad_accounts.some(a => a.id === scope.account_id) : null, resource_receipt: input.resource_receipt,
+      notes: ['Read-only reconciliation of an approved creation. No creation, share, update or event request was replayed.', ...(matches === false ? ['The native dataset binding does not match the creation receipt. Only the exact created resource was read; no dataset contents were followed. Sharing remains unverified and mutation checks remain strict.'] : [])] };
   }
   async sharingStatus(input: { account_id: string; resource_receipt: string }) {
     const proof = this.proof(input.account_id, input.resource_receipt, 'sharing')!, scope = await this.scope(input.account_id);this.checkProof(scope, proof);
