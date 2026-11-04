@@ -112,6 +112,14 @@ describe('Spotify account-scoped measurement resources', () => {
     const f = fixture({ missingPaging: true });expect(await f.provider.measurement.datasets(A)).toMatchObject({ complete: null, truncated: true });
     expect((await f.provider.measurement.datasets(A)).datasets).toHaveLength(1);expect(f.native().every(c => !c.url.search)).toBe(true);
   });
+  it.each([{ datasets: [] }, { datasets: [{ id: D }] }])('preserves dataset rows when native paging is null: %j', async ({ datasets }) => {
+    const f = fixture({ datasetResponse: { datasets, paging: null } });
+    const result = await f.provider.measurement.context(A);
+    expect(result).toMatchObject({ complete: null, truncated: true, paging: null });
+    expect(result.datasets.map(row => row.id)).toEqual(datasets.map(row => row.id));
+    expect(f.native().every(call => !call.url.search)).toBe(true);
+    expect(f.writes()).toHaveLength(0);
+  });
   it.each([{ datasetResponse: { datasets: [], paging: { offset: 1, total_results: 0 } } }, { datasetResponse: { datasets: [{ id: D }, { id: D }], paging: { offset: 0, total_results: 2 } } }, { badIdentity: true }])('rejects inconsistent native inventory/account identities: %o', async options => {
     await expect(fixture(options).provider.measurement.context(A)).rejects.toThrow(/spotify:/);
   });

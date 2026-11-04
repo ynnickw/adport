@@ -70,7 +70,7 @@ export class SpotifyMeasurementService {
   private publicMobile(scope: Scope, row: Mobile, snapshot = true) { return { ...row, ...this.sharing(scope, row), ...(snapshot ? { configuration_hash: digest(scope, 'mobile_app', row) } : {}) }; }
   private async selectedDatasets(scope: Scope) {
     // This endpoint has no documented limit/offset query; never invent paging parameters.
-    const data = await this.client.get(`${this.base(scope)}/ad_accounts/${scope.account_id}/datasets`, z.object({ datasets: z.array(datasetSchema), paging: paging.optional() }));
+    const data = await this.client.get(`${this.base(scope)}/ad_accounts/${scope.account_id}/datasets`, z.object({ datasets: z.array(datasetSchema), paging: paging.nullish() }));
     ensure(new Set(data.datasets.map(d => d.id)).size === data.datasets.length, 'dataset inventory repeated an ID');
     ensure(!data.paging || data.paging.offset === 0 && data.paging.total_results >= data.datasets.length, 'dataset inventory pagination is inconsistent');
     for (const row of data.datasets) ensure(!row.shared_ad_accounts || row.shared_ad_accounts.some(a => a.id === scope.account_id), 'dataset inventory contains an unshared account resource');
