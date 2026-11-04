@@ -7,6 +7,10 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./tool-catalog": {
+      "types": "./dist/tool-catalog.d.ts",
+      "import": "./dist/tool-catalog.js"
+    },
     "./media-platforms": {
       "types": "./dist/media-platforms.d.ts",
       "import": "./dist/media-platforms.js"
@@ -20,7 +24,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts src/media-platforms.ts --format esm --dts --sourcemap --clean",
+    "build": "tsup src/index.ts src/media-platforms.ts src/tool-catalog.ts --format esm --dts --sourcemap --clean",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"

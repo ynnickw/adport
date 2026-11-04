@@ -1447,3 +1447,15 @@ input.control-checkbox:disabled { cursor: not-allowed; opacity: .45; }
   .pricing-paywall .comparison-table { min-width: 820px; }
   .pricing-paywall .comparison-table thead th { top: 0; }
 }
+
+.tool-catalog-fields { display: grid; gap: .85rem; }
+.tool-catalog-fields .select-control { display: flex; width: 100%; }
+.tool-platform-disclosure { border: 1px solid var(--line-soft); border-radius: .6rem; }
+.tool-platform-disclosure > summary { padding: .75rem .85rem; font-size: .8125rem; }
+.tool-platform-disclosure .disclosure-content { padding: .85rem; }
+.tool-platform-options { border: 0; padding: .8rem 0 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem 1rem; }
+.tool-platform-option { display: flex; align-items: center; gap: .55rem; font-size: .8125rem; line-height: 1.5; }
+.tool-platform-options:disabled { opacity: .5; }
+.assistant-tool-access { margin-top: .65rem; max-width: 34rem; border: 0; }
+.assistant-tool-access > summary { padding: .4rem 0; font-size: .8125rem; }
+.assistant-tool-access > .disclosure-content { padding: .75rem 0 .25rem; }

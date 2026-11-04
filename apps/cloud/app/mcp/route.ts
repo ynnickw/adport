@@ -9,6 +9,7 @@ import { mcpUiDomain } from '@/lib/mcp-ui-domain';
 import { adWritePlanLimit } from '@/lib/cloud/write-plan-limit';
 import { env } from '@/lib/env';
 import { routeMcpProjects } from '@/lib/cloud/mcp-projects';
+import { principalToolSelection } from '@/lib/cloud/tool-catalog';
 import { diagnoseMcpRejection, recordMcpUiResponse } from '@/lib/mcp-transport-diagnostics';
 import { inspectMcpRequest, type McpDiscoveryMethod } from '@/lib/mcp-ui-request';
 
@@ -48,13 +49,14 @@ async function handle(request: Request): Promise<Response> {
     let server: ReturnType<typeof createMcpServer>;
     if (uiOnly) server = createMcpUiServer(uiOptions);
     else {
-      const tenantRuntime = await createTenantRuntime(principal, { surface: 'mcp' });
-      const runtime = principal.oauthTokenId ? routeMcpProjects(tenantRuntime, principal) : tenantRuntime;
+      const catalog = await principalToolSelection(principal);
+      const tenantRuntime = await createTenantRuntime(principal, { surface: 'mcp', catalog });
+      const runtime = principal.oauthTokenId ? routeMcpProjects(tenantRuntime, principal, catalog) : tenantRuntime;
       server = createMcpServer({
         ...uiOptions,
         runtime,
         instructions: principal.oauthTokenId
-          ? 'Call projects_list to discover the projects and platforms authorized for this connection. Use project_id on operations to choose the intended project; it is required when multiple projects are available. Each project has its own accounts and policies. New connected platforms are available after their accounts are enabled, without reconnecting the assistant.'
+          ? `Call projects_list to discover the projects and platforms authorized for this connection. Use project_id on operations to choose the intended project; it is required when multiple projects are available. Each project has its own accounts and policies. This connection uses the ${catalog.profile} tool profile. Tool access and platforms can be changed on Adport's AI assistants page; refresh the assistant's tool list after changing them.`
           : undefined,
         productionOnly: true,
         scopes: toolScopes,

@@ -88,7 +88,7 @@ describe('all-provider shared tool surface', () => {
     // Inspect what directory scanners actually receive, not only registry metadata.
     // No provider requests are made: all credentials above are inert test strings.
     const client = new Client({ name: 'submission-scanner-test', version: '1.0.0' });
-    const server = createMcpServer({ runtime });
+    const server = createMcpServer({ runtime, includeRawTools: true });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
     try {
@@ -177,4 +177,51 @@ describe('all-provider shared tool surface', () => {
       expect(modernTools.find(tool => tool.name === 'google_assets')?._meta).toMatchObject({ ui: { resourceUri: ADPORT_UI_URI } });
     } finally { await modernClient.close(); await modern.close(); }
   });
+  it('defaults to typed tools, filters profiles and platforms, and rejects excluded calls', async () => {
+    async function unavailable(client: Client, name: string) {
+      try { expect((await client.callTool({ name, arguments: {} })).isError).toBe(true); }
+      catch (error) { expect(String(error)).toMatch(/not found|Unknown tool/); }
+    }
+    const catalogs: Record<string, number> = {};
+    for (const [label, catalog] of Object.entries({
+      full: { profile: 'full' as const, providers: null },
+      standard: { profile: 'standard' as const, providers: ['google', 'meta'] as const },
+      reporting: { profile: 'reporting' as const, providers: ['google', 'meta'] as const },
+      empty: { profile: 'standard' as const, providers: [] },
+    })) {
+      const server = createMcpServer({ runtime, productionOnly: true, catalog, includeRawTools: true });
+      const client = new Client({ name: `catalog-${label}`, version: '1.0.0' });
+      const [ct, st] = InMemoryTransport.createLinkedPair();
+      await Promise.all([server.connect(st), client.connect(ct)]);
+      try {
+        const tools = (await client.listTools()).tools;
+        const listed = tools.map(tool => tool.name);
+        catalogs[label] = tools.length;
+        expect(listed.some(name => /_api_/.test(name))).toBe(false);
+        if (label !== 'full') {
+          expect(listed.some(name => /^(apple|tiktok|microsoft|reddit|snapchat|spotify|pinterest|linkedin|x)_/.test(name))).toBe(false);
+          await unavailable(client, 'apple_create_campaign');
+        }
+        if (label === 'standard') {
+          expect(listed).toEqual(expect.arrayContaining(['accounts_list', 'report', 'meta_insights', 'meta_create_campaign', 'meta_create_ad_set', 'meta_create_ad', 'google_create_responsive_search_ad']));
+          expect(listed).not.toContain('google_create_experiment');
+        }
+        if (label === 'reporting') {
+          expect(tools.every(tool => tool.annotations?.readOnlyHint === true)).toBe(true);
+          await unavailable(client, 'meta_set_budget');
+        }
+        if (label === 'empty') expect(listed.some(name => /^(google|meta)_/.test(name))).toBe(false);
+        await unavailable(client, 'meta_api_read');
+      } finally { await client.close(); await server.close(); }
+    }
+    expect(catalogs.standard).toBeLessThan(catalogs.full! / 3);
+    console.log('Catalog sizes:', JSON.stringify(catalogs));
+    const server = createMcpServer({ runtime });
+    const client = new Client({ name: 'default-local-catalog', version: '1.0.0' });
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(st), client.connect(ct)]);
+    try { expect((await client.listTools()).tools.some(tool => /_api_/.test(tool.name))).toBe(false); }
+    finally { await client.close(); await server.close(); }
+  });
+
 });
