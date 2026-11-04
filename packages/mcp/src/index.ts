@@ -163,6 +163,7 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
         destructiveHint: tool.annotations.destructive ?? false,
         openWorldHint: tool.annotations.openWorld ?? false,
       },
+      ...(tool.fileInputs?.length ? { _meta: { 'openai/fileParams': [...tool.fileInputs] } } : {}),
     };
     const callback = async (args: Record<string, unknown>) => {
       if (scopeDenial) {
@@ -224,6 +225,7 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
       registerAppTool(server, tool.name, {
         ...config,
         _meta: {
+          ...config._meta,
           ui: { resourceUri: ADPORT_UI_URI, visibility: ['model', 'app'] },
           'openai/widgetAccessible': true,
           'openai/outputTemplate': ADPORT_UI_URI,

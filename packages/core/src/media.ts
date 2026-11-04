@@ -14,10 +14,17 @@ export const mediaUploadMetadataSchema = z.object({
   name: z.string().trim().min(1).max(240), content_type: z.enum(PROJECT_MEDIA_TYPES),
   byte_length: z.number().int().positive().max(MAX_PROJECT_MEDIA_BYTES), sha256: z.string().regex(/^[a-f0-9]{64}$/),
 });
+/** Host-injected file references; bytes stay outside the model's tool arguments. */
+export const hostFileSchema = z.object({
+  download_url: z.string().min(1).max(16_384), file_id: z.string().min(1).max(200).regex(/^[A-Za-z0-9_-]+$/),
+  mime_type: z.string().max(100).optional(), file_name: z.string().max(240).optional(),
+}).strict();
+export type HostFile = z.infer<typeof hostFileSchema>;
 const existing = { media_id: z.string().uuid(), expected_sha256: z.string().regex(/^[a-f0-9]{64}$/) };
 export const mediaWriteSchemas = {
   media_prepare_upload: mediaUploadMetadataSchema,
   media_upload: mediaUploadMetadataSchema.safeExtend({ byte_length: z.number().int().positive().max(MAX_INLINE_MEDIA_BYTES), data_base64: z.string().min(4).max(4 * Math.ceil(MAX_INLINE_MEDIA_BYTES / 3)).regex(/^[A-Za-z0-9+/]*={0,2}$/) }),
+  media_import_file: mediaUploadMetadataSchema.safeExtend({ file: hostFileSchema }),
   media_finalize_upload: z.object(existing),
   media_upload_part: z.object({ ...existing, part_index: z.number().int().min(0).max(Math.ceil(MAX_PROJECT_MEDIA_BYTES / MEDIA_UPLOAD_PART_BYTES) - 1), part_sha256: z.string().regex(/^[a-f0-9]{64}$/), data_base64: z.string().min(4).max(4 * Math.ceil(MEDIA_UPLOAD_PART_BYTES / 3)).regex(/^[A-Za-z0-9+/]*={0,2}$/) }),
   media_rename: z.object({ ...existing, expected_name: z.string(), name: mediaUploadMetadataSchema.shape.name }),
@@ -51,6 +58,7 @@ export interface MediaLibrary extends MediaResolver {
 export interface ManagedMediaLibrary extends MediaLibrary {
   readonly scopeId: string;
   get(id: string): Promise<MediaAsset>;
+  inspectFile?(file: HostFile): Promise<{ file_id: string; metadata: z.infer<typeof mediaUploadMetadataSchema>; width?: number; height?: number }>;
   previewWrite(op: WriteOperation): Promise<WritePreview>;
   applyWrite(op: WriteOperation): Promise<WriteResult>;
 }

@@ -1,7 +1,7 @@
 import 'server-only';
 import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
-import { AdportError, verifyMedia, mediaUploadMetadataSchema, mediaWriteSchemas, MAX_PROJECT_MEDIA_BYTES, MEDIA_UPLOAD_PART_BYTES, PROJECT_MEDIA_TYPES, type MediaAsset, type ManagedMediaLibrary, type MediaSource, type VerifiedMedia, type WriteOperation, type WritePreview, type WriteResult } from '@adport/core';
+import { AdportError, verifyMedia, mediaUploadMetadataSchema, mediaWriteSchemas, MAX_PROJECT_MEDIA_BYTES, MEDIA_UPLOAD_PART_BYTES, PROJECT_MEDIA_TYPES, type HostFile, type MediaAsset, type ManagedMediaLibrary, type MediaSource, type VerifiedMedia, type WriteOperation, type WritePreview, type WriteResult } from '@adport/core';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
@@ -10,6 +10,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { requireScope } from './auth';
 import { enforceRateLimit } from './repository';
 import type { TenantPrincipal } from './types';
+import { readHostFile } from './host-file';
 
 const BUCKET = 'creative-media';
 // Compatible with the default Supabase global upload limit. Local provider
@@ -90,8 +91,16 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
     return this.asset(await this.record(id, true));
   }
 
+  async inspectFile(source: HostFile) {
+    requireScope(this.principal, 'tools:read');
+    const file = await readHostFile(source);
+    const metadata = mediaUploadSchema.parse({ name: file.name, content_type: file.contentType, byte_length: file.bytes.length, sha256: file.sha256 });
+    const { width, height } = await inspectMediaBytes(file.bytes, metadata);
+    return { file_id: source.file_id, metadata, ...(width ? { width } : {}), ...(height ? { height } : {}) };
+  }
+
   async read(source: MediaSource, options: { maxBytes?: number; contentTypes?: readonly string[] } = {}): Promise<VerifiedMedia> {
-    if (source.file_path || !source.media_id) throw new AdportError('INVALID_INPUT', 'Hosted uploads require a project media_id; server file paths are not accepted. Stage files with media_upload, or media_prepare_upload → HTTP PUT or media_upload_part → media_finalize_upload. Then pass the returned media_id and SHA-256. No dashboard is required.');
+    if (source.file_path || !source.media_id) throw new AdportError('INVALID_INPUT', 'Hosted uploads require a project media_id; server file paths are not accepted. Stage a ChatGPT attachment with media_inspect_file → media_import_file; otherwise use media_upload, or media_prepare_upload → HTTP PUT or media_upload_part → media_finalize_upload. Then pass the returned media_id and SHA-256. No dashboard is required.');
     const row = await this.record(source.media_id);
     if (row.status !== 'ready') throw new AdportError('INVALID_INPUT', 'Finish and verify the media upload before using it.');
     if (row.sha256 !== source.expected_sha256.toLowerCase()) throw new AdportError('INVALID_INPUT', 'Media SHA-256 mismatch. Select the approved project asset.');
@@ -206,7 +215,7 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
     if (!Object.hasOwn(mediaWriteSchemas, tool) || !schema || op.provider !== 'media' || op.accountId !== this.scopeId || op.kind !== kind) throw new AdportError('INVALID_INPUT', 'Invalid project media operation.');
     const input = schema.parse(op.payload);
     const base = { coercions: [], budgetDeltas: [], serverValidated: false };
-    if (tool === 'media_prepare_upload' || tool === 'media_upload') {
+    if (tool === 'media_prepare_upload' || tool === 'media_upload' || tool === 'media_import_file') {
       const metadata = mediaUploadSchema.parse(input);
       let bytes: Buffer<ArrayBuffer> | undefined;
       if (tool === 'media_upload') {
@@ -215,13 +224,23 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
         if (bytes.toString('base64') !== inline.data_base64) throw new AdportError('INVALID_INPUT', 'Use canonical padded base64 for the exact media bytes.');
         await inspectMediaBytes(bytes, metadata);
       }
+      if (tool === 'media_import_file') {
+        const source = mediaWriteSchemas.media_import_file.parse(input);
+        bytes = Buffer.from((await readHostFile(source.file)).bytes);
+        await inspectMediaBytes(bytes, metadata);
+      }
       return { ...base, summary: `${bytes ? 'Upload' : 'Prepare upload for'} project media “${metadata.name}”`, changes: [`+ ${metadata.name}; ${metadata.content_type}; ${metadata.byte_length} bytes; SHA-256 ${metadata.sha256}`], fieldChanges: [{ field: 'File', before: '(new)', after: metadata.name }, { field: 'Bytes', before: '0', after: String(metadata.byte_length) }, { field: 'SHA-256', before: '(new)', after: metadata.sha256 }], notes: ['Private project storage only. No advertising account upload or publication. Provider uploads use the resulting media_id and checksum in a separate guarded operation.'], execute: async () => {
         if (!await enforceRateLimit(`media:${this.principal.userId ?? this.principal.apiKeyId ?? this.principal.oauthTokenId}:${this.scopeId}`, 12)) throw new HttpError('Too many uploads. Try again in a minute.', 429);
         const grant = await this.beginUpload(metadata);
         if (!bytes) return { applied: true, resourceIds: [grant.media_id], details: grant };
         try {
-          const uploaded = await fetch(grant.upload_url, { method: 'PUT', headers: grant.headers, body: bytes, redirect: 'error', signal: AbortSignal.timeout(60_000) });
-          if (!uploaded.ok) throw new Error('Storage upload failed');
+          if (tool === 'media_import_file') {
+            const { error } = await createAdminClient().storage.from(BUCKET).upload(`${this.scopeId}/${grant.media_id}`, bytes, { contentType: metadata.content_type, upsert: false });
+            if (error) throw new Error('Storage import failed');
+          } else {
+            const uploaded = await fetch(grant.upload_url, { method: 'PUT', headers: grant.headers, body: bytes, redirect: 'error', signal: AbortSignal.timeout(60_000) });
+            if (!uploaded.ok) throw new Error('Storage upload failed');
+          }
           await this.finalize(grant.media_id);
           return { applied: true, resourceIds: [grant.media_id], details: { media_id: grant.media_id, sha256: metadata.sha256, status: 'ready', asset: await this.asset(await this.record(grant.media_id), false) } };
         } catch { throw new AdportError('PROVIDER_ERROR', 'Media upload was started but completion was not confirmed. Read media_get for this ID; reconcile before preparing another upload.', { media_id: grant.media_id }); }

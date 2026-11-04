@@ -36,4 +36,17 @@ describe('project media tools through the shared policy gate', () => {
     await expect(runtime.registry.call('media_upload', { ...metadata, byte_length: 1024 * 1024 + 1, data_base64: 'YQ==' }, runtime.ctx)).rejects.toMatchObject({ code: 'INVALID_INPUT' });
     expect(f.calls).toEqual([]);
   });
+
+  it('binds a host file import to its exact capability, checksum and selected project', async () => {
+    const f = fixture(), runtime = await createContext({ engine: f.engine, media: f.media('project-a') });
+    const input = { ...metadata, file: { download_url: 'https://files.oaiusercontent.com/file-fixture?sig=fixture', file_id: 'file_fixture' } };
+    expect(runtime.registry.get('media_import_file').fileInputs).toEqual(['file']);
+    expect(runtime.registry.get('media_inspect_file').annotations.readOnly).toBe(true);
+    const preview = await runtime.registry.call('media_import_file', input, runtime.ctx) as { pending_operation_id: string };
+    await expect(runtime.registry.call('media_import_file', { ...input, file: { ...input.file, file_id: 'file_other' }, pending_operation_id: preview.pending_operation_id }, runtime.ctx)).rejects.toMatchObject({ code: 'PENDING_MISMATCH' });
+    const other = await createContext({ engine: f.engine, media: f.media('project-b') });
+    await expect(other.registry.call('media_import_file', { ...input, pending_operation_id: preview.pending_operation_id }, other.ctx)).rejects.toMatchObject({ code: 'PENDING_MISMATCH' });
+    expect(await runtime.registry.call('media_import_file', { ...input, pending_operation_id: preview.pending_operation_id }, runtime.ctx)).toMatchObject({ applied: true });
+    expect(f.calls.at(-1)).toMatchObject({ provider: 'media', accountId: 'project-a', kind: 'create', payload: input });
+  });
 });

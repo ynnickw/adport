@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import sharp from 'sharp';
 import postgres from 'postgres';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { db, closeDbForTests } from '@/lib/db';
 import { cleanupDeletedProjectMedia, ProjectMediaLibrary } from '@/lib/cloud/media';
 import { resolveMembership } from '@/lib/cloud/repository';
@@ -115,6 +115,40 @@ describeDatabase('project media signed-upload boundary', () => {
     const preview = await call(rt, tool, input); expect(preview.applied).toBe(false);
     return call(rt, tool, { ...input, pending_operation_id: preview.pending_operation_id });
   }
+
+  it('imports a large host attachment through MCP with exact bytes and the normal project approval gate', async () => {
+    const nativeBytes = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(2 * 1024 * 1024 + 31, 32), Buffer.from('\n%%EOF\n')]);
+    const checksum = createHash('sha256').update(nativeBytes).digest('hex');
+    const file = { file_id: 'file_private_fixture', download_url: 'https://files.oaiusercontent.com/file-fixture?sig=private-fixture', file_name: 'native-host-attachment.pdf', mime_type: 'application/pdf' };
+    let current = nativeBytes;
+    const originalFetch = globalThis.fetch, download = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => String(url) === file.download_url ? new Response(current) : originalFetch(url, init));
+    const rt = await runtime(), server = createMcpServer({ runtime: rt }), client = new Client({ name: 'host-file-import-fixture', version: '1' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    const invoke = async (name: string, input: Record<string, unknown>): Promise<any> => { const result = await client.callTool({ name, arguments: input }); if (result.isError) throw new Error((result.content as any[]).find(item => item.type === 'text')?.text ?? 'MCP fixture error'); return result.structuredContent; };
+    const count = async () => (await db()<Array<{ count: string }>>`select count(*)::text as count from private.creative_media where organization_id = ${projects[0]!}`)[0]!.count;
+    try {
+      const before = await count(), inspected = await invoke('media_inspect_file', { file });
+      expect(inspected.metadata).toMatchObject({ byte_length: nativeBytes.length, sha256: checksum, content_type: 'application/pdf' });
+      expect(JSON.stringify(inspected)).not.toContain('private-fixture'); expect(await count()).toBe(before);
+      const input = { ...inspected.metadata, file }, preview = await invoke('media_import_file', input);
+      expect(preview.applied).toBe(false); expect(await count()).toBe(before);
+      current = Buffer.from(nativeBytes); current[current.length - 1] = 33;
+      await expect(invoke('media_import_file', { ...input, pending_operation_id: preview.pending_operation_id })).rejects.toThrow('SHA-256');
+      expect(await count()).toBe(before);
+      current = nativeBytes;
+      const fresh = await invoke('media_import_file', input), imported = await invoke('media_import_file', { ...input, pending_operation_id: fresh.pending_operation_id }), media_id = imported.result.details.media_id;
+      expect(imported).toMatchObject({ applied: true, result: { details: { sha256: checksum, status: 'ready', asset: { byte_length: nativeBytes.length } } } });
+      expect(Number(await count())).toBe(Number(before) + 1);
+      const found = await invoke('media_get', { media_id }); expect(found.asset).toMatchObject({ status: 'READY', sha256: checksum });
+      expect(Buffer.from((await owner.read({ media_id, expected_sha256: checksum })).bytes)).toEqual(nativeBytes);
+      await expect(other.get(media_id)).rejects.toThrow('selected project');
+      const reader = await runtime(0, ['tools:read']); await expect(call(reader, 'media_import_file', input)).rejects.toThrow('tools:write');
+      const audits = await db()<Array<{ event: string }>>`select event from public.audit_events where organization_id = ${projects[0]!} and tool = 'media_import_file'`;
+      expect(audits).toEqual(expect.arrayContaining([{ event: 'validated' }, { event: 'applied' }]));
+      expect(download.mock.calls.filter(([url]) => String(url) === file.download_url).length).toBeGreaterThanOrEqual(5);
+    } finally { download.mockRestore(); await Promise.allSettled([client.close(), server.close()]); }
+  });
 
   it('stores and transfers a checksum-bound PDF without rendering it as audio', async () => {
     const rt = await runtime(), pdf = Buffer.from('%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n'), checksum = createHash('sha256').update(pdf).digest('hex');

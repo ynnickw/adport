@@ -57,6 +57,20 @@ afterEach(async () => {
 });
 
 describe('adport MCP server', () => {
+  it('exports complete native file parameter schemas on read and guarded write tools', async () => {
+    const tools = (await client.listTools()).tools;
+    for (const name of ['media_inspect_file', 'media_import_file']) {
+      const tool = tools.find(tool => tool.name === name)!;
+      expect(tool._meta?.['openai/fileParams']).toEqual(['file']);
+      const schema = (tool.inputSchema.properties as Record<string, any>).file;
+      expect(Object.keys(schema.properties).sort()).toEqual(['download_url', 'file_id', 'file_name', 'mime_type']);
+      expect(schema.required.sort()).toEqual(['download_url', 'file_id']);
+      expect(schema.additionalProperties).toBe(false);
+    }
+    const imported = tools.find(tool => tool.name === 'media_import_file')!;
+    expect(imported.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
+    expect(imported._meta).toHaveProperty('ui');
+  });
   it('includes the display title in annotations for directory clients', async () => {
     const { tools } = await client.listTools();
     expect(tools.length).toBeGreaterThan(0);
