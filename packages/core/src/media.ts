@@ -16,6 +16,10 @@ export const mediaUploadMetadataSchema = z.object({
   name: z.string().trim().min(1).max(240), content_type: z.enum(PROJECT_MEDIA_TYPES),
   byte_length: z.number().int().positive().max(MAX_PROJECT_MEDIA_BYTES), sha256: z.string().regex(/^[a-f0-9]{64}$/),
 });
+export const mediaWidgetUploadSchema = z.object({
+  project_id: z.string().uuid(), storage_origin: z.string().url(), max_bytes: z.number().int().positive().max(MAX_PROJECT_MEDIA_BYTES),
+  content_types: z.array(z.enum(PROJECT_MEDIA_TYPES)).min(1),
+});
 /** Host-injected file references; bytes stay outside the model's tool arguments. */
 export const hostFileSchema = z.object({
   download_url: z.string().min(1).max(16_384), file_id: z.string().min(1).max(200).regex(/^[A-Za-z0-9_-]+$/),
@@ -62,7 +66,7 @@ export const mediaAssetSchema = z.object({
 });
 export type MediaAsset = z.infer<typeof mediaAssetSchema>;
 export interface MediaLibrary extends MediaResolver {
-  list(input: MediaListInput): Promise<{ assets: MediaAsset[]; truncated: boolean; next_cursor?: string; upload_page_url?: string }>;
+  list(input: MediaListInput): Promise<{ assets: MediaAsset[]; truncated: boolean; next_cursor?: string; upload_page_url?: string; upload_config?: z.infer<typeof mediaWidgetUploadSchema> }>;
   trackUpload?(input: { media_id: string; expected_sha256: string; provider: string; account_id: string; tool: string }, execute: () => Promise<WriteResult>): Promise<WriteResult>;
 }
 export interface ManagedMediaLibrary extends MediaLibrary {

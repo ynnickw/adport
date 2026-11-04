@@ -54,6 +54,7 @@ describeDatabase('project media signed-upload boundary', () => {
     await expect(owner.finalize(prepared.media_id)).resolves.toMatchObject({ media_id: prepared.media_id, sha256, status: 'ready' });
     await expect(owner.finalize(prepared.media_id)).resolves.toMatchObject({ status: 'ready' });
     const found = await owner.list({ limit: 10 });
+    expect(found.upload_config).toMatchObject({ project_id: projects[0], storage_origin: new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).origin, max_bytes: 50 * 1024 * 1024, content_types: expect.arrayContaining(['image/png', 'video/mp4']) });
     expect(found.assets.find(asset => asset.id === prepared.media_id)).toMatchObject({ sha256, width: 1200, height: 628, byte_length: bytes.byteLength, status: 'READY' });
     const read = await owner.read({ media_id: prepared.media_id, expected_sha256: sha256 });
     expect(Buffer.from(read.bytes).equals(bytes)).toBe(true);

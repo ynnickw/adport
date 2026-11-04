@@ -167,6 +167,7 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
     const assets = await Promise.all(rows.slice(0, input.limit).map(row => this.asset(row)));
     const truncated = rows.length > input.limit;
     return { assets, truncated, ...(truncated ? { next_cursor: assets.at(-1)!.id } : {}),
+      upload_config: { project_id: this.scopeId, storage_origin: new URL(env().NEXT_PUBLIC_SUPABASE_URL).origin, max_bytes: MAX_MEDIA_BYTES, content_types: [...MEDIA_TYPES] },
       upload_page_url: `${env().ADPORT_CLOUD_BASE_URL}/dashboard/assets?project_id=${encodeURIComponent(this.principal.organizationId)}` };
   }
 

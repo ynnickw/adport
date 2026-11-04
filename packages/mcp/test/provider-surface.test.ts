@@ -14,6 +14,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { Client, InMemoryTransport, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { createMcpHandler } from '@modelcontextprotocol/server';
 import { createMcpServer } from '../src/index.js';
+import { ADPORT_UI_URI } from '../src/ui.js';
 
 describe('all-provider shared tool surface', () => {
   let runtime: Awaited<ReturnType<typeof createContext>>;
@@ -168,7 +169,7 @@ describe('all-provider shared tool surface', () => {
       await modernClient.connect(new StreamableHTTPClientTransport(new URL('https://adport.test/mcp'), { fetch: (url, init) => modern.fetch(new Request(url, init)) }));
       const modernTools = (await modernClient.listTools()).tools;
       expect(modernTools.map(tool => tool.name).sort()).toEqual(names.filter(name => name !== 'recommendation_apply' && !/_api_(read|create|update|delete|remove)$/.test(name)).sort());
-      expect(modernTools.find(tool => tool.name === 'google_assets')?._meta).toMatchObject({ ui: { resourceUri: 'ui://adport/insight-card-v7.html' } });
+      expect(modernTools.find(tool => tool.name === 'google_assets')?._meta).toMatchObject({ ui: { resourceUri: ADPORT_UI_URI } });
     } finally { await modernClient.close(); await modern.close(); }
   });
 });

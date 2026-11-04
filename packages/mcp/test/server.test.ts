@@ -94,7 +94,8 @@ describe('adport MCP server', () => {
   it('uses the host sandbox domain without a conflicting OpenAI origin alias', async () => {
     const runtime = await createContext({ providerModules: [] });
     const uiDomain = '0123456789abcdef0123456789abcdef.claudemcpcontent.com';
-    const server = createMcpServer({ runtime, uiDomain });
+    const uiConnectDomains = ['https://private-storage.example'];
+    const server = createMcpServer({ runtime, uiDomain, uiConnectDomains });
     const hostClient = new Client({ name: 'host-domain-test', version: '1' });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
@@ -104,7 +105,7 @@ describe('adport MCP server', () => {
       const content = (await hostClient.readResource({ uri: ADPORT_UI_URI })).contents[0];
       for (const resource of [listing, content]) {
         expect(resource?._meta).toMatchObject({
-          ui: { domain: uiDomain, csp: { connectDomains: [], resourceDomains: ADPORT_UI_RESOURCE_DOMAINS } },
+          ui: { domain: uiDomain, csp: { connectDomains: uiConnectDomains, resourceDomains: ADPORT_UI_RESOURCE_DOMAINS } },
         });
         expect(resource?._meta).not.toHaveProperty('openai/widgetDomain');
       }

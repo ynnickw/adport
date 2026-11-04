@@ -79,6 +79,7 @@ describe('hosted MCP entitlement explanation', () => {
     expect(mocks.oauthClient).toHaveBeenCalledWith('fictional-client');
     expect(options.scopes).toEqual(['tools:read']);
     expect(options.uiResourceDomains).toContain(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).origin);
+    expect(options.uiConnectDomains).toEqual([new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).origin]);
   });
 
   it('preserves default metadata for other clients and skips lookup for API keys', async () => {

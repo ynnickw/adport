@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { creativesOutput } from '../creatives.js';
 import { AdportError } from '../errors.js';
-import { hostFileSchema, mediaAssetSchema, mediaUploadMetadataSchema, mediaWriteSchemas, mediaListSchema, type ManagedMediaLibrary } from '../media.js';
+import { hostFileSchema, mediaAssetSchema, mediaUploadMetadataSchema, mediaWidgetUploadSchema, mediaWriteSchemas, mediaListSchema, type ManagedMediaLibrary } from '../media.js';
 import type { AdProvider } from '../provider.js';
 import { defineTool, type AnyToolDefinition, type ToolContext } from './registry.js';
 import { guardedWriteTool } from './write.js';
@@ -25,7 +25,7 @@ export function mediaTools(): AnyToolDefinition[] {
     name: 'media_list', namespace: 'core',
     description: 'Search central project media by name, kind, tag or platform label, with SHA-256 and previews. Labels do not publish. Upload via media_inspect_file → media_import_file (ChatGPT), media_upload (up to1MiB), or prepare → PUT/parts → finalize (up to50MiB). Use media_distribution_plan to reuse exact source bytes on channels.',
     input: mediaListSchema,
-    output: creativesOutput.extend({ assets: z.array(mediaAssetSchema), upload_page_url: z.string().url().optional() }),
+    output: creativesOutput.extend({ assets: z.array(mediaAssetSchema), upload_page_url: z.string().url().optional(), upload_config: mediaWidgetUploadSchema.optional() }),
     presentation: 'creatives', pagination: { cursorInput: 'cursor' }, annotations: { readOnly: true, openWorld: false },
     async handler(input, ctx) {
       if (!ctx.media) throw new AdportError('NOT_CONNECTED', 'A hosted project media library is required. Local uploads accept file_path and expected_sha256.');

@@ -1,4 +1,6 @@
-export const ADPORT_UI_URI = 'ui://adport/insight-card-v7.html';
+import { MEDIA_UPLOAD_UI } from './media-upload-ui.js';
+
+export const ADPORT_UI_URI = 'ui://adport/insight-card-v8.html';
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
 export const ADPORT_UI_RESOURCE_DOMAINS = ['https://*.fbcdn.net', 'https://*.fbsbx.com', 'https://*.googleusercontent.com', 'https://tpc.googlesyndication.com', 'https://www.bing.com', 'https://*.scdn.co', 'https://*.spotifycdn.com', 'https://storage.googleapis.com', 'https://*.pinimg.com', 'https://*.redd.it', 'https://*.redditmedia.com', 'https://*.redditstatic.com', 'https://*.licdn.com', 'https://*.licdn-ei.com', 'https://pbs.twimg.com', 'https://video.twimg.com', 'https://ton.twimg.com'];
 
@@ -71,7 +73,7 @@ export function structuredResult(tool: string, view: AdportView, result: unknown
 
 /**
  * Self-contained MCP App. It uses the open MCP Apps postMessage protocol and
- * has no script/network dependencies. Media uses only the resource CSP supplied
+ * has no external script dependencies. Media uses only the resource CSP supplied
  * by the server; tool invocations always use the host bridge.
  */
 export const ADPORT_UI_HTML = String.raw`<!doctype html>
@@ -108,6 +110,20 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     .brand b { font-size:12px; letter-spacing:-.02em }
     .context { color:var(--muted); font-size:11px; text-align:right }
     .content { padding:4px 16px 16px }
+    .widget-upload { margin:8px 0 16px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--soft) }
+    .widget-drop { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;border:1px dashed var(--line);border-radius:10px }
+    .widget-drop.dragging { border-color:var(--orange);background:color-mix(in srgb,var(--orange) 9%,var(--paper)) }
+    .widget-drop b { font-size:13px }
+    .widget-drop p { margin:5px 0 0;font-size:11px;color:var(--muted) }
+    .widget-file-label { position:relative;flex-shrink:0;overflow:hidden;cursor:pointer }
+    .widget-file-label input { position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer }
+    .widget-file-label:focus-within { outline:2px solid var(--orange);outline-offset:3px }
+    .widget-upload-row { display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);font-size:11px }
+    .widget-upload-row>div { flex:1;min-width:120px }
+    .widget-upload-row strong { display:block;overflow-wrap:anywhere;font-size:12px }
+    .widget-upload-row small { display:block;margin-top:3px;color:var(--muted) }
+    .widget-upload-row progress,.widget-upload-row p { width:100%;margin:0;accent-color:var(--orange) }
+    .widget-upload-actions { display:flex;gap:8px;margin-top:12px }
     .kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-bottom:15px }
     .kpi { min-width:0; padding:12px; border-radius:13px; background:var(--soft); border:1px solid color-mix(in srgb,var(--line) 70%,transparent) }
     button.kpi { cursor:pointer; color:var(--ink); text-align:left }
@@ -340,10 +356,10 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       button.addEventListener('click',event=>{if (event.detail===0 && !interacted && !button.disabled) complete();});
     }
     const pendingRequests=new Map();
-    async function callTool(tool,parameters) {
+    async function callTool(tool,parameters,timeoutMs=30000) {
       const requestId=id++;
       return new Promise((resolve,reject)=>{
-        const timer=setTimeout(()=>{pendingRequests.delete(requestId);reject(new Error('The request could not be confirmed. Check the result in chat before retrying.'));},30000);
+        const timer=setTimeout(()=>{pendingRequests.delete(requestId);reject(new Error('The request could not be confirmed. Check the result in chat before retrying.'));},timeoutMs);
         pendingRequests.set(requestId,{resolve,reject,timer});
         if (typeof window.openai?.callTool==='function') {
           Promise.resolve().then(()=>window.openai.callTool(tool,parameters)).then(result=>{
@@ -357,6 +373,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       for (const item of arr(result?.content)) {if (item.type==='text') {try {return JSON.parse(item.text);} catch {}}}
       return result;
     }
+    ${MEDIA_UPLOAD_UI}
     function renderCreatives(data,meta) {
       const creatives=arr(data.creatives);
       const canWrite=meta.capabilities?.can_write!==false;
@@ -369,6 +386,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
         return '';
       }).join('')+'</div>';
       const uploadUrl=safeMediaUrl(data.upload_page_url);
+      const uploadScope=uploadContext(data,meta);
       const fieldInput=(field,key)=>{
         const label='<span>'+esc(field.label)+'</span>';
         if (field.type==='select') return '<label class="creative-field">'+label+'<select data-field="'+key+'">'+arr(field.options).map(option=>'<option value="'+esc(option.value)+'" '+(option.value===field.value?'selected':'')+'>'+esc(option.label)+'</option>').join('')+'</select></label>';
@@ -378,17 +396,18 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       const canRefresh=meta.refresh?.arguments && typeof meta.refresh.arguments==='object' && !Array.isArray(meta.refresh.arguments) && typeof meta.tool==='string';
       const canNext=meta.next?.arguments && typeof meta.next.arguments==='object' && !Array.isArray(meta.next.arguments) && typeof meta.tool==='string';
       const creativeNotices=notices({...data,truncated:false})+(data.truncated?'<p class="notice">Partial gallery: more creatives may be available.</p>':'');
-      const body=creativeNotices+(!canWrite&&creatives.some(creative=>arr(creative.actions).length)?'<p class="notice">Your connection can view these creatives. Editing access is required to change them.</p>':'')+((uploadUrl||canRefresh||canNext)?'<p>'+(uploadUrl?'<button class="approve" type="button" data-open-library>'+(canWrite?'Upload media':'Open media library')+'</button> ':'')+(canRefresh?'<button class="approve" type="button" data-refresh-previews '+(state.refreshing?'disabled':'')+'>'+(state.refreshing&&!state.paging?'Refreshing…':'Refresh previews')+'</button>':'')+(canNext?' <button class="approve" type="button" data-next-page '+(state.refreshing?'disabled':'')+'>'+(state.paging?'Loading…':'Next page')+'</button>':'')+'</p>':'')+(state.creativeError?'<p class="notice" role="alert">'+esc(state.creativeError)+'</p>':'')+(creatives.length?'<div class="creative-grid">'+creatives.map((creative,ci)=>{
+      const body=creativeNotices+uploadPanel(uploadScope)+(!canWrite&&creatives.some(creative=>arr(creative.actions).length)?'<p class="notice">Your connection can view these creatives. Editing access is required to change them.</p>':'')+((uploadUrl||canRefresh||canNext)?'<p>'+(uploadUrl?'<button class="approve" type="button" data-open-library>Open media library</button> ':'')+(canRefresh?'<button class="approve" type="button" data-refresh-previews '+(state.refreshing||uploads.running?'disabled':'')+'>'+(state.refreshing&&!state.paging?'Refreshing…':'Refresh previews')+'</button>':'')+(canNext?' <button class="approve" type="button" data-next-page '+(state.refreshing||uploads.running?'disabled':'')+'>'+(state.paging?'Loading…':'Next page')+'</button>':'')+'</p>':'')+(state.creativeError?'<p class="notice" role="alert">'+esc(state.creativeError)+'</p>':'')+(creatives.length?'<div class="creative-grid">'+creatives.map((creative,ci)=>{
         const status=statusOf(creative.status);
         return '<article class="creative-card"><div class="identity">'+logo(creative.provider)+'<div class="identity-copy"><b>'+esc(creative.name)+'</b><span>'+esc(creative.type)+' · '+esc(creative.id)+'</span></div><span class="pill '+status.tone+'">'+esc(status.label)+'</span></div>'+mediaView(creative)+'<div class="creative-copy">'+arr(creative.headlines).map(text=>'<strong>'+esc(text)+'</strong>').join('')+arr(creative.descriptions).map(text=>'<p>'+esc(text)+'</p>').join('')+arr(creative.landing_urls).map(url=>'<p class="context">'+esc(url)+'</p>').join('')+'</div>'+(canWrite?arr(creative.actions):[]).map((action,ai)=>'<form data-creative="'+ci+'" data-action="'+ai+'">'+arr(action.fields).map((field,fi)=>fieldInput(field,fi)).join('')+'<button class="approve" type="submit" '+(state.previewing?'disabled':'')+'>'+(state.previewing?'Preparing preview…':'Preview '+esc(action.label).toLowerCase())+'</button></form>').join('')+'</article>';
       }).join('')+'</div>':'<div class="empty">No creatives were returned for this selection.</div>');
       app.innerHTML=chrome(body,creatives.length+' creative'+(creatives.length===1?'':'s'));
+      bindWidgetUpload(uploadScope,meta);
       app.querySelector('[data-open-library]')?.addEventListener('click',()=>{
         if (typeof window.openai?.openExternal==='function') window.openai.openExternal({href:uploadUrl});
         else send({jsonrpc:'2.0',id:id++,method:'ui/open-link',params:{url:uploadUrl}});
       });
       const loadPage=kind=>async()=>{
-        if (state.refreshing || state.previewing) return;
+        if (state.refreshing || state.previewing || uploads.running) return;
         state.refreshing=true;state.paging=kind==='next';state.creativeError='';render(state.result);
         try {
           const parameters={...meta[kind].arguments,...(meta.context?.project_id?{project_id:meta.context.project_id}:{})};delete parameters.pending_operation_id;
@@ -403,7 +422,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       app.querySelector('[data-refresh-previews]')?.addEventListener('click',loadPage('refresh'));
       app.querySelector('[data-next-page]')?.addEventListener('click',loadPage('next'));
       app.querySelectorAll('[data-creative]').forEach(form=>form.addEventListener('submit',async event=>{
-        event.preventDefault();if (state.previewing || state.refreshing) return;
+        event.preventDefault();if (state.previewing || state.refreshing || uploads.running) return;
         const action=creatives[Number(form.dataset.creative)]?.actions?.[Number(form.dataset.action)];
         if (!action || typeof action.tool!=='string') return;
         const parameters={...action.arguments,...(meta.context?.project_id?{project_id:meta.context.project_id}:{})};
@@ -516,6 +535,8 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     }
     function acceptResult(result,local=false) {
       if (!result || typeof result !== 'object') return;
+      // Widget-initiated upload calls may be echoed as new operation views by the host.
+      if (!local && uploads.running) return;
       const fingerprint=JSON.stringify(resultValue(result));
       // Host state updates can echo an old tool result after a local edit/apply.
       if (!local && state.hasLocalResult && hostResults.has(fingerprint)) return;

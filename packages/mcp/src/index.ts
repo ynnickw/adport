@@ -28,7 +28,7 @@ import {
 
 export const PROVIDER_IDS = ['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const;
 export { ADPORT_UI_RESOURCE_DOMAINS };
-export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v6.html', 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html'];
+export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v7.html', 'ui://adport/insight-card-v6.html', 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html'];
 
 const DEFAULT_MCP_ICONS = [{
   src: 'https://app.adport.dev/icon.svg?brand=orange-dot-v2',
@@ -79,6 +79,8 @@ export interface CreateServerOptions {
   /** Host-specific MCP Apps sandbox domain; OpenAI's widget domain stays independent. */
   uiDomain?: string;
   uiResourceDomains?: readonly string[];
+  /** Exact private-storage origins used by in-widget signed uploads. */
+  uiConnectDomains?: readonly string[];
 }
 
 export interface ToolScopeDenial {
@@ -87,18 +89,18 @@ export interface ToolScopeDenial {
   data?: Record<string, unknown>;
 }
 
-type UiServerOptions = Pick<CreateServerOptions, 'name' | 'version' | 'icons' | 'uiDomain' | 'uiResourceDomains'>;
+type UiServerOptions = Pick<CreateServerOptions, 'name' | 'version' | 'icons' | 'uiDomain' | 'uiResourceDomains' | 'uiConnectDomains'>;
 
 /** Static resources only. Business requests must use the normal registry server. */
-export function createMcpUiServer({ name = 'adport', version = packageJson.version, icons = DEFAULT_MCP_ICONS, uiDomain = ADPORT_UI_DOMAIN, uiResourceDomains = ADPORT_UI_RESOURCE_DOMAINS }: UiServerOptions = {}): McpServer {
+export function createMcpUiServer({ name = 'adport', version = packageJson.version, icons = DEFAULT_MCP_ICONS, uiDomain = ADPORT_UI_DOMAIN, uiResourceDomains = ADPORT_UI_RESOURCE_DOMAINS, uiConnectDomains = [] }: UiServerOptions = {}): McpServer {
   const server = new McpServer({ name, version, ...(icons ? { icons } : {}) });
-  registerUiResources(server, uiDomain, uiResourceDomains);
+  registerUiResources(server, uiDomain, uiResourceDomains, uiConnectDomains);
   return server;
 }
 
-function registerUiResources(server: McpServer, uiDomain: string, uiResourceDomains: readonly string[]): void {
+function registerUiResources(server: McpServer, uiDomain: string, uiResourceDomains: readonly string[], uiConnectDomains: readonly string[]): void {
   const resourceMeta = {
-    ui: { domain: uiDomain, prefersBorder: false, csp: { connectDomains: [], resourceDomains: [...uiResourceDomains] } },
+    ui: { domain: uiDomain, prefersBorder: false, csp: { connectDomains: [...uiConnectDomains], resourceDomains: [...uiResourceDomains] } },
     ...(uiDomain.startsWith('https://') ? { 'openai/widgetDomain': uiDomain } : {}),
   };
   for (const uri of ADPORT_UI_RESOURCE_URIS) registerAppResource(
@@ -114,7 +116,7 @@ function registerUiResources(server: McpServer, uiDomain: string, uiResourceDoma
  * Thin adapter: every tool in the shared registry becomes an MCP tool.
  * No tool logic lives here — see the "one tool-definition layer" principle.
  */
-export function createMcpServer({ runtime, instructions, name = 'adport', version = packageJson.version, icons = DEFAULT_MCP_ICONS, scopes, scopeDenials, notConnectedMessage, productionOnly = false, uiDomain = ADPORT_UI_DOMAIN, uiResourceDomains = ADPORT_UI_RESOURCE_DOMAINS }: CreateServerOptions): McpServer {
+export function createMcpServer({ runtime, instructions, name = 'adport', version = packageJson.version, icons = DEFAULT_MCP_ICONS, scopes, scopeDenials, notConnectedMessage, productionOnly = false, uiDomain = ADPORT_UI_DOMAIN, uiResourceDomains = ADPORT_UI_RESOURCE_DOMAINS, uiConnectDomains = [] }: CreateServerOptions): McpServer {
   if (productionOnly && (runtime.dataSource === 'synthetic'
     || runtime.ctx.providers.list().some(provider => !PROVIDER_IDS.includes(provider.id as typeof PROVIDER_IDS[number]))
     || runtime.registry.list().some(tool => /^(demo|mock|synthetic)(_|$)/.test(tool.name) || /^(demo|mock|synthetic)$/.test(tool.namespace)))) {
@@ -124,7 +126,7 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
     ? { ...(value && typeof value === 'object' && !Array.isArray(value) ? value : { value }), data_source: 'synthetic' }
     : value;
   const server = new McpServer({ name, version, ...(icons ? { icons } : {}) }, { instructions });
-  registerUiResources(server, uiDomain, uiResourceDomains);
+  registerUiResources(server, uiDomain, uiResourceDomains, uiConnectDomains);
   for (const tool of runtime.registry.list()) {
     // Hosted directory tools must expose each operation explicitly. Keep generic
     // dispatchers in the local CLI/stdio registry, never as a hosted escape hatch.

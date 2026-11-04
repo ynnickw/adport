@@ -34,6 +34,7 @@ async function handle(request: Request): Promise<Response> {
       name: 'adport-cloud',
       uiDomain: mcpUiDomain(oauthClient?.redirectUris ?? [], mcpResourceUrl()),
       uiResourceDomains: [...ADPORT_UI_RESOURCE_DOMAINS, new URL(env().NEXT_PUBLIC_SUPABASE_URL).origin],
+      uiConnectDomains: [new URL(env().NEXT_PUBLIC_SUPABASE_URL).origin],
       version: '0.1.0',
       icons: [{
         src: `${oauthIssuerUrl()}/icon.svg?brand=orange-dot-v2`,
