@@ -28,7 +28,7 @@ import {
 
 export const PROVIDER_IDS = ['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const;
 export { ADPORT_UI_RESOURCE_DOMAINS };
-export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v9.html', 'ui://adport/insight-card-v8.html', 'ui://adport/insight-card-v7.html', 'ui://adport/insight-card-v6.html', 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html'];
+export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v10.html', 'ui://adport/insight-card-v9.html', 'ui://adport/insight-card-v8.html', 'ui://adport/insight-card-v7.html', 'ui://adport/insight-card-v6.html', 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html'];
 
 const DEFAULT_MCP_ICONS = [{
   src: 'https://app.adport.dev/icon.svg?brand=orange-dot-v2',
@@ -76,8 +76,8 @@ export interface CreateServerOptions {
   notConnectedMessage?: string;
   /** Hosted production must never serve synthetic results or demo tool definitions. */
   productionOnly?: boolean;
-  /** Host-specific MCP Apps sandbox domain; OpenAI's widget domain stays independent. */
-  uiDomain?: string;
+  /** Host-specific sandbox domain; null lets the host choose its default origin. */
+  uiDomain?: string | null;
   uiResourceDomains?: readonly string[];
   /** Exact private-storage origins used by in-widget signed uploads. */
   uiConnectDomains?: readonly string[];
@@ -98,10 +98,10 @@ export function createMcpUiServer({ name = 'adport', version = packageJson.versi
   return server;
 }
 
-function registerUiResources(server: McpServer, uiDomain: string, uiResourceDomains: readonly string[], uiConnectDomains: readonly string[]): void {
+function registerUiResources(server: McpServer, uiDomain: string | null, uiResourceDomains: readonly string[], uiConnectDomains: readonly string[]): void {
   const resourceMeta = {
-    ui: { domain: uiDomain, prefersBorder: false, csp: { connectDomains: [...uiConnectDomains], resourceDomains: [...uiResourceDomains] } },
-    ...(uiDomain.startsWith('https://') ? { 'openai/widgetDomain': uiDomain } : {}),
+    ui: { ...(uiDomain ? { domain: uiDomain } : {}), prefersBorder: false, csp: { connectDomains: [...uiConnectDomains], resourceDomains: [...uiResourceDomains] } },
+    ...(uiDomain?.startsWith('https://') ? { 'openai/widgetDomain': uiDomain } : {}),
   };
   for (const uri of ADPORT_UI_RESOURCE_URIS) registerAppResource(
     server,
