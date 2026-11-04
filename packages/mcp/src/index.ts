@@ -28,7 +28,7 @@ import {
 
 export const PROVIDER_IDS = ['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const;
 export { ADPORT_UI_RESOURCE_DOMAINS };
-export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v15.html', 'ui://adport/insight-card-v14.html', 'ui://adport/insight-card-v13.html', 'ui://adport/insight-card-v12.html', 'ui://adport/insight-card-v11.html', 'ui://adport/insight-card-v10.html', 'ui://adport/insight-card-v9.html', 'ui://adport/insight-card-v8.html', 'ui://adport/insight-card-v7.html', 'ui://adport/insight-card-v6.html', 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html'];
+export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v16.html', 'ui://adport/insight-card-v15.html', 'ui://adport/insight-card-v14.html', 'ui://adport/insight-card-v13.html', 'ui://adport/insight-card-v12.html', 'ui://adport/insight-card-v11.html', 'ui://adport/insight-card-v10.html', 'ui://adport/insight-card-v9.html', 'ui://adport/insight-card-v8.html', 'ui://adport/insight-card-v7.html', 'ui://adport/insight-card-v6.html', 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html'];
 
 const DEFAULT_MCP_ICONS = [{
   src: 'https://app.adport.dev/icon.svg?brand=orange-dot-v2',
@@ -158,6 +158,7 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
         ...(view ? { _adport: z.object({
           tool: z.literal(tool.name), view: z.literal(view), providerNames: z.record(z.string(), z.string()),
           provider: z.string().optional(), accountId: z.string().optional(),
+          pagination: z.object({ cursorInput: z.string() }).optional(),
           approval: z.object({ arguments: z.record(z.string(), z.unknown()) }).optional(),
           context: z.object({ project_id: z.string() }).optional(),
           capabilities: z.object({ can_write: z.boolean() }).optional(),
@@ -178,6 +179,7 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
       const descriptor = {
         ...(PROVIDER_IDS.includes(tool.namespace as typeof PROVIDER_IDS[number]) ? { provider: tool.namespace } : {}),
         ...(typeof args.account_id === 'string' ? { accountId: args.account_id } : {}),
+        ...(tool.pagination ? { pagination: { cursorInput: tool.pagination.cursorInput } } : {}),
       };
       if (scopeDenial) {
         const payload = provenance({

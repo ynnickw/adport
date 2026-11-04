@@ -24,9 +24,9 @@ export const CREATIVE_UI_STYLES = String.raw`
     .creative-destination:hover { text-decoration:underline }
 `;
 
-/** Provider previews stay view-only; the central library has a compact upload surface. */
+/** Media rendering is shared; scoped controls live in the provider gallery or central library. */
 export const CREATIVE_UI_SCRIPT = String.raw`
-    function creativeCards(creatives) {
+    function creativeCards(creatives,menuFor) {
       const safeUrl=(value,media=false)=>{try {const url=new URL(value);return (media?url.protocol==='https:':['https:','http:'].includes(url.protocol))&&!url.username&&!url.password?url:null;} catch {return null;}};
       const mediaView=creative=>{
         const items=arr(creative.media).map(media=>{
@@ -46,7 +46,7 @@ export const CREATIVE_UI_SCRIPT = String.raw`
         const destination=arr(creative.landing_urls).map(value=>safeUrl(value)).find(Boolean);
         const headline=unique(creative.headlines).filter(text=>text!==name).join(' · '),copy=unique(creative.descriptions).filter(text=>text!==name&&text!==headline).join('\n');
         const active=/^(active|enabled|ready|approved)$/i.test(creative.status || '');
-        return '<article class="creative-card" data-media-id="'+esc(creative.id)+'"><div class="creative-heading">'+(providerSvg[creative.provider]?logo(creative.provider):'')+'<span class="creative-name" title="'+esc(name)+'">'+esc(name)+'</span></div>'+mediaView(creative)+'<div class="creative-copy">'+(headline?'<strong title="'+esc(headline)+'">'+esc(headline)+'</strong>':'')+(copy?'<p title="'+esc(copy)+'">'+esc(copy)+'</p>':'')+'</div><div class="creative-footer"><span class="creative-status'+(active?' creative-status-active':'')+'">'+esc(status.label)+'</span>'+(destination?'<a class="creative-destination" href="'+esc(destination.href)+'" target="_blank" rel="noopener noreferrer">'+esc(destination.hostname.replace(/^www\./,''))+'</a>':'')+'</div></article>';
+        return '<article class="creative-card" data-media-id="'+esc(creative.id)+'"><div class="creative-heading">'+(providerSvg[creative.provider]?logo(creative.provider):'')+'<span class="creative-name" title="'+esc(name)+'">'+esc(name)+'</span>'+(menuFor?menuFor(creative):'')+'</div>'+mediaView(creative)+'<div class="creative-copy">'+(headline?'<strong title="'+esc(headline)+'">'+esc(headline)+'</strong>':'')+(copy?'<p title="'+esc(copy)+'">'+esc(copy)+'</p>':'')+'</div><div class="creative-footer"><span class="creative-status'+(active?' creative-status-active':'')+'">'+esc(status.label)+'</span>'+(destination?'<a class="creative-destination" href="'+esc(destination.href)+'" target="_blank" rel="noopener noreferrer">'+esc(destination.hostname.replace(/^www\./,''))+'</a>':'')+'</div></article>';
       }).join('');
     }
     function bindCreativeErrors(root) {
@@ -61,10 +61,6 @@ export const CREATIVE_UI_SCRIPT = String.raw`
     }
     function renderCreatives(data,meta) {
       if(meta.tool==='media_list' && mediaLibraryProject(data,meta)) return renderMediaLibrary(data,meta);
-      const creatives=arr(data.creatives),cards=creativeCards(creatives);
-      const notes=notices({...data,truncated:false})+(data.truncated?'<p class="notice">Showing '+creatives.length+' preview'+(creatives.length===1?'':'s')+' from a partial result.</p>':'');
-      const gallery=creatives.length?'<div class="creative-grid'+(creatives.length===1?' creative-grid-single':'')+'" role="region" aria-label="Creative previews" tabindex="0">'+cards+'</div>':'<div class="empty">No creatives to preview.</div>';
-      app.innerHTML=chrome(notes+gallery,creatives.length+' creative'+(creatives.length===1?'':'s'));
-      bindCreativeErrors(app);
+      return renderProviderGallery(data,meta);
     }
 `;

@@ -169,5 +169,70 @@ describe('stable media source', () => {
     view.rerender(<AssetPreview asset={{ ...original, preview_url: 'https://qa.supabase.co/fresh' }} projectId={projectId} expanded />);
     expect(view.container.querySelector('video')).toBe(player); expect(player.src).toBe(original.preview_url);
     fireEvent.error(player); await waitFor(() => expect(view.container.querySelector('video')?.src).toBe('https://qa.supabase.co/fresh'));
+    expect(mocks.action).not.toHaveBeenCalled();
+  });
+
+  it('recovers an expired preview once without reloading the library', async () => {
+    const original = source(1, { content_type: 'video/mp4' }), fresh = { ...original, preview_url: 'https://qa.supabase.co/renewed' }, onRefresh = vi.fn();
+    let finish!: (result: { asset: MediaAsset }) => void;
+    mocks.action.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const view = render(<AssetPreview asset={original} projectId={projectId} expanded onRefresh={onRefresh} />);
+    fireEvent.error(view.container.querySelector('video')!);
+    expect(screen.getByText('Refreshing preview…')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Loading…' })).toHaveProperty('disabled', true);
+    await act(async () => { finish({ asset: fresh }); });
+    expect(view.container.querySelector('video')?.src).toBe(fresh.preview_url);
+    expect(mocks.action).toHaveBeenCalledExactlyOnceWith(projectId, 'media_get', { media_id: original.id });
+    expect(onRefresh).toHaveBeenCalledExactlyOnceWith(fresh); expect(fetch).not.toHaveBeenCalled();
+    fireEvent.error(view.container.querySelector('video')!);
+    expect(screen.getByRole('button', { name: 'Retry preview' })).toBeTruthy(); expect(mocks.action).toHaveBeenCalledTimes(1);
+    mocks.action.mockResolvedValueOnce({ asset: { ...fresh, preview_url: 'https://qa.supabase.co/manual' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Retry preview' }));
+    await waitFor(() => expect(view.container.querySelector('video')?.src).toBe('https://qa.supabase.co/manual'));
+    expect(mocks.action).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves a manual retry after a failed automatic refresh without looping', async () => {
+    const original = source(1, { content_type: 'audio/mp3' });
+    mocks.action.mockRejectedValueOnce(new Error('Temporarily unavailable'));
+    const view = render(<AssetPreview asset={original} projectId={projectId} expanded />);
+    fireEvent.error(view.container.querySelector('audio')!);
+    await screen.findByText('Preview unavailable');
+    view.rerender(<AssetPreview asset={{ ...original, tags: ['changed'] }} projectId={projectId} expanded />);
+    expect(mocks.action).toHaveBeenCalledTimes(1); expect(screen.getByRole('button', { name: 'Retry preview' })).toBeTruthy();
+  });
+
+  it.each(['asset', 'project', 'checksum'] as const)('discards a delayed refresh after the %s changes', async field => {
+    const original = source(1, { content_type: 'video/mp4' }), onRefresh = vi.fn();
+    let finish!: (result: { asset: MediaAsset }) => void;
+    mocks.action.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const view = render(<AssetPreview asset={original} projectId={projectId} expanded onRefresh={onRefresh} />);
+    fireEvent.error(view.container.querySelector('video')!);
+    const next = field === 'asset' ? source(2, { content_type: 'video/mp4' }) : field === 'checksum' ? { ...original, sha256: 'b'.repeat(64), preview_url: 'https://qa.supabase.co/replaced' } : original;
+    view.rerender(<AssetPreview asset={next} projectId={field === 'project' ? 'other-project' : projectId} expanded onRefresh={onRefresh} />);
+    const player = view.container.querySelector('video');
+    await act(async () => { finish({ asset: { ...original, preview_url: 'https://qa.supabase.co/old-request' } }); });
+    expect(view.container.querySelector('video')).toBe(player); expect(player?.src).toBe(next.preview_url); expect(onRefresh).not.toHaveBeenCalled();
+  });
+
+  it('keeps a newer parent recovery when an earlier refresh completes', async () => {
+    const original = source(1, { content_type: 'video/mp4' }), onRefresh = vi.fn();
+    let finish!: (result: { asset: MediaAsset }) => void;
+    mocks.action.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const view = render(<AssetPreview asset={original} projectId={projectId} expanded onRefresh={onRefresh} />);
+    fireEvent.error(view.container.querySelector('video')!);
+    view.rerender(<AssetPreview asset={{ ...original, preview_url: 'https://qa.supabase.co/newer' }} projectId={projectId} expanded onRefresh={onRefresh} />);
+    await waitFor(() => expect(view.container.querySelector('video')?.src).toBe('https://qa.supabase.co/newer'));
+    const player = view.container.querySelector('video');
+    await act(async () => { finish({ asset: { ...original, preview_url: 'https://qa.supabase.co/older' } }); });
+    expect(view.container.querySelector('video')).toBe(player); expect(player?.src).toBe('https://qa.supabase.co/newer'); expect(onRefresh).not.toHaveBeenCalled();
+  });
+
+  it('rejects a refresh for different bytes', async () => {
+    const original = source(1, { content_type: 'video/mp4' }), onRefresh = vi.fn();
+    mocks.action.mockResolvedValueOnce({ asset: { ...original, sha256: 'b'.repeat(64), preview_url: 'https://qa.supabase.co/wrong' } });
+    const view = render(<AssetPreview asset={original} projectId={projectId} expanded onRefresh={onRefresh} />);
+    fireEvent.error(view.container.querySelector('video')!);
+    await screen.findByText('Preview unavailable'); expect(onRefresh).not.toHaveBeenCalled(); expect(view.container.querySelector('video')).toBeNull();
   });
 });

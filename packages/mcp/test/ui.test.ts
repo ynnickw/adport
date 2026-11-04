@@ -356,7 +356,7 @@ describe('shipped MCP iframe', () => {
 
   it('shares confirmed IDs and async receipts through standard host context without a consumed apply token', async () => {
     const ui = widget();
-    const original = { structuredContent: structuredResult('media_list', 'creatives', { creatives: [], truncated: false }) };
+    const original = { structuredContent: structuredResult('media_get', 'data', { asset: { id: 'source-file', name: 'QA source', status: 'READY' } }) };
     ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: original });
     const pending = { structuredContent: structuredResult('x_upload_media', 'operation', { status: 'pending_validation', applied: false, expires_at: '2099-01-01T00:00:00Z', pending_operation_id: 'consumed-token', preview: { summary: 'Upload QA image', changes: ['+ image'] } }, { arguments: { account_id: 'a1', project_id: 'project-b' } }) };
     ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: pending });
