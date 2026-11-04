@@ -1,12 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMcpHandler, McpServer, WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/server';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
-import { diagnoseMcpRejection } from '@/lib/mcp-transport-diagnostics';
+import { diagnoseMcpRejection, recordMcpUiResponse } from '@/lib/mcp-transport-diagnostics';
 import { inspectMcpRequest } from '@/lib/mcp-ui-request';
 
 afterEach(() => vi.restoreAllMocks());
 
 describe('MCP transport rejection diagnostics', () => {
+  it('records only static UI method and HTTP status, without claiming RPC success or logging business calls', () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    for (const method of ['resources/read', 'resources/list', 'resources/templates/list'] as const) recordMcpUiResponse(method, 200);
+    for (const method of [undefined, 'tools/list', 'prompts/list', 'server/discover'] as const) recordMcpUiResponse(method, 200);
+    expect(info.mock.calls.map(call => JSON.parse(call[0] as string))).toEqual(['resources/read', 'resources/list', 'resources/templates/list'].map(rpcMethod => ({ event: 'mcp_ui_resource_response', rpcMethod, status: 200 })));
+  });
+
   it('reports a native legacy HTTP200 resource error using the pre-inspected method, leaving the response intact', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const request = new Request('https://adport.test/mcp', { method: 'POST', headers: { accept: 'application/json, text/event-stream', 'content-type': 'application/json', authorization: 'Bearer private-token' }, body: JSON.stringify({ jsonrpc: '2.0', id: 'private-id', method: 'resources/read', params: { uri: 'ui://diagnostics/private-value' } }) });
