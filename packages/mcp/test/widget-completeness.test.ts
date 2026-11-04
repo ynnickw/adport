@@ -16,6 +16,22 @@ describe('compact record, recommendation, receipt and trend views', () => {
     try { expect(document.querySelector('.operation-heading .logo.'+provider+' svg')).not.toBeNull(); }
     finally { dom.window.close(); }
   });
+  it('keeps provider identity in planning headers while paging native estimates', () => {
+    const { dom, document } = mount('planning', { planning: { title: 'Supply forecast', columns: [{ key: 'impressions', label: 'Impressions' }], rows: Array.from({ length: 101 }, (_, impressions) => ({ impressions })) } }, 'linkedin_supply_forecast', { provider: 'linkedin' });
+    try {
+      expect(document.querySelector('.operation-heading .logo.linkedin svg')).not.toBeNull();
+      (document.querySelector('[data-planning-page="next"]') as HTMLButtonElement).click();
+      expect(document.querySelector('.operation-heading .logo.linkedin svg')).not.toBeNull();
+    } finally { dom.window.close(); }
+  });
+  it('shows the actual daily report providers after changing chart metrics', () => {
+    const { dom, document } = mount('report', { rows: ['google','apple'].map(provider => ({ provider, accountId: provider, currency: 'EUR', date: '2026-11-01', entity: { id: provider }, metrics: { spend: 1, clicks: 2 } })), errors: [] }, 'report');
+    try {
+      expect(document.querySelectorAll('.report-trend .record-provider')).toHaveLength(2);
+      (document.querySelector('[data-metric="clicks"]') as HTMLButtonElement).click();
+      expect(document.querySelectorAll('.report-trend .record-provider')).toHaveLength(2);
+    } finally { dom.window.close(); }
+  });
   it('shows all project provider logos, the saved project logo, and no duplicated organization or raw ID', () => {
     const providers=Object.keys(PROVIDER_LOGOS);
     const { dom, document, callTool } = mount('data', { projects: [{ id: 'private-project-id', name: 'Adport', organization_name: 'Adport', role: 'owner', providers, logo_url: 'https://example.test/project.png' }] }, 'projects_list');
@@ -104,15 +120,15 @@ describe('compact record, recommendation, receipt and trend views', () => {
     const row = (date: string, spend?: number) => ({ provider: 'google', accountId: 'one', currency: 'USD', date, entity: { id: 'one', name: 'Example' }, metrics: { spend, clicks: 1 } });
     const { dom, document } = mount('report', { rows: [row('2026-11-01', 10), row('2026-11-02'), row('2026-11-03', 30)], errors: [], warnings: [], granularity: 'day' }, 'report');
     try {
-      expect(document.querySelectorAll('.report-trend circle')).toHaveLength(2);
+      expect(document.querySelectorAll('[data-report-trend] circle')).toHaveLength(2);
       expect(document.querySelector('.trend-line')?.getAttribute('d')?.match(/M/g)).toHaveLength(2);
-      expect(document.querySelector('.report-trend svg')?.getAttribute('aria-label')).toContain('2026-11-03: $30.00');
+      expect(document.querySelector('[data-report-trend] svg')?.getAttribute('aria-label')).toContain('2026-11-03: $30.00');
       expect(document.querySelector('.bars')).toBeNull(); expect(document.querySelector('main')?.textContent).toContain('Missing or unavailable days remain gaps');
     } finally { dom.window.close(); }
   });
   it('keeps observations from another provider visible when a separate provider fails', () => {
     const { dom, document } = mount('report', { rows: [{ provider: 'apple', accountId: 'one', currency: 'EUR', date: '2026-11-01', entity: { id: 'one' }, metrics: { spend: 12 } }], errors: [{ provider: 'meta', date: '2026-11-01', message: 'Unavailable' }] }, 'report');
-    try { expect(document.querySelectorAll('.report-trend circle')).toHaveLength(1); }
+    try { expect(document.querySelectorAll('[data-report-trend] circle')).toHaveLength(1); }
     finally { dom.window.close(); }
   });
 });
