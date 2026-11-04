@@ -17,7 +17,7 @@ fixture. No production accounts or provider writes are used.
 | --- | ---: | --- |
 | Operation | 323 | Structured review and guarded approval |
 | Data | 179 | Generic native records, arrays, values, and full details |
-| Creatives | 32 | Existing media previews, editors, uploads, refresh, and pagination |
+| Creatives | 32 | View-only media previews and ad copy |
 | Insights | 4 | Findings and their lifecycle |
 | Planning | 2 | Native estimates and existing paging |
 | Accounts | 1 | Connected accounts and provider errors |
@@ -26,6 +26,15 @@ fixture. No production accounts or provider writes are used.
 There are 542 hosted tools and 566 local registry tools. Local generic API
 dispatchers remain excluded from the hosted surface. Newly registered reads get
 the data fallback unless they declare a specialized presentation.
+
+## Creative previews
+
+Creative galleries show smaller media, ad copy, one status label, and destination
+hostnames. Gallery height is bounded; all returned items remain available through
+native scrolling. Single previews stay small. Images open at full size; video and
+audio retain native playback controls. Failed media displays an unavailable state.
+Provider actions, upload grants, refresh and page metadata never create controls
+or tool calls. Editing and uploads remain available through agents and the dashboard.
 
 ## Review contract
 
@@ -59,13 +68,13 @@ Attempts are keyed to the pending token. A host echo cannot offer a second apply
 and a late response cannot replace a newer preview. Host facts include resource
 receipts and project/account scope, but never a reusable pending token.
 
-The widget resource is `ui://adport/insight-card-v9.html`. Previous v2–v8 URIs are
-retained as aliases. Existing creative resource domains and private upload grants
-keep their configured CSP; provider logos and scripts are embedded.
+The widget resource is `ui://adport/insight-card-v10.html`. Previous v2–v9 URIs are
+retained as aliases. Existing creative resource domains keep their configured CSP; provider logos
+and scripts are embedded.
 
 ## Validation
 
 Run `pnpm build`, `pnpm test`, and `pnpm typecheck`. The provider suites cover native
 request/response shapes; widget tests execute the shipped iframe script and cover
 the full registry, native and standard host bridges, scopes, errors, holds,
-processing receipts, creative controls, and project media uploads.
+processing receipts and view-only creative galleries.
