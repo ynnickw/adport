@@ -51,10 +51,22 @@ export class PinterestAdsClient {
   async get<T>(path: string, schema: z.ZodType<T>, params = new URLSearchParams()): Promise<T> {
     return this.request(path, 'GET', schema, undefined, params);
   }
-  async mutate<T>(path: string, method: 'POST' | 'PATCH', body: unknown, schema: z.ZodType<T>): Promise<T> {
-    return this.request(path, method, schema, body);
+  async mutate<T>(path: string, method: 'POST' | 'PATCH' | 'DELETE', body: unknown, schema: z.ZodType<T>, params = new URLSearchParams()): Promise<T> {
+    return this.request(path, method, schema, body, params);
   }
-  private async request<T>(path: string, method: 'GET' | 'POST' | 'PATCH', schema: z.ZodType<T>, body?: unknown, params = new URLSearchParams(), retry = true): Promise<T> {
+  async uploadVideo(url: string, parameters: Record<string, string>, bytes: Uint8Array<ArrayBuffer>, name: string) {
+    const destination = new URL(url);
+    if (destination.origin !== 'https://pinterest-media-upload.s3-accelerate.amazonaws.com' || destination.pathname !== '/' || destination.search || destination.hash || destination.username || destination.password) throw new AdportError('PROVIDER_ERROR', 'pinterest: unrecognized native upload destination; no bytes sent');
+    const required = ['Content-Type', 'key', 'policy', 'x-amz-algorithm', 'x-amz-credential', 'x-amz-date', 'x-amz-security-token', 'x-amz-signature'];
+    if (Object.keys(parameters).length !== required.length || required.some(key => !parameters[key] || parameters[key]!.length > 32_768) || parameters['Content-Type'] !== 'multipart/form-data' || parameters['x-amz-algorithm'] !== 'AWS4-HMAC-SHA256' || !parameters.key!.startsWith('uploads/')) throw new AdportError('PROVIDER_ERROR', 'pinterest: invalid native multipart instructions; no bytes sent');
+    const body = new FormData();
+    for (const key of required) body.set(key, parameters[key]!);
+    body.set('file', new Blob([bytes], { type: 'video/mp4' }), name);
+    // The signed Storage capability replaces OAuth here; never forward a bearer token.
+    const response = await this.fetchImpl(destination.href, { method: 'POST', body, redirect: 'error', signal: AbortSignal.timeout(120_000) });
+    if (response.status !== 204) throw new AdportError('PROVIDER_ERROR', 'pinterest: video transfer was not confirmed');
+  }
+  private async request<T>(path: string, method: 'GET' | 'POST' | 'PATCH' | 'DELETE', schema: z.ZodType<T>, body?: unknown, params = new URLSearchParams(), retry = true): Promise<T> {
     if (!/^[a-z_]+(?:\/[a-zA-Z0-9_-]+)*$/.test(path)) throw new AdportError('INVALID_INPUT', 'pinterest: invalid API resource path');
     const url = new URL(path, PINTEREST_API_BASE);
     url.search = params.toString();
@@ -68,7 +80,7 @@ export class PinterestAdsClient {
       return this.request(path, method, schema, body, params, false);
     }
     if (!response.ok) {
-      const advice = response.status === 403 ? ' Check app Trial/Standard access, ads scopes and ad-account permissions; reauthorization alone may not help.' : '';
+      const advice = response.status === 403 ? ' Check app Trial/Standard access, endpoint-specific scopes and ad-account permissions; reauthorization alone may not help.' : '';
       const details: Record<string, unknown> = { http_status: response.status };
       if ([400, 404, 409, 422].includes(response.status)) {
         const error = z.object({ code: z.union([z.string(), z.number()]).optional(), message: z.string().max(2000).optional() }).safeParse(await response.json().catch(() => undefined));
@@ -79,8 +91,13 @@ export class PinterestAdsClient {
       }
       throw new AdportError('PROVIDER_ERROR', `pinterest: HTTP ${response.status}.${advice}${details.api_message ? ` ${details.api_message}` : ''}`, details);
     }
-    const parsed = schema.safeParse(await response.json());
-    if (!parsed.success) throw new AdportError('PROVIDER_ERROR', 'pinterest: malformed API response', { api_path: path, response_issues: parsed.error.issues.map(issue => ({ path: issue.path, code: issue.code })) });
+    const raw: unknown = response.status === 204 ? undefined : await response.json();
+    const parsed = schema.safeParse(raw);
+    if (!parsed.success) {
+      const value = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+      const resourceIds = [value.id, value.media_id].filter((id): id is string => typeof id === 'string' && /^\d{1,30}$/.test(id));
+      throw new AdportError('PROVIDER_ERROR', 'pinterest: malformed API response', { api_path: path, response_issues: parsed.error.issues.map(issue => ({ path: issue.path, code: issue.code })), ...(method !== 'GET' && resourceIds.length ? { resource_ids: [...new Set(resourceIds)] } : {}) });
+    }
     return parsed.data;
   }
   private async accessToken(): Promise<string> {

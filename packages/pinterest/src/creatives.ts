@@ -171,7 +171,7 @@ function checkTargeting(input: unknown) {
   if (Array.isArray(target.AGE_BUCKET) && target.AGE_BUCKET.length && (target.MINIMUM_AGE || target.MAXIMUM_AGE)) throw new AdportError('INVALID_INPUT', 'pinterest: choose AGE_BUCKET or minimum/maximum age');
   if (Boolean(target.MINIMUM_AGE) !== Boolean(target.MAXIMUM_AGE) || (target.MINIMUM_AGE && Number.parseInt(String(target.MINIMUM_AGE)) > Number.parseInt(String(target.MAXIMUM_AGE)))) throw new AdportError('INVALID_INPUT', 'pinterest: minimum and maximum age must be supplied together and ordered');
 }
-function pinMedia(input: unknown, depth = 0): Creative['media'] {
+export function pinMedia(input: unknown, depth = 0): Creative['media'] {
   if (depth > 2) return [];
   const media = record(input), result: Creative['media'] = [];
   const variants = (value: unknown) => Object.values(record(value)).map(record).sort((a, b) => Number(b.width ?? 0) * Number(b.height ?? 0) - Number(a.width ?? 0) * Number(a.height ?? 0));

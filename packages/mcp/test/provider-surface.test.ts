@@ -71,6 +71,8 @@ describe('all-provider shared tool surface', () => {
       'snapchat_list_campaigns', 'snapchat_create_campaign', 'snapchat_set_campaign_status', 'snapchat_set_budget',
       'spotify_list_campaigns', 'spotify_get_ad_set', 'spotify_create_campaign_draft', 'spotify_set_campaign_status', 'spotify_set_budget', 'spotify_set_ad_set_delivery',
       'pinterest_list_campaigns', 'pinterest_create_campaign', 'pinterest_set_campaign_status', 'pinterest_set_budget',
+      'pinterest_boards', 'pinterest_pins', 'pinterest_get_pin', 'pinterest_get_media_upload',
+      'pinterest_create_board', 'pinterest_create_image_pin', 'pinterest_upload_video', 'pinterest_create_video_pin', 'pinterest_update_pin', 'pinterest_delete_pin',
       'linkedin_list_campaigns', 'linkedin_list_campaign_groups', 'linkedin_create_campaign', 'linkedin_set_campaign_status', 'linkedin_set_budget',
       'x_list_campaigns', 'x_list_funding_instruments', 'x_list_line_items', 'x_create_campaign', 'x_set_campaign_status', 'x_set_budget',
     ]));

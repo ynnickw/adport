@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import {
-  AdportError, resolveDateRange, type Account, type AdProvider, type MetricName,
+  AdportError, LocalMediaResolver, resolveDateRange, type Account, type AdProvider, type MediaResolver, type MetricName,
   type NormalizedQuery, type Report, type ReportRow, type StandardActions,
   type WriteGuard, type WriteOperation, type WritePreview, type WriteResult,
 } from '@adport/core';
 import { PinterestAdsClient } from './client.js';
 import { PinterestCreativeService } from './creatives.js';
+import { PINTEREST_ASSET_WRITES, PinterestAssetService } from './assets.js';
 import { accountSchema, batchResponseSchema, campaignSchema, createCampaignSchema, entitySchema, entityStatus, pinterestId, setBudgetSchema, setStatusSchema } from './schemas.js';
 
 interface Plan extends Omit<WritePreview, 'serverValidated'> { execute: () => Promise<string[]> }
@@ -24,7 +25,11 @@ const DERIVED = {
 export class PinterestAdsProvider implements AdProvider {
   readonly id = 'pinterest';
   readonly creatives: PinterestCreativeService;
-  constructor(private readonly client: PinterestAdsClient) { this.creatives = new PinterestCreativeService(client, (account, id) => this.getCampaign(account, id)); }
+  readonly assets: PinterestAssetService;
+  constructor(private readonly client: PinterestAdsClient, media: MediaResolver = new LocalMediaResolver()) {
+    this.creatives = new PinterestCreativeService(client, (account, id) => this.getCampaign(account, id));
+    this.assets = new PinterestAssetService(client, media);
+  }
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions {
     return { pauseCampaign: (accountId, campaignId) => ({ tool: 'pinterest_set_campaign_status', input: { account_id: accountId, campaign_id: campaignId, status: 'PAUSED' } }) };
@@ -130,6 +135,7 @@ export class PinterestAdsProvider implements AdProvider {
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<Plan> {
     const accountId = pinterestId.parse(op.accountId);
     if (op.provider !== this.id) throw new AdportError('INVALID_INPUT', 'pinterest: provider mismatch');
+    if (PINTEREST_ASSET_WRITES.has(op.tool)) return this.assets.plan(op);
     if (op.tool === 'pinterest_create_campaign' && op.kind === 'create') {
       const input = createCampaignSchema.parse(op.payload);
       const { budget_type, budget_micros, ...rest } = input;

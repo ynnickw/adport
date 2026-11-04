@@ -82,7 +82,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
   }
   if (credentials.pinterest && providerAllowedForOrganization('pinterest', principal.organizationId)) {
     const persist = persistTokens('pinterest');
-    const provider = new PinterestAdsProvider(new PinterestAdsClient({ ...cloudProviderApp('pinterest'), refreshToken: credentials.pinterest.refreshToken, onRefreshToken: refreshToken => persist({ refreshToken }) }));
+    const provider = new PinterestAdsProvider(new PinterestAdsClient({ ...cloudProviderApp('pinterest'), refreshToken: credentials.pinterest.refreshToken, onRefreshToken: refreshToken => persist({ refreshToken }) }), media);
     modules.push({ provider: scopeProvider(provider), tools: pinterestTools(provider) });
   }
   if (credentials.linkedin && providerAllowedForOrganization('linkedin', principal.organizationId)) {
