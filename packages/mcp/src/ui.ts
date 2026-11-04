@@ -1,8 +1,8 @@
-import { MEDIA_UPLOAD_UI } from './media-upload-ui.js';
+import { CREATIVE_UI_SCRIPT, CREATIVE_UI_STYLES } from './creative-ui.js';
 import { PROVIDER_LOGOS } from './provider-logos.js';
 import { OPERATION_UI_SCRIPT } from './operation-ui.js';
 
-export const ADPORT_UI_URI = 'ui://adport/insight-card-v9.html';
+export const ADPORT_UI_URI = 'ui://adport/insight-card-v10.html';
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
 export const ADPORT_UI_RESOURCE_DOMAINS = ['https://*.fbcdn.net', 'https://*.fbsbx.com', 'https://*.googleusercontent.com', 'https://tpc.googlesyndication.com', 'https://www.bing.com', 'https://*.scdn.co', 'https://*.spotifycdn.com', 'https://storage.googleapis.com', 'https://*.pinimg.com', 'https://*.redd.it', 'https://*.redditmedia.com', 'https://*.redditstatic.com', 'https://*.licdn.com', 'https://*.licdn-ei.com', 'https://pbs.twimg.com', 'https://video.twimg.com', 'https://ton.twimg.com'];
 
@@ -114,20 +114,6 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     .brand b { font-size:12px; letter-spacing:-.02em }
     .context { color:var(--muted); font-size:11px; text-align:right }
     .content { padding:4px 16px 16px }
-    .widget-upload { margin:8px 0 16px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--soft) }
-    .widget-drop { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;border:1px dashed var(--line);border-radius:10px }
-    .widget-drop.dragging { border-color:var(--orange);background:color-mix(in srgb,var(--orange) 9%,var(--paper)) }
-    .widget-drop b { font-size:13px }
-    .widget-drop p { margin:5px 0 0;font-size:11px;color:var(--muted) }
-    .widget-file-label { position:relative;flex-shrink:0;overflow:hidden;cursor:pointer }
-    .widget-file-label input { position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer }
-    .widget-file-label:focus-within { outline:2px solid var(--orange);outline-offset:3px }
-    .widget-upload-row { display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);font-size:11px }
-    .widget-upload-row>div { flex:1;min-width:120px }
-    .widget-upload-row strong { display:block;overflow-wrap:anywhere;font-size:12px }
-    .widget-upload-row small { display:block;margin-top:3px;color:var(--muted) }
-    .widget-upload-row progress,.widget-upload-row p { width:100%;margin:0;accent-color:var(--orange) }
-    .widget-upload-actions { display:flex;gap:8px;margin-top:12px }
     .kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-bottom:15px }
     .kpi { min-width:0; padding:12px; border-radius:13px; background:var(--soft); border:1px solid color-mix(in srgb,var(--line) 70%,transparent) }
     button.kpi { cursor:pointer; color:var(--ink); text-align:left }
@@ -224,17 +210,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     @media (pointer:coarse) { .approve,.operation-footer summary { min-height:44px } }
     @media (max-width:620px) { .kpis { grid-template-columns:repeat(2,minmax(0,1fr)) }.top,.content { padding-left:12px; padding-right:12px } }
     @media (max-width:420px) { .bar-row { grid-template-columns:minmax(0,1fr) auto; gap:5px }.bar-name { grid-column:1/-1 }.bar-name > span:last-child { white-space:normal }.bars { gap:12px } }
-    .creative-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr)); gap:16px }
-    .creative-card { border:1px solid var(--line); border-radius:12px; padding:16px; min-width:0 }
-    .creative-copy { margin:16px 0; overflow-wrap:anywhere }
-    .creative-copy strong { display:block; margin:5px 0 }
-    .creative-copy p { margin:8px 0 }
-    .creative-media { display:grid; gap:8px; margin:14px 0 }
-    .creative-media img,.creative-media video { display:block; width:100%; max-height:360px; object-fit:contain; border-radius:8px; background:var(--soft) }
-    .creative-media audio { width:100% }
-    .creative-field { display:grid; gap:6px; margin:12px 0; font-size:13px }
-    .creative-field textarea,.creative-field select { box-sizing:border-box; width:100%; color:var(--ink); background:var(--paper); border:1px solid var(--line); border-radius:7px; padding:9px; font:inherit }
-    .creative-field textarea { min-height:76px; resize:vertical }
+${CREATIVE_UI_STYLES}
     @media (prefers-reduced-motion:reduce) { * { animation:none!important; transition:none!important } }
     :root[data-theme="dark"] { --ink:#f5f5f3;--muted:#aaa9ad;--faint:#a09fa5;--paper:#171717;--soft:#222220;--line:rgba(255,255,255,.11) }
     @media (prefers-color-scheme:dark) { :root:not([data-theme="light"]) { --ink:#f5f5f3;--muted:#aaa9ad;--faint:#a09fa5;--paper:#171717;--soft:#222220;--line:rgba(255,255,255,.11) } }
@@ -248,7 +224,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
   <script>
   (() => {
     const app = document.getElementById('app');
-    const state = { host: {}, result: null, reportGroup: null, reportMetric: 'spend', planningPage: 0, approving: false, approvalError: '', previewing: false, refreshing: false, paging: false, creativeError: '', hasLocalResult: false };
+    const state = { host: {}, result: null, reportGroup: null, reportMetric: 'spend', planningPage: 0, hasLocalResult: false };
     const hostResults=new Set();
     const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const arr = (value) => Array.isArray(value) ? value : [];
@@ -324,82 +300,7 @@ ${OPERATION_UI_SCRIPT}
         } else send({jsonrpc:'2.0',id:requestId,method:'tools/call',params:{name:tool,arguments:parameters}});
       });
     }
-    function resultValue(result) {
-      if (result?.structuredContent) return result.structuredContent;
-      for (const item of arr(result?.content)) {if (item.type==='text') {try {return JSON.parse(item.text);} catch {}}}
-      return result;
-    }
-    ${MEDIA_UPLOAD_UI}
-    function renderCreatives(data,meta) {
-      const creatives=arr(data.creatives);
-      const canWrite=meta.capabilities?.can_write!==false;
-      const safeMediaUrl=value=>{try {const parsed=new URL(value);return parsed.protocol==='https:'&&!parsed.username&&!parsed.password?value:null;} catch {return null;}};
-      const mediaView=creative=>'<div class="creative-media">'+arr(creative.media).map(media=>{
-        const src=safeMediaUrl(media.url);if (!src) return '';
-        if (media.type==='image') return '<img src="'+esc(src)+'" alt="'+esc(media.alt || creative.name)+'" loading="lazy" referrerpolicy="no-referrer">';
-        if (media.type==='video') return '<video src="'+esc(src)+'" controls preload="none" playsinline aria-label="'+esc(media.alt || creative.name)+'"></video>';
-        if (media.type==='audio') return '<audio src="'+esc(src)+'" controls preload="none" aria-label="'+esc(media.alt || creative.name)+'"></audio>';
-        return '';
-      }).join('')+'</div>';
-      const uploadUrl=safeMediaUrl(data.upload_page_url);
-      const uploadScope=uploadContext(data,meta);
-      const fieldInput=(field,key)=>{
-        const label='<span>'+esc(field.label)+'</span>';
-        if (field.type==='select') return '<label class="creative-field">'+label+'<select data-field="'+key+'">'+arr(field.options).map(option=>'<option value="'+esc(option.value)+'" '+(option.value===field.value?'selected':'')+'>'+esc(option.label)+'</option>').join('')+'</select></label>';
-        const value=Array.isArray(field.value)?field.value.join('\n'):String(field.value ?? '');
-        return '<label class="creative-field">'+label+'<textarea data-field="'+key+'" '+(field.max_length?'maxlength="'+Number(field.max_length)+'"':'')+'>'+esc(value)+'</textarea></label>';
-      };
-      const canRefresh=meta.refresh?.arguments && typeof meta.refresh.arguments==='object' && !Array.isArray(meta.refresh.arguments) && typeof meta.tool==='string';
-      const canNext=meta.next?.arguments && typeof meta.next.arguments==='object' && !Array.isArray(meta.next.arguments) && typeof meta.tool==='string';
-      const creativeNotices=notices({...data,truncated:false})+(data.truncated?'<p class="notice">Partial gallery: more creatives may be available.</p>':'');
-      const body=creativeNotices+uploadPanel(uploadScope)+(!canWrite&&creatives.some(creative=>arr(creative.actions).length)?'<p class="notice">Your connection can view these creatives. Editing access is required to change them.</p>':'')+((uploadUrl||canRefresh||canNext)?'<p>'+(uploadUrl?'<button class="approve" type="button" data-open-library>Open media library</button> ':'')+(canRefresh?'<button class="approve" type="button" data-refresh-previews '+(state.refreshing||uploads.running?'disabled':'')+'>'+(state.refreshing&&!state.paging?'Refreshing…':'Refresh previews')+'</button>':'')+(canNext?' <button class="approve" type="button" data-next-page '+(state.refreshing||uploads.running?'disabled':'')+'>'+(state.paging?'Loading…':'Next page')+'</button>':'')+'</p>':'')+(state.creativeError?'<p class="notice" role="alert">'+esc(state.creativeError)+'</p>':'')+(creatives.length?'<div class="creative-grid">'+creatives.map((creative,ci)=>{
-        const status=statusOf(creative.status);
-        return '<article class="creative-card"><div class="identity">'+logo(creative.provider)+'<div class="identity-copy"><b>'+esc(creative.name)+'</b><span>'+esc(creative.type)+' · '+esc(creative.id)+'</span></div><span class="pill '+status.tone+'">'+esc(status.label)+'</span></div>'+mediaView(creative)+'<div class="creative-copy">'+arr(creative.headlines).map(text=>'<strong>'+esc(text)+'</strong>').join('')+arr(creative.descriptions).map(text=>'<p>'+esc(text)+'</p>').join('')+arr(creative.landing_urls).map(url=>'<p class="context">'+esc(url)+'</p>').join('')+'</div>'+(canWrite?arr(creative.actions):[]).map((action,ai)=>'<form data-creative="'+ci+'" data-action="'+ai+'">'+arr(action.fields).map((field,fi)=>fieldInput(field,fi)).join('')+'<button class="approve" type="submit" '+(state.previewing?'disabled':'')+'>'+(state.previewing?'Preparing preview…':'Preview '+esc(action.label).toLowerCase())+'</button></form>').join('')+'</article>';
-      }).join('')+'</div>':'<div class="empty">No creatives were returned for this selection.</div>');
-      app.innerHTML=chrome(body,creatives.length+' creative'+(creatives.length===1?'':'s'));
-      bindWidgetUpload(uploadScope,meta);
-      app.querySelector('[data-open-library]')?.addEventListener('click',()=>{
-        if (typeof window.openai?.openExternal==='function') window.openai.openExternal({href:uploadUrl});
-        else send({jsonrpc:'2.0',id:id++,method:'ui/open-link',params:{url:uploadUrl}});
-      });
-      const loadPage=kind=>async()=>{
-        if (state.refreshing || state.previewing || uploads.running) return;
-        state.refreshing=true;state.paging=kind==='next';state.creativeError='';render(state.result);
-        try {
-          const parameters={...meta[kind].arguments,...(meta.context?.project_id?{project_id:meta.context.project_id}:{})};delete parameters.pending_operation_id;
-          const result=await callTool(meta.tool,parameters),value=resultValue(result);
-          if (result?.isError || value?.error) throw new Error(value?.message || 'Previews could not be refreshed.');
-          if (!Array.isArray(value?.creatives)) throw new Error('A creative result was not returned. Check the tool response in chat.');
-          state.refreshing=false;state.paging=false;
-          const next=result?.structuredContent?result:{structuredContent:{...value,_adport:{...meta,refresh:{arguments:parameters},next:undefined}}};
-          if (JSON.stringify(state.result)===JSON.stringify(next)) render(state.result); else acceptResult(next,true);
-        } catch(error) {state.refreshing=false;state.paging=false;state.creativeError=error?.message || 'The gallery could not be loaded.';render(state.result);}
-      };
-      app.querySelector('[data-refresh-previews]')?.addEventListener('click',loadPage('refresh'));
-      app.querySelector('[data-next-page]')?.addEventListener('click',loadPage('next'));
-      app.querySelectorAll('[data-creative]').forEach(form=>form.addEventListener('submit',async event=>{
-        event.preventDefault();if (state.previewing || state.refreshing || uploads.running) return;
-        const action=creatives[Number(form.dataset.creative)]?.actions?.[Number(form.dataset.action)];
-        if (!action || typeof action.tool!=='string') return;
-        const parameters={...action.arguments,...(meta.context?.project_id?{project_id:meta.context.project_id}:{})};
-        // Only server-declared editable fields can change. Every submission requests a fresh preview.
-        delete parameters.pending_operation_id;
-        try {
-          for (const [fi,field] of arr(action.fields).entries()) {
-            if (!/^[a-z][a-z0-9_]*$/.test(field.key) || ['account_id','project_id','pending_operation_id','constructor','prototype'].includes(field.key)) throw new Error('This field cannot be edited here.');
-            const value=form.querySelector('[data-field="'+fi+'"]').value;
-            if (field.type==='select' && !arr(field.options).some(option=>option.value===value)) throw new Error('Choose a supported value.');
-            parameters[field.key]=['text_list','url_list'].includes(field.type)?value.split('\n').map(v=>v.trim()).filter(Boolean):value;
-          }
-          state.previewing=true;state.creativeError='';form.querySelector('button').disabled=true;
-          const result=await callTool(action.tool,parameters),value=resultValue(result);
-          if (result?.isError || value?.error) throw new Error(value?.message || 'The preview could not be prepared.');
-          if (value?.status!=='pending_validation' || value?.applied!==false || !value?.pending_operation_id) throw new Error('A validated preview was not returned. Check the tool result in chat.');
-          state.previewing=false;
-          acceptResult({structuredContent:{...value,_adport:{...meta,...value._adport,tool:action.tool,view:'operation',approval:{arguments:parameters}}}},true);
-        } catch(error) {state.previewing=false;state.creativeError=error?.message || 'The preview could not be prepared.';render(state.result);}
-      }));
-    }
+${CREATIVE_UI_SCRIPT}
     function renderPlanning(data) {
       const planning=data.planning || {}, columns=arr(planning.columns).filter(v=>typeof v?.key==='string'&&typeof v?.label==='string').slice(0,12), rows=arr(planning.rows), pageSize=100, pages=Math.max(1,Math.ceil(rows.length/pageSize));
       state.planningPage=Math.max(0,Math.min(state.planningPage,pages-1));
@@ -439,9 +340,7 @@ ${OPERATION_UI_SCRIPT}
     }
     function acceptResult(result,local=false) {
       if (!result || typeof result !== 'object') return;
-      // Widget-initiated upload calls may be echoed as new operation views by the host.
-      if (!local && uploads.running) return;
-      const fingerprint=JSON.stringify(resultValue(result));
+      const fingerprint=JSON.stringify(resultData(result));
       // Host state updates can echo an old tool result after a local edit/apply.
       if (!local && state.hasLocalResult && hostResults.has(fingerprint)) return;
       if (local) state.hasLocalResult=true;
