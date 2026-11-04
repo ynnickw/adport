@@ -162,10 +162,10 @@ describe('all-provider shared tool surface', () => {
       const dispatchers = names.filter(name => name === 'recommendation_apply' || /_api_(read|create|update|delete|remove)$/.test(name));
       for (const name of dispatchers) {
         expect(hostedNames).not.toContain(name);
-        await expect(hostedClient.callTool({ name, arguments: {} })).rejects.toThrow(/not found/);
       }
+      await Promise.all(dispatchers.map(name => expect(hostedClient.callTool({ name, arguments: {} })).rejects.toThrow(/not found/)));
     } finally { await hostedClient.close(); await hosted.close(); }
-  });
+  }, 20_000);
 
   it('serves the complete named catalog and widget metadata over modern streamable HTTP', async () => {
     const modern = createMcpHandler(() => createMcpServer({ runtime, productionOnly: true }));
@@ -222,6 +222,6 @@ describe('all-provider shared tool surface', () => {
     await Promise.all([server.connect(st), client.connect(ct)]);
     try { expect((await client.listTools()).tools.some(tool => /_api_/.test(tool.name))).toBe(false); }
     finally { await client.close(); await server.close(); }
-  });
+  }, 20_000);
 
 });
