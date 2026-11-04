@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createContext } from '../src/context.js';
 import { PolicyEngine } from '../src/policy/engine.js';
 import { PendingStore } from '../src/policy/pending.js';
@@ -20,15 +20,19 @@ describe('project routing through the shared registry', () => {
       const dir = mkdtempSync(join(tmpdir(), 'adport-projects-')); directories.push(dir);
       return createContext({ includeMock: true, engine: new PolicyEngine(DEFAULT_POLICY, new PendingStore(join(dir, 'pending')), new AuditLog(join(dir, 'audit'))) });
     }));
+    const listForDisplay = vi.fn(async () => ids.map(id => ({ id, name: id, organization_name: 'Company', role: 'owner', providers: ['mock'], logo_url: 'https://example.test/project.png' })));
     const routed = withProjectRouting(runtimes[0]!, {
       list: async () => ids.map(id => ({ id, name: id, organization_name: 'Company', role: 'owner', providers: ['mock'] })),
+      listForDisplay,
       resolve: async id => {
         const runtime = runtimes[ids.indexOf(id)];
         if (!runtime) throw new Error('Unauthorized project');
         return runtime;
       },
     });
+    expect(await routed.registry.call('projects_list', {}, routed.ctx)).toHaveProperty('projects.0.logo_url', 'https://example.test/project.png');
     await expect(routed.registry.call('accounts_list', {}, routed.ctx)).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    expect(listForDisplay).toHaveBeenCalledTimes(1);
     const payload = { account_id: 'mock-1', campaign_id: 'c1', status: 'PAUSED' };
     const preview = await routed.registry.call('mock_set_campaign_status', { project_id: ids[0], ...payload }, routed.ctx) as { pending_operation_id: string };
     await expect(routed.registry.call('mock_set_campaign_status', { project_id: ids[1], ...payload, pending_operation_id: preview.pending_operation_id }, routed.ctx)).rejects.toMatchObject({ code: 'PENDING_NOT_FOUND' });

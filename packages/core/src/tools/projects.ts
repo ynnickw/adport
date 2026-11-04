@@ -14,6 +14,8 @@ export interface AgentProject {
 
 export interface ProjectRouter {
   list: () => Promise<AgentProject[]>;
+  /** Optional presentation metadata; never used to select or authorize a target. */
+  listForDisplay?: () => Promise<AgentProject[]>;
   resolve: (projectId: string, tool: AnyToolDefinition) => Promise<AdportRuntime>;
 }
 
@@ -29,12 +31,12 @@ export function withProjectRouting(runtime: AdportRuntime, router: ProjectRouter
       id: z.string().uuid(), name: z.string(), organization_name: z.string(), role: z.string(), providers: z.array(z.string()), logo_url: z.url().startsWith('https://').optional(),
     })) }),
     annotations: { readOnly: true, openWorld: false },
-    async handler() { return { projects: await router.list() }; },
+    async handler() { return { projects: router.listForDisplay ? await router.listForDisplay() : await router.list() }; },
   }));
   for (const tool of runtime.registry.list()) {
     registry.register({
       ...tool,
-      input: tool.input.extend({
+      input: tool.input.safeExtend({
         project_id: z.string().uuid().optional().describe('Project id from projects_list. Required when this connection has access to multiple projects.'),
       }),
       async handler(input) {
