@@ -1,10 +1,11 @@
+import { CREATIVE_UI_SCRIPT, CREATIVE_UI_STYLES } from './creative-ui.js';
 import { PROVIDER_LOGOS } from './provider-logos.js';
 import { OPERATION_UI_SCRIPT } from './operation-ui.js';
 
-export const ADPORT_UI_URI = 'ui://adport/insight-card-v9.html';
+export const ADPORT_UI_URI = 'ui://adport/insight-card-v10.html';
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
 
-export type AdportView = 'accounts' | 'report' | 'operation' | 'insights' | 'data';
+export type AdportView = 'accounts' | 'report' | 'operation' | 'insights' | 'data' | 'creatives';
 
 const providerNames: Record<string, string> = {
   google: 'Google Ads',
@@ -47,6 +48,7 @@ export function toolInvocationLabels(view: AdportView): { invoking: string; invo
     // Descriptor labels cover both preview and apply; the card shows the actual result.
     case 'operation': return { invoking: 'Processing change…', invoked: 'Change result ready' };
     case 'insights': return { invoking: 'Reviewing opportunities…', invoked: 'Opportunities ready' };
+    case 'creatives': return { invoking: 'Loading creatives…', invoked: 'Creatives ready' };
     case 'data': return { invoking: 'Loading data…', invoked: 'Data ready' };
   }
 }
@@ -196,6 +198,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     @media (pointer:coarse) { .approve,.operation-footer summary { min-height:44px } }
     @media (max-width:620px) { .kpis { grid-template-columns:repeat(2,minmax(0,1fr)) }.top,.content { padding-left:12px; padding-right:12px } }
     @media (max-width:420px) { .bar-row { grid-template-columns:minmax(0,1fr) auto; gap:5px }.bar-name { grid-column:1/-1 }.bar-name > span:last-child { white-space:normal }.bars { gap:12px } }
+${CREATIVE_UI_STYLES}
     @media (prefers-reduced-motion:reduce) { * { animation:none!important; transition:none!important } }
     :root[data-theme="dark"] { --ink:#f5f5f3;--muted:#aaa9ad;--faint:#a09fa5;--paper:#171717;--soft:#222220;--line:rgba(255,255,255,.11) }
     @media (prefers-color-scheme:dark) { :root:not([data-theme="light"]) { --ink:#f5f5f3;--muted:#aaa9ad;--faint:#a09fa5;--paper:#171717;--soft:#222220;--line:rgba(255,255,255,.11) } }
@@ -273,6 +276,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       app.querySelectorAll('[data-metric]').forEach(button=>button.addEventListener('click',()=>{state.reportMetric=button.dataset.metric;renderReport(data);}));
     }
 ${OPERATION_UI_SCRIPT}
+${CREATIVE_UI_SCRIPT}
     async function callTool(tool,parameters,timeoutMs=30000) {
       const requestId=id++;
       return new Promise((resolve,reject)=>{
@@ -308,6 +312,7 @@ ${OPERATION_UI_SCRIPT}
       if (meta.view === 'report') return renderReport(data,meta);
       if (meta.view === 'operation') return renderOperation(data,meta);
       if (meta.view === 'insights') return renderInsights(data,meta);
+      if (meta.view === 'creatives' || Array.isArray(data.creatives)) return renderCreatives(data,meta);
       return renderData(data,meta);
     }
     function acceptResult(result,local=false) {
