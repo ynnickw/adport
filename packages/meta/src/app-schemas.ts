@@ -2,8 +2,10 @@ import { z } from 'zod';
 
 const storeUrl = z.string().url().refine(value => {
   const url = new URL(value);
-  return url.protocol === 'https:' && !url.username && !url.password && !url.hash;
-}, 'Use an HTTPS app-store URL without credentials or a fragment');
+  // Meta's own app inventory still returns legacy http://itunes.apple.com URLs.
+  // This value is sent to Meta as data; Adport never fetches the store URL.
+  return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && !url.hash;
+}, 'Use an HTTP(S) app-store URL without credentials or a fragment');
 
 export const appPromotedObject = z.object({
   application_id: z.string().regex(/^\d+$/).describe('Meta application ID from meta_advertisable_applications, not the App Store ID'),

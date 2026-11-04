@@ -61,6 +61,7 @@ describe('Meta app campaign binding', () => {
 
   it.each([
     { promoted_object: undefined },
+    { promoted_object: { application_id: appId } },
     { objective: 'OUTCOME_TRAFFIC' },
   ])('rejects incomplete SKAdNetwork campaigns before native calls: %j', async payload => {
     const { provider, fetch } = fixture();
@@ -127,8 +128,10 @@ describe('Meta app campaign binding', () => {
     const create = tools.find(tool => tool.name === 'meta_create_campaign')!;
     const base = { account_id: account, name: 'QA', objective: 'OUTCOME_APP_PROMOTION', is_skadnetwork_attribution: true };
     expect(create.input.safeParse(base).success).toBe(false);
+    expect(create.input.safeParse({ ...base, promoted_object: { application_id: appId } }).success).toBe(false);
     expect(create.input.safeParse({ ...base, promoted_object: app }).success).toBe(true);
-    for (const value of [{ application_id: 'not-an-id' }, { ...app, access_token: 'secret' }, { ...app, object_store_url: 'https://user:pass@store.test/app' }, { ...app, object_store_url: 'http://store.test/app' }]) {
+    expect(create.input.safeParse({ ...base, promoted_object: { ...app, object_store_url: 'http://itunes.apple.com/app/id6765692747' } }).success).toBe(true);
+    for (const value of [{ application_id: 'not-an-id' }, { ...app, access_token: 'secret' }, { ...app, object_store_url: 'https://user:pass@store.test/app' }, { ...app, object_store_url: 'file:///app' }]) {
       expect(create.input.safeParse({ ...base, promoted_object: value }).success).toBe(false);
     }
     const set = tools.find(tool => tool.name === 'meta_create_ad_set')!;

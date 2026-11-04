@@ -150,7 +150,7 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
         name: z.string().min(1),
         objective: objectiveSchema.default('OUTCOME_TRAFFIC'),
         status: statusSchema.optional(),
-        is_skadnetwork_attribution: z.boolean().optional().describe('iOS SKAdNetwork campaign; requires APP_PROMOTION and the Meta application binding at creation'),
+        is_skadnetwork_attribution: z.boolean().optional().describe('iOS SKAdNetwork campaign; requires APP_PROMOTION, the Meta application ID and its store URL at creation'),
         promoted_object: appPromotedObject.optional(),
         special_ad_categories: z.array(specialAdCategorySchema).default([]),
         daily_budget_cents: z
@@ -164,8 +164,8 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
           .optional()
           .describe('For campaigns without a campaign budget: allow eligible ad sets to share up to 20% of their daily budgets; defaults to false'),
       }).superRefine((value, ctx) => {
-        if (value.is_skadnetwork_attribution && (value.objective !== 'OUTCOME_APP_PROMOTION' || !value.promoted_object)) {
-          ctx.addIssue({ code: 'custom', path: ['promoted_object'], message: 'SKAdNetwork requires OUTCOME_APP_PROMOTION and promoted_object.application_id at campaign creation' });
+        if (value.is_skadnetwork_attribution && (value.objective !== 'OUTCOME_APP_PROMOTION' || !value.promoted_object?.object_store_url)) {
+          ctx.addIssue({ code: 'custom', path: ['promoted_object'], message: 'SKAdNetwork requires OUTCOME_APP_PROMOTION, promoted_object.application_id and object_store_url at campaign creation' });
         }
         if (value.promoted_object && value.objective !== 'OUTCOME_APP_PROMOTION') {
           ctx.addIssue({ code: 'custom', path: ['objective'], message: 'The typed application binding requires OUTCOME_APP_PROMOTION' });

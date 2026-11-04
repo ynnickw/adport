@@ -489,8 +489,8 @@ export class MetaAdsProvider implements AdProvider {
     },
     guard: WriteGuard,
   ): Promise<WritePlan> {
-    if (payload.is_skadnetwork_attribution && (payload.objective !== 'OUTCOME_APP_PROMOTION' || !payload.promoted_object)) {
-      throw new AdportError('INVALID_INPUT', 'SKAdNetwork requires OUTCOME_APP_PROMOTION and promoted_object.application_id at campaign creation.');
+    if (payload.is_skadnetwork_attribution && (payload.objective !== 'OUTCOME_APP_PROMOTION' || !payload.promoted_object?.object_store_url)) {
+      throw new AdportError('INVALID_INPUT', 'SKAdNetwork requires OUTCOME_APP_PROMOTION, promoted_object.application_id and object_store_url at campaign creation.');
     }
     if (payload.promoted_object) {
       appPromotedObject.parse(payload.promoted_object);
