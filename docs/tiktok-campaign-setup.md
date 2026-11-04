@@ -22,3 +22,14 @@ Use [`media_list` and the project asset library](creative-media.md) to upload fi
 Ad cards display native text, destination and available preview URLs. Their edit/status actions bind the advertiser and entity IDs, request a new policy preview and use the ordinary approval flow. Spark text can come from its source post, so its card omits the ad-copy text form. Creating a standard ad does not grant Spark authorization or create an identity.
 
 Wire contracts are tested against the [official SDK at f809c396](https://github.com/tiktok/tiktok-business-api-sdk/tree/f809c396520df2d7b201a9ccc5378d822b728ed3), including `adgroup_create_body.py`, `ad_update_body.py`, child status bodies, `file_api.py` multipart fields and the targeting OpenAPI definitions. Tests check headers, trailing slashes, JSON parameters, payload masks, monetary conversion, parent/account validation and changed-byte rejection. This extension has not yet been verified through the existing hosted TikTok grant; live verification and additional audience/measurement/automation workflows remain pending.
+
+
+## Saved targeting templates
+
+`tiktok_saved_audiences` supports native ID filters, up to 100 IDs and 100 rows per page. Each record includes a snapshot hash; missing or contradictory native paging is reported as unknown completeness. `tiktok_get_saved_audience` uses the same ID-filtered native endpoint.
+
+Preview/apply `tiktok_create_saved_audience` to save location, interest, audience, device and action targeting for reuse. This does not create or change a campaign, budget or delivery setting. Native creator/hashtag action periods are coerced to zero and the preview reports that coercion. Creation is independently read back; an uncertain result must be reconciled by ID or filtered list before another create. TikTok's documented saved-audience API has no update endpoint. Create a new template for changed targeting.
+
+`tiktok_delete_saved_audiences` permanently deletes up to 100 templates using a current `snapshot_hash` for each target. All snapshots are checked again before any deletion; a filtered native read must confirm absence before Adport reports success. Deletion has no restore endpoint. Native permission errors are preserved and writes never retry automatically.
+
+These contracts follow TikTok's [official saved-audience models](https://github.com/tiktok/tiktok-business-api-sdk/blob/f809c396520df2d7b201a9ccc5378d822b728ed3/python_sdk/docs/SavedAudienceCreateBody.md) and [Audience API](https://github.com/tiktok/tiktok-business-api-sdk/blob/f809c396520df2d7b201a9ccc5378d822b728ed3/python_sdk/docs/AudienceApi.md). Account grants and native targeting eligibility remain authoritative.
