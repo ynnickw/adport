@@ -26,7 +26,8 @@ export interface AuthorizedCapiCredentialScope {
   dataset_configuration_hash: string;
 }
 interface Plan extends Omit<WritePreview, 'serverValidated'> { execute(): Promise<WriteResult> }
-const notes = ['Local preview only; Spotify has no native validation endpoint for credentials.', 'CAPI credentials grant ongoing event-ingestion access to this integration. The native endpoint provides no configurable expiry. No token value is returned to agents, widgets or audit logs.', 'No conversion events, tracking installation, ad delivery or budget changes. Native failures are never replayed automatically.'];
+const notes = ['CAPI credentials grant ongoing event-ingestion access to this integration. The native endpoint provides no configurable expiry. No token value is returned to agents, widgets or audit logs.', 'No conversion events, tracking installation, ad delivery or budget changes. Native failures are never replayed automatically.'];
+const previewNotes = ['Local preview only; Spotify has no native validation endpoint for credentials.', ...notes];
 
 export class SpotifyCapiCredentials {
   constructor(private readonly client: SpotifyAdsClient, private readonly authorize: (input: { account_id: string; dataset_id: string }) => Promise<AuthorizedCapiCredentialScope>, private readonly secrets?: ResourceSecretStore) {}
@@ -69,8 +70,8 @@ export class SpotifyCapiCredentials {
     if (storing && !selected?.capi_auth_token) throw new AdportError('INVALID_INPUT', 'spotify: the selected active credential has no available native secret to store.');
     if (!creating && !selected && !stored) throw new AdportError('INVALID_INPUT', 'spotify: the selected credential is neither active in this integration nor stored in this Adport scope.');
     const title = creating ? 'Create CAPI credential' : storing ? 'Store existing CAPI credential' : selected ? 'Revoke CAPI credential' : 'Remove inactive CAPI credential copy';
-    return { summary: `${title} for Spotify integration ${scope.capi_connection_id}`, changes: [creating ? '+ One native long-lived credential, saved privately in Adport.' : storing ? `+ Store only the selected active credential ${id}; do not create a native token.` : selected ? `- Revoke native credential ${id} and remove its Adport copy after confirmed native revocation.` : `- Remove only the private Adport copy of inactive credential ${id}; no native deletion request.`, 'No events are sent.'], coercions: [], budgetDeltas: [], notes,
-      review: { provider: 'spotify', accountId: scope.account_id, kind: creating || storing ? 'create' : 'remove', title, fields: [{ label: 'Dataset', after: scope.dataset_id }, { label: 'CAPI integration', after: scope.capi_connection_id }, ...(id ? [{ label: 'Credential', after: id }, { label: 'Stored in Adport', after: stored }] : []), { label: 'Active credentials', after: before.length }], notices: notes },
+    return { summary: `${title} for Spotify integration ${scope.capi_connection_id}`, changes: [creating ? '+ One native long-lived credential, saved privately in Adport.' : storing ? `+ Store only the selected active credential ${id}; do not create a native token.` : selected ? `- Revoke native credential ${id} and remove its Adport copy after confirmed native revocation.` : `- Remove only the private Adport copy of inactive credential ${id}; no native deletion request.`, 'No events are sent.'], coercions: [], budgetDeltas: [], notes: previewNotes,
+      review: { provider: 'spotify', accountId: scope.account_id, kind: creating || storing ? 'create' : 'remove', title, fields: [{ label: 'Dataset', after: scope.dataset_id }, { label: 'CAPI integration', after: scope.capi_connection_id }, ...(id ? [{ label: 'Credential', after: id }, { label: 'Stored in Adport', before: stored, after: storing }] : []), { label: 'Active credentials', before: before.length, after: before.length + (creating ? 1 : !storing && selected ? -1 : 0) }], notices: previewNotes },
       execute: async () => {
         let createdId: string | undefined, nativeAcknowledged = false;
         try {

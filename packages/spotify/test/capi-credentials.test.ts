@@ -59,6 +59,7 @@ describe('private Spotify CAPI credential lifecycle', () => {
     const result = await f.provider.measurement.credentials.list({ account_id: A, dataset_id: D });
     expect(result.credentials).toEqual([{ capi_auth_token_id: T, created_at: '2026-11-05T00:00:00Z', stored_in_adport: false }]);
     expect(JSON.stringify(result)).not.toContain(secret);expect(result.credential_inventory_hash).toMatch(/^[a-f0-9]{64}$/);
+    expect(result.notes.join(' ')).not.toContain('Local preview only');
     expect(f.fetch.mock.calls.map(([url]) => new URL(String(url)).pathname).slice(1)).toEqual([`/ads/v3/ad_accounts/${A}`, `/ads/v3/businesses/${B}/datasets/${D}`, `/ads/v3/businesses/${B}/capi/${C}`, `/ads/v3/businesses/${B}/capi/${C}/tokens`]);
   });
   it('rejects a malformed metadata field without echoing a secret-bearing response', async () => {
@@ -73,6 +74,7 @@ describe('private Spotify CAPI credential lifecycle', () => {
     const request = { ...values, account_id: A };
     const preview = await runtime.registry.call('spotify_create_capi_credential', request, runtime.ctx) as any;
     expect(preview).toMatchObject({ applied: false, preview: { serverValidated: false, budgetDeltas: [] } });expect(mutations(f)).toHaveLength(0);
+    expect(preview.preview.review.fields).toContainEqual({ label: 'Active credentials', before: 0, after: 1 });
     const result = await runtime.registry.call('spotify_create_capi_credential', { ...request, pending_operation_id: preview.pending_operation_id }, runtime.ctx);
     expect(result).toMatchObject({ applied: true, result: { details: { capi_auth_token_id: T, stored_in_adport: true } } });
     expect(mutations(f)).toHaveLength(1);expect(mutations(f)[0]![1]?.body).toBeUndefined();
@@ -101,6 +103,10 @@ describe('private Spotify CAPI credential lifecycle', () => {
   it('confirms native revocation before removing only its private copy', async () => {
     const f = fixture();f.tokens([native(), native(O)]);f.stored.set(resourceSecretKey(key()), secret + T);f.stored.set(resourceSecretKey(key(O)), secret + O);
     const values = { ...await input(f), capi_auth_token_id: T, acknowledge_ingestion_effects: true };delete (values as any).acknowledge_credential_access;
+    const preview = await f.provider.previewWrite(operation(values, 'spotify_revoke_capi_credential'), guard);
+    expect(preview.review!.fields).toContainEqual({ label: 'Active credentials', before: 2, after: 1 });
+    expect(preview.review!.fields).toContainEqual({ label: 'Stored in Adport', before: true, after: false });
+    expect(mutations(f)).toHaveLength(0);
     const result = await f.provider.applyWrite(operation(values, 'spotify_revoke_capi_credential'), guard);
     expect(result.details).toMatchObject({ native_active: false, stored_in_adport: false });expect(mutations(f)).toHaveLength(1);expect(mutations(f)[0]![1]?.method).toBe('DELETE');expect(f.stored.size).toBe(1);expect(f.stored.has(resourceSecretKey(key(O)))).toBe(true);
   });
