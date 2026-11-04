@@ -11,6 +11,7 @@ function widget(initialGlobals?: Record<string, unknown>) {
   const buttons: Array<{ dataset: { group: string }; click: () => void }> = [];
   const approvals: Array<{ click: () => void; fire: (name: string, event?: Record<string, unknown>) => void }> = [];
   const metrics: Array<{ dataset: { metric: string }; click: () => void }> = [];
+  const planningButtons: Array<{ dataset: { planningPage: string }; disabled: boolean; click: () => void }> = [];
   let html = '';
   let renders = 0;
   const details = { open: false };
@@ -19,6 +20,13 @@ function widget(initialGlobals?: Record<string, unknown>) {
     set innerHTML(value: string) { html = value; renders++; details.open = false; },
     querySelector: (selector: string) => selector === 'details' && html.includes('<details>') ? details : null,
     querySelectorAll: (selector: string) => {
+      if (selector === '[data-planning-page]') {
+        planningButtons.length = 0;
+        return [...app.innerHTML.matchAll(/<button[^>]*data-planning-page="(previous|next)"([^>]*)>/g)].map(match => {
+          const button = { dataset: { planningPage: match[1]! }, disabled: match[2]!.includes('disabled'), click: () => {}, addEventListener: (_: string, fn: () => void) => { button.click = fn; } };
+          planningButtons.push(button); return button;
+        });
+      }
       if (selector === '[data-metric]') {
         metrics.length = 0;
         return [...app.innerHTML.matchAll(/data-metric="([a-z]+)"/g)].map((match) => {
@@ -59,7 +67,7 @@ function widget(initialGlobals?: Record<string, unknown>) {
   });
   const message = (data: unknown, source: unknown = parent) => listeners.get('message')?.({ data, source });
   return {
-    app, buttons, metrics, approvals, root, sent, message, details,
+    app, buttons, metrics, planningButtons, approvals, root, sent, message, details,
     globals: (globals: Record<string, unknown>) => listeners.get('openai:set_globals')?.({ detail: { globals } }),
     elapse: () => { for (const [id, fn] of [...timers]) { if (timers.delete(id)) fn(); } },
     renderCount: () => renders,
@@ -74,6 +82,26 @@ const row = (accountId: string, spend: number, currency?: string, conversionValu
 });
 
 describe('shipped MCP iframe', () => {
+  it('renders exact planning amounts, unavailable values and native units without approval controls', () => {
+    const ui = widget();
+    ui.render('planning', { planning: { title: 'LinkedIn pricing', columns: [{ key: 'amount', label: 'Native amount' }, { key: 'missing', label: 'Unavailable' }, { key: 'unit', label: 'Unit' }], rows: [{ amount: '7.12345678', missing: null, unit: 'EUR per 1,000,000 clicks' }], notes: ['Estimates, not observed results.'] }, truncated: true });
+    expect(ui.app.innerHTML).toContain('7.12345678'); expect(ui.app.innerHTML).toContain('<td>—</td>'); expect(ui.app.innerHTML).toContain('EUR per 1,000,000 clicks');
+    expect(ui.app.innerHTML).toContain('Partial native response'); expect(ui.app.innerHTML).toContain('Read-only estimates'); expect(ui.app.innerHTML).not.toContain('data-approve');
+  });
+  it('pages planning rows locally and resets for new results without making a tool call', () => {
+    const ui = widget(), planning = { title: 'Native forecast', columns: [{ key: 'metric', label: 'Metric' }], rows: Array.from({ length: 205 }, (_, i) => ({ metric: `Native row ${i}` })), notes: [] };
+    ui.render('planning', { planning }); expect(ui.app.innerHTML).toContain('Rows 1–100 of 205'); expect(ui.app.innerHTML).not.toContain('<td>Native row 100</td>');
+    ui.planningButtons.find(b => b.dataset.planningPage === 'previous')!.click(); expect(ui.app.innerHTML).toContain('Rows 1–100 of 205');
+    ui.planningButtons.find(b => b.dataset.planningPage === 'next')!.click(); expect(ui.app.innerHTML).toContain('Rows 101–200 of 205');
+    ui.planningButtons.find(b => b.dataset.planningPage === 'next')!.click(); expect(ui.app.innerHTML).toContain('Rows 201–205 of 205');
+    expect(ui.planningButtons.find(b => b.dataset.planningPage === 'next')!.disabled).toBe(true);
+    ui.render('planning', { planning: { ...planning, title: 'Another selection' } }); expect(ui.app.innerHTML).toContain('Rows 1–100 of 205');
+    expect(ui.sent.some(v => (v as { method?: string }).method === 'tools/call')).toBe(false);
+  });
+  it('escapes native planning content and never reads an inherited row value', () => {
+    const ui = widget(); ui.render('planning', { planning: { title: '<img src=x onerror=alert(1)>', columns: [{ key: 'constructor', label: '<script>unsafe</script>' }], rows: [{}], notes: ['<button>not an action</button>'] } });
+    expect(ui.app.innerHTML).toContain('&lt;img'); expect(ui.app.innerHTML).toContain('&lt;script&gt;'); expect(ui.app.innerHTML).toContain('<td>—</td>'); expect(ui.app.innerHTML).not.toContain('function Object'); expect(ui.app.innerHTML).not.toContain('<img src=x');
+  });
   it('uses the same server summary as the agent and preserves explicit unavailable ratios', () => {
     const ui = widget();
     ui.render('report', {

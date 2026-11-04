@@ -7,6 +7,7 @@ import { LinkedInMediaService, LINKEDIN_MEDIA_WRITES } from './media.js';
 import { LinkedInManagementService } from './management.js';
 import { LinkedInSponsoredService } from './sponsored.js';
 import { LINKEDIN_SPONSORED_WRITES } from './sponsored-tools.js';
+import { LinkedInPlanningService } from './planning.js';
 
 interface Plan extends Omit<WritePreview, 'serverValidated'> { execute: () => Promise<string[] | WriteResult> }
 const FIELDS = { spend: 'costInLocalCurrency', impressions: 'impressions', clicks: 'clicks', conversions: 'externalWebsiteConversions', conversion_value: 'conversionValueInLocalCurrency' } as const;
@@ -34,7 +35,8 @@ export class LinkedInAdsProvider implements AdProvider {
   readonly management: LinkedInManagementService;
   readonly media: LinkedInMediaService;
   readonly sponsored: LinkedInSponsoredService;
-  constructor(private readonly client: LinkedInAdsClient, media?: MediaResolver) { this.creatives = new LinkedInCreativeService(client, this, media); this.management = new LinkedInManagementService(client, this); this.media = new LinkedInMediaService(client, this, media); this.sponsored = new LinkedInSponsoredService(client, this); }
+  readonly planning: LinkedInPlanningService;
+  constructor(private readonly client: LinkedInAdsClient, media?: MediaResolver) { this.creatives = new LinkedInCreativeService(client, this, media); this.management = new LinkedInManagementService(client, this); this.media = new LinkedInMediaService(client, this, media); this.sponsored = new LinkedInSponsoredService(client, this); this.planning = new LinkedInPlanningService(client, this); }
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions { return { pauseCampaign: (accountId, campaignId) => ({ tool: 'linkedin_set_campaign_status', input: { account_id: accountId, campaign_id: campaignId, status: 'PAUSED' } }) }; }
   private async search<T extends { id: number }>(path: string, schema: z.ZodType<T>, search?: RestliValue): Promise<T[]> {

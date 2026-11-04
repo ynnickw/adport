@@ -28,7 +28,7 @@ import {
 
 export const PROVIDER_IDS = ['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const;
 export { ADPORT_UI_RESOURCE_DOMAINS };
-export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html'];
+export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v6.html', 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html'];
 
 const DEFAULT_MCP_ICONS = [{
   src: 'https://app.adport.dev/icon.svg?brand=orange-dot-v2',
@@ -105,7 +105,7 @@ function registerUiResources(server: McpServer, uiDomain: string, uiResourceDoma
     server,
     uri === ADPORT_UI_URI ? 'Adport insight card' : 'Adport insight card (previous URI)',
     uri,
-    { description: 'Responsive Adport accounts, performance, recommendations, and guarded-change view.', _meta: resourceMeta },
+    { description: 'Responsive Adport accounts, performance, planning estimates, creatives, recommendations, and guarded-change view.', _meta: resourceMeta },
     async () => ({ contents: [{ uri, mimeType: RESOURCE_MIME_TYPE, text: ADPORT_UI_HTML, _meta: resourceMeta }] }),
   );
 }

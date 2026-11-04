@@ -1,8 +1,8 @@
-export const ADPORT_UI_URI = 'ui://adport/insight-card-v6.html';
+export const ADPORT_UI_URI = 'ui://adport/insight-card-v7.html';
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
 export const ADPORT_UI_RESOURCE_DOMAINS = ['https://*.fbcdn.net', 'https://*.fbsbx.com', 'https://*.googleusercontent.com', 'https://tpc.googlesyndication.com', 'https://www.bing.com', 'https://*.scdn.co', 'https://*.spotifycdn.com', 'https://storage.googleapis.com', 'https://*.pinimg.com', 'https://*.redd.it', 'https://*.redditmedia.com', 'https://*.redditstatic.com', 'https://*.licdn.com', 'https://*.licdn-ei.com', 'https://pbs.twimg.com', 'https://video.twimg.com', 'https://ton.twimg.com'];
 
-export type AdportView = 'accounts' | 'report' | 'operation' | 'insights' | 'creatives';
+export type AdportView = 'accounts' | 'report' | 'operation' | 'insights' | 'creatives' | 'planning';
 
 const providerNames: Record<string, string> = {
   google: 'Google Ads',
@@ -46,6 +46,7 @@ export function toolInvocationLabels(view: AdportView): { invoking: string; invo
     case 'operation': return { invoking: 'Processing change…', invoked: 'Change result ready' };
     case 'insights': return { invoking: 'Reviewing opportunities…', invoked: 'Opportunities ready' };
     case 'creatives': return { invoking: 'Loading creatives…', invoked: 'Creatives ready' };
+    case 'planning': return { invoking: 'Loading planning estimates…', invoked: 'Planning estimates ready' };
   }
 }
 
@@ -150,6 +151,13 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     .comparison td:first-child { color:var(--muted); font-size:11px }
     .comparison td:last-child { font-weight:600 }
     .comparison .changed { color:var(--orange) }
+    .planning-scroll { max-height:440px; overflow:auto; margin-bottom:12px }
+    .planning-table { width:100%; border-collapse:collapse; font-size:11px }
+    .planning-table th { position:sticky; top:0; background:var(--paper); padding:8px; text-align:left; color:var(--muted) }
+    .planning-table td { border-top:1px solid var(--line); padding:9px 8px; overflow-wrap:anywhere }
+    .planning-pages { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px }
+    .planning-pages button { cursor:pointer; padding:7px 10px; border:1px solid var(--line); border-radius:9px; color:var(--ink); background:var(--paper) }
+    .planning-pages button:disabled { cursor:default; opacity:.45 }
     .adjustment { margin:8px 0; color:var(--amber); font-size:11px; line-height:1.4 }
     .approval { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:12px 0 }
     .approve { cursor:pointer; padding:9px 16px; border:0; border-radius:99px; background:var(--ink); color:var(--paper); font-size:12px; font-weight:700 }
@@ -190,7 +198,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
   <script>
   (() => {
     const app = document.getElementById('app');
-    const state = { host: {}, result: null, reportGroup: null, reportMetric: 'spend', approving: false, approvalError: '', previewing: false, refreshing: false, paging: false, creativeError: '', hasLocalResult: false };
+    const state = { host: {}, result: null, reportGroup: null, reportMetric: 'spend', planningPage: 0, approving: false, approvalError: '', previewing: false, refreshing: false, paging: false, creativeError: '', hasLocalResult: false };
     const hostResults=new Set();
     const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const arr = (value) => Array.isArray(value) ? value : [];
@@ -466,6 +474,16 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
         else send({jsonrpc:'2.0',id:id++,method:'ui/update-model-context',params:{structuredContent:{adport_operation:facts}}});
       }
     }
+    function renderPlanning(data) {
+      const planning=data.planning || {}, columns=arr(planning.columns).filter(v=>typeof v?.key==='string'&&typeof v?.label==='string').slice(0,12), rows=arr(planning.rows), pageSize=100, pages=Math.max(1,Math.ceil(rows.length/pageSize));
+      state.planningPage=Math.max(0,Math.min(state.planningPage,pages-1));
+      const start=state.planningPage*pageSize, shown=rows.slice(start,start+pageSize);
+      const notes=arr(planning.notes).filter(v=>typeof v==='string').map(v=>'<p class="notice">'+esc(v)+'</p>').join('');
+      const table=columns.length&&shown.length?'<div class="planning-scroll" tabindex="0" role="region" aria-label="Planning estimate table"><table class="planning-table"><thead><tr>'+columns.map(v=>'<th scope="col">'+esc(v.label)+'</th>').join('')+'</tr></thead><tbody>'+shown.map(row=>'<tr>'+columns.map(column=>{const value=row&&Object.hasOwn(row,column.key)?row[column.key]:null;return '<td>'+esc(value==null?'—':value)+'</td>';}).join('')+'</tr>').join('')+'</tbody></table></div>':'<div class="empty">No planning values were returned for this selection.</div>';
+      const controls=pages>1?'<div class="planning-pages"><button type="button" data-planning-page="previous" '+(state.planningPage===0?'disabled':'')+'>Previous rows</button><span class="context">Rows '+(start+1)+'–'+(start+shown.length)+' of '+rows.length+'</span><button type="button" data-planning-page="next" '+(state.planningPage===pages-1?'disabled':'')+'>Next rows</button></div>':'';
+      app.innerHTML=chrome('<p class="operation-name">'+esc(planning.title || 'Planning estimates')+'</p>'+table+controls+(data.truncated?'<p class="notice">Partial native response. More estimates may exist.</p>':'')+notes,'Read-only estimates');
+      app.querySelectorAll('[data-planning-page]').forEach(button=>button.addEventListener('click',()=>{if(button.disabled)return;state.planningPage+=button.dataset.planningPage==='next'?1:-1;renderPlanning(data);}));
+    }
     function renderInsights(data) {
       const items = data.finding ? [data.finding] : arr(data.findings || data.recommendations || data.results || data.entries);
       const body = items.length ? '<div class="list">'+items.slice(0,8).map((item,i)=>'<div class="row"><div class="identity"><span class="logo" style="background:var(--orange)">'+(i+1)+'</span><div class="identity-copy"><b>'+esc(item.title || item.summary || item.rule || 'Opportunity')+'</b><span>'+esc(item.description || item.status || item.severity || 'Review recommended')+'</span></div></div><span class="pill '+(/high|critical/i.test(item.severity || '')?'danger':'')+'">'+esc(item.severity || item.status || 'open')+'</span></div>').join('')+'</div>' : '<div class="empty">No active recommendations were returned.</div>';
@@ -493,6 +511,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       if (meta.view === 'report') return renderReport(data,meta);
       if (meta.view === 'operation') return renderOperation(data,meta);
       if (meta.view === 'creatives') return renderCreatives(data,meta);
+      if (meta.view === 'planning') return renderPlanning(data,meta);
       return renderInsights(data,meta);
     }
     function acceptResult(result,local=false) {
@@ -506,6 +525,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       // ChatGPT can deliver the same result through both supported bridges.
       // Do not reset an open disclosure when the second copy arrives.
       if (state.result && JSON.stringify(state.result) === JSON.stringify(result)) return;
+      state.planningPage=0;
       state.result = result;
       render(result);
     }
