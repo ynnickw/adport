@@ -12,7 +12,7 @@ import {
   revokeGoogleToken,
 } from './google-oauth';
 import type { OAuthProvider, ProviderCredentialMap, StoredProviderCredential } from './types';
-import { extraOAuthAdapters } from './provider-oauth-extra';
+import { extraOAuthAdapters, pinterestPinManagementAdapter } from './provider-oauth-extra';
 import { xOAuthAdapter } from './provider-oauth-x';
 import { providerAllowedForOrganization } from './provider-rollout';
 
@@ -382,7 +382,11 @@ const reddit: OAuthAdapter<'reddit'> = {
 
 const adapters = { google, meta, tiktok, microsoft, reddit, apple, ...extraOAuthAdapters, x: xOAuthAdapter } satisfies { [P in OAuthProvider]: OAuthAdapter<P> };
 
-export function oauthAdapter<P extends OAuthProvider>(provider: P, options: { googleDataManager?: boolean } = {}): OAuthAdapter<P> {
+export function oauthAdapter<P extends OAuthProvider>(provider: P, options: { googleDataManager?: boolean; pinterestPinManagement?: boolean } = {}): OAuthAdapter<P> {
+  if (options.pinterestPinManagement) {
+    if (provider !== 'pinterest' || options.googleDataManager) throw new Error('Pin management authorization is supported only for Pinterest.');
+    return pinterestPinManagementAdapter() as OAuthAdapter<P>;
+  }
   if (options.googleDataManager) {
     if (provider !== 'google') throw new Error('Data Manager authorization is supported only for Google.');
     return {

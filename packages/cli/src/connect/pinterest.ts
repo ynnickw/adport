@@ -5,13 +5,14 @@ import type { ProgramIO } from '../program.js';
 import { printLocalConnectionIntro, printLocalConnectionSaved } from './local.js';
 import { generateOAuthState, openInBrowser, startLoopbackServer } from './oauth.js';
 
-export async function connectPinterest(input: { openBrowser: boolean; io: ProgramIO }): Promise<void> {
+export async function connectPinterest(input: { openBrowser: boolean; pinManagement?: boolean; io: ProgramIO }): Promise<void> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const store = new CredentialStore();
   try {
     printLocalConnectionIntro(input.io, 'Pinterest Ads');
     input.io.out('Register your own app at developers.pinterest.com/apps and obtain Trial access for your own account or Standard access for external users.');
-    input.io.out('Register http://localhost:53686/callback as an exact redirect URI on your app. This local flow requests ads:read and ads:write only.');
+    input.io.out('Register http://localhost:53686/callback as an exact redirect URI on your app.');
+    input.io.out(input.pinManagement ? 'Pin management requests Ads, boards, Pins and user-account read/write permissions as applicable. Your app must have native access to these scopes. No content is created by connecting.' : 'This flow requests ads:read and ads:write only. Use --pin-management to explicitly authorize original Pin/image/video management.');
     const existing = (await store.get('pinterest'))?.data;
     const clientId = (await rl.question('App ID (Enter to reuse stored/environment): ')).trim() || existing?.client_id || process.env.PINTEREST_CLIENT_ID || '';
     const clientSecret = process.env.PINTEREST_CLIENT_SECRET || existing?.client_secret || '';
@@ -26,14 +27,14 @@ export async function connectPinterest(input: { openBrowser: boolean; io: Progra
     let timeout: ReturnType<typeof setTimeout> | undefined;
     let refreshToken: string;
     try {
-      const authUrl = buildPinterestAuthUrl(clientId, redirectUri, state);
+      const authUrl = buildPinterestAuthUrl(clientId, redirectUri, state, { pinManagement: input.pinManagement });
       input.io.out(`Authorize your own Pinterest app:\n  ${authUrl}`);
       if (input.openBrowser) openInBrowser(authUrl);
       const code = await Promise.race([
         loopback.waitForCode,
         new Promise<never>((_resolve, reject) => { timeout = setTimeout(() => reject(new Error('Pinterest authorization timed out after five minutes.')), 300_000); }),
       ]);
-      refreshToken = await exchangePinterestCode({ clientId, clientSecret, code, redirectUri });
+      refreshToken = await exchangePinterestCode({ clientId, clientSecret, code, redirectUri, pinManagement: input.pinManagement });
     } finally {
       clearTimeout(timeout); loopback.close();
     }

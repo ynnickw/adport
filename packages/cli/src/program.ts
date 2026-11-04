@@ -238,8 +238,10 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .description('Connect an ad account (guided wizard)')
     .option('--no-browser', 'Print auth URLs instead of opening a browser')
     .option('--data-manager', 'Google only: explicitly request the additional Data Manager OAuth scope')
-    .action(async (provider: string, opts: { browser: boolean; dataManager?: boolean }) => {
+    .option('--pin-management', 'Pinterest only: explicitly request board, Pin and native media permissions')
+    .action(async (provider: string, opts: { browser: boolean; dataManager?: boolean; pinManagement?: boolean }) => {
       if (opts.dataManager && provider !== 'google') throw new Error('--data-manager is supported only for Google');
+      if (opts.pinManagement && provider !== 'pinterest') throw new Error('--pin-management is supported only for Pinterest');
       if (provider === 'google') {
         const { connectGoogle } = await import('./connect/google.js');
         await connectGoogle({ openBrowser: opts.browser, dataManager: opts.dataManager, io });
@@ -282,7 +284,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
       }
       if (provider === 'pinterest') {
         const { connectPinterest } = await import('./connect/pinterest.js');
-        await connectPinterest({ openBrowser: opts.browser, io });
+        await connectPinterest({ openBrowser: opts.browser, pinManagement: opts.pinManagement, io });
         return;
       }
       if (provider === 'linkedin') {

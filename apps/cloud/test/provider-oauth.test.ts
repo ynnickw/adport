@@ -37,6 +37,7 @@ describe('hosted provider OAuth broker', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it('reports every provider as unavailable until its Adport-owned application is configured', () => {
@@ -117,6 +118,20 @@ describe('hosted provider OAuth broker', () => {
     request.mockResolvedValueOnce(Response.json({ access_token: 'access', refresh_token: 'refresh', scope: adapter.scopes.join(' ') }));
     expect(await adapter.exchange({ code: 'code', verifier: 'verifier' })).toEqual({ refreshToken: 'refresh' });
     expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps Pinterest ads-only by default and verifies an explicitly requested Pin-management grant', async () => {
+    vi.stubEnv('PINTEREST_CLIENT_ID', 'pinterest-client'); vi.stubEnv('PINTEREST_CLIENT_SECRET', 'pinterest-secret'); vi.stubEnv('PINTEREST_OAUTH_ENABLED', 'true'); resetEnvForTests();
+    const input = { state: 'bound-state', challenge: 'unused' };
+    expect(new URL(oauthAdapter('pinterest').authorizationUrl(input)).searchParams.get('scope')).toBe('ads:read,ads:write');
+    const adapter = oauthAdapter('pinterest', { pinterestPinManagement: true });
+    expect(new URL(adapter.authorizationUrl(input)).searchParams.get('scope')?.split(',')).toEqual(adapter.scopes);
+    expect(() => oauthAdapter('meta', { pinterestPinManagement: true })).toThrow('only for Pinterest');
+    expect(() => oauthAdapter('pinterest', { pinterestPinManagement: true, googleDataManager: true })).toThrow('only for Pinterest');
+    const request = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ access_token: 'access', expires_in: 3600, refresh_token: 'refresh', scope: 'ads:read ads:write' }));
+    await expect(adapter.exchange({ code: 'code', verifier: 'unused' })).rejects.toThrow('previous connection was preserved');
+    request.mockResolvedValueOnce(Response.json({ access_token: 'access', expires_in: 3600, refresh_token: 'refresh', scope: adapter.scopes.join(' ') }));
+    expect(await adapter.exchange({ code: 'code', verifier: 'unused' })).toEqual({ refreshToken: 'refresh' });
   });
 
   it('injects the Adport-owned application identity into tenant grants at runtime', () => {

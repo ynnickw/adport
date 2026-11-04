@@ -20,12 +20,30 @@ beforeEach(() => {
   mocks.consume.mockResolvedValue({ organizationId: 'org', verifier: 'secret', returnPath: popupReturnPath(id, '/onboarding') });
   mocks.exchange.mockResolvedValue({ accessToken: 'secret' }); mocks.list.mockResolvedValue([]);
   mocks.upsert.mockResolvedValue('connection');
-  mocks.adapter.mockImplementation((_provider, options) => ({ configured: () => true, codeParam: 'code', scopes: options?.googleDataManager ? ['https://www.googleapis.com/auth/adwords', 'https://www.googleapis.com/auth/datamanager'] : [], authorizationUrl: () => 'https://provider.test/authorize', exchange: mocks.exchange }));
+  mocks.adapter.mockImplementation((_provider, options) => ({ configured: () => true, codeParam: 'code', scopes: options?.googleDataManager ? ['https://www.googleapis.com/auth/adwords', 'https://www.googleapis.com/auth/datamanager'] : options?.pinterestPinManagement ? ['ads:read', 'ads:write', 'boards:read', 'boards:write', 'pins:read', 'pins:write', 'user_accounts:read'] : [], authorizationUrl: () => 'https://provider.test/authorize', exchange: mocks.exchange }));
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); resetEnvForTests(); });
 
 describe('shared popup OAuth routes', () => {
+  it('binds Pinterest Pin permissions to the one-use transaction and ignores forged callback options', async () => {
+    const context = { params: Promise.resolve({ provider: 'pinterest' }) };
+    await start(new Request('https://app.adport.test/api/oauth/pinterest/start?pin_management=1'), context);
+    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ provider: 'pinterest', pinterestPinManagement: true }));
+    mocks.consume.mockResolvedValue({ organizationId: 'org', verifier: 'secret', returnPath: '/dashboard/connections', pinterestPinManagement: true });
+    await callback(new Request('https://app.adport.test/api/oauth/pinterest/callback?code=code&state=verified'), context);
+    expect(mocks.upsert).toHaveBeenCalledWith(expect.objectContaining({ scopes: ['ads:read', 'ads:write', 'boards:read', 'boards:write', 'pins:read', 'pins:write', 'user_accounts:read'] }));
+    mocks.upsert.mockClear(); mocks.consume.mockResolvedValue({ organizationId: 'org', verifier: 'secret', returnPath: '/dashboard/connections' });
+    await callback(new Request('https://app.adport.test/api/oauth/pinterest/callback?code=code&state=verified&pin_management=1'), context);
+    expect(mocks.upsert).toHaveBeenCalledWith(expect.objectContaining({ scopes: [] }));
+    mocks.upsert.mockClear(); mocks.exchange.mockRejectedValue(new Error('Scope not granted'));
+    await callback(new Request('https://app.adport.test/api/oauth/pinterest/callback?code=code&state=verified'), context);
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+  it.each(['pinterest/start?pin_management=0', 'pinterest/start?pin_management=1&pin_management=1', 'meta/start?pin_management=1'])('rejects ambiguous or non-Pinterest Pin opt-in: %s', async suffix => {
+    const response = await start(new Request(`https://app.adport.test/api/oauth/${suffix}`), { params: Promise.resolve({ provider: suffix.startsWith('meta') ? 'meta' : 'pinterest' }) });
+    expect(response.status).toBe(400); expect(mocks.create).not.toHaveBeenCalled();
+  });
   it('binds the Google Data Manager opt-in to the server-side transaction and uses it on callback', async () => {
     const context = { params: Promise.resolve({ provider: 'google' }) };
     await start(new Request('https://app.adport.test/api/oauth/google/start?data_manager=1'), context);

@@ -2,7 +2,7 @@ import type { CredentialStore, ProviderModule } from '@adport/core';
 import { PinterestAdsClient, type PinterestCredentials } from './client.js';
 import { PinterestAdsProvider } from './provider.js';
 import { pinterestTools } from './tools.js';
-export { PinterestAdsClient, PINTEREST_API_BASE, PINTEREST_TOKEN_URL, buildPinterestAuthUrl, exchangePinterestCode, type PinterestCredentials } from './client.js';
+export { PinterestAdsClient, PINTEREST_API_BASE, PINTEREST_TOKEN_URL, PINTEREST_ADS_SCOPES, PINTEREST_PIN_SCOPES, buildPinterestAuthUrl, exchangePinterestCode, type PinterestCredentials } from './client.js';
 export { PinterestAdsProvider } from './provider.js';
 export { pinterestTools } from './tools.js';
 export { accountSchema, campaignSchema } from './schemas.js';

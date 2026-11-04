@@ -18,6 +18,8 @@ import {
   setOrganizationAdAccountEnabled,
   syncDiscoveredAccounts,
   upsertProviderConnection,
+  createOAuthTransaction,
+  consumeOAuthTransaction,
 } from '@/lib/cloud/repository';
 import { createTenantRuntime } from '@/lib/cloud/runtime';
 import { processStripeEvent, stripeClient } from '@/lib/cloud/billing';
@@ -87,6 +89,17 @@ describeDatabase('Supabase tenant boundary', () => {
     const other = await firstUserClient.from('organizations').select('id').eq('id', secondOrgId);
     expect(other.error).toBeNull();
     expect(other.data).toEqual([]);
+  });
+
+  it('keeps the Pin scope opt-in in a tenant/user-bound encrypted one-use OAuth transaction', async () => {
+    const state = randomUUID();
+    await createOAuthTransaction({ organizationId: firstOrgId, userId: firstUserId, provider: 'pinterest', state, verifier: 'local-test-verifier', pinterestPinManagement: true });
+    await expect(consumeOAuthTransaction('pinterest', state, secondUserId)).rejects.toThrow('invalid');
+    expect(await consumeOAuthTransaction('pinterest', state, firstUserId)).toMatchObject({ organizationId: firstOrgId, verifier: 'local-test-verifier', pinterestPinManagement: true });
+    await expect(consumeOAuthTransaction('pinterest', state, firstUserId)).rejects.toThrow('already used');
+    const foreignState = randomUUID();
+    await createOAuthTransaction({ organizationId: firstOrgId, userId: firstUserId, provider: 'google', state: foreignState, verifier: 'local-test-verifier', pinterestPinManagement: true });
+    expect(await consumeOAuthTransaction('google', foreignState, firstUserId)).not.toHaveProperty('pinterestPinManagement');
   });
 
   it('persists first-run progress and tenant-scoped support messages', async () => {

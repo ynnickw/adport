@@ -17,6 +17,16 @@ function render(options: { canManage?: boolean; available?: boolean; connections
 }
 
 describe('compact provider connection list', () => {
+  it('offers Pin management separately and preserves an enabled opt-in on reconnection', () => {
+    const pinterest = { ...connection, provider: 'pinterest', status: 'error' as const };
+    const basic = render({ connections: [pinterest] });
+    expect(basic).toContain('Authorize Pinterest board, Pin and media management with additional permissions');
+    expect(basic).toContain('/api/oauth/pinterest/start?organization_id=org&amp;pin_management=1');
+    const enabled = render({ connections: [{ ...pinterest, pinManagementEnabled: true }] });
+    expect(enabled).not.toContain('Enable Pin management');
+    expect(enabled).toContain('/api/oauth/pinterest/start?organization_id=org&amp;pin_management=1');
+    expect(render({ connections: [pinterest], canManage: false })).not.toContain('Enable Pin management');
+  });
   it('offers conversion permission separately and retains it on later Google reconnection', () => {
     const basic = render();
     expect(basic).toContain('Authorize Google conversion imports with additional Data Manager permission');

@@ -30,10 +30,12 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
     if (!isOAuthProvider(provider)) return failure(new Error('Unknown OAuth provider.'), 404);
     const dataManager = url.searchParams.get('data_manager') === '1';
     if (url.searchParams.has('data_manager') && (provider !== 'google' || url.searchParams.getAll('data_manager').length !== 1 || !dataManager)) return failure(new Error('Invalid Google Data Manager authorization option.'), 400);
+    const pinManagement = url.searchParams.get('pin_management') === '1';
+    if (url.searchParams.has('pin_management') && (provider !== 'pinterest' || url.searchParams.getAll('pin_management').length !== 1 || !pinManagement)) return failure(new Error('Invalid Pinterest Pin management authorization option.'), 400);
     const principal = await sessionPrincipal(url.searchParams.get('organization_id') ?? undefined);
     if (!['owner', 'admin'].includes(principal.role ?? '')) throw new Error('Owner or admin access is required.');
     if (!providerAllowedForOrganization(provider, principal.organizationId)) return failure(new Error('This provider is not enabled for this organization.'), 403);
-    const adapter = oauthAdapter(provider, { googleDataManager: dataManager });
+    const adapter = oauthAdapter(provider, { googleDataManager: dataManager, pinterestPinManagement: pinManagement });
     if (!adapter.configured()) return failure(new Error(`The hosted ${provider} application is not available yet.`), 503);
     const prepared = await adapter.prepare?.();
     const state = prepared?.state ?? randomBytes(32).toString('base64url');
@@ -48,6 +50,7 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
       state,
       verifier: prepared?.verifier ?? pkce.verifier,
       ...(dataManager ? { googleDataManager: true } : {}),
+      ...(pinManagement ? { pinterestPinManagement: true } : {}),
       returnPath: validPopupId(popupId) ? popupReturnPath(popupId, returnPath) : returnPath,
     });
     captureProductEvent(principal, { event: 'provider_connection_started', provider });

@@ -3,6 +3,8 @@ import { z } from 'zod';
 
 export const PINTEREST_API_BASE = 'https://api.pinterest.com/v5/';
 export const PINTEREST_TOKEN_URL = `${PINTEREST_API_BASE}oauth/token`;
+export const PINTEREST_ADS_SCOPES = ['ads:read', 'ads:write'] as const;
+export const PINTEREST_PIN_SCOPES = [...PINTEREST_ADS_SCOPES, 'boards:read', 'boards:write', 'pins:read', 'pins:write', 'user_accounts:read'] as const;
 export interface PinterestCredentials {
   clientId: string;
   clientSecret: string;
@@ -12,11 +14,12 @@ export interface PinterestCredentials {
 const tokenSchema = z.object({
   access_token: z.string().min(1), expires_in: z.number().positive(),
   refresh_token: z.string().min(1).optional(),
+  scope: z.string().optional(),
 });
 
-export function buildPinterestAuthUrl(clientId: string, redirectUri: string, state: string): string {
+export function buildPinterestAuthUrl(clientId: string, redirectUri: string, state: string, options: { pinManagement?: boolean } = {}): string {
   return `https://www.pinterest.com/oauth/?${new URLSearchParams({
-    client_id: clientId, response_type: 'code', redirect_uri: redirectUri, state, scope: 'ads:read,ads:write',
+    client_id: clientId, response_type: 'code', redirect_uri: redirectUri, state, scope: (options.pinManagement ? PINTEREST_PIN_SCOPES : PINTEREST_ADS_SCOPES).join(','),
   })}`;
 }
 
@@ -33,11 +36,15 @@ async function tokenRequest(credentials: Pick<PinterestCredentials, 'clientId' |
   return parsed.data;
 }
 
-export async function exchangePinterestCode(input: { clientId: string; clientSecret: string; code: string; redirectUri: string }, fetchImpl: typeof fetch = fetch): Promise<string> {
+export async function exchangePinterestCode(input: { clientId: string; clientSecret: string; code: string; redirectUri: string; pinManagement?: boolean }, fetchImpl: typeof fetch = fetch): Promise<string> {
   const token = await tokenRequest(input, new URLSearchParams({
     grant_type: 'authorization_code', code: input.code, redirect_uri: input.redirectUri, continuous_refresh: 'true',
   }), fetchImpl);
   if (!token.refresh_token) throw new AdportError('PROVIDER_ERROR', 'pinterest: OAuth exchange did not return a refresh token');
+  if (input.pinManagement) {
+    const granted = new Set(token.scope?.split(/[\s,]+/).filter(Boolean));
+    if (PINTEREST_PIN_SCOPES.some(scope => !granted.has(scope))) throw new AdportError('PROVIDER_ERROR', 'pinterest: Ads and Pin management permissions were not all confirmed. The previous connection was preserved.');
+  }
   return token.refresh_token;
 }
 

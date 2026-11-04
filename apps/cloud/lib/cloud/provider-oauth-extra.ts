@@ -1,7 +1,7 @@
 import 'server-only';
 import { buildSnapchatAuthUrl, exchangeSnapchatCode, SNAPCHAT_SCOPE } from '@adport/provider-snapchat';
 import { buildSpotifyAuthUrl, exchangeSpotifyCode } from '@adport/provider-spotify';
-import { buildPinterestAuthUrl, exchangePinterestCode } from '@adport/provider-pinterest';
+import { buildPinterestAuthUrl, exchangePinterestCode, PINTEREST_PIN_SCOPES } from '@adport/provider-pinterest';
 import { buildLinkedInAuthUrl, exchangeLinkedInCode } from '@adport/provider-linkedin';
 import { env } from '@/lib/env';
 import type { OAuthAdapter } from './provider-oauth';
@@ -62,3 +62,13 @@ export const extraOAuthAdapters = {
     async revoke() { return false; },
   },
 } satisfies { [P in Provider]: OAuthAdapter<P> };
+
+export function pinterestPinManagementAdapter(): OAuthAdapter<'pinterest'> {
+  return {
+    ...extraOAuthAdapters.pinterest,
+    flowLabel: 'Pinterest Ads OAuth 2.0 with additional Pin management permission',
+    scopes: [...PINTEREST_PIN_SCOPES],
+    authorizationUrl({ state }) { const app = appForConsent('pinterest'); return buildPinterestAuthUrl(app.clientId, app.redirectUri, state, { pinManagement: true }); },
+    async exchange({ code }) { return { refreshToken: await exchangePinterestCode({ ...appForConsent('pinterest'), code, pinManagement: true }) }; },
+  };
+}

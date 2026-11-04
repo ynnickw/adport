@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createContext, CredentialStore, DEFAULT_POLICY, PolicyEngine, PendingStore, AuditLog, type NormalizedQuery, type WriteOperation } from '@adport/core';
-import { PinterestAdsClient, PINTEREST_TOKEN_URL, buildPinterestAuthUrl, exchangePinterestCode } from '../src/client.js';
+import { PinterestAdsClient, PINTEREST_TOKEN_URL, PINTEREST_PIN_SCOPES, buildPinterestAuthUrl, exchangePinterestCode } from '../src/client.js';
 import { PinterestAdsProvider } from '../src/provider.js';
 import { accountSchema } from '../src/schemas.js';
 import { pinterestTools } from '../src/tools.js';
@@ -50,6 +50,14 @@ describe('Pinterest OAuth and transport', () => {
     expect(calls[0]!.init.headers).toEqual({ authorization: `Basic ${Buffer.from('client:secret').toString('base64')}`, 'content-type': 'application/x-www-form-urlencoded' });
     expect(Object.fromEntries(new URLSearchParams(String(calls[0]!.init.body)))).toEqual({ grant_type: 'authorization_code', code: 'code+&', redirect_uri: 'http://localhost:53686/callback', continuous_refresh: 'true' });
     expect(calls[0]!.init.redirect).toBe('error');
+  });
+  it('requests Pin management only on explicit opt-in and requires the actual granted scope set', async () => {
+    const url = new URL(buildPinterestAuthUrl('client', 'http://localhost:53686/callback', 'csrf', { pinManagement: true }));
+    expect(url.searchParams.get('scope')?.split(',')).toEqual([...PINTEREST_PIN_SCOPES]);
+    const denied = fixture(() => ({}));
+    await expect(exchangePinterestCode({ ...creds, code: 'code', redirectUri: 'http://localhost:53686/callback', pinManagement: true }, denied.fetchImpl)).rejects.toThrow('previous connection was preserved');
+    const granted = fixture(() => ({}), { ...token, scope: PINTEREST_PIN_SCOPES.join(' ') });
+    expect(await exchangePinterestCode({ ...creds, code: 'code', redirectUri: 'http://localhost:53686/callback', pinManagement: true }, granted.fetchImpl)).toBe('refresh');
   });
   it('requires a refresh token on exchange', async () => {
     const { fetchImpl } = fixture(() => ({}), { access_token: 'access', expires_in: 3600 });
