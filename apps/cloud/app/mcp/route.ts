@@ -9,7 +9,7 @@ import { mcpUiDomain } from '@/lib/mcp-ui-domain';
 import { adWritePlanLimit } from '@/lib/cloud/write-plan-limit';
 import { env } from '@/lib/env';
 import { routeMcpProjects } from '@/lib/cloud/mcp-projects';
-import { diagnoseMcpRejection } from '@/lib/mcp-transport-diagnostics';
+import { diagnoseMcpRejection, recordMcpUiResponse } from '@/lib/mcp-transport-diagnostics';
 import { inspectMcpRequest, type McpDiscoveryMethod } from '@/lib/mcp-ui-request';
 
 async function handle(request: Request): Promise<Response> {
@@ -83,6 +83,7 @@ async function handle(request: Request): Promise<Response> {
       response = await handler.fetch(request, requestOptions);
     }
     await diagnoseMcpRejection(request, response, 'transport', discoveryMethod);
+    if (uiOnly) recordMcpUiResponse(discoveryMethod, response.status);
     return response;
   } catch (error) {
     const status = error instanceof HttpError ? error.status : 401;

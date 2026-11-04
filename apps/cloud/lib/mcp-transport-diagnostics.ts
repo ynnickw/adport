@@ -3,6 +3,12 @@ import { isMcpDiscoveryMethod, type McpDiscoveryMethod } from './mcp-ui-request'
 
 type RejectionPhase = 'transport' | 'request_setup';
 
+/** Static UI delivery diagnostics only; HTTP status does not imply RPC success. */
+export function recordMcpUiResponse(method: McpDiscoveryMethod | undefined, status: number): void {
+  if (!method || !['resources/read', 'resources/list', 'resources/templates/list'].includes(method)) return;
+  console.info(JSON.stringify({ event: 'mcp_ui_resource_response', rpcMethod: method, status }));
+}
+
 async function responseEnvelope(response: Response): Promise<unknown> {
   const reader = response.clone().body?.getReader();
   if (!reader) return undefined;
