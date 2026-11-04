@@ -28,7 +28,7 @@ import {
 
 export const PROVIDER_IDS = ['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const;
 export { ADPORT_UI_RESOURCE_DOMAINS };
-export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v7.html', 'ui://adport/insight-card-v6.html', 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html'];
+export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v8.html', 'ui://adport/insight-card-v7.html', 'ui://adport/insight-card-v6.html', 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html'];
 
 const DEFAULT_MCP_ICONS = [{
   src: 'https://app.adport.dev/icon.svg?brand=orange-dot-v2',
@@ -151,6 +151,7 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
       ...(objectOutput ? { outputSchema: objectOutput.extend({
         ...(view ? { _adport: z.object({
           tool: z.literal(tool.name), view: z.literal(view), providerNames: z.record(z.string(), z.string()),
+          provider: z.string().optional(), accountId: z.string().optional(),
           approval: z.object({ arguments: z.record(z.string(), z.unknown()) }).optional(),
           context: z.object({ project_id: z.string() }).optional(),
           capabilities: z.object({ can_write: z.boolean() }).optional(),
@@ -168,6 +169,10 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
       ...(tool.fileInputs?.length ? { _meta: { 'openai/fileParams': [...tool.fileInputs] } } : {}),
     };
     const callback = async (args: Record<string, unknown>) => {
+      const descriptor = {
+        ...(PROVIDER_IDS.includes(tool.namespace as typeof PROVIDER_IDS[number]) ? { provider: tool.namespace } : {}),
+        ...(typeof args.account_id === 'string' ? { accountId: args.account_id } : {}),
+      };
       if (scopeDenial) {
         const payload = provenance({
           error: scopeDenial.code,
@@ -184,6 +189,7 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
           // Errors use JSON text (also consumed by the widget), never a fake
           // success object to satisfy the advertised output schema.
           isError: true,
+          _meta: { adport: { tool: tool.name, view, ...descriptor } },
         };
       }
       try {
@@ -201,7 +207,7 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
         const nextArgs = view === 'creatives' ? nextPageArguments(tool, args, rawObject) : undefined;
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-          ...(view ? { structuredContent: structuredResult(tool.name, view, structured, approval, typeof args.project_id === 'string' ? { project_id: args.project_id } : undefined, { can_write: !scopes || scopes.includes('tools:write') }, view === 'creatives' && tool.annotations.readOnly ? { arguments: Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'pending_operation_id')) } : undefined, nextArgs ? { arguments: nextArgs } : undefined) }
+          ...(view ? { structuredContent: structuredResult(tool.name, view, structured, approval, typeof args.project_id === 'string' ? { project_id: args.project_id } : undefined, { can_write: !scopes || scopes.includes('tools:write') }, view === 'creatives' && tool.annotations.readOnly ? { arguments: Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'pending_operation_id')) } : undefined, nextArgs ? { arguments: nextArgs } : undefined, descriptor) }
             : tool.output ? { structuredContent: structured as Record<string, unknown> } : {}),
         };
       } catch (err) {
@@ -220,6 +226,7 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(payload, null, 2) }],
           isError: true,
+          _meta: { adport: { tool: tool.name, view, ...descriptor } },
         };
       }
     };

@@ -147,14 +147,14 @@ describe('Meta E2E over MCP with doc-faithful Graph mocks', () => {
     const result = await client.callTool({ name: 'meta_api_read', arguments: { account_id: '426197654150180', edge: 'campaigns', paged } });
     expect(result.isError).not.toBe(true);
     expect(textOf(result as never)).toEqual(raw);
-    expect(result.structuredContent).toEqual({ value: raw });
+    expect(result.structuredContent).toMatchObject({ value: raw, _adport: { view: 'data', provider: 'meta' } });
   });
 
   it('validates Page outputs and excludes Page access tokens', async () => {
     await client.listTools();
     const pages = await client.callTool({ name: 'meta_list_pages', arguments: {} });
     expect(pages.isError).not.toBe(true);
-    expect(pages.structuredContent).toEqual({ pages: [{ id: '123', name: 'Test Page', tasks: ['ANALYZE'] }], page_count: 1 });
+    expect(pages.structuredContent).toMatchObject({ pages: [{ id: '123', name: 'Test Page', tasks: ['ANALYZE'] }], page_count: 1 });
     expect(JSON.stringify(pages)).not.toContain('must-not-return');
     const engagement = await client.callTool({ name: 'meta_page_engagement', arguments: { page_id: '123' } });
     expect(engagement.isError).not.toBe(true);
@@ -170,8 +170,8 @@ describe('Meta E2E over MCP with doc-faithful Graph mocks', () => {
     readResponse = { data: rows };
     const result = await client.callTool({ name: 'meta_insights', arguments: { account_id: '426197654150180' } });
     expect(result.isError).not.toBe(true);
-    expect(result.structuredContent).toEqual({ rows, row_count: rows.length });
-    expect(textOf(result as never)).toEqual(result.structuredContent);
+    expect(result.structuredContent).toMatchObject({ rows, row_count: rows.length, _adport: { view: 'data' } });
+    expect(textOf(result as never)).toEqual({ rows, row_count: rows.length });
   });
 
   it('lists Meta ad accounts through the MCP tool', async () => {

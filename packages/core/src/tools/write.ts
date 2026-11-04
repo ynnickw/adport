@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { AdProvider, WriteKind, WriteOperation } from '../provider.js';
 import { defineTool, type AnyToolDefinition, type ToolContext } from './registry.js';
 import { writeOutput } from './outputs.js';
+import { reviewWrite } from './review.js';
 import { MEDIA_UPLOAD_TOOLS } from './media-distribution.js';
 
 const TWO_STEP_NOTE =
@@ -69,13 +70,13 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
           applied: false,
           pending_operation_id: outcome.pendingOperationId,
           expires_at: outcome.expiresAt,
-          preview: outcome.preview,
+          preview: { ...outcome.preview, review: reviewWrite(op, outcome.preview) },
           next_step:
             'Review the preview. To apply, call this tool again with the same arguments plus pending_operation_id.',
         };
       }
       const outcome = await ctx.engine.apply(provider, op, pending_operation_id);
-      return { status: 'applied', applied: true, result: outcome.result, preview: outcome.preview };
+      return { status: 'applied', applied: true, result: outcome.result, preview: { ...outcome.preview, review: reviewWrite(op, outcome.preview) } };
     },
   });
 }

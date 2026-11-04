@@ -1,10 +1,12 @@
 import { MEDIA_UPLOAD_UI } from './media-upload-ui.js';
+import { PROVIDER_LOGOS } from './provider-logos.js';
+import { OPERATION_UI_SCRIPT } from './operation-ui.js';
 
-export const ADPORT_UI_URI = 'ui://adport/insight-card-v8.html';
+export const ADPORT_UI_URI = 'ui://adport/insight-card-v9.html';
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
 export const ADPORT_UI_RESOURCE_DOMAINS = ['https://*.fbcdn.net', 'https://*.fbsbx.com', 'https://*.googleusercontent.com', 'https://tpc.googlesyndication.com', 'https://www.bing.com', 'https://*.scdn.co', 'https://*.spotifycdn.com', 'https://storage.googleapis.com', 'https://*.pinimg.com', 'https://*.redd.it', 'https://*.redditmedia.com', 'https://*.redditstatic.com', 'https://*.licdn.com', 'https://*.licdn-ei.com', 'https://pbs.twimg.com', 'https://video.twimg.com', 'https://ton.twimg.com'];
 
-export type AdportView = 'accounts' | 'report' | 'operation' | 'insights' | 'creatives' | 'planning';
+export type AdportView = 'accounts' | 'report' | 'operation' | 'insights' | 'creatives' | 'planning' | 'data';
 
 const providerNames: Record<string, string> = {
   google: 'Google Ads',
@@ -22,13 +24,13 @@ const providerNames: Record<string, string> = {
   demo: 'Synthetic demo',
 };
 
-export function viewForTool(name: string, readOnly: boolean): AdportView | undefined {
+export function viewForTool(name: string, readOnly: boolean): AdportView {
   if (name === 'accounts_list') return 'accounts';
   if (name === 'report') return 'report';
   if (name === 'audit_run' || name === 'recommendation_dismiss') return 'insights';
   if (!readOnly) return 'operation';
   if (name.startsWith('recommendation') || name.startsWith('audit_')) return 'insights';
-  return undefined;
+  return 'data';
 }
 
 export function toolTitle(name: string): string {
@@ -49,10 +51,11 @@ export function toolInvocationLabels(view: AdportView): { invoking: string; invo
     case 'insights': return { invoking: 'Reviewing opportunities…', invoked: 'Opportunities ready' };
     case 'creatives': return { invoking: 'Loading creatives…', invoked: 'Creatives ready' };
     case 'planning': return { invoking: 'Loading planning estimates…', invoked: 'Planning estimates ready' };
+    case 'data': return { invoking: 'Loading data…', invoked: 'Data ready' };
   }
 }
 
-export function structuredResult(tool: string, view: AdportView, result: unknown, approval?: { arguments: Record<string, unknown> }, context?: { project_id: string }, capabilities?: { can_write: boolean }, refresh?: { arguments: Record<string, unknown> }, next?: { arguments: Record<string, unknown> }): Record<string, unknown> {
+export function structuredResult(tool: string, view: AdportView, result: unknown, approval?: { arguments: Record<string, unknown> }, context?: { project_id: string }, capabilities?: { can_write: boolean }, refresh?: { arguments: Record<string, unknown> }, next?: { arguments: Record<string, unknown> }, descriptor?: { provider?: string; accountId?: string }): Record<string, unknown> {
   const payload = result && typeof result === 'object' && !Array.isArray(result)
     ? result as Record<string, unknown>
     : { value: result };
@@ -62,6 +65,7 @@ export function structuredResult(tool: string, view: AdportView, result: unknown
       tool,
       view,
       providerNames,
+      ...descriptor,
       ...(approval ? { approval } : {}),
       ...(context ? { context } : {}),
       ...(capabilities ? { capabilities } : {}),
@@ -91,7 +95,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       --paper: var(--color-background-primary, #ffffff);
       --soft: var(--color-background-secondary, #f6f6f4);
       --line: var(--color-border-secondary, rgba(23,23,23,.11));
-      --orange: #ff5a1f;
+      --orange: #ff6b00;
       --green: #16845b;
       --red: #c8392f;
       --amber: #a86500;
@@ -176,10 +180,12 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     .planning-pages button:disabled { cursor:default; opacity:.45 }
     .adjustment { margin:8px 0; color:var(--amber); font-size:11px; line-height:1.4 }
     .approval { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:12px 0 }
-    .approve { cursor:pointer; padding:9px 16px; border:0; border-radius:99px; background:var(--ink); color:var(--paper); font-size:12px; font-weight:700 }
+    .approve { cursor:pointer; min-width:145px; padding:11px 19px 10px; border:0; border-radius:999px; background:var(--orange); color:#1d1d1f; font-size:13px; font-weight:750 }
     .approve:disabled { cursor:default; opacity:.55 }
     .approve { position:relative; overflow:hidden; touch-action:none; user-select:none }
-    .approve::before { content:''; position:absolute; inset:0; background:#ff650055; transform:scaleX(0); transform-origin:left }
+    .approve::before { content:''; position:absolute; inset:0; background:#1d1d1f26; transform:scaleX(0); transform-origin:left }
+    .approve > span { position:relative }
+    @media (hover:hover) { .approve:not(:disabled):hover { background:#f26100 } }
     .approve.holding::before { transform:scaleX(1); transition:transform .9s linear }
     .approve:focus-visible { outline:2px solid var(--orange); outline-offset:3px }
     @media (prefers-reduced-motion:reduce) { .approve.holding::before { transition:none } }
@@ -188,6 +194,34 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     summary:focus-visible { outline:2px solid var(--orange); outline-offset:3px }
     details p { margin:8px 0; overflow-wrap:anywhere }
     .empty { padding:26px 12px; text-align:center; color:var(--muted); font-size:12px }
+    .operation-heading { display:flex; align-items:center; gap:11px; margin:8px 0 22px; min-width:0 }
+    .operation-heading h2 { margin:0; font-size:15px; line-height:1.4; font-weight:650; letter-spacing:-.015em }
+    .operation-heading p { margin:3px 0 0; color:var(--muted); font-size:12px; overflow-wrap:anywhere }
+    .review-fields { margin:0; display:grid; gap:12px }
+    .review-field { display:grid; grid-template-columns:minmax(90px,.8fr) minmax(0,2fr); gap:12px; align-items:baseline }
+    .review-field dt { font-size:12px; color:var(--muted); overflow-wrap:anywhere }
+    .review-field dd { display:flex; flex-wrap:wrap; align-items:baseline; gap:5px 9px; margin:0; min-width:0; font-size:14px; overflow-wrap:anywhere }
+    .review-before,.review-arrow,.unavailable { color:var(--muted) }
+    .review-after { font-weight:500; min-width:0 }
+    .review-copy { font-size:16px!important; line-height:1.6 }
+    .review-money { font-size:20px!important; font-variant-numeric:tabular-nums }
+    .review-list { margin:0; padding-left:17px; display:grid; gap:5px }
+    .review-added,.review-removed { padding:3px 7px; border-radius:5px; font-size:13px }
+    .review-added { color:var(--green); background:color-mix(in srgb,var(--green) 10%,var(--paper)) }
+    .review-removed { color:var(--red); background:color-mix(in srgb,var(--red) 10%,var(--paper)) }
+    .operation-note { margin:10px 0; color:var(--muted); font-size:12px; line-height:1.5; overflow-wrap:anywhere }
+    .operation-footer { position:relative; border-top:1px solid var(--line); margin-top:21px; padding-top:14px; min-height:55px }
+    .operation-footer > details { border:0; padding:0 }
+    .operation-footer summary { display:flex; align-items:center; min-height:40px; max-width:calc(100% - 160px); padding:0 }
+    .operation-footer summary::after { content:'⌄'; margin-left:5px }
+    .operation-action { position:absolute; top:14px; right:0 }
+    .operation-status { display:block; padding:11px 0; font-size:13px }
+    .operation-details { padding-top:12px }
+    .operation-details .review-fields { margin:14px 0 }
+    pre { font:11px/1.5 var(--mono); white-space:pre-wrap; overflow-wrap:anywhere; margin:12px 0 0 }
+    .data-record { padding:12px 0; border-top:1px solid var(--line) }
+    @media (max-width:420px) { .review-field { grid-template-columns:1fr; gap:5px } }
+    @media (pointer:coarse) { .approve,.operation-footer summary { min-height:44px } }
     @media (max-width:620px) { .kpis { grid-template-columns:repeat(2,minmax(0,1fr)) }.top,.content { padding-left:12px; padding-right:12px } }
     @media (max-width:420px) { .bar-row { grid-template-columns:minmax(0,1fr) auto; gap:5px }.bar-name { grid-column:1/-1 }.bar-name > span:last-child { white-space:normal }.bars { gap:12px } }
     .creative-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr)); gap:16px }
@@ -238,16 +272,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     const notices = (data) => [...arr(data.errors).map(e => (e.provider || 'Provider')+': '+(e.message || 'Read failed')), ...arr(data.warnings).map(e => e.message || 'Some metadata is unavailable'), ...(data.truncated ? ['Partial result: row limit reached. Totals and charts cover returned rows only.'] : [])].map(text => '<p class="notice">'+esc(text)+'</p>').join('');
     const providerName = (id, names) => names?.[id] || String(id || 'Provider');
     const initials = (id) => ({snapchat:'S',spotify:'S',pinterest:'P',linkedin:'in',x:'X'}[id] || String(id || '?').slice(0,2).toUpperCase());
-    const providerSvg = {
-      // Unmodified official Ghost paths, matching cloud/components/snapchat-logo.tsx.
-      snapchat:"<svg viewBox=\"0 0 1024 1024\" aria-hidden=\"true\"> <path fill=\"#fff\" d=\"M992.5,756.3c-4.2-13.9-24.3-23.7-24.3-23.7l0,0c-1.9-1-3.6-1.9-5-2.6c-33.5-16.2-63.2-35.7-88.2-57.8 c-20.1-17.8-37.3-37.4-51.1-58.2c-16.9-25.4-24.8-46.6-28.2-58.1c-1.9-7.5-1.6-10.5,0-14.4c1.3-3.3,5.2-6.4,7-7.9 c11.3-8,29.5-19.8,40.7-27c9.7-6.3,18-11.7,22.9-15.1c15.7-11,26.5-22.2,32.8-34.3c8.2-15.6,9.2-32.8,2.8-49.7 c-8.6-22.8-29.9-36.4-57-36.4c-6,0-12.2,0.7-18.4,2c-15.5,3.4-30.2,8.9-42.5,13.7c-0.9,0.4-1.9-0.3-1.8-1.3 c1.3-30.5,2.8-71.5-0.6-110.4c-3-35.2-10.3-64.9-22.1-90.8c-11.9-26-27.4-45.2-39.5-59.1C708.5,112,688.2,92.5,657.6,75 C614.6,50.4,565.6,37.9,512,37.9c-53.5,0-102.4,12.5-145.5,37.1c-32.4,18.5-53.1,39.4-62.5,50.2c-12.1,13.9-27.6,33.1-39.5,59.1 c-11.9,25.9-19.1,55.5-22.1,90.8c-3.4,39.1-2,76.8-0.6,110.4c0,1-0.9,1.7-1.9,1.3c-12.3-4.8-27-10.3-42.5-13.7 c-6.1-1.3-12.3-2-18.4-2c-27,0-48.3,13.6-57,36.4c-6.4,16.9-5.4,34.1,2.8,49.7c6.4,12.1,17.1,23.3,32.8,34.3 c4.8,3.4,13.2,8.8,22.9,15.1c10.9,7.1,28.6,18.6,40,26.5c1.4,1,6.2,4.6,7.7,8.4c1.6,4,1.9,7-0.2,15c-3.5,11.6-11.4,32.6-28,57.5 c-13.8,20.9-31,40.4-51.1,58.2c-25,22.1-54.7,41.6-88.2,57.8c-1.6,0.8-3.5,1.7-5.5,2.9l0,0c0,0-20,10.2-23.8,23.4 c-5.6,19.5,9.3,37.8,24.4,47.6c24.8,16,55,24.6,72.5,29.3c4.9,1.3,9.3,2.5,13.3,3.7c2.5,0.8,8.8,3.2,11.5,6.7 c3.4,4.4,3.8,9.8,5,15.9v0c1.9,10.3,6.2,23,18.9,31.8c14,9.6,31.7,10.3,54.2,11.2c23.5,0.9,52.7,2,86.2,13.1 c15.5,5.1,29.6,13.8,45.8,23.8c34,20.9,76.3,46.9,148.5,46.9c72.3,0,114.9-26.1,149.1-47.1c16.2-9.9,30.1-18.5,45.3-23.5 c33.5-11.1,62.7-12.2,86.2-13.1c22.5-0.9,40.2-1.5,54.2-11.2c13.6-9.4,17.5-23.4,19.3-33.9c1-5.2,1.6-9.9,4.6-13.7 c2.6-3.3,8.4-5.6,11.1-6.5c4.1-1.3,8.7-2.5,13.8-3.9c17.5-4.7,39.5-10.2,66.2-25.3C993.7,789.8,995.9,767.4,992.5,756.3z\" /> <path fill=\"#000\" d=\"M1020.3,745.5c-7.1-19.4-20.7-29.7-36.1-38.3c-2.9-1.7-5.6-3.1-7.8-4.1c-4.6-2.4-9.3-4.7-14-7.1 c-48.1-25.5-85.7-57.7-111.7-95.8c-8.8-12.9-14.9-24.5-19.2-34c-2.2-6.4-2.1-10-0.5-13.3c1.2-2.5,4.4-5.1,6.2-6.4 c8.3-5.5,16.8-11,22.6-14.7c10.3-6.7,18.5-12,23.7-15.6c19.8-13.8,33.6-28.5,42.2-44.9c12.2-23.1,13.7-49.5,4.3-74.3 c-13-34.4-45.6-55.8-85-55.8c-8.2,0-16.5,0.9-24.7,2.7c-2.2,0.5-4.3,1-6.4,1.5c0.4-23.4-0.2-48.4-2.3-72.8 c-7.4-86-37.5-131.1-68.9-167c-13.1-15-35.9-36.9-70.1-56.5C624.9,21.7,570.9,7.9,512,7.9c-58.7,0-112.7,13.8-160.4,41.1 c-34.4,19.6-57.2,41.6-70.2,56.5c-31.4,35.9-61.5,81-68.9,167c-2.1,24.4-2.6,49.4-2.3,72.8c-2.1-0.5-4.3-1-6.4-1.5 c-8.2-1.8-16.6-2.7-24.7-2.7c-39.4,0-72,21.4-85,55.8c-9.4,24.8-7.9,51.2,4.3,74.3c8.6,16.4,22.5,31.1,42.2,44.9 c5.3,3.7,13.4,9,23.7,15.6c5.6,3.6,13.7,8.9,21.7,14.2c1.2,0.8,5.5,4,7,7c1.7,3.4,1.7,7.1-0.8,13.9c-4.2,9.3-10.3,20.7-18.9,33.3 c-25.5,37.3-62,68.9-108.5,94.1c-24.7,13.1-50.3,21.8-61.1,51.2c-8.2,22.2-2.8,47.5,17.9,68.8l0,0c6.8,7.3,15.4,13.8,26.2,19.8 c25.4,14,47,20.9,64,25.6c3,0.9,9.9,3.1,12.9,5.8c7.6,6.6,6.5,16.6,16.6,31.2c6.1,9.1,13.1,15.3,18.9,19.3 c21.1,14.6,44.9,15.5,70.1,16.5c22.7,0.9,48.5,1.9,77.9,11.6c12.2,4,24.9,11.8,39.5,20.8c35.2,21.7,83.5,51.3,164.2,51.3 c80.8,0,129.3-29.8,164.8-51.5c14.6-8.9,27.2-16.7,39-20.6c29.4-9.7,55.2-10.7,77.9-11.6c25.2-1,48.9-1.9,70.1-16.5 c6.6-4.6,15-12.1,21.6-23.5c7.2-12.3,7.1-21,13.9-26.9c2.8-2.4,8.9-4.5,12.2-5.5c17.1-4.7,39-11.6,64.9-25.9 c11.5-6.3,20.4-13.2,27.5-21.1c0.1-0.1,0.2-0.2,0.3-0.3C1023.4,791.7,1028.3,767.2,1020.3,745.5z M948.6,784 c-43.8,24.2-72.9,21.6-95.5,36.1c-19.2,12.4-7.9,39.1-21.8,48.7c-17.2,11.9-67.9-0.8-133.4,20.8c-54,17.9-88.5,69.2-185.8,69.2 c-97.5,0-131-51.1-185.8-69.2c-65.5-21.6-116.3-8.9-133.4-20.8c-13.9-9.6-2.6-36.3-21.8-48.7c-22.6-14.6-51.7-12-95.5-36.1 c-27.9-15.4-12.1-24.9-2.8-29.4c158.6-76.7,183.8-195.3,185-204.2c1.4-10.6,2.9-19-8.8-29.9c-11.3-10.5-61.6-41.6-75.5-51.3 c-23.1-16.1-33.2-32.2-25.7-52c5.2-13.7,18-18.8,31.5-18.8c4.2,0,8.5,0.5,12.6,1.4c25.3,5.5,49.9,18.2,64.1,21.6 c2,0.5,3.7,0.7,5.2,0.7c7.6,0,10.2-3.8,9.7-12.5c-1.6-27.7-5.6-81.7-1.2-132.2c6-69.4,28.4-103.8,55-134.3 c12.8-14.6,72.8-78,187.5-78c115,0,174.7,63.4,187.5,78c26.6,30.4,49,64.8,55,134.3c4.4,50.5,0.6,104.5-1.2,132.2 c-0.6,9.1,2.2,12.5,9.7,12.5c1.5,0,3.3-0.2,5.2-0.7c14.2-3.4,38.8-16.1,64.1-21.6c4.1-0.9,8.4-1.4,12.6-1.4 c13.5,0,26.3,5.2,31.5,18.8c7.5,19.8-2.7,35.9-25.7,52c-13.9,9.7-64.2,40.8-75.5,51.3c-11.7,10.8-10.2,19.2-8.8,29.9 c1.1,8.9,26.4,127.5,185,204.2C960.6,759.1,976.5,768.6,948.6,784z\" /> </svg>",
-      google:'<svg viewBox="0 0 24 24"><path fill="#34a853" d="M4 22.93a4 4 0 1 1 0-8 4 4 0 0 1 0 8Z"/><path fill="#4285f4" d="M23.464 16.929 15.463 3.072A4 4 0 0 0 8.534 7.072l8.001 13.857a4 4 0 0 0 6.929-4Z"/><path fill="#fbbc04" d="M7.514 4.844 1.565 15.148A4.5 4.5 0 0 1 4 14.43a4.5 4.5 0 0 1 4.494 4.715l3.217-5.573-3.61-6.25a4 4 0 0 1-.587-2.478Z"/></svg>',
-      meta:'<svg viewBox="0 0 24 24"><path fill="#0866ff" d="M6.915 4.03C2.484 4.03 0 9.95 0 14.449c0 3.37 1.276 5.521 4.439 5.521 2.93 0 4.146-2.574 6.628-6.764l.942-1.664 2.335 3.895c1.883 3.15 3.38 4.533 5.53 4.533 2.788 0 4.126-1.93 4.126-5.56 0-5.53-2.73-10.38-6.8-10.38-2.04 0-3.835 1.53-5.173 3.348C10.16 5.01 8.593 4.03 6.915 4.03Zm-.04 2.606c1.55 0 2.445 1.193 3.908 3.025l-1.02 1.566c-2.22 3.41-3.576 6.155-5.323 6.155-1.23 0-2.154-1.075-2.154-2.9 0-3.755 2.088-7.846 4.588-7.846Zm10.2-.553c2.488 0 4.639 4.054 4.639 8.4 0 1.547-.368 2.899-1.839 2.899-1.193 0-2.027-1.42-4.496-5.362l-1.872-3.008c1.12-1.814 2.248-2.929 3.559-2.929Z"/></svg>',
-      tiktok:'<svg viewBox="0 0 58 58"><path fill="#2dccd3" d="M25.98 0v37.68c0 4.94-3.55 8.11-7.88 8.11-1.43 0-2.79-.33-3.97-.95 1.5 1.91 3.87 3.01 6.47 3.01 4.32 0 7.87-3.17 7.87-8.11V2.06h6.85A20.3 20.3 0 0 1 34.87 0h-8.89Z"/><path fill="#f1204a" d="M41.73 11.11a17.48 17.48 0 0 1-4.37-9.05h-2.04c1.16 4.23 3.56 7.18 6.41 9.05Zm7.63 11.37a19.31 19.31 0 0 1-11-2.97c3.84 3.84 8.5 5.03 13.5 5.03v-8.82a17.4 17.4 0 0 1-2.5-.37v7.13Z"/><path fill="currentColor" d="M35.32 2.06h-6.85v37.68c0 4.94-3.55 8.11-7.87 8.11-2.6 0-4.97-1.1-6.47-3.01-2.48-1.29-4.19-3.82-4.19-7.16 0-5.71 4.47-8.71 10.42-8.09v-7.68C10.63 21.93 2.49 29.73 2.49 39.4c0 5.16 2.04 9.71 5.32 12.96 2.89 1.97 6.39 3.11 10.15 3.11 8.69 0 17.91-6.38 17.91-18.41V17.45c.8.8 1.63 1.48 2.49 2.06a19.31 19.31 0 0 0 11 2.97v-7.13a16.14 16.14 0 0 1-7.63-4.24c-2.85-1.87-5.25-4.82-6.41-9.05Z"/></svg>',
-      apple:'<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09Zm3.377-3.065C16.372 2.819 16.929 1.403 16.774 0c-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.56-1.701Z"/></svg>',
-      microsoft:'<svg viewBox="0 0 24 24"><path fill="#f25022" d="M0 0h11.4v11.4H0Z"/><path fill="#7fba00" d="M12.6 0H24v11.4H12.6Z"/><path fill="#00a4ef" d="M0 12.6h11.4V24H0Z"/><path fill="#ffb900" d="M12.6 12.6H24V24H12.6Z"/></svg>',
-      reddit:'<svg viewBox="0 0 24 24"><path fill="#ff4500" d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0Zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614.028.169.042.342.042.52 0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .378-.239l2.906.617a1.214 1.214 0 0 1 1.108-.701Z"/></svg>'
-    };
+    const providerSvg = ${JSON.stringify(PROVIDER_LOGOS)};
     const logo = (id) => '<span class="logo '+esc(id)+'" aria-hidden="true">'+(providerSvg[id] || esc(initials(id)))+'</span>';
     let syntheticResult = false;
     const chrome = (body, context) => '<header class="top"><div class="brand"><b>adport<span class="wordmark-dot" aria-hidden="true">.</span></b></div><span class="context">'+(syntheticResult?'Synthetic demo · ':'')+esc(context || '')+'</span></header><section class="content">'+body+'</section>';
@@ -286,76 +311,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       app.querySelectorAll('[data-group]').forEach(button=>button.addEventListener('click',()=>{state.reportGroup=choices[Number(button.dataset.group)].key;renderReport(data);}));
       app.querySelectorAll('[data-metric]').forEach(button=>button.addEventListener('click',()=>{state.reportMetric=button.dataset.metric;renderReport(data);}));
     }
-    function renderOperation(data, meta) {
-      if (meta.tool === 'recommendation_apply' && data.result) data = data.result;
-      const preview = data.preview || {}, pending = data.pending_operation_id, applied = data.status === 'applied' || data.applied === true;
-      const accepted=applied && data.result?.details?.status==='ACCEPTED_FOR_PROCESSING' && data.result?.details?.processed===false;
-      const resources=arr(data.result?.resourceIds).filter(value=>typeof value==='string');
-      const changes = arr(preview.changes), coercions = arr(preview.coercions), deltas = arr(preview.budgetDeltas);
-      // Review amounts must preserve micros; rounded report totals are not suitable for consent.
-      const comparisons=deltas.map(v=>{const currency=currencyOf(v);return {label:(v.target || 'Budget')+(currency?' · '+currency:' (account units)'),before:available(v.fromMicros)?money(v.fromMicros/1e6,currency,6):'—',after:available(v.toMicros)?money(v.toMicros/1e6,currency,6):'—'};});
-      const fields=arr(preview.fieldChanges);
-      const explicit=fields.length && fields.every(v=>v && typeof v.field==='string' && v.field.trim() && typeof v.before==='string' && typeof v.after==='string')?fields:[];
-      for (const field of explicit.slice(0,12)) comparisons.push({label:field.field,before:field.before,after:field.after});
-      // Split only explicit field/value arrows. Freeform JSON updates still
-      // show the proposed payload, but never claim a previous value.
-      for (const change of explicit.length?[]:changes) {
-        const match=String(change).match(/^~\s+(?:.+?\s+)?(status|configured_status|bidding_strategy|delivery|bid|dailyBudget\.value|DailyBudget|value)\s*:?\s*(.*?)\s*→\s*(.+)$/i);
-        if (match) { const label=match[1].replaceAll('_',' ').replace(/([a-z])([A-Z])/g,'$1 $2');comparisons.push({label:label[0].toUpperCase()+label.slice(1),before:match[2].trim() || '—',after:match[3].trim()}); }
-      }
-      // Other provider plans still have a concrete change list. Show the
-      // proposed effect without pretending we fetched the previous object.
-      for (const change of explicit.length?[]:changes.slice(0,12)) {
-        const value=String(change).trim();
-        if (/^~\s+(?:.+?\s+)?(status|configured_status|bidding_strategy|delivery|bid|dailyBudget\.value|DailyBudget|value)\s*:?\s*.*?\s*→\s*.+$/i.test(value)) continue;
-        if (deltas.length && /\b(budget|amount_micros)\b/i.test(value) && /\s*→\s*/.test(value)) continue;
-        const kind=value[0];
-        comparisons.push({
-          label:kind==='+'?'Create':kind==='-'?'Remove':kind==='~'?'Update':'Change',
-          before:kind==='+'?'Not present':kind==='-'?value.slice(1).trim():'Not provided',
-          after:kind==='-'?'Removed':/^[+~!]\s*/.test(value)?value.replace(/^[+~!]\s*/,''):value,
-        });
-      }
-      if (!comparisons.length && preview.summary) comparisons.push({label:'Proposed change',before:'Not provided',after:String(preview.summary)});
-      const title=String(preview.summary || '').match(/"([^"]+)"/)?.[1] || (comparisons.length ? '' : preview.summary);
-      const validation=preview.serverValidated===true?'server validated':preview.serverValidated===false?'local preview · not server validated':'validation not reported';
-      const table=comparisons.length?'<table class="comparison" aria-label="Before and after"><thead><tr><th scope="col">Change</th><th scope="col">Before</th><th scope="col">After</th></tr></thead><tbody>'+comparisons.map(v=>'<tr><td>'+esc(v.label)+'</td><td>'+esc(v.before)+'</td><td class="'+(v.before!==v.after?'changed':'')+'">'+esc(v.after)+'</td></tr>').join('')+'</tbody></table>':'<p class="notice">No change details were returned. Review the tool response before applying.</p>';
-      const approval=meta.approval;
-      const canApprove=typeof pending==='string' && pending.length>0 && typeof preview.summary==='string' && preview.summary.trim() && approval?.arguments && typeof approval.arguments==='object' && !Array.isArray(approval.arguments) && typeof meta.tool==='string';
-      const action=canApprove?'<div class="approval"><button class="approve" data-approve="true" aria-label="Hold to approve and apply" '+(state.approving || state.approvalError?'disabled':'')+'>'+(state.approving?'Applying…':state.approvalError?'Verify result before retrying':'Hold to apply')+'</button><span class="context">Hold for 0.9s · release to cancel. Expires '+esc(data.expires_at || 'soon')+'</span></div>':'';
-      const pendingNotice=state.approvalError?'An apply was attempted. Its outcome is unconfirmed; check the provider before retrying.':state.approving?'An apply is in progress. Wait for confirmation before taking another action.':'Nothing has been changed. Apply requires the matching pending operation token before it expires.';
-      const count=explicit.length || changes.length;
-      const notes=arr(preview.notes).filter(v=>typeof v==='string').map(v=>'<p class="notice">'+esc(v)+'</p>').join('');
-      const warnings=applied?arr(data.result?.warnings).filter(value=>typeof value==='string'):[];
-      const warningNotices=warnings.map(value=>'<p class="adjustment" role="alert">'+esc(value)+'</p>').join('');
-      const body=(title?'<p class="operation-name">'+esc(title)+'</p>':'')+table+(count>12?'<p class="notice">Showing 12 of '+count+' changes. All changes are in Details.</p>':'')+notes+coercions.map(v=>'<p class="adjustment">'+esc(v)+'</p>').join('')+(state.approvalError?'<p class="notice" role="alert">'+esc(state.approvalError)+'</p>':'')+action+(applied?'<p class="notice">'+(accepted?'Accepted for processing. Processing is not confirmed. ':warnings.length?'Applied with warnings. ':'Applied. ')+esc(preview.summary || 'The change was submitted.')+'</p>'+warningNotices+(resources.length?'<p class="context">Resource'+(resources.length===1?'':'s')+': '+resources.slice(0,20).map(esc).join(', ')+(resources.length>20?' · '+(resources.length-20)+' more in the tool result':'')+'</p>':''):'')+'<details><summary>Details</summary><p>'+esc(validation)+'</p><p>'+esc(preview.summary || 'No change details returned.')+'</p>'+changes.map(v=>'<p>'+esc(v)+'</p>').join('')+(pending?'<p>'+esc(pendingNotice)+'</p>':'')+'<p>'+esc(meta.tool || '')+'</p></details>';
-      app.innerHTML = chrome(body, accepted?(warnings.length?'Processing pending · Warnings':'Processing pending'):applied?(warnings.length?'Applied with warnings':'Applied'):state.approvalError?'Outcome unconfirmed':state.approving?'Applying':pending?'Preview · Not applied':'Result');
-      if (canApprove) app.querySelectorAll('[data-approve]').forEach(button=>bindHold(button,()=>approve(meta.tool,approval.arguments,pending)));
-    }
-    function bindHold(button,complete) {
-      let timer=null, interacted=false;
-      const cancel=()=>{clearTimeout(timer);timer=null;button.classList.remove('holding');};
-      const begin=event=>{
-        if (button.disabled || timer!==null) return;
-        if (event.type==='keydown') {
-          if (![' ','Enter'].includes(event.key) || event.repeat) return;
-          event.preventDefault();
-        } else {
-          if (event.button!==0) return;
-          button.setPointerCapture?.(event.pointerId);
-        }
-        interacted=true;button.classList.add('holding');
-        timer=setTimeout(()=>{cancel();complete();},900);
-      };
-      button.addEventListener('pointerdown',begin);
-      button.addEventListener('keydown',begin);
-      ['pointerup','pointerleave','pointercancel','lostpointercapture','blur'].forEach(name=>button.addEventListener(name,cancel));
-      button.addEventListener('keyup',event=>{if ([' ','Enter','Escape'].includes(event.key)) cancel();});
-      button.addEventListener('contextmenu',event=>event.preventDefault());
-      // Screen-reader activation has no pointer/key sequence. Retain an accessible activation path.
-      button.addEventListener('click',event=>{if (event.detail===0 && !interacted && !button.disabled) complete();});
-    }
-    const pendingRequests=new Map();
+${OPERATION_UI_SCRIPT}
     async function callTool(tool,parameters,timeoutMs=30000) {
       const requestId=id++;
       return new Promise((resolve,reject)=>{
@@ -444,55 +400,6 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
         } catch(error) {state.previewing=false;state.creativeError=error?.message || 'The preview could not be prepared.';render(state.result);}
       }));
     }
-    async function approve(tool,args,pending) {
-      if (state.approving || state.approvalError || !state.result) return;
-      state.approving=true;state.approvalError='';render(state.result);
-      const requestId=id++;
-      const response=new Promise((resolve,reject)=>{
-        const timer=setTimeout(()=>{
-          pendingRequests.delete(requestId);
-          reject(new Error('No confirmation arrived. The write may have succeeded; check its status before retrying.'));
-        },30000);
-        pendingRequests.set(requestId,{resolve,reject,timer});
-      });
-      const parameters={...args,pending_operation_id:pending};
-      // Use the native ChatGPT bridge when supplied; never dispatch a second write as fallback.
-      if (typeof window.openai?.callTool==='function') {
-        Promise.resolve().then(()=>window.openai.callTool(tool,parameters)).then(result=>{
-          const request=pendingRequests.get(requestId);
-          if (request) {clearTimeout(request.timer);pendingRequests.delete(requestId);request.resolve(result);}
-        },error=>{
-          const request=pendingRequests.get(requestId);
-          if (request) {clearTimeout(request.timer);pendingRequests.delete(requestId);request.reject(error);}
-        });
-      } else send({jsonrpc:'2.0',id:requestId,method:'tools/call',params:{name:tool,arguments:parameters}});
-      try {
-        const result=await response;
-        if (!result || result.isError) {
-          const failure=resultValue(result);
-          throw new Error(typeof failure?.message==='string' && failure.message.trim()?failure.message.slice(0,2000)+' Check its status before retrying.':'Adport could not confirm the change. Check its status before retrying.');
-        }
-        let value=result.structuredContent || result;
-        if (!result.structuredContent && Array.isArray(result.content)) {
-          for (const item of result.content) {if (item.type==='text') {try {value=JSON.parse(item.text);break;} catch {}}}
-        }
-        const outcome=tool==='recommendation_apply'?value.result:value;
-        if (outcome?.applied!==true || outcome?.status!=='applied') throw new Error('The change was not confirmed as applied. Check its status before retrying.');
-        state.approving=false;state.approvalError='';acceptResult({structuredContent:{...value,_adport:{...(state.result.structuredContent?._adport || {}),...value._adport,approval:undefined}}},true);
-        const resources=arr(outcome.result?.resourceIds).filter(value=>typeof value==='string'),details=outcome.result?.details;
-        const warnings=arr(outcome.result?.warnings).filter(value=>typeof value==='string');
-        const facts={tool,status:'applied',...(details?.status==='ACCEPTED_FOR_PROCESSING' && details?.processed===false?{processing_status:'ACCEPTED_FOR_PROCESSING',processed:false}:{}),...(warnings.length?{warnings:warnings.slice(0,20)}:{}),...(typeof args.project_id==='string'?{project_id:args.project_id}:{}),...(typeof args.account_id==='string'?{account_id:args.account_id}:{}),resource_ids:resources.slice(0,100),...(resources.length>100?{resource_ids_truncated:true,total_resource_ids:resources.length}:{}),...(typeof details?.next_tool==='string'?{next_tool:details.next_tool}:{}),...(typeof details?.resource_receipt==='string'?{resource_receipt:details.resource_receipt}:{})};
-        // Share confirmed facts for follow-up reads, never a reusable apply token.
-        if (typeof window.openai?.setWidgetState==='function') Promise.resolve().then(()=>window.openai.setWidgetState({lastOperation:facts})).catch(()=>{});
-        else send({jsonrpc:'2.0',id:id++,method:'ui/update-model-context',params:{structuredContent:{adport_operation:facts}}});
-      } catch (error) {
-        state.approving=false;state.approvalError=error?.message || 'The change could not be confirmed. Check its status before retrying.';
-        render(state.result);
-        const facts={tool,status:'unconfirmed',...(typeof args.project_id==='string'?{project_id:args.project_id}:{}),...(typeof args.account_id==='string'?{account_id:args.account_id}:{}),message:state.approvalError};
-        if (typeof window.openai?.setWidgetState==='function') Promise.resolve().then(()=>window.openai.setWidgetState({lastOperation:facts})).catch(()=>{});
-        else send({jsonrpc:'2.0',id:id++,method:'ui/update-model-context',params:{structuredContent:{adport_operation:facts}}});
-      }
-    }
     function renderPlanning(data) {
       const planning=data.planning || {}, columns=arr(planning.columns).filter(v=>typeof v?.key==='string'&&typeof v?.label==='string').slice(0,12), rows=arr(planning.rows), pageSize=100, pages=Math.max(1,Math.ceil(rows.length/pageSize));
       state.planningPage=Math.max(0,Math.min(state.planningPage,pages-1));
@@ -505,17 +412,13 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     }
     function renderInsights(data) {
       const items = data.finding ? [data.finding] : arr(data.findings || data.recommendations || data.results || data.entries);
-      const body = items.length ? '<div class="list">'+items.slice(0,8).map((item,i)=>'<div class="row"><div class="identity"><span class="logo" style="background:var(--orange)">'+(i+1)+'</span><div class="identity-copy"><b>'+esc(item.title || item.summary || item.rule || 'Opportunity')+'</b><span>'+esc(item.description || item.status || item.severity || 'Review recommended')+'</span></div></div><span class="pill '+(/high|critical/i.test(item.severity || '')?'danger':'')+'">'+esc(item.severity || item.status || 'open')+'</span></div>').join('')+'</div>' : '<div class="empty">No active recommendations were returned.</div>';
+      const body = notices(data)+(items.length ? '<div class="list">'+items.slice(0,8).map((item,i)=>'<div class="row"><div class="identity">'+(item.provider?logo(item.provider):'<span class="logo">'+(i+1)+'</span>')+'<div class="identity-copy"><b>'+esc(item.title || item.summary || item.rule || 'Opportunity')+'</b><span>'+esc(item.description || item.status || item.severity || 'Review recommended')+'</span></div></div><span class="pill '+(/high|critical/i.test(item.severity || '')?'danger':'')+'">'+esc(item.status && item.status!=='open'?item.status:item.severity || item.status || 'open')+'</span></div>').join('')+'</div><details><summary>Details · '+items.length+' findings</summary><pre>'+esc(JSON.stringify(items,null,2))+'</pre></details>' : '<div class="empty">No recommendations were returned.</div>');
       app.innerHTML = chrome(body, items.length+' recommendation'+(items.length===1?'':'s'));
     }
     function render(result) {
-      let data = result?.structuredContent || result || {};
-      if (!result?.structuredContent && Array.isArray(result?.content)) {
-        for (const item of result.content) {
-          if (item.type !== 'text') continue;
-          try { const parsed = JSON.parse(item.text); if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) { data = parsed; break; } } catch {}
-        }
-      }
+      cancelHold();clearTimeout(expiryTimer);
+      let data=resultData(result);
+      if (!object(data)) data={value:data};
       const meta = data._adport || {};
       syntheticResult = data.data_source === 'synthetic';
       if (data.cancelled) {
@@ -523,7 +426,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
         return;
       }
       if (result?.isError || data.error) {
-        app.innerHTML=chrome('<p class="notice">'+esc(data.message || 'The request could not complete. See the tool response for details.')+'</p>','Request failed');
+        renderFailure(data,meta,meta.view==='operation');
         return;
       }
       if (meta.view === 'accounts') return renderAccounts(data,meta);
@@ -531,7 +434,8 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       if (meta.view === 'operation') return renderOperation(data,meta);
       if (meta.view === 'creatives') return renderCreatives(data,meta);
       if (meta.view === 'planning') return renderPlanning(data,meta);
-      return renderInsights(data,meta);
+      if (meta.view === 'insights') return renderInsights(data,meta);
+      return renderData(data,meta);
     }
     function acceptResult(result,local=false) {
       if (!result || typeof result !== 'object') return;
@@ -555,7 +459,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
       const metadata = globals.toolResponseMetadata;
       const envelope = metadata?.mcp_tool_result || metadata?.call_tool_result;
       if (envelope && typeof envelope === 'object') return acceptResult(envelope);
-      if (globals.toolOutput && typeof globals.toolOutput === 'object') acceptResult({structuredContent:globals.toolOutput});
+      if (globals.toolOutput && typeof globals.toolOutput === 'object') acceptResult({structuredContent:{...globals.toolOutput,...(metadata?.adport?{_adport:metadata.adport}:{})}});
     }
     // Some hosts mount an error result's resource but never relay its payload.
     // This is a delivery fallback, not a claim about tool execution or success.

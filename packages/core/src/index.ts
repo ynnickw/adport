@@ -59,6 +59,7 @@ export {
   type ToolContext,
 } from './tools/registry.js';
 export { guardedWriteTool } from './tools/write.js';
+export { reviewWrite, type ReviewField, type WriteReview } from './tools/review.js';
 export { planningViewSchema, type PlanningView } from './planning.js';
 export { builtinTools } from './tools/builtin.js';
 export { withProjectRouting, type AgentProject, type ProjectRouter } from './tools/projects.js';
