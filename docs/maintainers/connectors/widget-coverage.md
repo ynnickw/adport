@@ -17,6 +17,15 @@ The hosted production catalog also contains provider capabilities developed on
 the deployment branch. Its specialized creative and planning views are retained
 when this widget change is integrated there.
 
+## Creative previews
+
+Creative previews are view-only galleries with smaller media, ad copy, one status
+label and destination hostnames. Gallery height is bounded, and all returned items
+remain accessible by native scrolling. Single previews stay small. Images open at
+full size; video and audio retain native playback. Missing media has an unavailable
+state. Actions, uploads, refresh and paging configuration never create controls or
+tool calls. Agents can request changes through the normal guarded tools.
+
 ## Review contract
 
 `guardedWriteTool` adds `preview.review` for every provider
@@ -49,7 +58,7 @@ Attempts are keyed to the pending token. A host echo cannot offer a second apply
 and a late response cannot replace a newer preview. Host facts include resource
 receipts and project/account scope, but never a reusable pending token.
 
-The widget resource is `ui://adport/insight-card-v9.html`. Previous v2–v8 URIs are
+The widget resource is `ui://adport/insight-card-v10.html`. Previous v2–v9 URIs are
 retained as aliases. Existing creative resource domains and private upload grants
 keep their configured CSP; provider logos and scripts are embedded.
 
