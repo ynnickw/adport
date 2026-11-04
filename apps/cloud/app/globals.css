@@ -917,7 +917,7 @@ input:disabled, textarea:disabled { background: rgba(245, 245, 247, 0.8); color:
 .assistant-footer .disclosure-content a { font-size: .75rem; }
 .assistant-connections { scroll-margin-top: 2rem; }
 .assistant-connections .card-head { align-items: center; flex-wrap: wrap; }
-.row-item.assistant-connection { justify-content: flex-start; flex-wrap: nowrap; gap: .75rem; }
+.row-item.assistant-connection { justify-content: flex-start; align-items: flex-start; flex-wrap: nowrap; gap: .75rem; }
 .assistant-connection-avatar { display: grid; place-items: center; flex: 0 0 auto; width: 2.2rem; height: 2.2rem; border: 1px solid var(--line); border-radius: .55rem; background: var(--bg); font-size: .875rem; font-weight: 650; }
 .assistant-connection-details { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .assistant-connection .cell-sub { margin: .3rem 0 0; font-family: var(--font-sans); line-height: 1.5; }
