@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { AdProvider, WriteKind, WriteOperation } from '../provider.js';
 import { defineTool, type AnyToolDefinition, type ToolContext } from './registry.js';
 import { writeOutput } from './outputs.js';
+import { MEDIA_UPLOAD_TOOLS } from './media-distribution.js';
 
 const TWO_STEP_NOTE =
   'Two-step write: call WITHOUT pending_operation_id to get a dry-run preview and a pending_operation_id; ' +
@@ -40,14 +41,20 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
     input,
     output: writeOutput,
     ...(def.fileInputs ? { fileInputs: def.fileInputs } : {}),
-    annotations: { readOnly: false, destructive: def.destructive ?? true, ...(def.openWorld === undefined ? {} : { openWorld: def.openWorld }) },
+    annotations: { readOnly: false, destructive: def.destructive ?? !MEDIA_UPLOAD_TOOLS.has(def.name), ...(def.openWorld === undefined ? {} : { openWorld: def.openWorld }) },
     async handler(raw, ctx) {
       const { account_id, pending_operation_id, ...payload } = raw as Record<string, unknown> & {
         account_id: string;
         pending_operation_id?: string;
       };
       const target = def.contextTarget?.(ctx);
-      const provider = target?.provider ?? ctx.providers.get(def.provider);
+      let provider = target?.provider ?? ctx.providers.get(def.provider);
+      const trackUpload = ctx.media?.trackUpload?.bind(ctx.media);
+      if (trackUpload && MEDIA_UPLOAD_TOOLS.has(def.name) && typeof payload.media_id === 'string' && typeof payload.expected_sha256 === 'string') {
+        const native = provider, media_id = payload.media_id, expected_sha256 = payload.expected_sha256;
+        provider = { id: native.id, capabilities: () => native.capabilities(), listAccounts: () => native.listAccounts(), report: query => native.report(query), previewWrite: (op, guard) => native.previewWrite(op, guard),
+          applyWrite: (op, guard) => trackUpload({ media_id, expected_sha256, provider: native.id, account_id, tool: def.name }, () => native.applyWrite(op, guard)) };
+      }
       const op: WriteOperation = {
         tool: def.name,
         provider: def.provider,

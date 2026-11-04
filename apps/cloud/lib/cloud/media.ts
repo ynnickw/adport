@@ -1,7 +1,7 @@
 import 'server-only';
 import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
-import { AdportError, verifyMedia, mediaUploadMetadataSchema, mediaWriteSchemas, MAX_PROJECT_MEDIA_BYTES, MEDIA_UPLOAD_PART_BYTES, PROJECT_MEDIA_TYPES, type HostFile, type MediaAsset, type ManagedMediaLibrary, type MediaSource, type VerifiedMedia, type WriteOperation, type WritePreview, type WriteResult } from '@adport/core';
+import { AdportError, verifyMedia, mediaUploadMetadataSchema, mediaWriteSchemas, mediaListSchema, MAX_PROJECT_MEDIA_BYTES, MEDIA_UPLOAD_PART_BYTES, PROJECT_MEDIA_TYPES, type HostFile, type MediaAsset, type MediaListInput, type ManagedMediaLibrary, type MediaSource, type VerifiedMedia, type WriteOperation, type WritePreview, type WriteResult } from '@adport/core';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
@@ -22,6 +22,7 @@ export const mediaUploadSchema = mediaUploadMetadataSchema;
 interface StoredMedia {
   id: string; organizationId: string; name: string; objectPath: string; contentType: string; byteLength: number | string;
   sha256: string; status: 'uploading' | 'ready' | 'failed'; width: number | null; height: number | null; expiresAt: Date; deletedAt: Date | null;
+  tags: string[]; platforms: MediaAsset['platforms']; metadataVersion: number; createdAt: Date;
 }
 const partCount = (row: Pick<StoredMedia, 'byteLength'>) => Math.ceil(Number(row.byteLength) / MEDIA_UPLOAD_PART_BYTES);
 const partPath = (row: Pick<StoredMedia, 'objectPath'>, index: number) => `${row.objectPath}.part-${index}`;
@@ -83,6 +84,7 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
     }
     return { id: row.id, name: row.name, content_type: row.contentType, byte_length: Number(row.byteLength), sha256: row.sha256,
       status: row.deletedAt ? 'DELETED' : row.status === 'ready' ? 'READY' : row.status === 'uploading' ? 'PROCESSING' : 'FAILED',
+      tags: row.tags ?? [], platforms: row.platforms ?? [], metadata_version: row.metadataVersion ?? 1, ...(row.createdAt ? { created_at: row.createdAt.toISOString() } : {}),
       ...(row.width ? { width: row.width } : {}), ...(row.height ? { height: row.height } : {}), ...(preview ? { preview_url: preview } : {}), ...(upload ? { upload } : {}) };
   }
 
@@ -97,6 +99,37 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
     const metadata = mediaUploadSchema.parse({ name: file.name, content_type: file.contentType, byte_length: file.bytes.length, sha256: file.sha256 });
     const { width, height } = await inspectMediaBytes(file.bytes, metadata);
     return { file_id: source.file_id, metadata, ...(width ? { width } : {}), ...(height ? { height } : {}) };
+  }
+
+  async distributions(id: string) {
+    requireScope(this.principal, 'tools:read');
+    await this.record(id, true);
+    const rows = await db()<Array<{ id: string; provider: string; accountId: string; tool: string; status: string; resourceIds: string[]; errorCode: string | null; createdAt: Date; updatedAt: Date }>>`
+      select id, provider, account_id, tool, status, resource_ids, error_code, created_at, updated_at
+      from private.creative_media_distributions where organization_id = ${this.scopeId} and media_id = ${id} order by created_at desc, id desc limit 50`;
+    return rows.map(row => ({ id: row.id, provider: row.provider, account_id: row.accountId, tool: row.tool, status: row.status, resource_ids: row.resourceIds, error_code: row.errorCode, created_at: row.createdAt.toISOString(), updated_at: row.updatedAt.toISOString() }));
+  }
+
+  /** Runs inside the normal provider apply, after its approval was consumed. */
+  async trackUpload(input: { media_id: string; expected_sha256: string; provider: string; account_id: string; tool: string }, execute: () => Promise<WriteResult>): Promise<WriteResult> {
+    requireScope(this.principal, 'tools:write');
+    const source = await this.record(input.media_id);
+    if (source.status !== 'ready' || source.sha256 !== input.expected_sha256.toLowerCase()) throw new AdportError('INVALID_INPUT', 'Distribution source is no longer ready or its checksum changed.');
+    const id = randomUUID();
+    await db()`insert into private.creative_media_distributions (id, organization_id, media_id, source_sha256, provider, account_id, tool, status)
+      values (${id}, ${this.scopeId}, ${source.id}, ${source.sha256}, ${input.provider}, ${input.account_id}, ${input.tool}, 'STARTED')`;
+    const safeIds = (values: unknown) => Array.isArray(values) ? values.filter((value): value is string => typeof value === 'string' && value.length <= 512 && !/[\s\x00-\x1f]/.test(value) && !/^https?:/i.test(value)).slice(0, 100) : [];
+    let result: WriteResult;
+    try { result = await execute(); if (result.applied !== true) throw new AdportError('PROVIDER_ERROR', 'The provider did not confirm the upload. Reconcile before trying again.', { resource_ids: result.resourceIds }); }
+    catch (error) {
+      const details = error instanceof AdportError && error.details && typeof error.details === 'object' ? error.details as Record<string, unknown> : {};
+      const code = error instanceof AdportError ? error.code : 'PROVIDER_ERROR';
+      try { await db()`update private.creative_media_distributions set status = 'UNCONFIRMED', resource_ids = ${safeIds(details.resource_ids)}, error_code = ${code}, updated_at = now() where id = ${id} and organization_id = ${this.scopeId}`; } catch { /* STARTED remains a reconciliation marker. */ }
+      throw new AdportError(code, error instanceof Error ? error.message : 'Provider upload was not confirmed. Reconcile before retrying.', { ...details, distribution_id: id });
+    }
+    try { await db()`update private.creative_media_distributions set status = 'ACCEPTED', resource_ids = ${safeIds(result.resourceIds)}, updated_at = now() where id = ${id} and organization_id = ${this.scopeId}`; }
+    catch { throw new AdportError('PROVIDER_ERROR', 'The provider upload completed, but its library receipt could not be saved. Do not upload again; reconcile the returned native IDs.', { resource_ids: result.resourceIds, distribution_id: id, execution_state: 'APPLIED_TRACKING_UNCONFIRMED' }); }
+    return { ...result, details: { ...(result.details && typeof result.details === 'object' ? result.details : {}), distribution_id: id } };
   }
 
   async read(source: MediaSource, options: { maxBytes?: number; contentTypes?: readonly string[] } = {}): Promise<VerifiedMedia> {
@@ -121,11 +154,16 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
     return { url: data.signedUrl, expires_at: new Date(Date.now() + 3_600_000).toISOString(), sha256: file.sha256 };
   }
 
-  async list(input: { limit: number; cursor?: string }) {
+  async list(raw: MediaListInput) {
     requireScope(this.principal, 'tools:read');
-    const rows = input.cursor
-      ? await db()<StoredMedia[]>`select * from private.creative_media where organization_id = ${this.principal.organizationId} and status = 'ready' and deleted_at is null and id < ${input.cursor} order by id desc limit ${input.limit + 1}`
-      : await db()<StoredMedia[]>`select * from private.creative_media where organization_id = ${this.principal.organizationId} and status = 'ready' and deleted_at is null order by id desc limit ${input.limit + 1}`;
+    const input = mediaListSchema.parse(raw), cursor = input.cursor ? await this.record(input.cursor, true) : undefined;
+    const rows = await db()<StoredMedia[]>`select * from private.creative_media where organization_id = ${this.scopeId} and status = 'ready' and deleted_at is null
+      and (${!input.query} or position(lower(${input.query ?? ''}) in lower(name)) > 0)
+      and (${!input.kind} or split_part(content_type, '/', 1) = ${input.kind ?? ''} or (${input.kind === 'document'} and content_type = 'application/pdf'))
+      and (${!input.platform} or ${input.platform ?? ''} = any(platforms))
+      and (${!input.tag} or ${input.tag ?? ''} = any(tags))
+      and (${!cursor} or (created_at, id) < (${cursor?.createdAt ?? new Date(0)}, ${cursor?.id ?? '00000000-0000-0000-0000-000000000000'}::uuid))
+      order by created_at desc, id desc limit ${input.limit + 1}`;
     const assets = await Promise.all(rows.slice(0, input.limit).map(row => this.asset(row)));
     const truncated = rows.length > input.limit;
     return { assets, truncated, ...(truncated ? { next_cursor: assets.at(-1)!.id } : {}),
@@ -211,7 +249,7 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
   private async plan(op: WriteOperation): Promise<WritePreview & { execute(): Promise<WriteResult> }> {
     requireScope(this.principal, 'tools:write');
     const tool = op.tool as keyof typeof mediaWriteSchemas, schema = mediaWriteSchemas[tool];
-    const kind = tool === 'media_delete' ? 'remove' : tool === 'media_rename' || tool === 'media_finalize_upload' || tool === 'media_upload_part' ? 'update' : 'create';
+    const kind = tool === 'media_delete' ? 'remove' : tool === 'media_rename' || tool === 'media_update_metadata' || tool === 'media_finalize_upload' || tool === 'media_upload_part' ? 'update' : 'create';
     if (!Object.hasOwn(mediaWriteSchemas, tool) || !schema || op.provider !== 'media' || op.accountId !== this.scopeId || op.kind !== kind) throw new AdportError('INVALID_INPUT', 'Invalid project media operation.');
     const input = schema.parse(op.payload);
     const base = { coercions: [], budgetDeltas: [], serverValidated: false };
@@ -230,7 +268,7 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
         await inspectMediaBytes(bytes, metadata);
       }
       return { ...base, summary: `${bytes ? 'Upload' : 'Prepare upload for'} project media “${metadata.name}”`, changes: [`+ ${metadata.name}; ${metadata.content_type}; ${metadata.byte_length} bytes; SHA-256 ${metadata.sha256}`], fieldChanges: [{ field: 'File', before: '(new)', after: metadata.name }, { field: 'Bytes', before: '0', after: String(metadata.byte_length) }, { field: 'SHA-256', before: '(new)', after: metadata.sha256 }], notes: ['Private project storage only. No advertising account upload or publication. Provider uploads use the resulting media_id and checksum in a separate guarded operation.'], execute: async () => {
-        if (!await enforceRateLimit(`media:${this.principal.userId ?? this.principal.apiKeyId ?? this.principal.oauthTokenId}:${this.scopeId}`, 12)) throw new HttpError('Too many uploads. Try again in a minute.', 429);
+        if (!await enforceRateLimit(`media:${this.principal.userId ?? this.principal.apiKeyId ?? this.principal.oauthTokenId}:${this.scopeId}`, 60)) throw new HttpError('Too many uploads. Try again in a minute.', 429);
         const grant = await this.beginUpload(metadata);
         if (!bytes) return { applied: true, resourceIds: [grant.media_id], details: grant };
         try {
@@ -279,12 +317,23 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
       if (row.status !== 'ready') await this.inspectUpload(row);
       return { ...base, summary: `Verify project media “${row.name}”`, changes: [`~ ${row.id}: ${row.status} → ready; SHA-256 ${row.sha256}`], fieldChanges: [{ field: 'File readiness', before: row.status, after: 'ready' }], notes: ['The stored bytes are decoded and checksum-verified before provider uploads can use them.'], execute: async () => { await this.finalize(row.id); return { applied: true, resourceIds: [row.id], details: { media_id: row.id, sha256: row.sha256, status: 'ready', asset: await this.asset(await this.record(row.id), false) } }; } };
     }
+    if (tool === 'media_update_metadata') {
+      const value = mediaWriteSchemas.media_update_metadata.parse(input);
+      if (row.status !== 'ready' || value.expected_version !== row.metadataVersion) throw new AdportError('PENDING_MISMATCH', 'Asset metadata changed. Read media_get and prepare a fresh preview.');
+      const name = value.name?.replace(/[\\/\x00-\x1f\x7f]/g, '_') ?? row.name, tags = value.tags ?? row.tags, platforms = value.platforms ?? row.platforms ?? [];
+      return { ...base, summary: `Organize project media “${row.name}”`, changes: [`Name: ${JSON.stringify(row.name)} → ${JSON.stringify(name)}`, `Tags: ${JSON.stringify(row.tags)} → ${JSON.stringify(tags)}`, `Platforms: ${JSON.stringify(row.platforms)} → ${JSON.stringify(platforms)}`], notes: ['Library metadata only. Platform labels do not distribute, publish or modify ads. Immutable source bytes and existing provider copies are preserved.'], execute: async () => {
+        const updated = await db()`update private.creative_media set name = ${name}, tags = ${tags}, platforms = ${platforms}, metadata_version = metadata_version + 1
+          where id = ${row.id} and organization_id = ${this.scopeId} and metadata_version = ${value.expected_version} and sha256 = ${row.sha256} and status = 'ready' and deleted_at is null returning id`;
+        if (!updated.length) throw new AdportError('PENDING_MISMATCH', 'Asset metadata changed before apply. Read it and prepare a fresh preview.');
+        return { applied: true, resourceIds: [row.id], details: { asset: await this.asset(await this.record(row.id), false) } };
+      } };
+    }
     const value = tool === 'media_rename' ? mediaWriteSchemas.media_rename.parse(input) : mediaWriteSchemas.media_delete.parse(input);
     if (value.expected_name !== row.name) throw new AdportError('INVALID_INPUT', 'Media name changed. Read the asset and request a fresh preview.');
     if (tool === 'media_rename') {
       const name = mediaWriteSchemas.media_rename.parse(input).name.replace(/[\\/\x00-\x1f\x7f]/g, '_');
       return { ...base, summary: `Rename project media “${row.name}”`, changes: [`~ name ${JSON.stringify(row.name)} → ${JSON.stringify(name)}`], fieldChanges: [{ field: 'File name', before: row.name, after: name }], notes: ['Immutable bytes and provider copies are preserved.'], execute: async () => {
-        const updated = await db()`update private.creative_media set name = ${name} where id = ${row.id} and organization_id = ${this.scopeId} and name = ${row.name} and sha256 = ${row.sha256} and deleted_at is null returning id`;
+        const updated = await db()`update private.creative_media set name = ${name}, metadata_version = metadata_version + 1 where id = ${row.id} and organization_id = ${this.scopeId} and name = ${row.name} and sha256 = ${row.sha256} and deleted_at is null returning id`;
         if (!updated.length) throw new AdportError('INVALID_INPUT', 'Media changed before the rename. Read it and preview again.');
         return { applied: true, resourceIds: [row.id], details: { asset: await this.asset(await this.record(row.id), false) } };
       } };

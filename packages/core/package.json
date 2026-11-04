@@ -7,6 +7,10 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./media-platforms": {
+      "types": "./dist/media-platforms.d.ts",
+      "import": "./dist/media-platforms.js"
+    },
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
@@ -16,7 +20,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --sourcemap --clean",
+    "build": "tsup src/index.ts src/media-platforms.ts --format esm --dts --sourcemap --clean",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"

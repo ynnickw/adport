@@ -5,6 +5,8 @@ import { basename, isAbsolute } from 'node:path';
 import { z } from 'zod';
 import { AdportError } from './errors.js';
 import type { WriteOperation, WritePreview, WriteResult } from './provider.js';
+import { MEDIA_PLATFORMS } from './media-platforms.js';
+export { MEDIA_PLATFORMS } from './media-platforms.js';
 
 export const MAX_PROJECT_MEDIA_BYTES = 50 * 1024 * 1024;
 export const MAX_INLINE_MEDIA_BYTES = 1024 * 1024;
@@ -21,6 +23,11 @@ export const hostFileSchema = z.object({
 }).strict();
 export type HostFile = z.infer<typeof hostFileSchema>;
 const existing = { media_id: z.string().uuid(), expected_sha256: z.string().regex(/^[a-f0-9]{64}$/) };
+export const mediaPlatformSchema = z.enum(MEDIA_PLATFORMS);
+const tags = z.array(z.string().trim().min(1).max(40).regex(/^[^\x00-\x1f\x7f]+$/).transform(value => value.toLowerCase())).max(24).transform(values => [...new Set(values)].sort());
+const platforms = z.array(mediaPlatformSchema).max(MEDIA_PLATFORMS.length).transform(values => [...new Set(values)].sort());
+export const mediaListSchema = z.object({ limit: z.number().int().positive().max(100).default(24), cursor: z.string().uuid().optional(), query: z.string().trim().max(200).optional(), kind: z.enum(['image', 'video', 'audio', 'document']).optional(), platform: mediaPlatformSchema.optional(), tag: z.string().trim().min(1).max(40).transform(value => value.toLowerCase()).optional() });
+export type MediaListInput = z.infer<typeof mediaListSchema>;
 export const mediaWriteSchemas = {
   media_prepare_upload: mediaUploadMetadataSchema,
   media_upload: mediaUploadMetadataSchema.safeExtend({ byte_length: z.number().int().positive().max(MAX_INLINE_MEDIA_BYTES), data_base64: z.string().min(4).max(4 * Math.ceil(MAX_INLINE_MEDIA_BYTES / 3)).regex(/^[A-Za-z0-9+/]*={0,2}$/) }),
@@ -29,6 +36,7 @@ export const mediaWriteSchemas = {
   media_upload_part: z.object({ ...existing, part_index: z.number().int().min(0).max(Math.ceil(MAX_PROJECT_MEDIA_BYTES / MEDIA_UPLOAD_PART_BYTES) - 1), part_sha256: z.string().regex(/^[a-f0-9]{64}$/), data_base64: z.string().min(4).max(4 * Math.ceil(MEDIA_UPLOAD_PART_BYTES / 3)).regex(/^[A-Za-z0-9+/]*={0,2}$/) }),
   media_rename: z.object({ ...existing, expected_name: z.string(), name: mediaUploadMetadataSchema.shape.name }),
   media_delete: z.object({ ...existing, expected_name: z.string() }),
+  media_update_metadata: z.object({ ...existing, expected_version: z.number().int().positive(), name: mediaUploadMetadataSchema.shape.name.optional(), tags: tags.optional(), platforms: platforms.optional() }).strict().refine(value => value.name !== undefined || value.tags !== undefined || value.platforms !== undefined, 'Provide a name, tags or platforms to change'),
 };
 
 export const mediaSourceFields = {
@@ -49,15 +57,18 @@ export const mediaAssetSchema = z.object({
   sha256: z.string().regex(/^[a-f0-9]{64}$/), width: z.number().int().positive().optional(), height: z.number().int().positive().optional(),
   status: z.enum(['READY', 'PROCESSING', 'FAILED', 'DELETED']).optional(),
   preview_url: z.string().url().optional(),
+  tags: z.array(z.string()).optional(), platforms: z.array(mediaPlatformSchema).optional(), metadata_version: z.number().int().positive().optional(), created_at: z.string().optional(),
   upload: z.object({ part_size: z.number().int().positive(), part_count: z.number().int().positive(), received_parts: z.array(z.object({ part_index: z.number().int().nonnegative(), byte_length: z.number().int().nonnegative() })), expires_at: z.string() }).optional(),
 });
 export type MediaAsset = z.infer<typeof mediaAssetSchema>;
 export interface MediaLibrary extends MediaResolver {
-  list(input: { limit: number; cursor?: string }): Promise<{ assets: MediaAsset[]; truncated: boolean; next_cursor?: string; upload_page_url?: string }>;
+  list(input: MediaListInput): Promise<{ assets: MediaAsset[]; truncated: boolean; next_cursor?: string; upload_page_url?: string }>;
+  trackUpload?(input: { media_id: string; expected_sha256: string; provider: string; account_id: string; tool: string }, execute: () => Promise<WriteResult>): Promise<WriteResult>;
 }
 export interface ManagedMediaLibrary extends MediaLibrary {
   readonly scopeId: string;
   get(id: string): Promise<MediaAsset>;
+  distributions?(id: string): Promise<unknown[]>;
   inspectFile?(file: HostFile): Promise<{ file_id: string; metadata: z.infer<typeof mediaUploadMetadataSchema>; width?: number; height?: number }>;
   previewWrite(op: WriteOperation): Promise<WritePreview>;
   applyWrite(op: WriteOperation): Promise<WriteResult>;

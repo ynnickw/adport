@@ -7,7 +7,7 @@ import { db, closeDbForTests } from '@/lib/db';
 import { cleanupDeletedProjectMedia, ProjectMediaLibrary } from '@/lib/cloud/media';
 import { resolveMembership } from '@/lib/cloud/repository';
 import { PostgresAuditStore, PostgresPendingStore } from '@/lib/cloud/repository';
-import { createContext, DEFAULT_POLICY, MEDIA_UPLOAD_PART_BYTES, PolicyEngine } from '@adport/core';
+import { AdportError, createContext, DEFAULT_POLICY, MEDIA_UPLOAD_PART_BYTES, PolicyEngine } from '@adport/core';
 import { createMcpServer } from '@adport/mcp';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 
@@ -303,5 +303,35 @@ describeDatabase('project media signed-upload boundary', () => {
     await apply(rt, 'media_prepare_upload', { ...metadata, name: 'after-abandoned.png' });
     expect((await admin.storage.from('creative-media').list(projects[0]!, { search: `${media_id}.part-` })).data).toEqual([]);
     await expect(call(rt, 'media_get', { media_id })).rejects.toThrow('selected project');
+  });
+
+  it('shares versioned metadata, filtered chronological pages and private distribution receipts across agents and UI', async () => {
+    const rt = await runtime(), input = { name: 'central-library-fixture.png', content_type: 'image/png', byte_length: bytes.length, sha256, data_base64: bytes.toString('base64') };
+    const upload = await apply(rt, 'media_upload', input), media_id = upload.result.details.media_id;
+    const source = await owner.get(media_id);
+    expect(source).toMatchObject({ metadata_version: 1, tags: [], platforms: [], status: 'READY' });
+    const metadata = { media_id, expected_sha256: sha256, expected_version: 1, tags: [' Launch ', 'launch'], platforms: ['meta', 'pinterest'] };
+    const preview = await call(rt, 'media_update_metadata', metadata);
+    expect((await owner.get(media_id)).tags).toEqual([]);
+    await call(rt, 'media_update_metadata', { ...metadata, pending_operation_id: preview.pending_operation_id });
+    expect(await owner.get(media_id)).toMatchObject({ tags: ['launch'], platforms: ['meta', 'pinterest'], metadata_version: 2, sha256 });
+    await expect(call(rt, 'media_update_metadata', metadata)).rejects.toMatchObject({ code: 'PENDING_MISMATCH' });
+    await expect(other.get(media_id)).rejects.toThrow('selected project');
+    expect((await owner.list({ limit: 1, query: 'CENTRAL-LIBRARY', platform: 'pinterest', tag: 'LAUNCH', kind: 'image' })).assets.map(asset => asset.id)).toEqual([media_id]);
+    expect((await owner.list({ limit: 1, query: 'central-library', platform: 'google' })).assets).toEqual([]);
+    const second = await apply(rt, 'media_upload', { ...input, name: 'central-library-second.png' }), nextId = second.result.details.media_id;
+    const page = await owner.list({ limit: 1, query: 'central-library' });
+    expect(page.assets[0]!.id).toBe(nextId); expect(page.truncated).toBe(true);
+    expect((await owner.list({ limit: 1, query: 'central-library', cursor: page.next_cursor })).assets[0]!.id).toBe(media_id);
+    await expect(other.list({ limit: 10, cursor: media_id })).rejects.toThrow('selected project');
+    const destination = { media_id, expected_sha256: sha256, provider: 'meta', account_id: 'qa-account', tool: 'meta_upload_image' };
+    await owner.trackUpload(destination, async () => ({ applied: true, resourceIds: ['native-image'], details: { private_upload_url: 'https://provider.test/?secret=never-store' } }));
+    await expect(owner.trackUpload(destination, async () => { throw new AdportError('PROVIDER_ERROR', 'Native timeout', { resource_ids: ['native-unconfirmed'] }); })).rejects.toMatchObject({ details: { distribution_id: expect.any(String) } });
+    const history = await owner.distributions(media_id);
+    expect(history).toEqual(expect.arrayContaining([expect.objectContaining({ status: 'ACCEPTED', resource_ids: ['native-image'] }), expect.objectContaining({ status: 'UNCONFIRMED', resource_ids: ['native-unconfirmed'] })]));
+    expect(JSON.stringify(history)).not.toContain('never-store');
+    await expect(other.distributions(media_id)).rejects.toThrow('selected project');
+    expect(Buffer.from((await owner.read({ media_id, expected_sha256: sha256 })).bytes).equals(bytes)).toBe(true);
+    const anonymousRows = await anonymous.schema('private').from('creative_media_distributions').select('*'); expect(anonymousRows.error).not.toBeNull();
   });
 });

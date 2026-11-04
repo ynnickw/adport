@@ -1,6 +1,7 @@
 export { AdportError, type AdportErrorCode } from './errors.js';
 export { creativeSchema, creativesOutput, creativeActionSchema, creativeFieldSchema, creativeStatusAction, type Creative, type CreativeAction } from './creatives.js';
-export { LocalMediaResolver, mediaSourceFields, mediaContentType, mediaAssetSchema, verifyMedia, mediaUploadMetadataSchema, mediaWriteSchemas, hostFileSchema, MAX_PROJECT_MEDIA_BYTES, MAX_INLINE_MEDIA_BYTES, MEDIA_UPLOAD_PART_BYTES, PROJECT_MEDIA_TYPES, type HostFile, type ManagedMediaLibrary, type MediaAsset, type MediaLibrary, type MediaSource, type MediaResolver, type VerifiedMedia } from './media.js';
+export { LocalMediaResolver, mediaSourceFields, mediaContentType, mediaAssetSchema, verifyMedia, mediaUploadMetadataSchema, mediaWriteSchemas, mediaListSchema, mediaPlatformSchema, MEDIA_PLATFORMS, hostFileSchema, MAX_PROJECT_MEDIA_BYTES, MAX_INLINE_MEDIA_BYTES, MEDIA_UPLOAD_PART_BYTES, PROJECT_MEDIA_TYPES, type HostFile, type ManagedMediaLibrary, type MediaAsset, type MediaListInput, type MediaLibrary, type MediaSource, type MediaResolver, type VerifiedMedia } from './media.js';
+export { MEDIA_UPLOAD_TOOLS, MEDIA_PREPARATION_TOOLS } from './tools/media-distribution.js';
 export { adportHome } from './paths.js';
 export {
   METRICS,
