@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { createContext, selectRuntimeCatalog } from '../src/context.js';
 import { MockProvider } from '../src/testing/mock-provider.js';
 import { classifyTool } from '../src/tools/catalog.js';
+import { MEDIA_PREPARATION_TOOLS, MEDIA_UPLOAD_TOOLS } from '../src/tools/media-distribution.js';
+import { guardedWriteTool } from '../src/tools/write.js';
+import { z } from 'zod';
 
 describe('catalog runtime boundaries', () => {
   it('restricts shared account reads and reports to the selected providers', async () => {
@@ -20,5 +23,22 @@ describe('catalog runtime boundaries', () => {
     expect(classifyTool('meta_api_read', 'meta').exposure).toBe('raw');
     expect(classifyTool('meta_create_ad', 'meta').exposure).toBe('standard');
     expect(classifyTool('google_create_experiment', 'google')).toEqual({ category: 'experiments', exposure: 'specialist' });
+  });
+  it('keeps the complete central asset upload and metadata flow in Standard', () => {
+    for (const name of [...MEDIA_UPLOAD_TOOLS, ...MEDIA_PREPARATION_TOOLS,
+      'media_rename', 'media_update_metadata', 'media_delete', 'reddit_asset_upload_status',
+      'spotify_get_asset', 'pinterest_get_media_upload', 'pinterest_create_video_pin',
+      'linkedin_get_document', 'x_media_upload_status', 'x_register_uploaded_media']) {
+      const namespace = name.startsWith('media_') ? 'core' : name.split('_')[0]!;
+      expect(classifyTool(name, namespace).exposure, name).toBe('standard');
+    }
+  });
+  it('preserves explicit catalog metadata through the guarded write adapter', () => {
+    const tool = guardedWriteTool({ name: 'spotify_update_capi_integration', namespace: 'spotify', provider: 'spotify',
+      description: 'Rename an integration', payload: z.object({ name: z.string() }), kind: 'update',
+      catalog: { category: 'measurement', exposure: 'specialist' } });
+    expect(tool.catalog).toEqual({ category: 'measurement', exposure: 'specialist' });
+    expect(tool.input.shape.pending_operation_id).toBeDefined();
+    expect(tool.annotations.readOnly).toBe(false);
   });
 });

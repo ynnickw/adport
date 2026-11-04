@@ -6,8 +6,9 @@ import { createCapi, createDataset, createMobile, createPixel, datasetSharing, d
 
 export const measurementWriteNames = new Set(['spotify_create_pixel', 'spotify_update_pixel', 'spotify_create_capi_integration', 'spotify_update_capi_integration', 'spotify_create_dataset', 'spotify_update_dataset', 'spotify_remove_dataset_integration', 'spotify_set_dataset_sharing', 'spotify_create_mobile_app', 'spotify_update_mobile_app', 'spotify_set_mobile_app_sharing']);
 export function spotifyMeasurementTools(provider: SpotifyAdsProvider): AnyToolDefinition[] {
-  const read = <T extends z.ZodRawShape>(name: string, description: string, input: z.ZodObject<T>, handler: (input: z.output<z.ZodObject<T>>) => Promise<unknown>) => defineTool({ name, namespace: 'spotify', description, input, presentation: 'records', annotations: { readOnly: true }, handler });
-  const write = (name: string, description: string, payload: z.ZodObject, kind: 'create' | 'update' | 'remove', destructive = false) => guardedWriteTool({ name, namespace: 'spotify', provider: 'spotify', description, payload, kind, destructive });
+  const catalog = { category: 'measurement', exposure: 'specialist' } as const;
+  const read = <T extends z.ZodRawShape>(name: string, description: string, input: z.ZodObject<T>, handler: (input: z.output<z.ZodObject<T>>) => Promise<unknown>) => defineTool({ name, namespace: 'spotify', description, input, catalog, presentation: 'records', annotations: { readOnly: true }, handler });
+  const write = (name: string, description: string, payload: z.ZodObject, kind: 'create' | 'update' | 'remove', destructive = false) => guardedWriteTool({ name, namespace: 'spotify', provider: 'spotify', description, payload, catalog, kind, destructive });
   const account = { account_id: spotifyId }, dataset = z.object({ ...account, ...datasetTarget });
   return [
     read('spotify_measurement_context', 'Read the selected account’s verified business and shared dataset topology. Read an individual resource before a mutation to obtain its full configuration_hash. Other account identities and business-wide inventory are excluded; no tracking or credentials are created.', z.object(account), v => provider.measurement.context(v.account_id)),
