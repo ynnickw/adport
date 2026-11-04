@@ -1,15 +1,53 @@
 import { JSDOM } from 'jsdom';
 import { describe, expect, it, vi } from 'vitest';
 import { ADPORT_UI_HTML, structuredResult, type AdportView } from '../src/ui.js';
+import { PROVIDER_LOGOS } from '../src/provider-logos.js';
 
-function mount(view: AdportView, data: unknown, tool = 'pinterest_keywords') {
+function mount(view: AdportView, data: unknown, tool = 'pinterest_keywords', descriptor?: { provider: string }) {
   const callTool = vi.fn();
   const dom = new JSDOM(ADPORT_UI_HTML, { runScripts: 'dangerously', url: 'https://widget.example', beforeParse(window) { Object.defineProperty(window, 'openai', { value: { callTool } }); } });
-  dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window.parent, data: { jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult(tool, view, data) } } }));
+  dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window.parent, data: { jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult(tool, view, data, undefined, undefined, undefined, undefined, undefined, descriptor) } } }));
   return { dom, document: dom.window.document, callTool };
 }
 
 describe('compact record, recommendation, receipt and trend views', () => {
+  it.each(Object.keys(PROVIDER_LOGOS))('retains the real %s provider mark on generic tool results', provider => {
+    const { dom, document } = mount('data', { items: [{ name: 'Example record', status: 'ACTIVE' }] }, provider+'_records', { provider });
+    try { expect(document.querySelector('.operation-heading .logo.'+provider+' svg')).not.toBeNull(); }
+    finally { dom.window.close(); }
+  });
+  it('shows all project provider logos, the saved project logo, and no duplicated organization or raw ID', () => {
+    const providers=Object.keys(PROVIDER_LOGOS);
+    const { dom, document, callTool } = mount('data', { projects: [{ id: 'private-project-id', name: 'Adport', organization_name: 'Adport', role: 'owner', providers, logo_url: 'https://example.test/project.png' }] }, 'projects_list');
+    try {
+      expect(document.querySelector('.operation-heading h2')?.textContent).toBe('Projects');
+      expect(document.querySelector('.project-logo img')?.getAttribute('src')).toBe('https://example.test/project.png');
+      expect(document.querySelectorAll('.record-provider')).toHaveLength(providers.length);
+      expect(document.querySelector('.project-copy')?.textContent).toBe('AdportOwner');
+      expect(document.querySelector('.record-list')?.textContent).not.toContain('private-project-id');
+      expect(document.querySelector('details')?.textContent).toContain('private-project-id');
+      expect(document.querySelector('button,input,select,textarea')).toBeNull(); expect(callTool).not.toHaveBeenCalled();
+      document.querySelector('.project-logo img')?.dispatchEvent(new dom.window.Event('error'));
+      expect(document.querySelector('.project-logo')?.textContent).toBe('A');
+    } finally { dom.window.close(); }
+  });
+  it('keeps empty and unsafe project logos honest and preserves long names and organization context', () => {
+    const { dom, document } = mount('data', { projects: [{ id: 'one', name: '<Product>', organization_name: 'Company', role: 'viewer', providers: [], logo_url: 'javascript:alert(1)' }, { id: 'two', name: 'Another project', role: 'admin', providers: ['future-provider'] }] }, 'projects_list');
+    try {
+      expect(document.querySelector('img')).toBeNull(); expect(document.querySelector('.project-copy')?.textContent).toBe('<Product>Company · Viewer');
+      expect(document.querySelector('.record-provider-name')?.textContent).toBe('future-provider');
+      expect(document.querySelector('.project-row script')).toBeNull();
+    } finally { dom.window.close(); }
+  });
+  it('uses provider identity and all provider marks in other mixed record lists', () => {
+    const { dom, document } = mount('data', { items: [{ display_name: 'Search account', provider: 'google', status: 'ACTIVE', platforms: ['google', 'meta', 'apple', 'x', 'linkedin'] }, { account_name: 'Social account', provider: 'meta' }] }, 'connected_accounts');
+    try {
+      expect(document.querySelectorAll('.record-name .logo')).toHaveLength(2);
+      expect(document.querySelector('.record-name strong')?.textContent).toBe('Search account');
+      expect(document.querySelectorAll('.record-provider')).toHaveLength(5);
+      expect(document.querySelector('.record-list')?.textContent).not.toContain('more in Details');
+    } finally { dom.window.close(); }
+  });
   it('selects actual records before empty warnings, keeps all rows, units and provider notes', () => {
     const { dom, document, callTool } = mount('records', { warnings: [], items: Array.from({ length: 12 }, (_, i) => ({ id: String(i), value: 'Keyword '+i, match_type: 'EXACT', status: 'UNARCHIVED', daily_budget_micros: 1250000, currency: 'USD' })), notes: ['Campaign scope only. Unarchived is not delivery.'] });
     try {
