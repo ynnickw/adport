@@ -188,4 +188,11 @@ describe('Pinterest audiences and customer sources', () => {
     const blocked = await createContext({ providerModules: [{ provider, tools: pinterestTools(provider) }], engine: new PolicyEngine({ ...DEFAULT_POLICY, protected_accounts: [A] }, new PendingStore(path.join(dir, 'blocked')), new AuditLog(path.join(dir, 'blocked-audit'))) });
     await expect(blocked.registry.call('pinterest_update_audience', input, blocked.ctx)).rejects.toThrow('protected'); expect(writes(calls)).toHaveLength(1);
   });
+  it('preserves count/digest-only customer previews through the shared widget review adapter', async () => {
+    const { provider, calls } = fixture();
+    const dir = await mkdtemp(path.join(tmpdir(), 'adport-pinterest-record-review-')); dirs.push(dir);
+    const runtime = await createContext({ providerModules: [{ provider, tools: pinterestTools(provider) }], engine: new PolicyEngine(DEFAULT_POLICY, new PendingStore(path.join(dir, 'pending')), new AuditLog(path.join(dir, 'audit'))) });
+    const result = await runtime.registry.call('pinterest_create_customer_list', { account_id: A, name: 'QA records', records_sha256: hashes, confirm_data_rights: true }, runtime.ctx) as { preview: unknown };
+    expect(JSON.stringify(result.preview)).not.toContain(hashes[0]); expect(JSON.stringify(result.preview)).not.toContain(hashes[1]); expect(JSON.stringify(result.preview)).toContain('2 records'); expect(writes(calls)).toEqual([]);
+  });
 });

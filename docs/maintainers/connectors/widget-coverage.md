@@ -15,15 +15,15 @@ fixture. No production accounts or provider writes are used.
 
 | View | Hosted tools | Content |
 | --- | ---: | --- |
-| Operation | 323 | Structured review and guarded approval |
-| Data | 179 | Generic native records, arrays, values, and full details |
-| Creatives | 32 | Existing media previews, editors, uploads, refresh, and pagination |
+| Operation | 333 | Structured review and guarded approval |
+| Data | 184 | Generic native records, arrays, values, and full details |
+| Creatives | 36 | Existing media previews, editors, uploads, refresh, and pagination |
 | Insights | 4 | Findings and their lifecycle |
-| Planning | 2 | Native estimates and existing paging |
+| Planning | 3 | Native estimates and existing paging |
 | Accounts | 1 | Connected accounts and provider errors |
 | Report | 1 | Existing currency-separated summaries and charts |
 
-There are 542 hosted tools and 566 local registry tools. Local generic API
+There are 562 hosted tools and 585 local registry tools. Local generic API
 dispatchers remain excluded from the hosted surface. Newly registered reads get
 the data fallback unless they declare a specialized presentation.
 
@@ -36,6 +36,8 @@ Legacy arrow text is only a compatibility fallback. Missing previous values are
 never invented. Policy adjustments remain visible and requested statuses are
 suppressed when the provider will coerce them. Nested batches are retained, and
 binary payloads are represented by metadata.
+Customer-record batches and nested personal matching identifiers in fallback
+reviews are replaced with counts and SHA-256 digests, including inside Details.
 
 The main review shows up to six fields and three array entries, with complete
 values in Details. Provider notes, shared-budget scope, coercions, and result
