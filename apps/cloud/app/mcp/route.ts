@@ -1,4 +1,4 @@
-import { createMcpServer } from '@adport/mcp';
+import { createMcpServer, ADPORT_UI_RESOURCE_DOMAINS } from '@adport/mcp';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { apiPrincipal } from '@/lib/cloud/auth';
 import { createTenantRuntime } from '@/lib/cloud/runtime';
@@ -37,6 +37,7 @@ async function handle(request: Request): Promise<Response> {
       name: 'adport-cloud',
       productionOnly: true,
       uiDomain: mcpUiDomain(oauthClient?.redirectUris ?? [], mcpResourceUrl()),
+      uiResourceDomains: [...ADPORT_UI_RESOURCE_DOMAINS, new URL(env().NEXT_PUBLIC_SUPABASE_URL).origin],
       version: '0.1.0',
       icons: [{
         src: `${oauthIssuerUrl()}/icon.svg?brand=orange-dot-v2`,

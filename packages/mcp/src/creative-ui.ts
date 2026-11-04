@@ -32,9 +32,9 @@ export const CREATIVE_UI_SCRIPT = String.raw`
       const mediaView=creative=>{
         const items=arr(creative.media).map(media=>{
           const url=safeUrl(media.url,true);if (!url) return '';
-          const src=esc(url.href),name=esc(media.alt || creative.name || 'Creative');
-          if (media.type==='image') return '<a class="creative-media-item" href="'+src+'" target="_blank" rel="noopener noreferrer" aria-label="View image: '+name+'"><img src="'+src+'" alt="'+name+'" loading="lazy" referrerpolicy="no-referrer"></a>';
-          if (media.type==='video') return '<div class="creative-media-item"><video src="'+src+'" controls preload="none" playsinline aria-label="'+name+'"></video></div>';
+          const src=esc(url.href),open=safeUrl(media.open_url,true)||url,poster=safeUrl(media.poster_url,true),name=esc(media.alt || creative.name || 'Creative');
+          if (media.type==='image') return '<a class="creative-media-item" href="'+esc(open.href)+'" target="_blank" rel="noopener noreferrer" aria-label="'+(creative.type==='application/pdf'?'Open document: ':'View image: ')+name+'"><img src="'+src+'" alt="'+name+'" loading="lazy" referrerpolicy="no-referrer"></a>';
+          if (media.type==='video') return '<div class="creative-media-item"><video src="'+src+'" controls preload="metadata" '+(poster?'poster="'+esc(poster.href)+'"':'data-first-frame')+' playsinline aria-label="'+name+'"></video></div>';
           if (media.type==='audio') return '<div class="creative-media-item"><audio src="'+src+'" controls preload="none" aria-label="'+name+'"></audio></div>';
           return '';
         }).join('');
@@ -52,6 +52,7 @@ export const CREATIVE_UI_SCRIPT = String.raw`
       const notes=notices({...data,truncated:false})+(data.truncated?'<p class="notice">Showing '+creatives.length+' preview'+(creatives.length===1?'':'s')+' from a partial result.</p>':'');
       const gallery=creatives.length?'<div class="creative-grid'+(creatives.length===1?' creative-grid-single':'')+'" role="region" aria-label="Creative previews" tabindex="0">'+cards+'</div>':'<div class="empty">No creatives to preview.</div>';
       app.innerHTML=chrome(notes+gallery,creatives.length+' creative'+(creatives.length===1?'':'s'));
+      app.querySelectorAll('video[data-first-frame]').forEach(video=>video.addEventListener('loadedmetadata',()=>{if(Number.isFinite(video.duration)&&video.duration>0)video.currentTime=Math.min(.1,video.duration/2);},{once:true}));
       app.querySelectorAll('.creative-media img,.creative-media video,.creative-media audio').forEach(media=>media.addEventListener('error',()=>{
         const placeholder=document.createElement('span');placeholder.className='creative-placeholder';placeholder.textContent='Preview unavailable';
         media.closest('.creative-media-item').replaceChildren(placeholder);
