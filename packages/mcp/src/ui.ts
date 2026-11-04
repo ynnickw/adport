@@ -1,3 +1,5 @@
+import { MEDIA_LIBRARY_UI, MEDIA_LIBRARY_STYLES } from './media-library-ui.js';
+import { MEDIA_UPLOAD_UI } from './media-upload-ui.js';
 import { TREND_UI_SCRIPT, TREND_UI_STYLES } from './trend-ui.js';
 import { RECORD_UI_SCRIPT, RECORD_UI_STYLES } from './record-ui.js';
 import { RECEIPT_UI_SCRIPT, RECEIPT_UI_STYLES } from './receipt-ui.js';
@@ -218,6 +220,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     @media (max-width:620px) { .kpis { grid-template-columns:repeat(2,minmax(0,1fr)) }.top,.content { padding-left:12px; padding-right:12px } }
     @media (max-width:420px) { .bar-row { grid-template-columns:minmax(0,1fr) auto; gap:5px }.bar-name { grid-column:1/-1 }.bar-name > span:last-child { white-space:normal }.bars { gap:12px } }
 ${CREATIVE_UI_STYLES}
+${MEDIA_LIBRARY_STYLES}
 ${RECORD_UI_STYLES}
 ${RECEIPT_UI_STYLES}
 ${INSIGHT_UI_STYLES}
@@ -320,6 +323,8 @@ ${TREND_UI_SCRIPT}
         } else send({jsonrpc:'2.0',id:requestId,method:'tools/call',params:{name:tool,arguments:parameters}});
       });
     }
+${MEDIA_UPLOAD_UI}
+${MEDIA_LIBRARY_UI}
 ${CREATIVE_UI_SCRIPT}
     function renderPlanning(data,meta) {
       const planning=data.planning || {}, columns=arr(planning.columns).filter(v=>typeof v?.key==='string'&&typeof v?.label==='string').slice(0,12), rows=arr(planning.rows), pageSize=100, pages=Math.max(1,Math.ceil(rows.length/pageSize));
@@ -357,7 +362,9 @@ ${CREATIVE_UI_SCRIPT}
     }
     function acceptResult(result,local=false) {
       if (!result || typeof result !== 'object') return;
-      const fingerprint=JSON.stringify(resultData(result));
+      const incoming=resultData(result);
+      if(!local && (app.querySelector('[data-media-gallery]') && uploads.items.length>0 && ['media_prepare_upload','media_finalize_upload','media_get'].includes(incoming?._adport?.tool || result._meta?.adport?.tool) || mediaLibrary?.loading && incoming?._adport?.tool==='media_list' && mediaLibraryProject(incoming,incoming._adport)===mediaLibrary.project)) return;
+      const fingerprint=JSON.stringify(incoming);
       // Host state updates can echo an old tool result after a local edit/apply.
       if (!local && state.hasLocalResult && hostResults.has(fingerprint)) return;
       if (local) state.hasLocalResult=true;

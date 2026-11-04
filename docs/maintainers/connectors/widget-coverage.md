@@ -19,7 +19,7 @@ fixture. No production accounts or provider writes are used.
 | Data | Semantic fallback for native records, arrays and values |
 | Records | Compact keywords, audiences, boards and entity collections |
 | Receipt | Processing status, reported counts and individual outcomes |
-| Creatives | View-only media previews and ad copy |
+| Creatives | Media previews, ad copy, central-library upload and paging |
 | Insights | Findings, reasons and suggested actions |
 | Planning | Native estimates and existing paging |
 | Accounts | Connected accounts and provider errors |
@@ -36,8 +36,14 @@ Creative galleries show smaller media, ad copy, one status label, and destinatio
 hostnames. Gallery height is bounded; all returned items remain available through
 native scrolling. Single previews stay small. Images open at full size; video and
 audio retain native playback controls. Failed media displays an unavailable state.
-Provider actions, upload grants, refresh and page metadata never create controls
-or tool calls. Editing and uploads remain available through agents and the dashboard.
+Provider previews never turn provider actions or upload configuration into controls.
+The central `media_list` view has a compact Upload files control, multi-file drop,
+per-file progress and Load more. Upload/finalize mutations use the same host bridge
+and guarded preview/apply tools as agents. Upload destination, project, SHA-256,
+size and MIME are checked; unknown outcomes never replay bytes or an uncertain
+apply. Queue updates and appended pages preserve existing media nodes. Read-only
+grants retain paging but have no upload control. Organization and distribution
+remain agent-managed; the dashboard remains an alternative upload/browsing view.
 
 ## Records, receipts, and trends
 
@@ -120,4 +126,4 @@ origin contract](https://apps.extensions.modelcontextprotocol.io/api/interfaces/
 Run `pnpm build`, `pnpm test`, and `pnpm typecheck`. The provider suites cover native
 request/response shapes; widget tests execute the shipped iframe script and cover
 the full registry, native and standard host bridges, scopes, errors, holds,
-processing receipts and view-only creative galleries.
+processing receipts, view-only provider galleries, and central-library uploads and pagination.
