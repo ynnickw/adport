@@ -9,7 +9,7 @@ import { pinMedia } from './creatives.js';
 const id = z.string().regex(/^\d+$/).max(30), hash = z.string().regex(/^[a-f0-9]{64}$/);
 const privacy = z.enum(['PUBLIC', 'PROTECTED', 'SECRET']);
 const username = z.string().min(1), owner = z.object({ username });
-const boardSchema = z.looseObject({ id, name: z.string(), privacy, owner, is_ads_only: z.boolean().optional() });
+const boardSchema = z.looseObject({ id, name: z.string(), description: z.string().nullable().optional(), privacy, owner, is_ads_only: z.boolean().optional(), pin_count: z.number().int().nonnegative().optional(), collaborator_count: z.number().int().nonnegative().optional(), follower_count: z.number().int().nonnegative().optional() });
 const pinSchema = z.looseObject({ id, board_id: id, title: z.string().nullable().optional(), description: z.string().nullable().optional(), alt_text: z.string().nullable().optional(), link: z.string().nullable().optional(), is_owner: z.boolean().optional(), has_been_promoted: z.boolean().optional() });
 const mediaSchema = z.object({ media_id: id, media_type: z.literal('video'), status: z.enum(['registered', 'processing', 'succeeded', 'failed']) });
 const source = z.object(mediaSourceFields).refine(v => Boolean(v.media_id) !== Boolean(v.file_path), 'Choose project media_id or local file_path');
@@ -19,13 +19,20 @@ const pinCreation = { board_id: id, expected_board_privacy: privacy, original_co
 const createImage = source.safeExtend(pinCreation);
 const createVideo = z.object({ ...pinCreation, native_media_id: id, cover_image_key_frame_time: z.number().int().nonnegative().safe().default(0) });
 const createBoard = z.object({ name: z.string().trim().min(1).max(180), description: z.string().max(500).optional(), privacy: privacy.default('SECRET'), confirm_publication: z.boolean().default(false) });
+const boardReference = { board_id: id, expected_snapshot_hash: hash };
+const updateBoard = z.object({ ...boardReference, name: z.string().trim().min(1).max(180).optional(), description: z.string().max(500).nullable().optional() }).strict().refine(v => v.name !== undefined || v.description !== undefined, 'Provide a board name or description');
+const deleteEmptyBoard = z.object({ ...boardReference, confirm_permanent_deletion: z.literal(true) }).strict();
 const updatePin = z.object({ pin_id: id, expected_snapshot_hash: hash, ...copy }).strict().refine(v => Object.keys(copy).some(key => v[key as keyof typeof v] !== undefined), 'Provide Pin copy to update');
 const deletePin = z.object({ pin_id: id, expected_snapshot_hash: hash }).strict();
-const kinds = { pinterest_create_board: 'create', pinterest_create_image_pin: 'create', pinterest_upload_video: 'create', pinterest_create_video_pin: 'create', pinterest_update_pin: 'update', pinterest_delete_pin: 'remove' } as const;
+const kinds = { pinterest_create_board: 'create', pinterest_update_board: 'update', pinterest_delete_empty_board: 'remove', pinterest_create_image_pin: 'create', pinterest_upload_video: 'create', pinterest_create_video_pin: 'create', pinterest_update_pin: 'update', pinterest_delete_pin: 'remove' } as const;
 export const PINTEREST_ASSET_WRITES = new Set(Object.keys(kinds));
 type Plan = Omit<WritePreview, 'serverValidated'> & { execute: () => Promise<string[]> };
 type Page = { account_id: string; page_size: number; bookmark?: string };
 type Pin = z.infer<typeof pinSchema>;
+type Board = z.infer<typeof boardSchema>;
+function boardSnapshot(board: Board) {
+  return createHash('sha256').update(JSON.stringify({ id: board.id, name: board.name, description: board.description ?? null, privacy: board.privacy, owner: board.owner.username.toLowerCase(), is_ads_only: board.is_ads_only ?? null })).digest('hex');
+}
 function snapshot(pin: Pin, board: z.infer<typeof boardSchema>) {
   return createHash('sha256').update(JSON.stringify({ id: pin.id, board_id: pin.board_id, title: pin.title ?? null, description: pin.description ?? null, alt_text: pin.alt_text ?? null, link: pin.link ?? null, is_owner: pin.is_owner, has_been_promoted: pin.has_been_promoted, privacy: board.privacy, owner: board.owner.username, is_ads_only: board.is_ads_only ?? false })).digest('hex');
 }
@@ -66,6 +73,18 @@ export class PinterestAssetService {
     if (input.privacy) params.set('privacy', input.privacy);
     const result = await this.page('boards', boardSchema, input, params);
     return { ...result, items: result.items.map(board => ({ ...board, owned_by_advertiser: board.owner.username.toLowerCase() === current.owner.username.toLowerCase() })) };
+  }
+  async getBoard(account: string, boardId: string) {
+    const board = await this.ownedBoard(account, boardId), snapshotHash = boardSnapshot(board);
+    const creative: Creative = { id: board.id, provider: 'pinterest', account_id: account, name: board.name, type: 'PINTEREST_BOARD', status: board.privacy, headlines: [], descriptions: board.description ? [board.description] : [], landing_urls: [], media: [], actions: [{ label: 'Edit board', tool: 'pinterest_update_board', arguments: { account_id: account, board_id: board.id, expected_snapshot_hash: snapshotHash }, fields: [...(board.is_ads_only === true || board.privacy === 'PROTECTED' ? [] : [{ key: 'name', label: 'Board name', type: 'text' as const, value: board.name, max_length: 180 }]), { key: 'description', label: 'Description', type: 'text', value: board.description ?? '', max_length: 500 }] }] };
+    return { board, snapshot_hash: snapshotHash, creatives: [creative], truncated: false, notes: ['Board copy and visibility are current native values. Copy edits preserve privacy, Pins, sections and ad delivery. Counts may change independently; they are not a deletion guarantee.'] };
+  }
+  private async requireEmptyBoard(account: string, board: Board) {
+    if (board.privacy !== 'SECRET' || board.is_ads_only !== false || board.pin_count !== 0 || board.collaborator_count !== 0 || board.follower_count !== 0) throw new AdportError('INVALID_INPUT', 'pinterest: empty-board deletion requires an explicitly SECRET, non-ad-only board with known zero Pins, collaborators and followers');
+    const input = { account_id: account, page_size: 1 };
+    const pins = await this.page(`boards/${board.id}/pins`, pinSchema, input, this.params(account));
+    const sections = await this.page(`boards/${board.id}/sections`, z.object({ id: id.optional(), name: z.string() }), input, this.params(account));
+    if (pins.items.length || pins.truncated || sections.items.length || sections.truncated) throw new AdportError('INVALID_INPUT', 'pinterest: board still contains Pins or sections; empty-board deletion does not remove content');
   }
   async getPin(account: string, pinId: string) {
     const pin = await this.client.get(`pins/${id.parse(pinId)}`, pinSchema, this.params(account));
@@ -108,6 +127,30 @@ export class PinterestAssetService {
         const created = await this.client.mutate('boards', 'POST', native, boardSchema, params);
         if (created.owner.username.toLowerCase() !== current.owner.username.toLowerCase() || created.privacy !== input.privacy || input.privacy !== 'PROTECTED' && created.name !== input.name || input.privacy === 'PROTECTED' && created.is_ads_only !== true) throw new AdportError('PROVIDER_ERROR', 'pinterest: created board owner/privacy/name mismatch; reconcile before retrying', { resource_ids: [created.id] });
         return [created.id];
+      });
+    }
+    if (op.tool === 'pinterest_update_board' || op.tool === 'pinterest_delete_empty_board') {
+      const input = op.tool === 'pinterest_update_board' ? updateBoard.parse(op.payload) : deleteEmptyBoard.parse(op.payload), board = await this.ownedBoard(account, input.board_id);
+      if (boardSnapshot(board) !== input.expected_snapshot_hash) throw new AdportError('PENDING_MISMATCH', 'pinterest: board copy, privacy or ownership changed; read the board again');
+      if (op.tool === 'pinterest_delete_empty_board') {
+        await this.requireEmptyBoard(account, board);
+        return plan(`Permanently delete empty Pinterest board “${board.name}”`, [`Board ${board.id}; SECRET; native counts, Pins and sections checked empty.`, 'No ad, Pin or project media is removed. Pinterest has no documented atomic empty-board conditional delete: stop other board writers until the operation completes.'], async () => {
+          // Recheck immediately before DELETE as well as when the apply plan is built.
+          const fresh = await this.ownedBoard(account, board.id);
+          if (boardSnapshot(fresh) !== input.expected_snapshot_hash) throw new AdportError('PENDING_MISMATCH', 'pinterest: board changed before deletion; read it again');
+          await this.requireEmptyBoard(account, fresh);
+          const receipt = await this.client.mutate(`boards/${board.id}`, 'DELETE', undefined, boardSchema.optional(), params);
+          if (receipt && receipt.id !== board.id) throw new AdportError('PROVIDER_ERROR', 'pinterest: board deletion receipt ID mismatch; reconcile before retrying', { resource_ids: [board.id] });
+          return [board.id];
+        });
+      }
+      const patch = updateBoard.parse(input);
+      if (patch.name !== undefined && (board.is_ads_only === true || board.privacy === 'PROTECTED')) throw new AdportError('INVALID_INPUT', 'pinterest: ad-only board names are assigned by Pinterest; edit only the description');
+      const fields = { ...(patch.name !== undefined ? { name: patch.name } : {}), ...(patch.description !== undefined ? { description: patch.description } : {}) };
+      return plan(`Edit Pinterest board “${board.name}”`, [`Board ${board.id}; visibility ${board.privacy} is preserved. Pins, sections and delivery are unchanged.`, ...Object.entries(fields).map(([key, value]) => `${key}: ${JSON.stringify(board[key] ?? null)} → ${JSON.stringify(value)}`), 'Pinterest provides no documented conditional-write version; the current snapshot is rechecked on apply, without claiming an atomic provider compare-and-swap.'], async () => {
+        const receipt = await this.client.mutate(`boards/${board.id}`, 'PATCH', fields, boardSchema, params);
+        if (receipt.id !== board.id || receipt.privacy !== board.privacy || receipt.owner.username.toLowerCase() !== board.owner.username.toLowerCase() || receipt.is_ads_only !== board.is_ads_only || Object.entries(fields).some(([key, value]) => (receipt[key] ?? null) !== value) || patch.name === undefined && receipt.name !== board.name || patch.description === undefined && (receipt.description ?? null) !== (board.description ?? null)) throw new AdportError('PROVIDER_ERROR', 'pinterest: board update receipt differs from approved copy or preserved visibility/ownership; reconcile before retrying', { resource_ids: [board.id] });
+        return [board.id];
       });
     }
     if (op.tool === 'pinterest_upload_video') {
@@ -163,10 +206,13 @@ export function pinterestAssetTools(provider: PinterestAdsProvider): AnyToolDefi
   const account = { account_id: pinterestId }, paging = { page_size: z.number().int().min(1).max(250).default(25), bookmark: z.string().min(1).optional() };
   return [
     defineTool({ name: 'pinterest_boards', namespace: 'pinterest', description: 'List selected advertiser-owner boards, privacy and ownership with native pagination. Public boards require boards:read; secret boards also require boards:read_secret. Collaborator boards are labeled, not treated as owned.', input: z.object({ ...account, ...paging, privacy: z.enum(['ALL', 'PUBLIC', 'PROTECTED', 'SECRET', 'PUBLIC_AND_SECRET']).optional() }), annotations: { readOnly: true }, handler: input => provider.assets.boards(input) }),
+    defineTool({ name: 'pinterest_get_board', namespace: 'pinterest', description: 'Read one advertiser-owned board, native visibility/counts and copy snapshot with a guarded edit widget. Public boards require boards:read; secret boards also need boards:read_secret. No Pins are fetched or changed.', input: z.object({ ...account, board_id: id }), output: creativesOutput.passthrough(), presentation: 'creatives', annotations: { readOnly: true }, handler: input => provider.assets.getBoard(input.account_id, input.board_id) }),
     defineTool({ name: 'pinterest_pins', namespace: 'pinterest', description: 'View original Pinterest Pin copy/media for this advertiser owner or one owned board. Native bookmark pagination; public boards/Pins need boards:read and pins:read; secret content also needs their read_secret scopes. No dashboard.', input: z.object({ ...account, ...paging, board_id: id.optional() }), output: creativesOutput.passthrough(), presentation: 'creatives', pagination: { cursorInput: 'bookmark' }, annotations: { readOnly: true }, handler: input => provider.assets.pins(input) }),
     defineTool({ name: 'pinterest_get_pin', namespace: 'pinterest', description: 'View exact original Pin, owned board visibility and snapshot hash. Owned never-promoted Pins expose guarded copy-edit actions. This is separate from advertiser ad settings.', input: z.object({ ...account, pin_id: id }), output: creativesOutput.passthrough(), presentation: 'creatives', annotations: { readOnly: true }, handler: input => provider.assets.getPin(input.account_id, input.pin_id) }),
     defineTool({ name: 'pinterest_get_media_upload', namespace: 'pinterest', description: 'Read native video upload processing. The credential-global media library must match the selected advertiser owner; requires pins:read and user_accounts:read. Never assumes an upload is ready.', input: z.object({ ...account, native_media_id: id }), annotations: { readOnly: true }, handler: input => provider.assets.getMedia(input.account_id, input.native_media_id) }),
     guardedWriteTool({ name: 'pinterest_create_board', namespace: 'pinterest', provider: 'pinterest', kind: 'create', destructive: false, payload: createBoard, description: 'Create an advertiser-owned board, SECRET by default. PUBLIC requires confirm_publication; PROTECTED creates an ad-only board with Pinterest-assigned name. Public boards require boards read/write; SECRET also requires boards:read_secret and boards:write_secret.' }),
+    guardedWriteTool({ name: 'pinterest_update_board', namespace: 'pinterest', provider: 'pinterest', kind: 'update', payload: updateBoard, description: 'Edit supplied board name/description after matching its copy/owner/privacy snapshot. Omitted fields, privacy, Pins, sections and delivery are preserved; null clears description. Ad-only names cannot be changed. Uses boards read/write and corresponding secret scopes for SECRET boards.' }),
+    guardedWriteTool({ name: 'pinterest_delete_empty_board', namespace: 'pinterest', provider: 'pinterest', kind: 'remove', payload: deleteEmptyBoard, description: 'Permanently remove an owned SECRET non-ad-only board after snapshot and known-zero Pins/collaborators/followers plus empty native Pin/section checks. Rejects populated or unknown state; no cascade workflow. Confirm deletion and stop concurrent board writers; Pinterest has no atomic empty conditional delete.' }),
     guardedWriteTool({ name: 'pinterest_create_image_pin', namespace: 'pinterest', provider: 'pinterest', kind: 'create', destructive: false, payload: createImage, description: 'Upload exact SHA-bound PNG/JPEG bytes and create original Pin content on an owned board. Hosted media_id or local file_path; no dashboard. Explicit original_content and current board privacy required. PUBLIC needs confirm_publication; SECRET needs boards/pins read_secret and write_secret scopes. No ad or delivery change.' }),
     guardedWriteTool({ name: 'pinterest_upload_video', namespace: 'pinterest', provider: 'pinterest', kind: 'create', destructive: false, payload: source, description: 'Register and upload SHA-bound MP4 to Pinterest, without creating a Pin or ad. Native media is token-owner scoped, so advertiser owner must match; requires pins read/write and user_accounts:read. Read returned ID processing before create_video_pin. Unknown outcomes are not retried.' }),
     guardedWriteTool({ name: 'pinterest_create_video_pin', namespace: 'pinterest', provider: 'pinterest', kind: 'create', destructive: false, payload: createVideo, description: 'Create original Pin content from succeeded native video and an owned board; cover image uses explicit keyframe seconds. Requires boards/pins scopes, including read_secret/write_secret for SECRET content. Binds current visibility; PUBLIC requires confirm_publication. No advertiser ad is created.' }),

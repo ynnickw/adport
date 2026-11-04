@@ -11,6 +11,7 @@ import { pinterestTools } from '../src/tools.js';
 // Pinterest-owned OpenAPI5.28.0 /boards, /pins and /media, fetched2026-11-04.
 const A = '549000000001', B = '549000000005', P = '1234567890123456789', V = '1234567890123456790';
 const owner = { username: 'adport_qa' }, board = { id: B, name: 'QA', privacy: 'SECRET', owner, is_ads_only: false };
+const emptyBoard = { ...board, description: 'Original board copy', pin_count: 0, collaborator_count: 0, follower_count: 0 };
 const pin = { id: P, board_id: B, title: 'Original', description: 'Preserve me', alt_text: null, link: 'https://example.com', is_owner: true, has_been_promoted: false, media: { media_type: 'image', images: { original: { url: 'https://i.pinimg.com/originals/qa.png', width: 640, height: 640 } } } };
 const imageBytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64'), videoBytes = Buffer.concat([Buffer.from([0, 0, 0, 20]), Buffer.from('ftypisom0000')]);
 const sha = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
@@ -55,6 +56,94 @@ describe('Pinterest original assets without dashboard access', () => {
     expect(result.items.map(v => v.owned_by_advertiser)).toEqual([true, false]); expect(result.next_cursor).toBe('next/page');
     expect(Object.fromEntries(calls.at(-1)!.url.searchParams)).toEqual({ ad_account_id: A, privacy: 'SECRET', page_size: '25', bookmark: 'previous' });
     expect(writes(calls)).toEqual([]);
+  });
+  it('reads an exact owned board and binds copy-edit widget arguments to its snapshot', async () => {
+    const { provider, calls } = fixture(call => call.url.pathname === `/v5/boards/${B}` ? emptyBoard : undefined);
+    const result = await provider.assets.getBoard(A, B);
+    expect(result.board).toMatchObject(emptyBoard); expect(result.snapshot_hash).toMatch(/^[a-f0-9]{64}$/);
+    expect(result.creatives[0]).toMatchObject({ type: 'PINTEREST_BOARD', status: 'SECRET', descriptions: ['Original board copy'], actions: [{ tool: 'pinterest_update_board', arguments: { account_id: A, board_id: B, expected_snapshot_hash: result.snapshot_hash }, fields: [{ key: 'name', value: 'QA' }, { key: 'description', value: 'Original board copy' }] }] });
+    expect(calls.at(-1)!.url.searchParams.get('ad_account_id')).toBe(A); expect(writes(calls)).toEqual([]);
+    const tools = pinterestTools(provider);
+    expect(tools.find(t => t.name === 'pinterest_get_board')).toMatchObject({ presentation: 'creatives', annotations: { readOnly: true } });
+    for (const name of ['pinterest_update_board', 'pinterest_delete_empty_board']) expect(tools.find(t => t.name === name)?.annotations).toMatchObject({ readOnly: false, destructive: true });
+  });
+  it('PATCHes only supplied board copy, preserves visibility, and accepts explicit description clearing', async () => {
+    const { provider, calls } = fixture(call => call.url.pathname === `/v5/boards/${B}` ? { ...emptyBoard, ...(call.init.method === 'PATCH' ? body(call) : {}) } : undefined);
+    const current = await provider.assets.getBoard(A, B);
+    const operation = op('pinterest_update_board', { board_id: B, expected_snapshot_hash: current.snapshot_hash, description: null }, 'update');
+    const preview = await provider.previewWrite(operation, guard); expect(preview.serverValidated).toBe(false); expect(writes(calls)).toEqual([]);
+    expect((await provider.applyWrite(operation, guard)).resourceIds).toEqual([B]);
+    expect(writes(calls)).toHaveLength(1); expect(writes(calls)[0]!.url.pathname).toBe(`/v5/boards/${B}`); expect(writes(calls)[0]!.url.searchParams.get('ad_account_id')).toBe(A);
+    expect(writes(calls)[0]!.init.method).toBe('PATCH'); expect(body(writes(calls)[0]!)).toEqual({ description: null });
+  });
+  it.each([{ name: 'Changed' }, { description: 'Changed' }, { privacy: 'PUBLIC' }, { owner: { username: 'other' } }, { is_ads_only: true }])('rejects changed board copy/visibility/ownership before any write %#', async override => {
+    let changed = false;
+    const { provider, calls } = fixture(call => call.url.pathname === `/v5/boards/${B}` ? { ...emptyBoard, ...(changed ? override : {}) } : undefined);
+    const current = await provider.assets.getBoard(A, B); changed = true;
+    await expect(provider.previewWrite(op('pinterest_update_board', { board_id: B, expected_snapshot_hash: current.snapshot_hash, description: 'New' }, 'update'), guard)).rejects.toThrow();
+    expect(writes(calls)).toEqual([]);
+  });
+  it('does not invalidate copy snapshots when independent native counts change', async () => {
+    let count = 0;
+    const { provider } = fixture(call => call.url.pathname === `/v5/boards/${B}` ? { ...emptyBoard, pin_count: count++ } : undefined);
+    expect((await provider.assets.getBoard(A, B)).snapshot_hash).toBe((await provider.assets.getBoard(A, B)).snapshot_hash);
+  });
+  it('hides native ad-only names from editing and rejects explicit renaming or privacy expansion', async () => {
+    const { provider, calls } = fixture(call => call.url.pathname === `/v5/boards/${B}` ? { ...emptyBoard, privacy: 'PROTECTED', is_ads_only: true } : undefined);
+    const current = await provider.assets.getBoard(A, B);
+    expect(current.creatives[0]!.actions[0]!.fields.map(field => field.key)).toEqual(['description']);
+    await expect(provider.previewWrite(op('pinterest_update_board', { board_id: B, expected_snapshot_hash: current.snapshot_hash, name: 'Rename' }, 'update'), guard)).rejects.toThrow('assigned by Pinterest');
+    const tool = pinterestTools(provider).find(t => t.name === 'pinterest_update_board')!;
+    expect(tool.input.safeParse({ account_id: A, board_id: B, expected_snapshot_hash: current.snapshot_hash, privacy: 'PUBLIC', name: 'Rename' }).success).toBe(false);
+    expect(tool.input.safeParse({ account_id: A, board_id: B, expected_snapshot_hash: current.snapshot_hash }).success).toBe(false);
+    expect(writes(calls)).toEqual([]);
+  });
+  it.each([{ privacy: 'PUBLIC' }, { owner: { username: 'other' } }, { name: 'Different' }, { description: 'Unexpected' }, { is_ads_only: true }])('retains the board ID on mismatched update receipts without retry %#', async override => {
+    const { provider, calls } = fixture(call => call.url.pathname === `/v5/boards/${B}` ? { ...emptyBoard, ...(call.init.method === 'PATCH' ? { ...body(call), ...override } : {}) } : undefined);
+    const current = await provider.assets.getBoard(A, B);
+    await expect(provider.applyWrite(op('pinterest_update_board', { board_id: B, expected_snapshot_hash: current.snapshot_hash, description: 'New' }, 'update'), guard)).rejects.toMatchObject({ details: { resource_ids: [B] } });
+    expect(writes(calls)).toHaveLength(1);
+  });
+  it.each([{ privacy: 'PUBLIC' }, { privacy: 'PROTECTED' }, { is_ads_only: true }, { is_ads_only: undefined }, { pin_count: 1 }, { pin_count: undefined }, { collaborator_count: 1 }, { follower_count: 1 }, { collaborator_count: undefined }, { follower_count: undefined }])('rejects nonempty/nonsecret/unknown board deletion %#', async override => {
+    const { provider, calls } = fixture(call => call.url.pathname === `/v5/boards/${B}` ? { ...emptyBoard, ...override } : undefined);
+    const current = await provider.assets.getBoard(A, B);
+    await expect(provider.previewWrite(op('pinterest_delete_empty_board', { board_id: B, expected_snapshot_hash: current.snapshot_hash, confirm_permanent_deletion: true }, 'remove'), guard)).rejects.toThrow('known zero');
+    expect(writes(calls)).toEqual([]);
+  });
+  it.each(['pins', 'sections'])('rejects a board with native %s despite stale zero counts', async collection => {
+    const { provider, calls } = fixture(call => call.url.pathname === `/v5/boards/${B}` ? emptyBoard : call.url.pathname === `/v5/boards/${B}/${collection}` ? { items: [collection === 'pins' ? pin : { id: '123', name: 'Section' }] } : call.url.pathname.startsWith(`/v5/boards/${B}/`) ? { items: [] } : undefined);
+    const current = await provider.assets.getBoard(A, B);
+    await expect(provider.previewWrite(op('pinterest_delete_empty_board', { board_id: B, expected_snapshot_hash: current.snapshot_hash, confirm_permanent_deletion: true }, 'remove'), guard)).rejects.toThrow('contains Pins or sections');
+    expect(writes(calls)).toEqual([]);
+  });
+  it('rechecks native emptiness immediately before DELETE and sends no cascade/body parameters', async () => {
+    const { provider, calls } = fixture(call => call.url.pathname === `/v5/boards/${B}` ? call.init.method === 'DELETE' ? new Response(null, { status: 204 }) : emptyBoard : call.url.pathname.startsWith(`/v5/boards/${B}/`) ? { items: [], bookmark: null } : undefined);
+    const current = await provider.assets.getBoard(A, B), operation = op('pinterest_delete_empty_board', { board_id: B, expected_snapshot_hash: current.snapshot_hash, confirm_permanent_deletion: true }, 'remove');
+    await provider.previewWrite(operation, guard); expect(writes(calls)).toEqual([]);
+    expect((await provider.applyWrite(operation, guard)).resourceIds).toEqual([B]);
+    const request = writes(calls)[0]!; expect(writes(calls)).toHaveLength(1); expect(request.init.method).toBe('DELETE'); expect(request.init.body).toBeUndefined(); expect(Object.fromEntries(request.url.searchParams)).toEqual({ ad_account_id: A });
+    for (const collection of ['pins', 'sections']) {
+      const reads = calls.filter(c => c.url.pathname === `/v5/boards/${B}/${collection}`);
+      expect(reads).toHaveLength(3); expect(Object.fromEntries(reads[0]!.url.searchParams)).toEqual({ ad_account_id: A, page_size: '1' });
+    }
+  });
+  it('stops when native content appears between apply planning and the final deletion recheck', async () => {
+    let reads = 0;
+    const { provider, calls } = fixture(call => call.url.pathname === `/v5/boards/${B}` ? emptyBoard : call.url.pathname === `/v5/boards/${B}/pins` ? { items: ++reads > 1 ? [pin] : [] } : call.url.pathname === `/v5/boards/${B}/sections` ? { items: [] } : undefined);
+    const current = await provider.assets.getBoard(A, B);
+    await expect(provider.applyWrite(op('pinterest_delete_empty_board', { board_id: B, expected_snapshot_hash: current.snapshot_hash, confirm_permanent_deletion: true }, 'remove'), guard)).rejects.toThrow('contains Pins'); expect(writes(calls)).toEqual([]);
+  });
+  it('rechecks the board snapshot through the shared policy gate before apply and preserves protected-account enforcement', async () => {
+    let changed = false;
+    const { provider, calls } = fixture(call => call.url.pathname === `/v5/boards/${B}` ? { ...emptyBoard, ...(changed ? { name: 'Changed elsewhere' } : {}) } : undefined);
+    const dir = await mkdtemp(path.join(tmpdir(), 'adport-pinterest-board-')); dirs.push(dir);
+    const engine = new PolicyEngine(DEFAULT_POLICY, new PendingStore(path.join(dir, 'pending')), new AuditLog(path.join(dir, 'audit'))), runtime = await createContext({ providerModules: [{ provider, tools: pinterestTools(provider) }], engine });
+    const current = await provider.assets.getBoard(A, B), input = { account_id: A, board_id: B, expected_snapshot_hash: current.snapshot_hash, description: 'New' };
+    const preview = await runtime.registry.call('pinterest_update_board', input, runtime.ctx) as { pending_operation_id: string }; changed = true;
+    await expect(runtime.registry.call('pinterest_update_board', { ...input, pending_operation_id: preview.pending_operation_id }, runtime.ctx)).rejects.toThrow('changed'); expect(writes(calls)).toEqual([]);
+    const protectedEngine = new PolicyEngine({ ...DEFAULT_POLICY, protected_accounts: [A] }, new PendingStore(path.join(dir, 'protected-pending')), new AuditLog(path.join(dir, 'protected-audit')));
+    const protectedRuntime = await createContext({ providerModules: [{ provider, tools: pinterestTools(provider) }], engine: protectedEngine });
+    await expect(protectedRuntime.registry.call('pinterest_delete_empty_board', { account_id: A, board_id: B, expected_snapshot_hash: current.snapshot_hash, confirm_permanent_deletion: true }, protectedRuntime.ctx)).rejects.toThrow('protected'); expect(writes(calls)).toEqual([]);
   });
   it('renders native original Pin media and rejects a foreign-board collection', async () => {
     const { provider } = fixture(call => call.url.pathname === `/v5/boards/${B}/pins` ? { items: [pin] } : undefined);
