@@ -1,4 +1,5 @@
 export const CREATIVE_UI_STYLES = String.raw`
+    .shell:has(.creative-grid-single) { max-width:320px }
     .creative-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr)); gap:10px; max-height:430px; overflow:auto; overscroll-behavior:contain; align-items:start; scrollbar-width:thin }
     .creative-grid:focus-visible { outline:2px solid var(--orange); outline-offset:3px; border-radius:10px }
     .creative-grid-single { grid-template-columns:minmax(0,280px); max-height:none }
