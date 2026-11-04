@@ -78,6 +78,7 @@ describe('TikTok saved targeting templates', () => {
   it('does not claim absence from an empty page without confirmed native completeness', async () => {
     await expect(fixture({ page: { saved_audiences: [] } }).provider.audiences.get(account, audienceId)).rejects.toThrow('could not confirm absence');
     await expect(fixture({ records: [] }).provider.audiences.get(account, audienceId)).rejects.toThrow('was not found');
+    await expect(fixture({ page: { saved_audiences: [], page_info: { page: 1, page_size: 100, total_page: 0, total_number: 1 } } }).provider.audiences.get(account, audienceId)).rejects.toThrow('could not confirm absence');
   });
   it('previews locally, then creates exact native targeting and verifies the returned template', async () => {
     const f = fixture({ records: [] }), payload = { saved_audience_name: 'Synthetic template', location_ids: ['6252001'], gender: 'GENDER_UNLIMITED', languages: [], interest_category_ids: ['123'] };

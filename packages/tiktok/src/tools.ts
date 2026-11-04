@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { TikTokAdsProvider } from './provider.js';
 import { tiktokCreativeTools } from './creative-tools.js';
 import { tiktokAudienceTools } from './audiences.js';
+import { tiktokMeasurementTools } from './measurement.js';
 
 const OBJECTIVES = [
   'REACH',
@@ -21,6 +22,7 @@ export function tiktokTools(provider: TikTokAdsProvider): AnyToolDefinition[] {
   return [
     ...tiktokCreativeTools(provider),
     ...tiktokAudienceTools(provider),
+    ...tiktokMeasurementTools(provider),
     defineTool({
       name: 'tiktok_api_read',
       namespace: 'tiktok',
