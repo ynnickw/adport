@@ -1,8 +1,10 @@
+import { MEDIA_LIBRARY_UI, MEDIA_LIBRARY_STYLES } from './media-library-ui.js';
+import { MEDIA_UPLOAD_UI } from './media-upload-ui.js';
 import { CREATIVE_UI_SCRIPT, CREATIVE_UI_STYLES } from './creative-ui.js';
 import { PROVIDER_LOGOS } from './provider-logos.js';
 import { OPERATION_UI_SCRIPT } from './operation-ui.js';
 
-export const ADPORT_UI_URI = 'ui://adport/insight-card-v11.html';
+export const ADPORT_UI_URI = 'ui://adport/insight-card-v12.html';
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
 export const ADPORT_UI_RESOURCE_DOMAINS = ['https://*.fbcdn.net', 'https://*.fbsbx.com', 'https://*.googleusercontent.com', 'https://tpc.googlesyndication.com', 'https://www.bing.com', 'https://*.scdn.co', 'https://*.spotifycdn.com', 'https://storage.googleapis.com', 'https://*.pinimg.com', 'https://*.redd.it', 'https://*.redditmedia.com', 'https://*.redditstatic.com', 'https://*.licdn.com', 'https://*.licdn-ei.com', 'https://pbs.twimg.com', 'https://video.twimg.com', 'https://ton.twimg.com'];
 
@@ -211,6 +213,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     @media (max-width:620px) { .kpis { grid-template-columns:repeat(2,minmax(0,1fr)) }.top,.content { padding-left:12px; padding-right:12px } }
     @media (max-width:420px) { .bar-row { grid-template-columns:minmax(0,1fr) auto; gap:5px }.bar-name { grid-column:1/-1 }.bar-name > span:last-child { white-space:normal }.bars { gap:12px } }
 ${CREATIVE_UI_STYLES}
+${MEDIA_LIBRARY_STYLES}
     @media (prefers-reduced-motion:reduce) { * { animation:none!important; transition:none!important } }
     :root[data-theme="dark"] { --ink:#f5f5f3;--muted:#aaa9ad;--faint:#a09fa5;--paper:#171717;--soft:#222220;--line:rgba(255,255,255,.11) }
     @media (prefers-color-scheme:dark) { :root:not([data-theme="light"]) { --ink:#f5f5f3;--muted:#aaa9ad;--faint:#a09fa5;--paper:#171717;--soft:#222220;--line:rgba(255,255,255,.11) } }
@@ -300,6 +303,8 @@ ${OPERATION_UI_SCRIPT}
         } else send({jsonrpc:'2.0',id:requestId,method:'tools/call',params:{name:tool,arguments:parameters}});
       });
     }
+${MEDIA_UPLOAD_UI}
+${MEDIA_LIBRARY_UI}
 ${CREATIVE_UI_SCRIPT}
     function renderPlanning(data) {
       const planning=data.planning || {}, columns=arr(planning.columns).filter(v=>typeof v?.key==='string'&&typeof v?.label==='string').slice(0,12), rows=arr(planning.rows), pageSize=100, pages=Math.max(1,Math.ceil(rows.length/pageSize));
@@ -340,7 +345,9 @@ ${CREATIVE_UI_SCRIPT}
     }
     function acceptResult(result,local=false) {
       if (!result || typeof result !== 'object') return;
-      const fingerprint=JSON.stringify(resultData(result));
+      const incoming=resultData(result);
+      if(!local && (uploads.running && ['media_prepare_upload','media_finalize_upload','media_get'].includes(incoming?._adport?.tool || result._meta?.adport?.tool) || mediaLibrary?.loading && incoming?._adport?.tool==='media_list' && mediaLibraryProject(incoming,incoming._adport)===mediaLibrary.project)) return;
+      const fingerprint=JSON.stringify(incoming);
       // Host state updates can echo an old tool result after a local edit/apply.
       if (!local && state.hasLocalResult && hostResults.has(fingerprint)) return;
       if (local) state.hasLocalResult=true;
