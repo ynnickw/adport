@@ -1,5 +1,5 @@
 import 'server-only';
-import { AdportError, createContext, PolicyEngine, type AdportRuntime, type AnyToolDefinition, type ProviderModule } from '@adport/core';
+import { AdportError, createContext, selectRuntimeCatalog, PolicyEngine, type ToolSelection, type AdportRuntime, type AnyToolDefinition, type ProviderModule } from '@adport/core';
 import { AppleAdsClient, AppleAdsProvider, appleTools } from '@adport/provider-apple';
 import { GoogleAdsProvider, GoogleAdsRestClient, googleTools } from '@adport/provider-google';
 import { MetaAdsProvider, MetaGraphClient, metaTools } from '@adport/provider-meta';
@@ -37,6 +37,7 @@ export interface TenantRuntimeOptions {
   /** Used only immediately after OAuth exchange to discover provider accounts. */
   enforceAccountScope?: boolean;
   surface?: 'dashboard' | 'mcp' | 'api';
+  catalog?: ToolSelection;
 }
 
 /**
@@ -157,7 +158,8 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     media,
   });
   if (options.surface === 'mcp') completeMcpCatalog(runtime);
-  return enforceAccountScope ? instrumentCloudTools(runtime, principal, options.surface ?? 'dashboard') : runtime;
+  const selected = options.catalog ? selectRuntimeCatalog(runtime, options.catalog) : runtime;
+  return enforceAccountScope ? instrumentCloudTools(selected, principal, options.surface ?? 'dashboard') : selected;
 }
 
 /** Factories define schemas without calling a provider. These handlers never execute. */

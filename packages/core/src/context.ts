@@ -9,6 +9,7 @@ import { MockProvider, mockTools } from './testing/mock-provider.js';
 import type { FindingsRepository } from './audit/store.js';
 import { mediaTools } from './tools/media.js';
 import type { MediaLibrary } from './media.js';
+import { toolInSelection, type ToolSelection } from './tools/catalog.js';
 
 export interface ProviderModule {
   provider: AdProvider;
@@ -39,6 +40,24 @@ export interface AdportRuntime {
   ctx: ToolContext;
   registry: ToolRegistry;
   policySource: string;
+}
+
+/** Filter execution as well as discovery; shared reads also see only selected providers. */
+export function selectRuntimeCatalog(runtime: AdportRuntime, selection: ToolSelection, includeRawTools = false): AdportRuntime {
+  const registry = new ToolRegistry();
+  registry.register(runtime.registry.list().filter(tool => toolInSelection(tool, selection, includeRawTools)));
+  // Keep transport instrumentation and the owning registry's validation path.
+  registry.call = async (name, input, ctx) => {
+    registry.get(name);
+    return runtime.registry.call(name, input, ctx);
+  };
+  const providers = new ProviderRegistry();
+  for (const provider of runtime.ctx.providers.list()) {
+    if (selection.providers === null || selection.providers.some(id => id === provider.id)) providers.register(provider);
+  }
+  return { ...runtime, registry, ctx: { ...runtime.ctx, providers, registry,
+    authorizeToolCall: (tool, input) => runtime.ctx.authorizeToolCall?.(tool, input),
+  } };
 }
 
 export async function createContext(options: CreateContextOptions = {}): Promise<AdportRuntime> {

@@ -87,8 +87,8 @@ beforeEach(async () => {
     }),
   );
 
-  const runtime = await assembleRuntime();
-  const server = createMcpServer({ runtime });
+  const runtime = await assembleRuntime({ includeRawTools: true });
+  const server = createMcpServer({ runtime, includeRawTools: true });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   client = new Client({ name: 'e2e-client', version: '0.0.0' });
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);

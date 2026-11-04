@@ -5,6 +5,7 @@ import { AdportError } from '../errors.js';
 import type { PolicyEngine } from '../policy/engine.js';
 import type { ProviderRegistry } from '../provider.js';
 import type { MediaLibrary } from '../media.js';
+import { classifyTool, type ToolCatalogMetadata } from './catalog.js';
 
 export interface ToolAnnotations {
   readOnly?: boolean;
@@ -29,6 +30,7 @@ export interface AnyToolDefinition {
   name: string;
   /** Grouping key used for config-based enable/disable ("core", "mock", "google", ...). */
   namespace: string;
+  catalog?: ToolCatalogMetadata;
   description: string;
   input: z.ZodObject<z.ZodRawShape>;
   /** Successful result contract, shared by all transports. Errors use their own envelope. */
@@ -53,11 +55,13 @@ export function defineTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   presentation?: AnyToolDefinition['presentation'];
   pagination?: AnyToolDefinition['pagination'];
   fileInputs?: AnyToolDefinition['fileInputs'];
+  catalog?: ToolCatalogMetadata;
   handler: (input: z.infer<S>, ctx: ToolContext) => Promise<unknown>;
 }): AnyToolDefinition {
   const openWorldByDefault = !['core', 'mock', 'audit'].includes(def.namespace);
   return {
     ...def,
+    catalog: def.catalog ?? classifyTool(def.name, def.namespace),
     annotations: {
       readOnly: def.annotations?.readOnly ?? false,
       // Directory reviewers treat modifying tools, not just deletions, as
