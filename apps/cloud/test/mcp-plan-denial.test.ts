@@ -57,7 +57,7 @@ describe('hosted MCP entitlement explanation', () => {
     const response = await POST(new Request('https://app.adport.test/mcp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params: { uri: 'ui://adport/insight-card-v3.html' } }) }));
     expect(response.status).toBe(200); expect(mocks.principal).toHaveBeenCalledOnce();
     expect(mocks.runtime).not.toHaveBeenCalled(); expect(mocks.server).not.toHaveBeenCalled(); expect(mocks.membership).not.toHaveBeenCalled();
-    expect(mocks.uiServer).toHaveBeenCalledWith(expect.objectContaining({ name: 'adport-cloud', uiDomain: expect.stringMatching(/\.claudemcpcontent\.com$/), uiResourceDomains: expect.arrayContaining([new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).origin]) }));
+    expect(mocks.uiServer).toHaveBeenCalledWith(expect.objectContaining({ name: 'adport-cloud', uiDomain: null, uiResourceDomains: expect.arrayContaining([new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).origin]) }));
   });
 
   it('does not let an unauthenticated UI resource request reach either server', async () => {
@@ -75,7 +75,7 @@ describe('hosted MCP entitlement explanation', () => {
   it('selects Claude metadata without requiring an initialize request', async () => {
     mocks.oauthClient.mockResolvedValue({ redirectUris: ['https://claude.ai/api/mcp/auth_callback'] });
     const options = await serverOptions();
-    expect(options.uiDomain).toMatch(/^[a-f0-9]{32}\.claudemcpcontent\.com$/);
+    expect(options.uiDomain).toBeNull();
     expect(mocks.oauthClient).toHaveBeenCalledWith('fictional-client');
     expect(options.scopes).toEqual(['tools:read']);
     expect(options.uiResourceDomains).toContain(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).origin);

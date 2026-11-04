@@ -102,6 +102,12 @@ The widget resource is `ui://adport/insight-card-v12.html`. Previous v2–v11 UR
 retained as aliases. Existing creative resource domains keep their configured CSP; provider logos
 and scripts are embedded.
 
+Claude uses its default isolated conversation sandbox. The widget does not run
+its own OAuth flow or require an origin allowlist, so it does not opt into an
+optional stable `ui.domain`. CSP restrictions remain in the resource metadata.
+Other hosts retain their existing origin metadata. See the [MCP Apps sandbox
+origin contract](https://apps.extensions.modelcontextprotocol.io/api/interfaces/app.McpUiResourceMeta.html).
+
 ## Validation
 
 Run `pnpm build`, `pnpm test`, and `pnpm typecheck`. The provider suites cover native

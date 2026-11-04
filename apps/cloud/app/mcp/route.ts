@@ -3,7 +3,7 @@ import { createMcpHandler, isLegacyRequest, WebStandardStreamableHTTPServerTrans
 import { apiPrincipal } from '@/lib/cloud/auth';
 import { createTenantRuntime } from '@/lib/cloud/runtime';
 import { HttpError } from '@/lib/http';
-import { mcpResourceUrl, oauthIssuerUrl, protectedResourceMetadataUrl } from '@/lib/mcp-oauth';
+import { oauthIssuerUrl, protectedResourceMetadataUrl } from '@/lib/mcp-oauth';
 import { getMcpOAuthClient } from '@/lib/cloud/mcp-oauth-repository';
 import { mcpUiDomain } from '@/lib/mcp-ui-domain';
 import { adWritePlanLimit } from '@/lib/cloud/write-plan-limit';
@@ -35,7 +35,7 @@ async function handle(request: Request): Promise<Response> {
       : undefined;
     const uiOptions = {
       name: 'adport-cloud',
-      uiDomain: mcpUiDomain(oauthClient?.redirectUris ?? [], mcpResourceUrl()),
+      uiDomain: mcpUiDomain(oauthClient?.redirectUris ?? []),
       uiResourceDomains: [...ADPORT_UI_RESOURCE_DOMAINS, new URL(env().NEXT_PUBLIC_SUPABASE_URL).origin],
       uiConnectDomains: [new URL(env().NEXT_PUBLIC_SUPABASE_URL).origin],
       version: '0.1.0',

@@ -5,7 +5,7 @@ import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { AdportError, createContext, FindingsStore } from '@adport/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { createMcpServer } from '../src/index.js';
+import { createMcpServer, createMcpUiServer } from '../src/index.js';
 import { ADPORT_UI_DOMAIN, ADPORT_UI_URI, ADPORT_UI_RESOURCE_DOMAINS } from '../src/ui.js';
 
 let home: string;
@@ -110,6 +110,23 @@ describe('adport MCP server', () => {
         expect(resource?._meta).not.toHaveProperty('openai/widgetDomain');
       }
     } finally { await hostClient.close(); await server.close(); }
+  });
+
+  it.each(['registry', 'static'] as const)('allows the %s server to omit an optional sandbox domain while retaining CSP and resource aliases', async kind => {
+    const runtime = await createContext({ providerModules: [] });
+    const options = { uiDomain: null, uiConnectDomains: ['https://private-storage.example'] };
+    const server = kind === 'registry' ? createMcpServer({ runtime, ...options }) : createMcpUiServer(options);
+    const host = new Client({ name: 'default-sandbox-test', version: '1' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport); await host.connect(clientTransport);
+    try {
+      const listing = (await host.listResources()).resources.find(resource => resource.uri === ADPORT_UI_URI);
+      for (const resource of [listing, (await host.readResource({ uri: ADPORT_UI_URI })).contents[0], (await host.readResource({ uri: 'ui://adport/insight-card-v10.html' })).contents[0]]) {
+        expect(resource?._meta).toMatchObject({ ui: { prefersBorder: false, csp: { connectDomains: options.uiConnectDomains, resourceDomains: ADPORT_UI_RESOURCE_DOMAINS } } });
+        expect(resource?._meta).not.toHaveProperty('ui.domain');
+        expect(resource?._meta).not.toHaveProperty('openai/widgetDomain');
+      }
+    } finally { await host.close(); await server.close(); }
   });
 
   it('returns read-only creative refresh arguments and keeps upload checksums outside human copy', async () => {

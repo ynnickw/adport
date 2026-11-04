@@ -76,8 +76,8 @@ export interface CreateServerOptions {
   notConnectedMessage?: string;
   /** Hosted production must never serve synthetic results or demo tool definitions. */
   productionOnly?: boolean;
-  /** Host-specific MCP Apps sandbox domain; OpenAI's widget domain stays independent. */
-  uiDomain?: string;
+  /** Host-specific sandbox domain; null lets the host choose its default origin. */
+  uiDomain?: string | null;
   uiResourceDomains?: readonly string[];
   /** Exact private-storage origins used by in-widget signed uploads. */
   uiConnectDomains?: readonly string[];
@@ -98,10 +98,10 @@ export function createMcpUiServer({ name = 'adport', version = packageJson.versi
   return server;
 }
 
-function registerUiResources(server: McpServer, uiDomain: string, uiResourceDomains: readonly string[], uiConnectDomains: readonly string[]): void {
+function registerUiResources(server: McpServer, uiDomain: string | null, uiResourceDomains: readonly string[], uiConnectDomains: readonly string[]): void {
   const resourceMeta = {
-    ui: { domain: uiDomain, prefersBorder: false, csp: { connectDomains: [...uiConnectDomains], resourceDomains: [...uiResourceDomains] } },
-    ...(uiDomain.startsWith('https://') ? { 'openai/widgetDomain': uiDomain } : {}),
+    ui: { ...(uiDomain ? { domain: uiDomain } : {}), prefersBorder: false, csp: { connectDomains: [...uiConnectDomains], resourceDomains: [...uiResourceDomains] } },
+    ...(uiDomain?.startsWith('https://') ? { 'openai/widgetDomain': uiDomain } : {}),
   };
   for (const uri of ADPORT_UI_RESOURCE_URIS) registerAppResource(
     server,
