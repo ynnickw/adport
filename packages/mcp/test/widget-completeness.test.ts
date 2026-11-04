@@ -35,6 +35,7 @@ describe('compact record, recommendation, receipt and trend views', () => {
     const { dom, document } = mount('data', { projects: [{ id: 'one', name: '<Product>', organization_name: 'Company', role: 'viewer', providers: [], logo_url: 'javascript:alert(1)' }, { id: 'two', name: 'Another project', role: 'admin', providers: ['future-provider'] }] }, 'projects_list');
     try {
       expect(document.querySelector('img')).toBeNull(); expect(document.querySelector('.project-copy')?.textContent).toBe('<Product>Company · Viewer');
+      expect(document.querySelector('.project-platforms-empty')?.textContent).toBe('No connected platforms');
       expect(document.querySelector('.record-provider-name')?.textContent).toBe('future-provider');
       expect(document.querySelector('.project-row script')).toBeNull();
     } finally { dom.window.close(); }
