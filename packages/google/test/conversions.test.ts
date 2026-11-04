@@ -196,7 +196,7 @@ describe('Google conversion management', () => {
   });
   it('keeps uploads behind the shared policy gate and exposes partial warnings through its output schema', async () => {
     const f = fixture(), pending = new Map<string, PendingOperation>();
-    const engine = new PolicyEngine(DEFAULT_POLICY, { async sweep() {}, async put(value) { pending.set(value.id, value); }, async get(key) { return pending.get(key); }, async delete(key) { pending.delete(key); } }, { async append() {} });
+    const engine = new PolicyEngine(DEFAULT_POLICY, { async sweep() {}, async put(value) { pending.set(value.id, value); }, async get(key) { return pending.get(key); }, async delete(key) { pending.delete(key); }, async consume(id: string, expectedHash: string) { const value = pending.get(id); return !!value && value.opHash === expectedHash && Date.parse(value.expiresAt) > Date.now() && pending.delete(id); } }, { async append() {} });
     const runtime = await createContext({ engine, providerModules: [{ provider: f.provider, tools: googleTools(f.provider) }] });
     const operation = await upload(f), args = { account_id: account, ...operation.payload };
     const preview = await runtime.registry.call(operation.tool, args, runtime.ctx) as { pending_operation_id: string };

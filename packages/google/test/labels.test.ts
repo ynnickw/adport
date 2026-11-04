@@ -130,7 +130,7 @@ describe('Google owned label metadata and assignments', () => {
 
   it('keeps registry writes behind pending tokens and rejects changed args or changed native metadata before apply', async () => {
     const f = fixture(), pending = new Map<string, PendingOperation>();
-    const engine = new PolicyEngine(DEFAULT_POLICY, { async sweep() {}, async put(value) { pending.set(value.id, value); }, async get(id) { return pending.get(id); }, async delete(id) { pending.delete(id); } }, { async append() {} });
+    const engine = new PolicyEngine(DEFAULT_POLICY, { async sweep() {}, async put(value) { pending.set(value.id, value); }, async get(id) { return pending.get(id); }, async delete(id) { pending.delete(id); }, async consume(id: string, expectedHash: string) { const value = pending.get(id); return !!value && value.opHash === expectedHash && Date.parse(value.expiresAt) > Date.now() && pending.delete(id); } }, { async append() {} });
     const runtime = await createContext({ engine, providerModules: [{ provider: f.provider, tools: googleTools(f.provider) }] });
     const current = await f.provider.labels.get(account, labelId), args = { account_id: account, label_id: labelId, expected_label_hash: current.snapshot_hash, name: 'New metadata' };
     const preview = await runtime.registry.call('google_update_label', args, runtime.ctx) as { applied: boolean; pending_operation_id: string };

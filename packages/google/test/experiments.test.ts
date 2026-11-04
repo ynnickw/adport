@@ -302,7 +302,7 @@ describe('Google experiment observation, adapters and policy', () => {
   });
   it('requires shared preview/apply policy, exact arguments, one-use tokens and protected-account authorization', async () => {
     const f = fixture(), pending = new Map<string, PendingOperation>(), audits: unknown[] = [];
-    const engine = new PolicyEngine(DEFAULT_POLICY, { async sweep() {}, async put(value) { pending.set(value.id, value); }, async get(key) { return pending.get(key); }, async delete(key) { pending.delete(key); } }, { async append(value) { audits.push(value); } });
+    const engine = new PolicyEngine(DEFAULT_POLICY, { async sweep() {}, async put(value) { pending.set(value.id, value); }, async get(key) { return pending.get(key); }, async delete(key) { pending.delete(key); }, async consume(id: string, expectedHash: string) { const value = pending.get(id); return !!value && value.opHash === expectedHash && Date.parse(value.expiresAt) > Date.now() && pending.delete(id); } }, { async append(value) { audits.push(value); } });
     const rt = await createContext({ engine, providerModules: [{ provider: f.provider, tools: googleTools(f.provider) }] });
     const operation = await op(f, 'google_update_experiment', { name: 'Changed' }), args = { account_id: account, ...operation.payload };
     const preview = await rt.registry.call(operation.tool, args, rt.ctx) as { pending_operation_id: string };
@@ -312,7 +312,7 @@ describe('Google experiment observation, adapters and policy', () => {
     await expect(rt.registry.call(operation.tool, { ...args, pending_operation_id: preview.pending_operation_id }, rt.ctx)).rejects.toMatchObject({ code: 'PENDING_NOT_FOUND' });
     expect(mutations(f).filter(value => !value.body.validateOnly)).toHaveLength(1);
     expect(audits.length).toBeGreaterThan(0);
-    const protectedEngine = new PolicyEngine({ ...DEFAULT_POLICY, protected_accounts: [account] }, { async sweep() {}, async put() {}, async get() { return undefined; }, async delete() {} }, { async append() {} });
+    const protectedEngine = new PolicyEngine({ ...DEFAULT_POLICY, protected_accounts: [account] }, { async sweep() {}, async put() {}, async get() { return undefined; }, async delete() {}, async consume() { return false; } }, { async append() {} });
     const protectedRt = await createContext({ engine: protectedEngine, providerModules: [{ provider: f.provider, tools: googleTools(f.provider) }] });
     await expect(protectedRt.registry.call(operation.tool, args, protectedRt.ctx)).rejects.toMatchObject({ code: 'POLICY_VIOLATION' });
     const tools = googleTools(f.provider);

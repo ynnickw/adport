@@ -190,7 +190,7 @@ describe('Google Data Manager conversions', () => {
   });
   it('enforces exact policy arguments, one-use approval and read-only authorization for all adapters', async () => {
     const f = fixture(), pending = new Map<string, PendingOperation>(), audits: unknown[] = [];
-    const engine = new PolicyEngine(DEFAULT_POLICY, { async sweep() {}, async put(value) { pending.set(value.id, value); }, async get(key) { return pending.get(key); }, async delete(key) { pending.delete(key); } }, { async append(value) { audits.push(value); } });
+    const engine = new PolicyEngine(DEFAULT_POLICY, { async sweep() {}, async put(value) { pending.set(value.id, value); }, async get(key) { return pending.get(key); }, async delete(key) { pending.delete(key); }, async consume(id: string, expectedHash: string) { const value = pending.get(id); return !!value && value.opHash === expectedHash && Date.parse(value.expiresAt) > Date.now() && pending.delete(id); } }, { async append(value) { audits.push(value); } });
     const runtime = await createContext({ engine, providerModules: [{ provider: f.provider, tools: googleTools(f.provider) }] }), op = await operation(f), args = { account_id: selected, ...op.payload };
     const preview = await runtime.registry.call(op.tool, args, runtime.ctx) as { pending_operation_id: string };
     expect(native(f).every(value => value.body.validateOnly === true)).toBe(true);

@@ -234,7 +234,7 @@ describe('Snapchat guarded writes and module assembly', () => {
     await expect(rt.registry.call(op.tool, { ...args, budget_micros: 121_000_000, pending_operation_id: pending.pending_operation_id }, rt.ctx)).rejects.toThrow('differs');
     await rt.registry.call(op.tool, { ...args, pending_operation_id: pending.pending_operation_id }, rt.ctx);
     expect(calls.filter(c => c.init.method === 'PATCH')).toHaveLength(1);
-    await expect(rt.registry.call(op.tool, { ...args, pending_operation_id: pending.pending_operation_id }, rt.ctx)).rejects.toThrow('No pending');
+    await expect(rt.registry.call(op.tool, { ...args, pending_operation_id: pending.pending_operation_id }, rt.ctx)).rejects.toMatchObject({ code: 'PENDING_NOT_FOUND' });
     await expect(rt.registry.call(op.tool, { ...args, budget_micros: 200_000_000 }, rt.ctx)).rejects.toThrow('budget-delta cap');
     const blocked = new PolicyEngine({ ...DEFAULT_POLICY, protected_accounts: [account.id] }, new PendingStore(path.join(dir, 'blocked')), audit);
     await expect(blocked.validate(provider, op)).rejects.toThrow('protected');

@@ -197,7 +197,7 @@ describe('Meta audience workflows', () => {
   });
   it('uses the real shared policy gate for preview, argument mismatch rejection and apply', async () => {
     const { provider, calls } = setup(() => ({ id: '702' })), pending = new Map<string, PendingOperation>();
-    const engine = new PolicyEngine(DEFAULT_POLICY, { async sweep() {}, async put(value) { pending.set(value.id, value); }, async get(id) { return pending.get(id); }, async delete(id) { pending.delete(id); } }, { async append() {} });
+    const engine = new PolicyEngine(DEFAULT_POLICY, { async sweep() {}, async put(value) { pending.set(value.id, value); }, async get(id) { return pending.get(id); }, async delete(id) { pending.delete(id); }, async consume(id: string, expectedHash: string) { const value = pending.get(id); return !!value && value.opHash === expectedHash && Date.parse(value.expiresAt) > Date.now() && pending.delete(id); } }, { async append() {} });
     const runtime = await createContext({ engine, providerModules: [{ provider, tools: metaTools(provider) }] });
     const input = { account_id: account, name: 'Empty QA', customer_file_source: 'USER_PROVIDED_ONLY' };
     const preview = await runtime.registry.call('meta_create_custom_audience', input, runtime.ctx) as { pending_operation_id: string; applied: boolean };

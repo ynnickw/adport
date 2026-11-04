@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 function fixture() {
   const pending = new Map<string, PendingOperation>(), calls: WriteOperation[] = [];
-  const engine = new PolicyEngine(DEFAULT_POLICY, { async sweep() {}, async put(value) { pending.set(value.id, value); }, async get(id) { return pending.get(id); }, async delete(id) { pending.delete(id); } }, { async append() {} });
+  const engine = new PolicyEngine(DEFAULT_POLICY, { async sweep() {}, async put(value) { pending.set(value.id, value); }, async get(id) { return pending.get(id); }, async delete(id) { pending.delete(id); }, async consume(id: string, expectedHash: string) { const value = pending.get(id); return !!value && value.opHash === expectedHash && Date.parse(value.expiresAt) > Date.now() && pending.delete(id); } }, { async append() {} });
   const media = (scopeId: string): ManagedMediaLibrary => ({ scopeId, list: async () => ({ assets: [], truncated: false }), read: async () => { throw new Error('No file read expected'); }, get: async () => { throw new Error('No metadata read expected'); }, previewWrite: async op => { calls.push(op); return { summary: 'Stage exact private file', changes: ['Private library only'], coercions: [], budgetDeltas: [], serverValidated: false }; }, applyWrite: async op => { calls.push(op); return { applied: true, resourceIds: ['11111111-1111-4111-8111-111111111111'] }; } });
   return { engine, media, pending, calls };
 }

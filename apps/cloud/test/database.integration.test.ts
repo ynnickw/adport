@@ -395,6 +395,6 @@ describeDatabase('Supabase tenant boundary', () => {
       where organization_id = ${firstOrgId} and pending_id = ${preview.pending_operation_id}
       order by created_at asc
     `;
-    expect(events.map((event) => event.event)).toEqual(['validated', 'applied']);
+    expect(events.map((event) => event.event)).toEqual(['validated', 'note', 'applied']);
   });
 });

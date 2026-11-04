@@ -248,7 +248,7 @@ describe('LinkedIn sponsored content and native creative metadata', () => {
 
   it('keeps exact arguments, protected accounts and single-use approvals on the shared tool path', async () => {
     const f = fixture(), pending = new Map<string, PendingOperation>();
-    const stores = { async sweep() {}, async put(value: PendingOperation) { pending.set(value.id, value); }, async get(id: string) { return pending.get(id); }, async delete(id: string) { pending.delete(id); } };
+    const stores = { async sweep() {}, async put(value: PendingOperation) { pending.set(value.id, value); }, async get(id: string) { return pending.get(id); }, async delete(id: string) { pending.delete(id); }, async consume(id: string, expectedHash: string) { const value = pending.get(id); return !!value && value.opHash === expectedHash && Date.parse(value.expiresAt) > Date.now() && pending.delete(id); } };
     const rt = await createContext({ engine: new PolicyEngine(DEFAULT_POLICY, stores, { async append() {} }), providerModules: [{ provider: f.provider, tools: linkedinTools(f.provider) }] });
     const input = { account_id: A, ...create({ type: 'TEXT' }) }, preview = await rt.registry.call('linkedin_create_sponsored_ad', input, rt.ctx) as { pending_operation_id: string };
     await expect(rt.registry.call('linkedin_create_sponsored_ad', { ...input, commentary: 'Changed', pending_operation_id: preview.pending_operation_id }, rt.ctx)).rejects.toMatchObject({ code: 'PENDING_MISMATCH' });

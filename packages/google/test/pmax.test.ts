@@ -255,7 +255,7 @@ describe('Performance Max signals, retail trees and approval', () => {
   });
   it('gates shared MCP/CLI tools through one-use identical-argument approval and protected accounts', async () => {
     const f = fixture(), pending = new Map<string, PendingOperation>(), audits: unknown[] = [];
-    const engine = new PolicyEngine(DEFAULT_POLICY, { async sweep() {}, async put(value) { pending.set(value.id, value); }, async get(key) { return pending.get(key); }, async delete(key) { pending.delete(key); } }, { async append(value) { audits.push(value); } });
+    const engine = new PolicyEngine(DEFAULT_POLICY, { async sweep() {}, async put(value) { pending.set(value.id, value); }, async get(key) { return pending.get(key); }, async delete(key) { pending.delete(key); }, async consume(id: string, expectedHash: string) { const value = pending.get(id); return !!value && value.opHash === expectedHash && Date.parse(value.expiresAt) > Date.now() && pending.delete(id); } }, { async append(value) { audits.push(value); } });
     const rt = await createContext({ engine, providerModules: [{ provider: f.provider, tools: googleTools(f.provider) }] }), op = await operation(f, 'google_set_asset_group_status', { status: 'PAUSED' }), args = { account_id: account, ...op.payload };
     const preview = await rt.registry.call(op.tool, args, rt.ctx) as { pending_operation_id: string };
     expect(mutations(f).every(value => value.body.validateOnly)).toBe(true);
@@ -263,13 +263,13 @@ describe('Performance Max signals, retail trees and approval', () => {
     await rt.registry.call(op.tool, { ...args, pending_operation_id: preview.pending_operation_id }, rt.ctx);
     await expect(rt.registry.call(op.tool, { ...args, pending_operation_id: preview.pending_operation_id }, rt.ctx)).rejects.toMatchObject({ code: 'PENDING_NOT_FOUND' });
     expect(mutations(f).filter(value => !value.body.validateOnly)).toHaveLength(1); expect(audits.length).toBeGreaterThan(0);
-    const protectedEngine = new PolicyEngine({ ...DEFAULT_POLICY, protected_accounts: [account] }, { async sweep() {}, async put() {}, async get() { return undefined; }, async delete() {} }, { async append() {} });
+    const protectedEngine = new PolicyEngine({ ...DEFAULT_POLICY, protected_accounts: [account] }, { async sweep() {}, async put() {}, async get() { return undefined; }, async delete() {}, async consume() { return false; } }, { async append() {} });
     const protectedRt = await createContext({ engine: protectedEngine, providerModules: [{ provider: f.provider, tools: googleTools(f.provider) }] });
     await expect(protectedRt.registry.call(op.tool, args, protectedRt.ctx)).rejects.toMatchObject({ code: 'POLICY_VIOLATION' });
   });
   it('reports the campaign budget in micros to the shared absolute cap and issues no applicable token on denial', async () => {
     const f = fixture(), pending: PendingOperation[] = [];
-    const engine = new PolicyEngine({ ...DEFAULT_POLICY, max_daily_budget_micros: 1000000 }, { async sweep() {}, async put(value) { pending.push(value); }, async get() { return undefined; }, async delete() {} }, { async append() {} });
+    const engine = new PolicyEngine({ ...DEFAULT_POLICY, max_daily_budget_micros: 1000000 }, { async sweep() {}, async put(value) { pending.push(value); }, async get() { return undefined; }, async delete() {}, async consume() { return false; } }, { async append() {} });
     const rt = await createContext({ engine, providerModules: [{ provider: f.provider, tools: googleTools(f.provider) }] });
     await expect(rt.registry.call('google_create_performance_max_campaign', { account_id: account, ...campaignInput() }, rt.ctx)).rejects.toMatchObject({ code: 'POLICY_VIOLATION' });
     expect(pending).toHaveLength(0); expect(mutations(f).every(value => value.body.validateOnly)).toBe(true);

@@ -172,7 +172,7 @@ describe('Microsoft shared daily budgets', () => {
 
   it('enforces shared-pool caps through the actual policy engine and rejects drift after approval', async () => {
     const f = fixture(), pending = new Map<string, PendingOperation>(), audit: unknown[] = [];
-    const engine = new PolicyEngine({ ...DEFAULT_POLICY, max_daily_budget_micros: 1500000 }, { async put(value) { pending.set(value.id, value); }, async get(id) { return pending.get(id); }, async delete(id) { pending.delete(id); }, async sweep() {} }, { async append(value) { audit.push(value); } });
+    const engine = new PolicyEngine({ ...DEFAULT_POLICY, max_daily_budget_micros: 1500000 }, { async put(value) { pending.set(value.id, value); }, async get(id) { return pending.get(id); }, async delete(id) { pending.delete(id); }, async consume(id: string, expectedHash: string) { const value = pending.get(id); return !!value && value.opHash === expectedHash && Date.parse(value.expiresAt) > Date.now() && pending.delete(id); }, async sweep() {} }, { async append(value) { audit.push(value); } });
     await expect(engine.validate(f.provider, op('microsoft_create_shared_budget', { name: 'Too large', amount: 2 }, 'create'))).rejects.toMatchObject({ code: 'POLICY_VIOLATION' });
     const view = await f.provider.budgets.get(account, '100');
     await expect(engine.validate(f.provider, op('microsoft_update_shared_budget', { budget_id: '100', expected_snapshot_hash: view.snapshot_hash, amount: 1.3 }))).rejects.toMatchObject({ code: 'POLICY_VIOLATION' });

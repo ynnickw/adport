@@ -422,6 +422,21 @@ export class PostgresPendingStore {
     `;
   }
 
+  async consume(id: string, expectedHash: string): Promise<boolean> {
+    return db().begin(async sql => {
+      const selected = await sql`select id from public.pending_operations
+        where id = ${id} and organization_id = ${this.principal.organizationId}
+          and operation_hash = ${expectedHash} and consumed_at is null for update`;
+      if (!selected.length) return false;
+      // Check the deadline after acquiring the row lock, not before a wait.
+      const rows = await sql`update public.pending_operations set consumed_at = clock_timestamp()
+        where id = ${id} and organization_id = ${this.principal.organizationId}
+          and operation_hash = ${expectedHash} and consumed_at is null and expires_at > clock_timestamp()
+        returning id`;
+      return rows.length === 1;
+    });
+  }
+
   async sweep(now = new Date()): Promise<void> {
     await db()`
       update public.pending_operations set consumed_at = ${now.toISOString()}

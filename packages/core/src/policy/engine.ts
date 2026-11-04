@@ -5,6 +5,7 @@ import { AuditLog, type AuditEntryStore } from './audit.js';
 import { PendingStore, type PendingOperationStore } from './pending.js';
 import type { Policy } from './policy.js';
 import { canonicalAccountId } from '../account-id.js';
+import { failureAuditDetails } from './failure.js';
 
 export interface ValidationOutcome {
   pendingOperationId: string;
@@ -31,6 +32,7 @@ function canonicalize(value: unknown): unknown {
 
 export function hashOperation(op: WriteOperation, policy?: Policy): string {
   const canonical = canonicalize({
+    approval_protocol: 'single_attempt_v1',
     tool: op.tool,
     provider: op.provider,
     accountId: op.accountId,
@@ -94,7 +96,7 @@ export class PolicyEngine {
     if (!pending) {
       throw new AdportError(
         'PENDING_NOT_FOUND',
-        `No pending operation "${pendingId}". Validate first: call the tool without pending_operation_id.`,
+        'No unused approval was found. It may have expired or already been attempted. Check provider state and the audit log before requesting a new preview.',
       );
     }
     if (Date.parse(pending.expiresAt) < Date.now()) {
@@ -124,17 +126,32 @@ export class PolicyEngine {
       throw new AdportError('PENDING_MISMATCH', 'The proposed monetary targets changed after preview. Request and approve a fresh preview before applying.');
     }
 
-    const result = await provider.applyWrite(op, this.guard());
-    await this.audit.append({
-      event: 'applied',
-      provider: provider.id,
-      tool: op.tool,
-      accountId: op.accountId,
-      pendingId,
-      summary: preview.summary,
-      details: { resourceIds: result.resourceIds, ...(result.warnings?.length ? { warnings: result.warnings } : {}) },
-    });
-    await this.pending.delete(pendingId);
+    if (!await this.pending.consume(pendingId, pending.opHash)) throw new AdportError('PENDING_NOT_FOUND', 'This approval is no longer available, expired, or was claimed by another apply. Check provider state and the audit log before requesting a new preview.');
+    const identity = { provider: provider.id, tool: op.tool, accountId: op.accountId, pendingId };
+    try {
+      await this.audit.append({ ...identity, event: 'note', summary: 'Approval consumed; provider apply is starting. This is not proof of a completed change.', details: { phase: 'apply_started', outcome: 'UNCONFIRMED' } });
+    } catch {
+      throw new AdportError('PROVIDER_ERROR', 'The approval was consumed, but its start audit could not be recorded. The provider apply was not called. Request a fresh preview after resolving the audit failure.', { approval_consumed: true, apply_state: 'NOT_STARTED' });
+    }
+    let result: WriteResult, attempted = false;
+    try {
+      if (!(Date.parse(pending.expiresAt) > Date.now())) throw new AdportError('PENDING_EXPIRED', 'The approval expired before provider execution. The provider apply was not called.');
+      attempted = true;
+      result = await provider.applyWrite(op, this.guard());
+    }
+    catch (error) {
+      let recorded = true;
+      try { await this.audit.append({ ...identity, event: 'note', summary: attempted ? 'Provider apply did not confirm completion. Changes may be partial or unknown; reconcile before a new preview. The approval cannot be replayed.' : 'Approval expired before provider execution. The provider apply was not called; the approval cannot be replayed.', details: { ...failureAuditDetails(provider.id, error), ...(!attempted ? { outcome: 'NOT_STARTED' } : {}) } }); }
+      catch { recorded = false; }
+      const original = error instanceof AdportError ? error : undefined;
+      const details = original?.details && typeof original.details === 'object' && !Array.isArray(original.details) ? original.details as Record<string, unknown> : original?.details !== undefined ? { native_details: original.details } : {};
+      throw new AdportError(original?.code ?? 'PROVIDER_ERROR', `${original?.message ?? 'Provider apply outcome could not be confirmed.'} The approval was consumed. Reconcile provider state before requesting another preview; do not replay this apply.${recorded ? '' : ' The failure audit could not be recorded.'}`, { ...details, approval_consumed: true, apply_state: attempted ? 'UNCONFIRMED' : 'NOT_STARTED', failure_audit_recorded: recorded });
+    }
+    try {
+      await this.audit.append({ ...identity, event: 'applied', summary: preview.summary, details: { resourceIds: result.resourceIds, ...(result.warnings?.length ? { warnings: result.warnings } : {}) } });
+    } catch {
+      throw new AdportError('PROVIDER_ERROR', 'The provider reported the change applied, but the completion audit could not be recorded. The approval was consumed. Reconcile these resource IDs; do not repeat the write.', { approval_consumed: true, apply_state: 'APPLIED_AUDIT_UNCONFIRMED', resource_ids: result.resourceIds });
+    }
     return { result, preview };
   }
 
