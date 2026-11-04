@@ -85,6 +85,16 @@ describe('all-provider shared tool surface', () => {
     try {
       const scanned = (await client.listTools()).tools;
       expect(scanned.map(tool => tool.name).sort()).toEqual([...names].sort());
+      const reportName = scanned.find(tool => tool.name === 'spotify_create_report')!.inputSchema.properties!.name;
+      expect(reportName).toMatchObject({ type: 'string', minLength: 2, maxLength: 120 });
+      expect(reportName).not.toHaveProperty('pattern');
+      const portablePatterns = (value: unknown, path: string): void => {
+        if (value && typeof value === 'object') for (const [key, item] of Object.entries(value)) {
+          // ChatGPT rejected the entire catalog for one JS-only Unicode pattern.
+          if (key === 'pattern' && typeof item === 'string') expect(item, path).not.toMatch(/\\[pP]\{/);
+          else portablePatterns(item, `${path}.${key}`);
+        }
+      };
       // Externally hosted private account data is not public/open-ended access.
       for (const name of ['accounts_list', 'report', 'audit_preview', 'audit_run',
         'meta_list_pages', 'meta_page_engagement', 'meta_api_read', 'meta_insights']) {
@@ -100,6 +110,8 @@ describe('all-provider shared tool surface', () => {
       }
       expect(scanned.find(tool => tool.name === 'meta_delete_custom_audience')?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
       for (const tool of scanned) {
+        portablePatterns(tool.inputSchema, `${tool.name}.inputSchema`);
+        portablePatterns(tool.outputSchema, `${tool.name}.outputSchema`);
         expect(tool.title, tool.name).toBeTruthy();
         expect(tool.description, tool.name).toBeTruthy();
         const source = runtime.registry.list().find(candidate => candidate.name === tool.name)!;

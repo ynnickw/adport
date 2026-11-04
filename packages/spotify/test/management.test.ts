@@ -96,4 +96,9 @@ describe('Spotify native audiences and exports', () => {
     expect(createReport.safeParse({ ...base, report_start: '2026-11-02T00:00:00Z', report_end: '2026-11-01T00:00:00Z' }).success).toBe(false);
     expect(createReport.safeParse({ ...base, granularity: 'LIFETIME', insight_dimension: 'PLATFORM', report_start: '2026-11-01T00:00:00Z' }).success).toBe(false);
   });
+  it('retains Unicode report names and rejects invalid punctuation independently of exported JSON Schema patterns', () => {
+    const base = { granularity: 'LIFETIME', dimensions: ['AD_ACCOUNT_NAME'], metrics: ['SPEND'] };
+    expect(createReport.parse({ ...base, name: '  Übersicht 日本語 2026  ' }).name).toBe('Übersicht 日本語 2026');
+    for (const name of ['a', 'a'.repeat(121), 'invalid/name', 'invalid.name', 'invalid\nname']) expect(createReport.safeParse({ ...base, name }).success).toBe(false);
+  });
 });
