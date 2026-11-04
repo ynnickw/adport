@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod';
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
-import { AdportError, CredentialStore, createContext, nextPageArguments, type AdportRuntime, type ProviderModule } from '@adport/core';
+import { AdportError, CredentialStore, createContext, selectRuntimeCatalog, nextPageArguments, type ToolSelection, type AdportRuntime, type ProviderModule } from '@adport/core';
 import { createGoogleModule } from '@adport/provider-google';
 import { createMetaModule } from '@adport/provider-meta';
 import { createTikTokModule } from '@adport/provider-tiktok';
@@ -42,6 +42,7 @@ const DEFAULT_MCP_ICONS = [{
  */
 export interface AssembleRuntimeOptions {
   includeMock?: boolean;
+  includeRawTools?: boolean;
 }
 
 export async function assembleRuntime(options: AssembleRuntimeOptions = {}): Promise<AdportRuntime> {
@@ -54,11 +55,15 @@ export async function assembleRuntime(options: AssembleRuntimeOptions = {}): Pro
       if (module) modules.push(module);
     }
   }
-  return createContext({ providerModules: modules, includeMock });
+  const runtime = await createContext({ providerModules: modules, includeMock });
+  return selectRuntimeCatalog(runtime, { profile: 'full', providers: null }, options.includeRawTools ?? false);
 }
 
 export interface CreateServerOptions {
   runtime: AdportRuntime;
+  catalog?: ToolSelection;
+  /** Explicit local opt-in; production connectors always reject raw tools. */
+  includeRawTools?: boolean;
   /** Transport-specific context, without redefining any provider tool. */
   instructions?: string;
   name?: string;
@@ -116,12 +121,13 @@ function registerUiResources(server: McpServer, uiDomain: string | null, uiResou
  * Thin adapter: every tool in the shared registry becomes an MCP tool.
  * No tool logic lives here — see the "one tool-definition layer" principle.
  */
-export function createMcpServer({ runtime, instructions, name = 'adport', version = packageJson.version, icons = DEFAULT_MCP_ICONS, scopes, scopeDenials, notConnectedMessage, productionOnly = false, uiDomain = ADPORT_UI_DOMAIN, uiResourceDomains = ADPORT_UI_RESOURCE_DOMAINS, uiConnectDomains = [] }: CreateServerOptions): McpServer {
+export function createMcpServer({ runtime, catalog = { profile: 'full', providers: null }, includeRawTools = false, instructions, name = 'adport', version = packageJson.version, icons = DEFAULT_MCP_ICONS, scopes, scopeDenials, notConnectedMessage, productionOnly = false, uiDomain = ADPORT_UI_DOMAIN, uiResourceDomains = ADPORT_UI_RESOURCE_DOMAINS, uiConnectDomains = [] }: CreateServerOptions): McpServer {
   if (productionOnly && (runtime.dataSource === 'synthetic'
     || runtime.ctx.providers.list().some(provider => !PROVIDER_IDS.includes(provider.id as typeof PROVIDER_IDS[number]))
     || runtime.registry.list().some(tool => /^(demo|mock|synthetic)(_|$)/.test(tool.name) || /^(demo|mock|synthetic)$/.test(tool.namespace)))) {
     throw new AdportError('POLICY_VIOLATION', 'Demo tools and synthetic runtimes are not available on the production connector.');
   }
+  runtime = selectRuntimeCatalog(runtime, catalog, includeRawTools && !productionOnly);
   const provenance = (value: unknown): unknown => runtime.dataSource === 'synthetic'
     ? { ...(value && typeof value === 'object' && !Array.isArray(value) ? value : { value }), data_source: 'synthetic' }
     : value;
@@ -166,7 +172,7 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
         destructiveHint: tool.annotations.destructive ?? false,
         openWorldHint: tool.annotations.openWorld ?? false,
       },
-      ...(tool.fileInputs?.length ? { _meta: { 'openai/fileParams': [...tool.fileInputs] } } : {}),
+      _meta: { 'adport/catalog': tool.catalog ?? {}, ...(tool.fileInputs?.length ? { 'openai/fileParams': [...tool.fileInputs] } : {}) },
     };
     const callback = async (args: Record<string, unknown>) => {
       const descriptor = {
@@ -249,8 +255,8 @@ export function createMcpServer({ runtime, instructions, name = 'adport', versio
   return server;
 }
 
-export async function runStdioServer(runtime: AdportRuntime, version?: string): Promise<void> {
-  serveStdio(() => createMcpServer({ runtime, version }));
+export async function runStdioServer(runtime: AdportRuntime, version?: string, includeRawTools = false): Promise<void> {
+  serveStdio(() => createMcpServer({ runtime, version, includeRawTools }));
   // stdout is the protocol channel; stderr is for humans.
   console.error(`adport MCP server on stdio (${runtime.registry.list().length} tools, policy: ${runtime.policySource})`);
   if (runtime.ctx.providers.list().length === 0) {

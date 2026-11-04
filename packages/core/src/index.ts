@@ -59,6 +59,7 @@ export {
   type ToolContext,
 } from './tools/registry.js';
 export { guardedWriteTool } from './tools/write.js';
+export { TOOL_PROVIDERS, classifyTool, toolInSelection, type ToolProvider, type ToolProfile, type ToolSelection, type ToolCatalogMetadata } from './tools/catalog.js';
 export { reviewWrite, type ReviewField, type WriteReview } from './tools/review.js';
 export { planningViewSchema, type PlanningView } from './planning.js';
 export { builtinTools } from './tools/builtin.js';
@@ -67,6 +68,7 @@ export { MockProvider, mockTools } from './testing/mock-provider.js';
 export { SyntheticProvider, syntheticTools, syntheticSeed, syntheticStateSchema, type SyntheticCampaign, type SyntheticStateStore } from './testing/synthetic-provider.js';
 export {
   createContext,
+  selectRuntimeCatalog,
   type AdportRuntime,
   type CreateContextOptions,
   type ProviderModule,

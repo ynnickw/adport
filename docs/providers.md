@@ -19,6 +19,8 @@ For a source checkout, replace `adport` below with `node packages/cli/dist/index
 | Microsoft | Advertising API v13 | `microsoft_api_read` covers query, search, get, and reporting operations | `microsoft_api_create`, `microsoft_api_update`, and `microsoft_api_delete` cover Campaign Management collections |
 | Reddit | Ads API v3 | `reddit_api_read` covers account-scoped GET and read-only POST endpoints; `reddit_report` exposes native reports | `reddit_api_create`, `reddit_api_update`, and `reddit_api_delete` cover account-owned v3 resources |
 
+Generic `*_api_*` tools are advanced local access: opt in with `adport --raw-api-tools tools list`, `adport --raw-api-tools tools run <name>`, `adport --raw-api-tools mcp`, or `adport-mcp --raw-api-tools`. Hosted MCP excludes these tools even in the Full profile. Standard, Reporting, and Full profiles select explicit hosted operations and platforms per connection; existing connections retain Full until changed.
+
 The native tools accept provider-shaped payloads, so use the provider's current API reference when composing them. They are still normal Adport tools: every mutation goes through the same preview, pending-operation binding, policy checks, and audit log as the typed convenience tools. Created campaigns are forced paused. Generic budget updates are deliberately rejected; use the provider's typed budget tool so Adport can fetch the current value and enforce the exact before/after delta. Generic deletes use a client-side preview when the provider has no applicable validation endpoint.
 
 ## Google Ads

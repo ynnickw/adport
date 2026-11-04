@@ -17,7 +17,7 @@ it('maps every registered tool to a branded view and supplies a structured revie
   const runtime = withProjectRouting(await createContext({ providerModules: providerModules(), includeMock: true }), {
     list: async () => [], resolve: async () => { throw new Error('No provider access in this test'); },
   });
-  const server = createMcpServer({ runtime });
+  const server = createMcpServer({ runtime, includeRawTools: true });
   const [ct, st] = InMemoryTransport.createLinkedPair();
   try {
     await Promise.all([server.connect(st), client.connect(ct)]);
