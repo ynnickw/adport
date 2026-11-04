@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
-import { AdportError, type WriteOperation, type WritePreview, type WriteResult } from '@adport/core';
+import { AdportError, type ResourceSecretStore, type WriteOperation, type WritePreview, type WriteResult } from '@adport/core';
 import { z } from 'zod';
 import type { SpotifyAdsClient } from './client.js';
 import { spotifyId } from './schemas.js';
 import { capiSchema, createdReceipt, createCapi, createDataset, createMobile, createPixel, datasetSchema, datasetSharing, diagnosticSchema, mobileSchema, mobileSharing, paging, pixelId, pixelSchema, removeIntegration, updateCapi, updateDataset, updateMobile, updatePixel } from './measurement-schemas.js';
+import { SpotifyCapiCredentials, capiCredentialWrites } from './capi-credentials.js';
 
 type Row = Record<string, unknown>;
 type Scope = { account_id: string; business_id: string };
@@ -26,7 +27,17 @@ function ensure(value: unknown, message: string): asserts value { if (!value) th
 
 /** Current official v3 OpenAPI, fetched 2026-11-05; signed recovery follows approved native creations only. */
 export class SpotifyMeasurementService {
-  constructor(private readonly client: SpotifyAdsClient) {}
+  readonly credentials: SpotifyCapiCredentials;
+  constructor(private readonly client: SpotifyAdsClient, secrets?: ResourceSecretStore) { this.credentials = new SpotifyCapiCredentials(client, input => this.credentialScope(input), secrets); }
+  private async credentialScope(input: { account_id: string; dataset_id: string }) {
+    const scope = await this.scope(input.account_id), dataset = await this.dataset(scope, input.dataset_id);
+    this.exclusive(scope, dataset);
+    ensure(dataset.shared_ad_accounts?.some(account => account.id === scope.account_id), 'CAPI credentials require sharing with this selected account');
+    ensure(dataset.capi_integration, 'dataset has no verified CAPI integration');
+    const integration = await this.rawCapi(scope, dataset.capi_integration.capi_connection_id);
+    this.verifyIntegrationBinding(dataset, 'capi', integration.capi_connection_id, integration.dataset_id);
+    return { ...scope, dataset_id: dataset.id, capi_connection_id: integration.capi_connection_id, configuration_hash: digest(scope, 'capi', integration), dataset_configuration_hash: digest(scope, 'dataset', dataset) };
+  }
   private base(scope: Scope) { return `businesses/${scope.business_id}`; }
   private async scope(account: string): Promise<Scope> {
     const id = spotifyId.parse(account), data = await this.client.get(`ad_accounts/${id}`, z.object({ id: spotifyId, business_id: spotifyId }));
@@ -224,7 +235,8 @@ export class SpotifyMeasurementService {
         const bound = this.proof(scope.account_id, receipt)!, { resource, datasetId } = await this.createdNative(scope, bound);
         const observed = resource as Row;
         // Spotify returns null for unused matching fields; only verified AAM-off makes them ineffective.
-        ensure(Object.entries(body).every(([key, value]) => kind === 'pixel' && key === 'aam_fields' && Array.isArray(value) && !value.length && observed.aam_opt_in === false && observed[key] == null
+        ensure(Object.entries(body).every(([key, value]) => key === 'dataset_id' && requestedDataset !== undefined && datasetId === requestedDataset
+          || kind === 'pixel' && key === 'aam_fields' && Array.isArray(value) && !value.length && observed.aam_opt_in === false && observed[key] == null
           || same({ [key]: observed[key] }, { [key]: value })), 'created measurement fields differ from the request');
         ensure(!requestedDataset || datasetId === requestedDataset, 'created integration has a different dataset');
         if (kind === 'mobile_app') {
@@ -334,6 +346,7 @@ export class SpotifyMeasurementService {
   }
 
   async plan(op: WriteOperation): Promise<Plan> {
+    if (capiCredentialWrites.has(op.tool)) return this.credentials.plan(op);
     if (op.tool === 'spotify_create_dataset') for (const source of createDataset.parse(op.payload).sources) this.proof(op.accountId, source.resource_receipt);
     const proof = this.proof(op.accountId, typeof op.payload.resource_receipt === 'string' ? op.payload.resource_receipt : undefined), scope = await this.scope(op.accountId);this.checkProof(scope, proof);
     if (op.tool === 'spotify_create_pixel' || op.tool === 'spotify_create_capi_integration' || op.tool === 'spotify_create_mobile_app') return this.planCreate(op, scope, proof);

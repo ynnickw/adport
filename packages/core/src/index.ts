@@ -46,6 +46,7 @@ export { FindingsStore, type FindingsRepository } from './audit/store.js';
 export { AuditRunner, type AuditRunOptions, type AuditRunResult } from './audit/runner.js';
 export { auditTools } from './audit/tools.js';
 export { CredentialStore, type CredentialRecord, type CredentialSource } from './credentials/store.js';
+export { FileResourceSecretStore, resourceSecretKey, type ResourceSecretScope, type ResourceSecretStore } from './credentials/resources.js';
 export { policySchema, loadPolicy, DEFAULT_POLICY, type Policy, type LoadedPolicy } from './policy/policy.js';
 export { PendingStore, type PendingOperation, type PendingOperationStore } from './policy/pending.js';
 export { AuditLog, type AuditEntry, type AuditEntryStore } from './policy/audit.js';

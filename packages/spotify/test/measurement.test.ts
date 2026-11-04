@@ -14,7 +14,7 @@ const PIXEL = { id: P, integration_id: I, dataset_id: D, name: 'QA Pixel', domai
 const CAPI = { capi_connection_id: C, integration_id: CI, dataset_id: D, name: 'QA CAPI', events_received: [], access_token: 'native-capi-secret-must-not-escape' };
 const APP = { id: M, name: 'QA Mobile', platform: 'IOS', platform_app_id: '123456789', mobile_measurement_partner: 'SINGULAR', shared_ad_accounts: [{ id: A, name: 'Selected' }], link_token: 'native-link-secret-must-not-escape' };
 type Row = Record<string, unknown>;
-type Options = { empty?: boolean; foreignShares?: boolean; missingShares?: boolean; missingPaging?: boolean; nullPixelMetadata?: boolean; nullPixelBindingOnRead?: boolean; pixelMatchingEnabled?: boolean; pixelMatchingUnknown?: boolean; badIdentity?: boolean; shareFailure?: boolean; updateIgnored?: boolean; readbackDenied?: boolean; postDenied?: boolean; corruptRouting?: boolean; retainDatasetSource?: boolean; datasetResponse?: Row; mobileResponse?: Row; diagnosticResponse?: Row };
+type Options = { empty?: boolean; foreignShares?: boolean; missingShares?: boolean; missingPaging?: boolean; nullPixelMetadata?: boolean; nullPixelBindingOnRead?: boolean; nullCapiBindingOnRead?: boolean; pixelMatchingEnabled?: boolean; pixelMatchingUnknown?: boolean; badIdentity?: boolean; shareFailure?: boolean; updateIgnored?: boolean; readbackDenied?: boolean; postDenied?: boolean; corruptRouting?: boolean; retainDatasetSource?: boolean; datasetResponse?: Row; mobileResponse?: Row; diagnosticResponse?: Row };
 function fixture(options: Options = {}) {
   const pixels = new Map<string, Row>(), capis = new Map<string, Row>(), apps = new Map<string, Row>(), datasets = new Map<string, Row>();
   if (!options.empty) {
@@ -79,7 +79,7 @@ function fixture(options: Options = {}) {
       const store = resource[2] === 'datasets' ? datasets : resource[2] === 'pixels' ? pixels : resource[2] === 'capi' ? capis : apps, row = store.get(resource[3]!);
       if (!row) return Response.json({}, { status: 404 });
       if (method === 'PATCH') { written = true;if (!options.updateIgnored) Object.assign(row, body); }
-      return Response.json(options.nullPixelBindingOnRead && resource[2] === 'pixels' && method === 'GET' ? { ...row, dataset_id: null } : row);
+      return Response.json(method === 'GET' && (options.nullPixelBindingOnRead && resource[2] === 'pixels' || options.nullCapiBindingOnRead && resource[2] === 'capi') ? { ...row, dataset_id: null } : row);
     }
     throw new Error(`Unexpected fixture request: ${method} ${path}`);
   }) as typeof fetch);
@@ -226,8 +226,8 @@ describe('Spotify account-scoped measurement resources', () => {
     expect(writes[1]!.url.pathname).toBe(`/ads/v3/businesses/${B}/datasets/${N}/ad_accounts/${A}`);expect(writes[1]!.body).toBeUndefined();expect(writes[1]!.headers.has('content-type')).toBe(false);
     expect(await f.provider.measurement.created({ account_id: A, resource_receipt: details(result).resource_receipt })).toMatchObject({ needs_dataset_sharing: false, dataset: { id: N, shared_ad_accounts: [{ id: A }] } });
   });
-  it('adds CAPI to an existing authorized dataset without issuing credentials or creating another dataset', async () => {
-    const f = fixture();f.datasets.get(D)!.capi_integration = null;f.capis.clear();const current = (await f.provider.measurement.getDataset({ account_id: A, dataset_id: D })).dataset;
+  it.each([false, true])('adds CAPI to an existing authorized dataset without tokens or another dataset; null child binding=%s', async nullCapiBindingOnRead => {
+    const f = fixture({ nullCapiBindingOnRead });f.datasets.get(D)!.capi_integration = null;f.capis.clear();const current = (await f.provider.measurement.getDataset({ account_id: A, dataset_id: D })).dataset;
     const result = await f.provider.applyWrite(f.op('spotify_create_capi_integration', { name: 'QA CAPI new', dataset_id: D, expected_dataset_configuration_hash: current.configuration_hash }), guard);
     expect(result).toMatchObject({ applied: true, resourceIds: [C, D] });expect(f.writes()).toHaveLength(1);expect(f.writes()[0]!.body).toEqual({ name: 'QA CAPI new', dataset_id: D });
     expect(f.native().some(c => c.url.pathname.includes('/tokens'))).toBe(false);expect(JSON.stringify(result)).not.toContain('native-capi-secret');

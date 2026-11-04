@@ -2,7 +2,7 @@ import { z } from 'zod';
 import {
   AdportError, LocalMediaResolver, resolveDateRange, type Account, type AdProvider, type MediaResolver, type MetricName,
   type NormalizedQuery, type Report, type ReportRow, type StandardActions,
-  type WriteGuard, type WriteOperation, type WritePreview, type WriteResult,
+  type WriteGuard, type WriteOperation, type WritePreview, type WriteResult, type ResourceSecretStore,
 } from '@adport/core';
 import { SpotifyAdsClient } from './client.js';
 import { SpotifyCreativeService } from './creatives.js';
@@ -29,7 +29,7 @@ export class SpotifyAdsProvider implements AdProvider {
   readonly creatives: SpotifyCreativeService;
   readonly management: SpotifyManagementService;
   readonly measurement: SpotifyMeasurementService;
-  constructor(private readonly client: SpotifyAdsClient, media: MediaResolver = new LocalMediaResolver()) { this.creatives = new SpotifyCreativeService(client, media); this.management = new SpotifyManagementService(client, this.creatives); this.measurement = new SpotifyMeasurementService(client); }
+  constructor(private readonly client: SpotifyAdsClient, media: MediaResolver = new LocalMediaResolver(), options: { resourceSecrets?: ResourceSecretStore } = {}) { this.creatives = new SpotifyCreativeService(client, media); this.management = new SpotifyManagementService(client, this.creatives); this.measurement = new SpotifyMeasurementService(client, options.resourceSecrets); }
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions {
     return { pauseCampaign: (accountId, campaignId) => ({ tool: 'spotify_set_campaign_status', input: { account_id: accountId, campaign_id: campaignId, status: 'PAUSED' } }) };

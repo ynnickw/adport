@@ -32,6 +32,7 @@ import { isSyntheticReviewer } from './synthetic-reviewer';
 import { HttpError } from '@/lib/http';
 import { ProjectMediaLibrary } from './media';
 import { instrumentCloudTools } from './analytics-tools';
+import { PostgresResourceSecretStore } from './resource-credentials';
 
 export interface TenantRuntimeOptions {
   /** Used only immediately after OAuth exchange to discover provider accounts. */
@@ -54,7 +55,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
   const [policy, credentials, enabledAccountIds, inventory] = await Promise.all([
     getOrganizationPolicy(principal.organizationId),
     loadProviderCredentials(principal.organizationId, !enforceAccountScope),
-    enforceAccountScope ? loadEnabledAccountIds(principal.organizationId) : Promise.resolve({}),
+    enforceAccountScope ? loadEnabledAccountIds(principal.organizationId) : Promise.resolve({} as Awaited<ReturnType<typeof loadEnabledAccountIds>>),
     enforceAccountScope ? listOrganizationAdAccounts(principal.organizationId) : Promise.resolve([]),
   ]);
   const modules: ProviderModule[] = [];
@@ -78,7 +79,8 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
   }
   if (credentials.spotify && providerAllowedForOrganization('spotify', principal.organizationId)) {
     const persist = persistTokens('spotify');
-    const provider = new SpotifyAdsProvider(new SpotifyAdsClient({ ...cloudProviderApp('spotify'), refreshToken: credentials.spotify.refreshToken, onRefreshToken: refreshToken => persist({ refreshToken }) }), media);
+    const provider = new SpotifyAdsProvider(new SpotifyAdsClient({ ...cloudProviderApp('spotify'), refreshToken: credentials.spotify.refreshToken, onRefreshToken: refreshToken => persist({ refreshToken }) }), media,
+      enforceAccountScope ? { resourceSecrets: new PostgresResourceSecretStore(principal, 'spotify', enabledAccountIds.spotify ?? new Set()) } : {});
     modules.push({ provider: scopeProvider(provider), tools: spotifyTools(provider) });
   }
   if (credentials.pinterest && providerAllowedForOrganization('pinterest', principal.organizationId)) {
