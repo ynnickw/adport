@@ -61,6 +61,11 @@ describe('private Spotify CAPI credential lifecycle', () => {
     expect(JSON.stringify(result)).not.toContain(secret);expect(result.credential_inventory_hash).toMatch(/^[a-f0-9]{64}$/);
     expect(f.fetch.mock.calls.map(([url]) => new URL(String(url)).pathname).slice(1)).toEqual([`/ads/v3/ad_accounts/${A}`, `/ads/v3/businesses/${B}/datasets/${D}`, `/ads/v3/businesses/${B}/capi/${C}`, `/ads/v3/businesses/${B}/capi/${C}/tokens`]);
   });
+  it('rejects a malformed metadata field without echoing a secret-bearing response', async () => {
+    const f = fixture();f.tokens([{ ...native(), created_at: secret }]);
+    const error = await f.provider.measurement.credentials.list({ account_id: A, dataset_id: D }).catch(error => error);
+    expect(error).toMatchObject({ code: 'PROVIDER_ERROR' });expect(String(error.stack)).not.toContain(secret);expect(JSON.stringify(error)).not.toContain(secret);
+  });
   it('uses the policy gate, sends exactly one bodyless create and never persists a secret in approvals or audit', async () => {
     const f = fixture(), values = await input(f), dir = await mkdtemp(path.join(tmpdir(), 'adport-capi-policy-'));directories.push(dir);
     const pending = new PendingStore(path.join(dir, 'pending')), audit = new AuditLog(path.join(dir, 'audit'));

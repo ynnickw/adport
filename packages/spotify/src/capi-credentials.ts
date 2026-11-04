@@ -13,7 +13,7 @@ export const revokeCapiCredential = z.object({ ...snapshot, capi_auth_token_id: 
 export const capiCredentialWrites = new Set(['spotify_create_capi_credential', 'spotify_store_capi_credential', 'spotify_revoke_capi_credential']);
 
 // GET returns secret values too. These private response objects never leave this service.
-const nativeToken = z.object({ capi_auth_token_id: spotifyId, created_at: z.string().nullish(), capi_auth_token: z.string().min(1).max(65536).optional() });
+const nativeToken = z.object({ capi_auth_token_id: spotifyId, created_at: z.iso.datetime({ offset: true }).nullish(), capi_auth_token: z.string().min(1).max(65536).optional() });
 const tokenList = z.object({ data: z.array(nativeToken).max(1000), paging: z.unknown().optional() }).refine(v => v.paging == null && new Set(v.data.map(t => t.capi_auth_token_id)).size === v.data.length, 'Invalid native credential inventory');
 const createdToken = z.object({ data: nativeToken.extend({ capi_auth_token: z.string().min(1).max(65536) }) });
 type NativeToken = z.infer<typeof nativeToken>;
