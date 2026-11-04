@@ -20,12 +20,25 @@ describe('compact provider connection list', () => {
   it('offers Pin management separately and preserves an enabled opt-in on reconnection', () => {
     const pinterest = { ...connection, provider: 'pinterest', status: 'error' as const };
     const basic = render({ connections: [pinterest] });
-    expect(basic).toContain('Authorize Pinterest board, Pin and media management with additional permissions');
+    expect(basic).toContain('Authorize Pinterest public board, Pin and media management with additional permissions');
+    expect(basic).not.toContain('secret_pins=1');
     expect(basic).toContain('/api/oauth/pinterest/start?organization_id=org&amp;pin_management=1');
     const enabled = render({ connections: [{ ...pinterest, pinManagementEnabled: true }] });
     expect(enabled).not.toContain('Enable Pin management');
     expect(enabled).toContain('/api/oauth/pinterest/start?organization_id=org&amp;pin_management=1');
     expect(render({ connections: [pinterest], canManage: false })).not.toContain('Enable Pin management');
+  });
+  it('offers secret content separately from a public grant and retains it on reconnect', () => {
+    const pinterest = { ...connection, provider: 'pinterest', pinManagementEnabled: true };
+    const publicOnly = render({ connections: [pinterest] });
+    expect(publicOnly).toContain('four additional private-content permissions');
+    expect(publicOnly).toContain('pin_management=1&amp;secret_pins=1');
+    const secret = render({ connections: [{ ...pinterest, secretPinsEnabled: true }] });
+    expect(secret).not.toContain('Enable secret Pin management');
+    expect(secret).not.toContain('pin_management=1');
+    expect(secret).toContain('/api/oauth/pinterest/start?organization_id=org&amp;secret_pins=1');
+    expect(render({ connections: [pinterest], canManage: false })).not.toContain('Enable secret Pin management');
+    expect(render({ connections: [{ ...pinterest, accountSelectionId: 'pending' }] })).not.toContain('Enable secret Pin management');
   });
   it('offers conversion permission separately and retains it on later Google reconnection', () => {
     const basic = render();

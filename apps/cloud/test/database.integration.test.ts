@@ -91,15 +91,15 @@ describeDatabase('Supabase tenant boundary', () => {
     expect(other.data).toEqual([]);
   });
 
-  it('keeps the Pin scope opt-in in a tenant/user-bound encrypted one-use OAuth transaction', async () => {
+  it.each(['pinterestPinManagement', 'pinterestSecretPins'] as const)('keeps %s in a tenant/user-bound encrypted one-use OAuth transaction', async option => {
     const state = randomUUID();
-    await createOAuthTransaction({ organizationId: firstOrgId, userId: firstUserId, provider: 'pinterest', state, verifier: 'local-test-verifier', pinterestPinManagement: true });
+    await createOAuthTransaction({ organizationId: firstOrgId, userId: firstUserId, provider: 'pinterest', state, verifier: 'local-test-verifier', [option]: true });
     await expect(consumeOAuthTransaction('pinterest', state, secondUserId)).rejects.toThrow('invalid');
-    expect(await consumeOAuthTransaction('pinterest', state, firstUserId)).toMatchObject({ organizationId: firstOrgId, verifier: 'local-test-verifier', pinterestPinManagement: true });
+    expect(await consumeOAuthTransaction('pinterest', state, firstUserId)).toMatchObject({ organizationId: firstOrgId, verifier: 'local-test-verifier', [option]: true });
     await expect(consumeOAuthTransaction('pinterest', state, firstUserId)).rejects.toThrow('already used');
     const foreignState = randomUUID();
-    await createOAuthTransaction({ organizationId: firstOrgId, userId: firstUserId, provider: 'google', state: foreignState, verifier: 'local-test-verifier', pinterestPinManagement: true });
-    expect(await consumeOAuthTransaction('google', foreignState, firstUserId)).not.toHaveProperty('pinterestPinManagement');
+    await createOAuthTransaction({ organizationId: firstOrgId, userId: firstUserId, provider: 'google', state: foreignState, verifier: 'local-test-verifier', [option]: true });
+    expect(await consumeOAuthTransaction('google', foreignState, firstUserId)).not.toHaveProperty(option);
   });
 
   it('persists first-run progress and tenant-scoped support messages', async () => {

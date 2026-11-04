@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createContext, CredentialStore, DEFAULT_POLICY, PolicyEngine, PendingStore, AuditLog, type NormalizedQuery, type WriteOperation } from '@adport/core';
-import { PinterestAdsClient, PINTEREST_TOKEN_URL, PINTEREST_PIN_SCOPES, buildPinterestAuthUrl, exchangePinterestCode } from '../src/client.js';
+import { PinterestAdsClient, PINTEREST_TOKEN_URL, PINTEREST_PIN_SCOPES, PINTEREST_SECRET_PIN_SCOPES, buildPinterestAuthUrl, exchangePinterestCode } from '../src/client.js';
 import { PinterestAdsProvider } from '../src/provider.js';
 import { accountSchema } from '../src/schemas.js';
 import { pinterestTools } from '../src/tools.js';
@@ -62,6 +62,17 @@ describe('Pinterest OAuth and transport', () => {
   it('requires a refresh token on exchange', async () => {
     const { fetchImpl } = fixture(() => ({}), { access_token: 'access', expires_in: 3600 });
     await expect(exchangePinterestCode({ ...creds, code: 'code', redirectUri: 'http://localhost:53686/callback' }, fetchImpl)).rejects.toThrow('refresh token');
+  });
+  it('requests secret content only through a separate opt-in, including public content permissions', async () => {
+    const url = new URL(buildPinterestAuthUrl('client', 'http://localhost:53686/callback', 'csrf', { secretPins: true }));
+    expect(url.searchParams.get('scope')?.split(',')).toEqual([...PINTEREST_SECRET_PIN_SCOPES]);
+    expect(new URL(buildPinterestAuthUrl('client', 'http://localhost:53686/callback', 'csrf', { pinManagement: true })).searchParams.get('scope')).not.toContain('_secret');
+    const granted = fixture(() => ({}), { ...token, scope: PINTEREST_SECRET_PIN_SCOPES.join(',') });
+    expect(await exchangePinterestCode({ ...creds, code: 'code', redirectUri: 'http://localhost:53686/callback', secretPins: true }, granted.fetchImpl)).toBe('refresh');
+  });
+  it.each(PINTEREST_SECRET_PIN_SCOPES)('does not replace a secret-content grant when %s is unconfirmed', async missing => {
+    const partial = fixture(() => ({}), { ...token, scope: PINTEREST_SECRET_PIN_SCOPES.filter(scope => scope !== missing).join(' ') });
+    await expect(exchangePinterestCode({ ...creds, code: 'code', redirectUri: 'http://localhost:53686/callback', secretPins: true }, partial.fetchImpl)).rejects.toThrow('secret Pin management permissions were not all confirmed');
   });
   it('single-flights refresh, uses form encoding and persists rotation before reads', async () => {
     const { fetchImpl, calls } = fixture(() => account, { ...token, refresh_token: 'rotated' });

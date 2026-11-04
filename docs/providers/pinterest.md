@@ -18,7 +18,7 @@ For noninteractive runtime assembly, provide the complete `PINTEREST_CLIENT_ID`,
 - Guarded campaign status and CBO budget updates, preserving the existing budget type. Flexible daily budgets and non-CBO campaign budget changes are rejected rather than misrepresented as ordinary daily caps.
 - Every mutation uses Adport's existing preview, pending-token, exact-approval and audit flow. Pinterest does not offer server-side validation for these operations; previews are local.
 
-This is not a complete creative-authoring or ad-group management surface. Campaign creation alone does not create Pins, ads, targeting or child ad groups. Cloud OAuth callbacks and approval are separate work.
+Named ad-group, ad, original Pin, board and media tools are documented in [Pinterest campaign setup](../pinterest-campaign-setup.md). Campaign creation alone does not create those child resources. Public Pin management is an explicit `--pin-management` connection option; secret boards and Pins additionally require `--secret-pins`. Neither option is requested by the default Ads connection.
 
 ## Contract and reporting decisions
 
@@ -33,4 +33,4 @@ Inspected against Pinterest's [official OpenAPI 5.28.0](https://github.com/pinte
 - Attribution is explicit: 30-day click, 1-day view, conversion reporting at time of ad action. Missing/null metrics remain absent; ratios are derived only from available dependencies.
 - The published analytics schema enumerates entity IDs/date but leaves metric keys open. The adapter validates consumed metric values as finite nonnegative numbers (also accepts strictly numeric strings defensively). Tests use synthetic values conforming to these contracts; they are not live-account evidence.
 
-No live Pinterest API calls or ad mutations have been verified yet. Approval and local credentials are still required for live read testing.
+Configuration, estimate and paused campaign/ad-group workflows have been live tested on the selected QA account; see the [verification limits](../pinterest-campaign-setup.md#verification). Original Pin/media access remains subject to separately granted content scopes, native roles and app eligibility. Contract tests alone do not establish a live grant or successful media processing.

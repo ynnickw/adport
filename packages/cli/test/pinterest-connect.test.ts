@@ -49,6 +49,14 @@ describe('Pinterest local connect wizard', () => {
     expect(mocks.startServer).toHaveBeenCalledWith('127.0.0.1', 'state-fixture', 53699, '/pinterest');
     expect(mocks.exchange).toHaveBeenCalledWith(expect.objectContaining({ redirectUri: 'http://127.0.0.1:53699/pinterest' }));
   });
+  it.each([false, true])('binds the explicit public/secret content choice to both OAuth steps (secret=%s)', async secretPins => {
+    await connectPinterest({ openBrowser: true, pinManagement: true, secretPins, io });
+    const scopes = new URL(mocks.openBrowser.mock.calls[0]![0]).searchParams.get('scope')!.split(',');
+    expect(scopes).toHaveLength(secretPins ? 11 : 7);
+    expect(scopes.includes('pins:write_secret')).toBe(secretPins);
+    expect(mocks.exchange).toHaveBeenCalledWith(expect.objectContaining({ pinManagement: true, secretPins }));
+    expect(lines.join('\n')).toContain(secretPins ? 'permits access to private content' : 'Secret content requires --secret-pins separately');
+  });
   it('reuses stored credentials without requesting an echoed secret', async () => {
     vi.stubEnv('PINTEREST_CLIENT_SECRET', '');
     await new CredentialStore().set({ provider: 'pinterest', source: 'byo', data: { client_id: 'stored-id', client_secret: 'stored-secret', refresh_token: 'old-refresh' } });

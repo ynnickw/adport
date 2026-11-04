@@ -45,6 +45,9 @@ describe('adport CLI', () => {
   it('rejects the Google-only Data Manager opt-in for other providers before connecting', async () => {
     await expect(run('connect', 'meta', '--data-manager', '--no-browser')).rejects.toThrow('only for Google');
   });
+  it.each(['--pin-management', '--secret-pins'])('rejects the Pinterest-only %s option for other providers before connecting', async option => {
+    await expect(run('connect', 'meta', option, '--no-browser')).rejects.toThrow('only for Pinterest');
+  });
   it('does not expose mock tools without explicit demo mode', async () => {
     await runWithoutDemo('tools', 'list', '--json');
     const tools = JSON.parse(out.join('\n')) as Array<{ name: string }>;

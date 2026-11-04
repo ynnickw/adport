@@ -66,7 +66,7 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
     if (!providerAllowedForOrganization(provider, transaction.organizationId)) throw new Error('This provider is not enabled for this organization.');
 
     // The optional scope is bound to the consumed encrypted transaction, never callback parameters.
-    const exchangeAdapter = oauthAdapter(provider, { googleDataManager: transaction.googleDataManager === true, pinterestPinManagement: transaction.pinterestPinManagement === true });
+    const exchangeAdapter = oauthAdapter(provider, { googleDataManager: transaction.googleDataManager === true, pinterestPinManagement: transaction.pinterestPinManagement === true, pinterestSecretPins: transaction.pinterestSecretPins === true });
     const credential = await exchangeAdapter.exchange({ code: code!, verifier: transaction.verifier, state });
     const selectionId = randomUUID();
     const connectionId = await upsertProviderConnection({

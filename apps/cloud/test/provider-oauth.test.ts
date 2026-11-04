@@ -134,6 +134,21 @@ describe('hosted provider OAuth broker', () => {
     expect(await adapter.exchange({ code: 'code', verifier: 'unused' })).toEqual({ refreshToken: 'refresh' });
   });
 
+  it('requires a separate verified grant for secret Pins and never broadens a public-only adapter', async () => {
+    vi.stubEnv('PINTEREST_CLIENT_ID', 'pinterest-client'); vi.stubEnv('PINTEREST_CLIENT_SECRET', 'pinterest-secret'); vi.stubEnv('PINTEREST_OAUTH_ENABLED', 'true'); resetEnvForTests();
+    const publicAdapter = oauthAdapter('pinterest', { pinterestPinManagement: true });
+    expect(publicAdapter.scopes).not.toContain('pins:read_secret');
+    const secretAdapter = oauthAdapter('pinterest', { pinterestSecretPins: true });
+    expect(secretAdapter.scopes).toEqual([...publicAdapter.scopes, 'boards:read_secret', 'boards:write_secret', 'pins:read_secret', 'pins:write_secret']);
+    expect(new URL(secretAdapter.authorizationUrl({ state: 'bound', challenge: 'unused' })).searchParams.get('scope')?.split(',')).toEqual(secretAdapter.scopes);
+    expect(() => oauthAdapter('meta', { pinterestSecretPins: true })).toThrow('only for Pinterest');
+    expect(() => oauthAdapter('pinterest', { pinterestSecretPins: true, googleDataManager: true })).toThrow('only for Pinterest');
+    const request = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ access_token: 'access', expires_in: 3600, refresh_token: 'refresh', scope: publicAdapter.scopes.join(' ') }));
+    await expect(secretAdapter.exchange({ code: 'code', verifier: 'unused' })).rejects.toThrow('previous connection was preserved');
+    request.mockResolvedValueOnce(Response.json({ access_token: 'access', expires_in: 3600, refresh_token: 'refresh', scope: secretAdapter.scopes.join(' ') }));
+    expect(await secretAdapter.exchange({ code: 'code', verifier: 'unused' })).toEqual({ refreshToken: 'refresh' });
+  });
+
   it('injects the Adport-owned application identity into tenant grants at runtime', () => {
     Object.assign(process.env, APP_ENV);
     resetEnvForTests();

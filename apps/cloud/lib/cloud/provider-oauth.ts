@@ -382,10 +382,10 @@ const reddit: OAuthAdapter<'reddit'> = {
 
 const adapters = { google, meta, tiktok, microsoft, reddit, apple, ...extraOAuthAdapters, x: xOAuthAdapter } satisfies { [P in OAuthProvider]: OAuthAdapter<P> };
 
-export function oauthAdapter<P extends OAuthProvider>(provider: P, options: { googleDataManager?: boolean; pinterestPinManagement?: boolean } = {}): OAuthAdapter<P> {
-  if (options.pinterestPinManagement) {
+export function oauthAdapter<P extends OAuthProvider>(provider: P, options: { googleDataManager?: boolean; pinterestPinManagement?: boolean; pinterestSecretPins?: boolean } = {}): OAuthAdapter<P> {
+  if (options.pinterestPinManagement || options.pinterestSecretPins) {
     if (provider !== 'pinterest' || options.googleDataManager) throw new Error('Pin management authorization is supported only for Pinterest.');
-    return pinterestPinManagementAdapter() as OAuthAdapter<P>;
+    return pinterestPinManagementAdapter(options.pinterestSecretPins === true) as OAuthAdapter<P>;
   }
   if (options.googleDataManager) {
     if (provider !== 'google') throw new Error('Data Manager authorization is supported only for Google.');

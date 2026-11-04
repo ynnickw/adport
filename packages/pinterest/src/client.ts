@@ -5,6 +5,11 @@ export const PINTEREST_API_BASE = 'https://api.pinterest.com/v5/';
 export const PINTEREST_TOKEN_URL = `${PINTEREST_API_BASE}oauth/token`;
 export const PINTEREST_ADS_SCOPES = ['ads:read', 'ads:write'] as const;
 export const PINTEREST_PIN_SCOPES = [...PINTEREST_ADS_SCOPES, 'boards:read', 'boards:write', 'pins:read', 'pins:write', 'user_accounts:read'] as const;
+export const PINTEREST_SECRET_PIN_SCOPES = [...PINTEREST_PIN_SCOPES, 'boards:read_secret', 'boards:write_secret', 'pins:read_secret', 'pins:write_secret'] as const;
+export interface PinterestAuthorizationOptions {
+  pinManagement?: boolean;
+  secretPins?: boolean;
+}
 export interface PinterestCredentials {
   clientId: string;
   clientSecret: string;
@@ -17,9 +22,9 @@ const tokenSchema = z.object({
   scope: z.string().optional(),
 });
 
-export function buildPinterestAuthUrl(clientId: string, redirectUri: string, state: string, options: { pinManagement?: boolean } = {}): string {
+export function buildPinterestAuthUrl(clientId: string, redirectUri: string, state: string, options: PinterestAuthorizationOptions = {}): string {
   return `https://www.pinterest.com/oauth/?${new URLSearchParams({
-    client_id: clientId, response_type: 'code', redirect_uri: redirectUri, state, scope: (options.pinManagement ? PINTEREST_PIN_SCOPES : PINTEREST_ADS_SCOPES).join(','),
+    client_id: clientId, response_type: 'code', redirect_uri: redirectUri, state, scope: (options.secretPins ? PINTEREST_SECRET_PIN_SCOPES : options.pinManagement ? PINTEREST_PIN_SCOPES : PINTEREST_ADS_SCOPES).join(','),
   })}`;
 }
 
@@ -36,14 +41,15 @@ async function tokenRequest(credentials: Pick<PinterestCredentials, 'clientId' |
   return parsed.data;
 }
 
-export async function exchangePinterestCode(input: { clientId: string; clientSecret: string; code: string; redirectUri: string; pinManagement?: boolean }, fetchImpl: typeof fetch = fetch): Promise<string> {
+export async function exchangePinterestCode(input: { clientId: string; clientSecret: string; code: string; redirectUri: string } & PinterestAuthorizationOptions, fetchImpl: typeof fetch = fetch): Promise<string> {
   const token = await tokenRequest(input, new URLSearchParams({
     grant_type: 'authorization_code', code: input.code, redirect_uri: input.redirectUri, continuous_refresh: 'true',
   }), fetchImpl);
   if (!token.refresh_token) throw new AdportError('PROVIDER_ERROR', 'pinterest: OAuth exchange did not return a refresh token');
-  if (input.pinManagement) {
+  if (input.pinManagement || input.secretPins) {
     const granted = new Set(token.scope?.split(/[\s,]+/).filter(Boolean));
-    if (PINTEREST_PIN_SCOPES.some(scope => !granted.has(scope))) throw new AdportError('PROVIDER_ERROR', 'pinterest: Ads and Pin management permissions were not all confirmed. The previous connection was preserved.');
+    const requested = input.secretPins ? PINTEREST_SECRET_PIN_SCOPES : PINTEREST_PIN_SCOPES;
+    if (requested.some(scope => !granted.has(scope))) throw new AdportError('PROVIDER_ERROR', `pinterest: Ads and ${input.secretPins ? 'secret ' : ''}Pin management permissions were not all confirmed. The previous connection was preserved.`);
   }
   return token.refresh_token;
 }
