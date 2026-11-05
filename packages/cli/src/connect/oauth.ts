@@ -14,12 +14,13 @@ export function buildGoogleAuthUrl(
   codeChallenge: string,
   state: string,
   dataManager = false,
+  scopes?: readonly string[],
 ): string {
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: [GOOGLE_ADS_SCOPE, ...(dataManager ? [GOOGLE_DATA_MANAGER_SCOPE] : [])].join(' '),
+    scope: (scopes ?? [GOOGLE_ADS_SCOPE, ...(dataManager ? [GOOGLE_DATA_MANAGER_SCOPE] : [])]).join(' '),
     access_type: 'offline',
     prompt: 'consent',
     include_granted_scopes: 'false',

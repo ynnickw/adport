@@ -248,6 +248,11 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
       if (opts.pinManagement && provider !== 'pinterest') throw new Error('--pin-management is supported only for Pinterest');
       if (opts.secretPins && provider !== 'pinterest') throw new Error('--secret-pins is supported only for Pinterest');
       if (opts.catalogManagement && provider !== 'pinterest') throw new Error('--catalog-management is supported only for Pinterest');
+      if (provider === 'gtm') {
+        const { connectGtm } = await import('./connect/gtm.js');
+        await connectGtm({ openBrowser: opts.browser, io });
+        return;
+      }
       if (provider === 'google') {
         const { connectGoogle } = await import('./connect/google.js');
         await connectGoogle({ openBrowser: opts.browser, dataManager: opts.dataManager, io });
@@ -307,7 +312,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
         await connectX({ openBrowser: opts.browser, io });
         return;
       }
-      io.err(`Provider "${provider}" is not supported. Available: google, meta, tiktok, apple, microsoft, reddit, snapchat, spotify, pinterest, linkedin, x, mock.`);
+      io.err(`Provider "${provider}" is not supported. Available: gtm, google, meta, tiktok, apple, microsoft, reddit, snapchat, spotify, pinterest, linkedin, x, mock.`);
       process.exitCode = 1;
     });
 
@@ -315,8 +320,8 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .command('disconnect <provider>')
     .description('Remove a provider connection from this machine')
     .action(async (provider: string) => {
-      if (!['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'].includes(provider)) {
-        io.err(`Provider "${provider}" is not supported. Available: google, meta, tiktok, apple, microsoft, reddit, snapchat, spotify, pinterest, linkedin, x.`);
+      if (!['gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'].includes(provider)) {
+        io.err(`Provider "${provider}" is not supported. Available: gtm, google, meta, tiktok, apple, microsoft, reddit, snapchat, spotify, pinterest, linkedin, x.`);
         process.exitCode = 1;
         return;
       }
@@ -391,7 +396,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
       for (const record of records) {
         io.out(`${record.provider}: credentials stored (source: ${record.source}, updated ${record.updatedAt})`);
       }
-      for (const id of ['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const) {
+      for (const id of ['gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const) {
         const provider = rt.ctx.providers.list().find((p) => p.id === id);
         if (!provider) {
           io.out(`${id}: not connected (run \`adport connect ${id}\`)`);

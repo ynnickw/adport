@@ -4,7 +4,7 @@ Google's August 2026 message is a consolidated audit checklist, not an approval 
 
 ## Scope and justification
 
-Adport Cloud requests exactly one Google scope:
+The Google Ads connection requests exactly one Google scope:
 
 ```text
 https://www.googleapis.com/auth/adwords
@@ -99,3 +99,41 @@ Do not edit the video after submitting unless you also update the review respons
 > Please continue the verification review and let us know if any additional evidence is required.
 
 Replace every bracketed field and re-run the checklist before sending.
+
+
+## Optional Google Tag Manager connection
+
+GTM uses the same server-owned Google client with a separate callback:
+`https://app.adport.dev/api/oauth/gtm/callback`. The Ads flow continues requesting
+only `adwords`; GTM requests exactly these scopes with PKCE and offline access:
+
+- `https://www.googleapis.com/auth/tagmanager.edit.containers`
+- `https://www.googleapis.com/auth/tagmanager.edit.containerversions`
+- `https://www.googleapis.com/auth/tagmanager.publish`
+
+The edit scope includes reads. No redundant readonly, user-management,
+account-management or container-deletion scopes are requested. Validate the
+returned granular grant before storing it. Keep `GTM_OAUTH_ENABLED=false` for
+public traffic until Google approves the additional sensitive scopes. Test and
+record the complete flow in a protected staging deployment first.
+
+Justification:
+
+> Users connect Google Tag Manager to inspect their website tracking setup and
+> request exact changes through Adport's shared MCP/CLI tools. The container edit
+> scope permits reading configuration and creating/editing draft workspaces,
+> tags, triggers and variables. The container-version scope lets a user save the
+> reviewed draft as a version. The publish scope lets the user separately approve
+> publishing that exact version. Readonly cannot implement these setup features.
+> Every mutation requires a preview token and identical approved arguments;
+> updates and publishing also check resource fingerprints. We do not request
+> container deletion or user/account administration.
+
+The demo must show GTM-specific consent, account selection, real configuration
+reads, draft create/update, a saved version, a separate reviewed publication on a
+non-production test container, audit history and disconnect/manual app-wide
+revocation. Never publish a test tag to a customer's production container.
+Do not reuse the old Ads-only video as evidence for these new features.
+
+The initial GTM connector does not expose GTM event or tool usage to product
+analytics. Existing local CLI/MCP telemetry-free behavior is retained.

@@ -62,7 +62,7 @@ describe('compact provider connection list', () => {
   });
   it('renders every provider as a list row without card descriptions or OAuth flow details', () => {
     const html = render();
-    expect(html.match(/class="connection-row"/g)).toHaveLength(11);
+    expect(html.match(/class="connection-row"/g)).toHaveLength(OAUTH_PROVIDERS.length);
     expect(html).toContain('role="list"');
     expect(html).not.toContain('connection-grid');
     expect(html).not.toContain('connection-copy');

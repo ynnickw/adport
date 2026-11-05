@@ -26,6 +26,9 @@ importers:
       '@adport/provider-google':
         specifier: workspace:*
         version: link:../../packages/google
+      '@adport/provider-gtm':
+        specifier: workspace:*
+        version: link:../../packages/gtm
       '@adport/provider-linkedin':
         specifier: workspace:*
         version: link:../../packages/linkedin
@@ -163,6 +166,9 @@ importers:
       '@adport/provider-google':
         specifier: workspace:*
         version: link:../google
+      '@adport/provider-gtm':
+        specifier: workspace:*
+        version: link:../gtm
       '@adport/provider-linkedin':
         specifier: workspace:*
         version: link:../linkedin
@@ -257,6 +263,28 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@26.1.2)(jsdom@26.1.0)(vite@7.3.6(@types/node@26.1.2)(yaml@2.9.0))
 
+  packages/gtm:
+    dependencies:
+      '@adport/core':
+        specifier: workspace:*
+        version: link:../core
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(postcss@8.5.26)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.2)(jsdom@26.1.0)(vite@7.3.6(@types/node@26.1.2)(yaml@2.9.0))
+
   packages/linkedin:
     dependencies:
       '@adport/core':
@@ -290,6 +318,9 @@ importers:
       '@adport/provider-google':
         specifier: workspace:*
         version: link:../google
+      '@adport/provider-gtm':
+        specifier: workspace:*
+        version: link:../gtm
       '@adport/provider-linkedin':
         specifier: workspace:*
         version: link:../linkedin

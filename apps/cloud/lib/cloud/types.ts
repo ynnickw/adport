@@ -70,6 +70,7 @@ export interface StoredAppleCredential {
 }
 
 export interface ProviderCredentialMap {
+  gtm: { refreshToken: string };
   google: StoredGoogleCredential;
   meta: StoredMetaCredential;
   tiktok: StoredTikTokCredential;
@@ -86,7 +87,7 @@ export interface ProviderCredentialMap {
 export type CloudProvider = keyof ProviderCredentialMap;
 export type StoredProviderCredential = ProviderCredentialMap[CloudProvider];
 
-export const CLOUD_PROVIDERS = ['google', 'meta', 'tiktok', 'microsoft', 'reddit', 'apple', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const satisfies readonly CloudProvider[];
+export const CLOUD_PROVIDERS = ['gtm', 'google', 'meta', 'tiktok', 'microsoft', 'reddit', 'apple', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const satisfies readonly CloudProvider[];
 /** Providers whose connection is established through the Adport-owned OAuth application. */
 export const OAUTH_PROVIDERS = CLOUD_PROVIDERS;
 export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];

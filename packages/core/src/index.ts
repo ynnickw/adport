@@ -60,6 +60,7 @@ export {
   type ToolAnnotations,
   type ToolContext,
 } from './tools/registry.js';
+export { gtmTools, gtmWriteSchemas, GTM_SCOPES, type GtmReader } from './tools/gtm.js';
 export { guardedWriteTool } from './tools/write.js';
 export { TOOL_PROVIDERS, classifyTool, toolInSelection, type ToolProvider, type ToolProfile, type ToolSelection, type ToolCatalogMetadata } from './tools/catalog.js';
 export { reviewWrite, type ReviewField, type WriteReview } from './tools/review.js';

@@ -23,6 +23,10 @@ Generic `*_api_*` tools are advanced local access: opt in with `adport --raw-api
 
 The native tools accept provider-shaped payloads, so use the provider's current API reference when composing them. They are still normal Adport tools: every mutation goes through the same preview, pending-operation binding, policy checks, and audit log as the typed convenience tools. Created campaigns are forced paused. Generic budget updates are deliberately rejected; use the provider's typed budget tool so Adport can fetch the current value and enforce the exact before/after delta. Generic deletes use a client-side preview when the provider has no applicable validation endpoint.
 
+## Google Tag Manager
+
+Use `adport connect gtm` with your own Google Desktop OAuth client after enabling Tag Manager API. See the [GTM provider guide](../packages/gtm/README.md) for credentials, native configuration tools, fingerprints, and the separate version/publish workflow. GTM supplies tracking configuration and is excluded from performance reports. Hosted access is separately gated pending Google scope approval.
+
 ## Google Ads
 
 You need a Google Cloud project with Google Ads API access and an OAuth desktop client in that project. Developer tokens were retired in September 2026 and are no longer required or sent by Adport.

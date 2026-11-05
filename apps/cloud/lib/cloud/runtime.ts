@@ -2,6 +2,7 @@ import 'server-only';
 import { AdportError, createContext, selectRuntimeCatalog, PolicyEngine, type ToolSelection, type AdportRuntime, type AnyToolDefinition, type ProviderModule } from '@adport/core';
 import { toolAccessPath } from '@/lib/tool-access-link';
 import { AppleAdsClient, AppleAdsProvider, appleTools } from '@adport/provider-apple';
+import { GtmClient, GtmProvider, gtmTools } from '@adport/provider-gtm';
 import { GoogleAdsProvider, GoogleAdsRestClient, googleTools } from '@adport/provider-google';
 import { MetaAdsProvider, MetaGraphClient, metaTools } from '@adport/provider-meta';
 import { MicrosoftAdsClient, MicrosoftAdsProvider, microsoftTools } from '@adport/provider-microsoft';
@@ -100,6 +101,14 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     if (!consumerKey || !consumerSecret) throw new Error('X Ads application credentials are not configured.');
     const provider = new XAdsProvider(new XAdsClient({ consumerKey, consumerSecret, ...credentials.x }), undefined, media);
     modules.push({ provider: scopeProvider(provider), tools: xTools(provider) });
+  }
+  if (credentials.gtm && providerAllowedForOrganization('gtm', principal.organizationId)) {
+    const config = googleEnv();
+    const provider = new GtmProvider(new GtmClient({
+      clientId: config.GOOGLE_ADS_CLIENT_ID, clientSecret: config.GOOGLE_ADS_CLIENT_SECRET,
+      refreshToken: credentials.gtm.refreshToken,
+    }));
+    modules.push({ provider: scopeProvider(provider), tools: gtmTools(provider) });
   }
   if (credentials.google) {
     const config = googleEnv();

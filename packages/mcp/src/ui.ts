@@ -18,6 +18,7 @@ export const ADPORT_UI_RESOURCE_DOMAINS = [ADPORT_UI_DOMAIN, 'https://*.fbcdn.ne
 export type AdportView = 'accounts' | 'report' | 'operation' | 'insights' | 'creatives' | 'planning' | 'data' | 'records' | 'receipt';
 
 const providerNames: Record<string, string> = {
+  gtm: 'Google Tag Manager',
   google: 'Google Ads',
   meta: 'Meta Ads',
   tiktok: 'TikTok Ads',
