@@ -172,7 +172,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     findings: new PostgresFindingsStore(principal.organizationId),
     media,
   });
-  if (options.surface === 'mcp') completeMcpCatalog(runtime);
+  if (options.surface === 'mcp') completeMcpCatalog(runtime, providerAllowedForOrganization('gtm', principal.organizationId));
   const selected = options.catalog ? selectRuntimeCatalog(runtime, options.catalog, false, {
     canWrite: principal.scopes.includes('tools:write'), excludedTools: ['recommendation_apply'],
     manageAccessUrl: new URL(toolAccessPath(principal.organizationId, principal.apiKeyId ?? principal.clientId ?? '', principal.apiKeyId ? 'key' : 'oauth', principal.oauthOrganizationGroupId), env().ADPORT_CLOUD_BASE_URL).href,
@@ -190,9 +190,10 @@ function unavailableTools<T extends object>(provider: string, factory: (provider
 }
 
 /** A stable catalog lets clients use platforms connected after OAuth consent. */
-function completeMcpCatalog(runtime: AdportRuntime): void {
+function completeMcpCatalog(runtime: AdportRuntime, includeGtm: boolean): void {
   const registered = new Set(runtime.registry.list().map(tool => tool.name));
   const catalog = [
+    ...(includeGtm ? unavailableTools('gtm', gtmTools) : []),
     ...unavailableTools('google', googleTools), ...unavailableTools('meta', metaTools),
     ...unavailableTools('tiktok', tiktokTools), ...unavailableTools('apple', appleTools),
     ...unavailableTools('microsoft', microsoftTools), ...unavailableTools('reddit', redditTools),
