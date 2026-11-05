@@ -10,6 +10,7 @@ import type { XParams } from './client.js';
 type Row = Record<string, unknown>;
 type Plan = Omit<WritePreview, 'serverValidated'> & { execute(): Promise<WriteResult> };
 const web = z.looseObject({ id, name: z.string(), type: z.string(), deleted: z.boolean() });
+type Web = z.infer<typeof web>;
 const app = z.looseObject({ id, app_store_identifier: z.string(), os_type: z.string(), conversion_type: z.string(), post_view_attribution_window: z.number().int().nonnegative(), post_engagement_attribution_window: z.number().int().nonnegative(), deleted: z.boolean() });
 const tracking = z.looseObject({ id, line_item_id: id, tracking_tag_type: z.string(), tracking_tag_url: z.string(), deleted: z.boolean() });
 type Tracking = z.infer<typeof tracking>;
@@ -17,6 +18,7 @@ const request = z.object({ params: z.record(z.string(), z.unknown()).optional() 
 const canonical = (value: unknown): string => JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b))) : item);
 const configuration = (value: Tracking) => Object.fromEntries(Object.entries(value).filter(([key]) => !['created_at', 'updated_at', 'configuration_hash'].includes(key)));
 const snapshot = (account: string, value: Tracking) => createHash('sha256').update(canonical({ account_id: account, configuration: configuration(value) })).digest('hex');
+const webSnapshot = (account: string, value: Web) => createHash('sha256').update(canonical({ account_id: account, configuration: Object.fromEntries(['id', 'name', 'type', 'retargeting_enabled', 'click_window', 'view_through_window', 'deleted'].filter(key => value[key] !== undefined).map(key => [key, value[key]])) })).digest('hex');
 const day = 86_400_000;
 const notes = ['Local preview only; X has no server dry run or conditional update for this workflow.', 'Measurement on active ads may change immediately. No events are sent by this tool, no ads are activated and no budget or bid is changed.', 'No automatic write retry. Reconcile known IDs after an uncertain result.'];
 const rejection = (error: unknown) => error instanceof AdportError && error.details !== null && typeof error.details === 'object' && 'http_status' in error.details && [401, 403, 429].includes(Number(error.details.http_status));
@@ -54,11 +56,13 @@ export class XMeasurementService {
   }
   async listWeb(value: unknown) {
     const { account_id, ...params } = webTags.parse(value), result = await this.page(account_id, 'web_event_tags', web, params);
-    return { ...result, records: result.data.map(value => ({ id: value.id, name: value.name, type: value.type, status: value.deleted ? 'Deleted' : value.status ?? 'Not reported', ...(value.click_window !== undefined ? { click_window_days: value.click_window } : {}), ...(value.view_through_window !== undefined ? { view_through_window_days: value.view_through_window } : {}) })) };
+    const data = result.data.map((value): Web & { configuration_hash: string } => ({ ...value, configuration_hash: webSnapshot(account_id, value) }));
+    return { ...result, data, records: data.map(value => ({ id: value.id, name: value.name, type: value.type, status: value.deleted ? 'Deleted' : value.status ?? 'Not reported', ...(value.click_window !== undefined ? { click_window_days: value.click_window } : {}), ...(value.view_through_window !== undefined ? { view_through_window_days: value.view_through_window } : {}) })) };
   }
   async getWeb(value: unknown) {
     const input = webTag.parse(value), result = await this.get(input.account_id, 'web_event_tags', input.web_event_tag_id, web, input.with_deleted);
-    return { ...result, records: [result.data], notes: ['Embed code is returned as inert data. This read does not install a pixel or send an event.'] };
+    const data: Web & { configuration_hash: string } = { ...result.data, configuration_hash: webSnapshot(input.account_id, result.data) };
+    return { ...result, data, records: [data], notes: ['Embed code is returned as inert data. This read does not install a pixel or send an event.'] };
   }
   async listApp(value: unknown) {
     const { account_id, app_event_tag_ids, ...input } = appTags.parse(value), params = this.pageParams(input, { app_event_tag_ids });

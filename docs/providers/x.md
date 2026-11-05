@@ -92,6 +92,25 @@ The implementation follows these current official contracts:
 
 `x_create_line_item` creates a PAUSED ad group under an existing non-draft `LINE_ITEM` budget campaign. It requires an explicit objective, product, placements and flight; sibling line items must use the same objective/product. Native requests use signed query parameters and CSV placements. App objectives require an explicit app-store ID, and the preview reports native automatic platform targeting. Publisher-network placement needs an advertiser domain and IAB categories. Placement combinations can be inspected with `x_line_item_placements`.
 
+Creation also accepts a documented native `goal` and `primary_web_event_tag`.
+`WEBSITE_CONVERSIONS` requires a primary event ID and the
+`expected_web_event_tag_hash` from `x_get_web_event_tag`. Any supplied primary
+event requires that hash. Adport reads the exact account-scoped event on preview
+and apply, rejects deleted/foreign or changed configurations, and includes the
+event name/type, goal, native event status, placements, flight and money in the
+review. Native event status alone does not establish measurement accuracy.
+New ad groups still follow paused-creation policy. The snapshot is an Adport
+approval check and is never sent as an X API parameter.
+
+Native creation receipts and independent ad-group readback must match the goal,
+primary event, status and approved configuration. Unconfirmed readback retains
+the created ID and never automatically repeats creation. This path installs no
+pixel and sends no conversion event. Current documentation establishes the
+primary-event parameter on creation; Adport does not infer an existing-group
+rebind/clear route from that. Native goal/account eligibility remains checked by
+X on apply. Event configuration hashes include name, type, retargeting and
+attribution windows; volatile tracking diagnostics are excluded.
+
 Name/schedule edits, status, daily/total caps and bidding have separate named tools. Omitted bounds/settings remain unchanged. Money uses integer micros with current-value lookup and shared policy checks. Native `AUTO` ignores a monetary bid; the tool rejects a purported AUTO cap and removal of an existing bounded bid through AUTO. `MAX`/`TARGET` eligibility follows the documented objective restrictions. Receipt checks bind ID, campaign, currency, status, requested settings and preserved monetary caps. Unexpected native changes retain the returned ID and require reconciliation before retrying.
 
 `x_delete_line_item` requires its relevant promoted-post/account/media children to be removed first, then uses native DELETE and checks the returned deleted flag. Unknown product types are rejected for deletion rather than assuming all child types have been checked. All advertising writes still use the same exact-argument preview/apply gate, audit log, protected-account and budget rules. X does not provide server validation for this workflow.

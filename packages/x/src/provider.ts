@@ -29,7 +29,7 @@ export class XAdsProvider extends XAdsEntities implements AdProvider {
   readonly cards: XCardService;
   readonly audiences: XAudienceService;
   readonly measurement: XMeasurementService;
-  constructor(client: XAdsClient, analytics?: XAdsAnalytics, media?: MediaResolver) { super(client); this.analytics = analytics ?? new XAdsAnalytics(client); this.management = new XManagementService(this); this.targeting = new XTargetingService(this); this.creatives = new XCreativeService(this); this.mediaUploads = new XMediaService(this, media); this.cards = new XCardService(this, this.creatives); this.audiences = new XAudienceService(this); this.measurement = new XMeasurementService(this, this.analytics); }
+  constructor(client: XAdsClient, analytics?: XAdsAnalytics, media?: MediaResolver) { super(client); this.analytics = analytics ?? new XAdsAnalytics(client); this.measurement = new XMeasurementService(this, this.analytics); this.management = new XManagementService(this, this.measurement); this.targeting = new XTargetingService(this); this.creatives = new XCreativeService(this); this.mediaUploads = new XMediaService(this, media); this.cards = new XCardService(this, this.creatives); this.audiences = new XAudienceService(this); }
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions { return { pauseCampaign: (accountId, campaignId) => ({ tool: 'x_set_campaign_status', input: { account_id: accountId, campaign_id: campaignId, status: 'PAUSED' } }) }; }
   async previewWrite(op: WriteOperation, guard: WriteGuard): Promise<WritePreview> {
