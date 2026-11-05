@@ -40,7 +40,20 @@ function fixture(custom?: (call: Call) => Response | undefined) {
       const value = state.forms.find(form => form.id === resource.split('/').at(-1));
       if (!value) return response({ status: 404 });
       if (init.method === 'GET') return response(value);
-      if (init.method === 'POST') { applyPatch(value, data(call).patch); return new Response(null, { status: 204 }); }
+      if (init.method === 'POST') {
+        const patch = data(call).patch, before = value.content as Record<string, unknown>, changed = patch.$set?.content;
+        if (changed && (changed.questions.some((q: Record<string, unknown>) => 'questionId' in q) || 'legalInfoId' in changed.legalInfo)) return new Response('{}', { status: 422 });
+        applyPatch(value, patch);
+        if (changed) {
+          changed.questions = changed.questions.map((q: Record<string, unknown>) => {
+            const previous = (before.questions as Array<Record<string, unknown>>).find(item => item.name === q.name);
+            return previous?.questionId !== undefined ? { ...q, questionId: previous.questionId } : q;
+          });
+          const legal = before.legalInfo as Record<string, unknown>;
+          if (legal.legalInfoId !== undefined) changed.legalInfo.legalInfoId = legal.legalInfoId;
+        }
+        return new Response(null, { status: 204 });
+      }
     }
     throw new Error(`Unexpected ${init.method} ${resource}`);
   });
@@ -117,9 +130,12 @@ describe('LinkedIn lead form configuration', () => {
   });
   it('uses a top-level content set preserving questions, exact native IDs and unknown fields', async () => {
     const f = fixture(), c = f.state.forms[0]!.content as Record<string, unknown>; c.vendorContent = 'preserve'; (c.legalInfo as Record<string, unknown>).legalInfoId = '6755260984438374491';
+    (c.questions as Array<Record<string, unknown>>)[0]!.questionId = '6755260984438374492';
     await f.provider.applyWrite(op('linkedin_update_lead_form', { ...await reference(f.provider), content: { headline: localized('New headline'), legalInfo: { privacyPolicyUrl: 'https://example.invalid/new' } } }), guard);
-    expect(data(mutations(f.calls)[0]!)).toEqual({ patch: { $set: { content: { ...content(), vendorContent: 'preserve', headline: localized('New headline'), legalInfo: { ...content().legalInfo, legalInfoId: '6755260984438374491', privacyPolicyUrl: 'https://example.invalid/new' } } } } });
-    expect(String(mutations(f.calls)[0]!.init.body)).toContain('"legalInfoId":6755260984438374491');
+    expect(data(mutations(f.calls)[0]!)).toEqual({ patch: { $set: { content: { ...content(), vendorContent: 'preserve', headline: localized('New headline'), legalInfo: { ...content().legalInfo, privacyPolicyUrl: 'https://example.invalid/new' } } } } });
+    expect(String(mutations(f.calls)[0]!.init.body)).not.toContain('legalInfoId');
+    expect(String(mutations(f.calls)[0]!.init.body)).not.toContain('questionId');
+    expect(((f.state.forms[0]!.content as Record<string, unknown>).questions as Array<Record<string, unknown>>)[0]!.questionId).toBe('6755260984438374492');
     expect(f.state.forms[0]!.content).toMatchObject({ vendorContent: 'preserve', questions: content().questions, legalInfo: { legalInfoId: '6755260984438374491', consents: [], legalDisclaimer: localized('Synthetic QA only') } });
   });
   it('clears only the requested optional field in the merged content', async () => {

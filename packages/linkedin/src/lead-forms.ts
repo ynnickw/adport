@@ -61,15 +61,15 @@ function requestedMatch(actual: unknown, expected: unknown, key = ''): boolean {
 function fieldsOf(current: unknown, requested: Record<string, unknown>): ReviewField[] {
   return Object.entries(requested).flatMap(([key, after]) => structural.has(key) && object(after) ? fieldsOf(object(current) ? current[key] : undefined, after) : [{ label: labels[key] ?? key, ...(object(current) && Object.hasOwn(current, key) ? { before: current[key] } : {}), after }]);
 }
-// leadForms rejects granular content patches. Carry the snapshot's complete
-// content into a top-level set, including its generated question/legal IDs.
-function wireContent(value: unknown, key = ''): unknown {
-  if (['questionId', 'legalInfoId'].includes(key) && typeof value === 'string' && /^\d{1,19}$/.test(value)) {
-    const raw = (JSON as typeof JSON & { rawJSON?: (text: string) => unknown }).rawJSON;
-    if (!raw) throw new AdportError('INVALID_INPUT', 'linkedin: this runtime cannot encode native Long form identifiers exactly');
-    return raw(value);
-  }
-  return Array.isArray(value) ? value.map(item => wireContent(item)) : object(value) ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key, wireContent(item, key)])) : value;
+// leadForms accepts top-level sets; generated child IDs are read-only. Keep
+// those IDs in the expected readback, but never submit them as editable fields.
+function wireContent(value: unknown): unknown {
+  if (!object(value)) return value;
+  const omit = (row: Record<string, unknown>, key: string) => Object.fromEntries(Object.entries(row).filter(([field]) => field !== key));
+  return { ...value,
+    ...(Array.isArray(value.questions) ? { questions: value.questions.map(item => object(item) ? omit(item, 'questionId') : item) } : {}),
+    ...(object(value.legalInfo) ? { legalInfo: omit(value.legalInfo, 'legalInfoId') } : {}),
+  };
 }
 function validateLocale(value: unknown, preferred: string): void {
   if (Array.isArray(value)) { for (const item of value) validateLocale(item, preferred); return; }
