@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createContext, CredentialStore, DEFAULT_POLICY, PolicyEngine, PendingStore, AuditLog, type NormalizedQuery, type WriteOperation } from '@adport/core';
-import { PinterestAdsClient, PINTEREST_TOKEN_URL, PINTEREST_PIN_SCOPES, PINTEREST_SECRET_PIN_SCOPES, buildPinterestAuthUrl, exchangePinterestCode } from '../src/client.js';
+import { PinterestAdsClient, PINTEREST_TOKEN_URL, PINTEREST_PIN_SCOPES, PINTEREST_SECRET_PIN_SCOPES, PINTEREST_CATALOG_SCOPES, buildPinterestAuthUrl, exchangePinterestCode } from '../src/client.js';
 import { PinterestAdsProvider } from '../src/provider.js';
 import { accountSchema } from '../src/schemas.js';
 import { pinterestTools } from '../src/tools.js';
@@ -58,6 +58,19 @@ describe('Pinterest OAuth and transport', () => {
     await expect(exchangePinterestCode({ ...creds, code: 'code', redirectUri: 'http://localhost:53686/callback', pinManagement: true }, denied.fetchImpl)).rejects.toThrow('previous connection was preserved');
     const granted = fixture(() => ({}), { ...token, scope: PINTEREST_PIN_SCOPES.join(' ') });
     expect(await exchangePinterestCode({ ...creds, code: 'code', redirectUri: 'http://localhost:53686/callback', pinManagement: true }, granted.fetchImpl)).toBe('refresh');
+  });
+  it.each([false, true])('adds catalog scopes only on opt-in while retaining the requested Pin grant (secret=%s)', async secretPins => {
+    const base = secretPins ? PINTEREST_SECRET_PIN_SCOPES : PINTEREST_PIN_SCOPES;
+    const scopes = [...base, ...PINTEREST_CATALOG_SCOPES];
+    const options = { pinManagement: true, secretPins, catalogManagement: true };
+    expect(new URL(buildPinterestAuthUrl('client', 'http://localhost:53686/callback', 'csrf', options)).searchParams.get('scope')?.split(',')).toEqual(scopes);
+    for (const missing of scopes) {
+      const partial = fixture(() => ({}), { ...token, scope: scopes.filter(scope => scope !== missing).join(' ') });
+      await expect(exchangePinterestCode({ ...creds, code: 'code', redirectUri: 'http://localhost:53686/callback', ...options }, partial.fetchImpl)).rejects.toThrow('previous connection was preserved');
+    }
+    const granted = fixture(() => ({}), { ...token, scope: scopes.join(',') });
+    expect(await exchangePinterestCode({ ...creds, code: 'code', redirectUri: 'http://localhost:53686/callback', ...options }, granted.fetchImpl)).toBe('refresh');
+    expect(new URL(buildPinterestAuthUrl('client', 'http://localhost:53686/callback', 'csrf', { secretPins })).searchParams.get('scope')).not.toContain('catalogs:');
   });
   it('requires a refresh token on exchange', async () => {
     const { fetchImpl } = fixture(() => ({}), { access_token: 'access', expires_in: 3600 });

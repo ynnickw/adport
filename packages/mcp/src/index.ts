@@ -209,7 +209,15 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
         const nestedResult = rawObject.result && typeof rawObject.result === 'object' && !Array.isArray(rawObject.result)
           ? rawObject.result as Record<string, unknown> : {};
         const pending = rawObject.pending_operation_id ?? nestedResult.pending_operation_id;
-        const approval = view === 'operation' && typeof pending === 'string' && !args.pending_operation_id
+        const privateArguments = tool.sensitiveInputs?.some(path => {
+          let current: unknown = args;
+          for (const key of path.split('.')) {
+            if (!current || typeof current !== 'object' || !Object.hasOwn(current, key)) return false;
+            current = (current as Record<string, unknown>)[key];
+          }
+          return current !== undefined;
+        });
+        const approval = view === 'operation' && typeof pending === 'string' && !args.pending_operation_id && !privateArguments
           ? { arguments: { ...args } }
           : undefined;
         const nextArgs = view === 'creatives' || view === 'records' ? nextPageArguments(tool, args, rawObject) : undefined;

@@ -50,7 +50,7 @@ export function classifyTool(name: string, namespace: string): ToolCatalogMetada
     : /conversion|pixel|insight_tag|event_source|offline_event|measurement/.test(operation) ? 'measurement'
     : /audience|targeting|demographic/.test(operation) ? 'audiences'
     : /report|insight|forecast|estimate|keyword_ideas|historical_metrics/.test(operation) ? 'reporting'
-    : /creative|image|video|asset|media|product_page|pin|board|lead_form/.test(operation) || namespace === 'media' ? 'creatives'
+    : /creative|image|video|asset|media|product_page|pin|board|lead_form|catalog|feed/.test(operation) || namespace === 'media' ? 'creatives'
     : /campaign|ad_group|ad_set|adset|keyword|budget|bidding|^ads?$|_ad$/.test(operation) ? 'campaigns'
     : ['core', 'audit', 'mock'].includes(namespace) ? 'core' : 'administration';
   return { category, exposure: standard ? 'standard' : 'specialist' };

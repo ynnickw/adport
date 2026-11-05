@@ -57,6 +57,13 @@ describe('Pinterest local connect wizard', () => {
     expect(mocks.exchange).toHaveBeenCalledWith(expect.objectContaining({ pinManagement: true, secretPins }));
     expect(lines.join('\n')).toContain(secretPins ? 'permits access to private content' : 'Secret content requires --secret-pins separately');
   });
+  it('keeps explicit catalog and secret Pin choices in both OAuth steps', async () => {
+    await connectPinterest({ openBrowser: true, secretPins: true, catalogManagement: true, io });
+    const scopes = new URL(mocks.openBrowser.mock.calls[0]![0]).searchParams.get('scope')!.split(',');
+    expect(scopes).toHaveLength(13); expect(scopes).toContain('catalogs:write'); expect(scopes).toContain('pins:write_secret');
+    expect(mocks.exchange).toHaveBeenCalledWith(expect.objectContaining({ secretPins: true, catalogManagement: true }));
+    expect(lines.join(' ')).toContain('Connecting does not create catalogs');
+  });
   it('reuses stored credentials without requesting an echoed secret', async () => {
     vi.stubEnv('PINTEREST_CLIENT_SECRET', '');
     await new CredentialStore().set({ provider: 'pinterest', source: 'byo', data: { client_id: 'stored-id', client_secret: 'stored-secret', refresh_token: 'old-refresh' } });

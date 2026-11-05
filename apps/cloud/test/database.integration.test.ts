@@ -91,7 +91,7 @@ describeDatabase('Supabase tenant boundary', () => {
     expect(other.data).toEqual([]);
   });
 
-  it.each(['pinterestPinManagement', 'pinterestSecretPins'] as const)('keeps %s in a tenant/user-bound encrypted one-use OAuth transaction', async option => {
+  it.each(['pinterestPinManagement', 'pinterestSecretPins', 'pinterestCatalogManagement'] as const)('keeps %s in a tenant/user-bound encrypted one-use OAuth transaction', async option => {
     const state = randomUUID();
     await createOAuthTransaction({ organizationId: firstOrgId, userId: firstUserId, provider: 'pinterest', state, verifier: 'local-test-verifier', [option]: true });
     await expect(consumeOAuthTransaction('pinterest', state, secondUserId)).rejects.toThrow('invalid');

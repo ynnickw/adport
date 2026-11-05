@@ -42,6 +42,8 @@ export interface AnyToolDefinition {
   pagination?: { cursorInput: string; cursorOutput?: string };
   /** Top-level host file inputs, declared once for transport adapters. */
   fileInputs?: readonly string[];
+  /** Dot paths whose presence prevents adapters from echoing arguments into widget approvals. */
+  sensitiveInputs?: readonly string[];
   handler: (input: never, ctx: ToolContext) => Promise<unknown>;
 }
 
@@ -55,6 +57,7 @@ export function defineTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   presentation?: AnyToolDefinition['presentation'];
   pagination?: AnyToolDefinition['pagination'];
   fileInputs?: AnyToolDefinition['fileInputs'];
+  sensitiveInputs?: AnyToolDefinition['sensitiveInputs'];
   catalog?: ToolCatalogMetadata;
   handler: (input: z.infer<S>, ctx: ToolContext) => Promise<unknown>;
 }): AnyToolDefinition {

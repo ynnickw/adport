@@ -6,9 +6,14 @@ export const PINTEREST_TOKEN_URL = `${PINTEREST_API_BASE}oauth/token`;
 export const PINTEREST_ADS_SCOPES = ['ads:read', 'ads:write'] as const;
 export const PINTEREST_PIN_SCOPES = [...PINTEREST_ADS_SCOPES, 'boards:read', 'boards:write', 'pins:read', 'pins:write', 'user_accounts:read'] as const;
 export const PINTEREST_SECRET_PIN_SCOPES = [...PINTEREST_PIN_SCOPES, 'boards:read_secret', 'boards:write_secret', 'pins:read_secret', 'pins:write_secret'] as const;
+export const PINTEREST_CATALOG_SCOPES = ['catalogs:read', 'catalogs:write'] as const;
 export interface PinterestAuthorizationOptions {
   pinManagement?: boolean;
   secretPins?: boolean;
+  catalogManagement?: boolean;
+}
+export function pinterestAuthorizationScopes(options: PinterestAuthorizationOptions = {}): readonly string[] {
+  return [...(options.secretPins ? PINTEREST_SECRET_PIN_SCOPES : options.pinManagement ? PINTEREST_PIN_SCOPES : PINTEREST_ADS_SCOPES), ...(options.catalogManagement ? PINTEREST_CATALOG_SCOPES : [])];
 }
 export interface PinterestCredentials {
   clientId: string;
@@ -24,7 +29,7 @@ const tokenSchema = z.object({
 
 export function buildPinterestAuthUrl(clientId: string, redirectUri: string, state: string, options: PinterestAuthorizationOptions = {}): string {
   return `https://www.pinterest.com/oauth/?${new URLSearchParams({
-    client_id: clientId, response_type: 'code', redirect_uri: redirectUri, state, scope: (options.secretPins ? PINTEREST_SECRET_PIN_SCOPES : options.pinManagement ? PINTEREST_PIN_SCOPES : PINTEREST_ADS_SCOPES).join(','),
+    client_id: clientId, response_type: 'code', redirect_uri: redirectUri, state, scope: pinterestAuthorizationScopes(options).join(','),
   })}`;
 }
 
@@ -46,10 +51,10 @@ export async function exchangePinterestCode(input: { clientId: string; clientSec
     grant_type: 'authorization_code', code: input.code, redirect_uri: input.redirectUri, continuous_refresh: 'true',
   }), fetchImpl);
   if (!token.refresh_token) throw new AdportError('PROVIDER_ERROR', 'pinterest: OAuth exchange did not return a refresh token');
-  if (input.pinManagement || input.secretPins) {
+  if (input.pinManagement || input.secretPins || input.catalogManagement) {
     const granted = new Set(token.scope?.split(/[\s,]+/).filter(Boolean));
-    const requested = input.secretPins ? PINTEREST_SECRET_PIN_SCOPES : PINTEREST_PIN_SCOPES;
-    if (requested.some(scope => !granted.has(scope))) throw new AdportError('PROVIDER_ERROR', `pinterest: Ads and ${input.secretPins ? 'secret ' : ''}Pin management permissions were not all confirmed. The previous connection was preserved.`);
+    const requested = pinterestAuthorizationScopes(input);
+    if (requested.some(scope => !granted.has(scope))) throw new AdportError('PROVIDER_ERROR', input.catalogManagement ? 'pinterest: requested Ads, catalog and existing Pin management permissions were not all confirmed. The previous connection was preserved.' : `pinterest: Ads and ${input.secretPins ? 'secret ' : ''}Pin management permissions were not all confirmed. The previous connection was preserved.`);
   }
   return token.refresh_token;
 }
@@ -99,7 +104,10 @@ export class PinterestAdsClient {
         const error = z.object({ code: z.union([z.string(), z.number()]).optional(), message: z.string().max(2000).optional() }).safeParse(await response.json().catch(() => undefined));
         if (error.success) {
           if (error.data.code !== undefined) details.api_code = error.data.code;
-          if (error.data.message) details.api_message = [this.credentials.clientId, this.credentials.clientSecret, this.credentials.refreshToken, this.refreshToken, token].reduce((text, secret) => secret ? text.replaceAll(secret, '[redacted]') : text, error.data.message);
+          const payload = body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : {};
+          const auth = payload.credentials && typeof payload.credentials === 'object' ? payload.credentials as Record<string, unknown> : {};
+          const sourceSecrets = path.startsWith('catalogs/') ? [payload.location, auth.username, auth.password].filter((value): value is string => typeof value === 'string' && value.length > 0) : [];
+          if (error.data.message) details.api_message = [...sourceSecrets, this.credentials.clientId, this.credentials.clientSecret, this.credentials.refreshToken, this.refreshToken, token].reduce((text, secret) => secret ? text.replaceAll(secret, '[redacted]') : text, error.data.message);
         }
       }
       throw new AdportError('PROVIDER_ERROR', `pinterest: HTTP ${response.status}.${advice}${details.api_message ? ` ${details.api_message}` : ''}`, details);
