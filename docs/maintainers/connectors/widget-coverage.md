@@ -67,6 +67,17 @@ remain separate from paginated rows; currencies are retained per amount. Missing
 metrics stay unavailable and zero installs show no CPI. Returned time buckets and
 breakdown dimensions are retained without inventing days or summing repeated totals.
 
+Native Meta, TikTok, Reddit, Spotify, Microsoft keyword/search-term and Apple
+insight reads also use explicit report presentation. Native row identities and
+breakdowns precede reported metrics; configuration IDs do not take metric slots.
+Reddit micros and value cents are shifted exactly, including large decimal strings.
+Unreported currencies stay account units and Spotify's privacy sentinel remains
+suppressed. Microsoft offline reports remain upload diagnostics with exact counts,
+ratios, missing summaries and per-goal errors. Native reports never invent totals,
+combine attribution actions, or add edit controls. All source metrics remain in
+Details. The normalized performance report continues to cover all eleven providers;
+LinkedIn demographics retain their existing semantic records and privacy notices.
+
 Recommendations show the native reason and suggested action directly. Processing
 and bulk receipts show only reported counts, statuses and individual outcomes.
 Resource IDs do not imply processed counts. Google diagnostic counts can overlap;
