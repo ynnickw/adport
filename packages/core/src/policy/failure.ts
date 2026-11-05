@@ -6,7 +6,7 @@ const resourcePatterns: Record<string, RegExp> = {
   meta: /^\d+$/, tiktok: /^\d+$/, apple: /^\d+$/, microsoft: /^\d+$/, pinterest: /^\d+$/,
   snapchat: uuid, spotify: uuid, media: uuid,
   reddit: /^(?:\d+|t3_[a-z0-9]+)$/,
-  linkedin: /^urn:li:(?:(?:sponsoredCampaign|sponsoredCampaignGroup|sponsoredCreative|ugcPost|share):\d+|(?:image|video|document):[A-Za-z0-9_-]+)$/,
+  linkedin: /^(?:[1-9]\d{0,18}|urn:li:(?:(?:sponsoredCampaign|sponsoredCampaignGroup|sponsoredCreative|ugcPost|share):\d+|(?:image|video|document):[A-Za-z0-9_-]+))$/,
   x: /^(?:[0-9a-z]{1,32}|\d+_\d+)$/,
   mock: /^(?:c|g|a)\d+$/,
 };
