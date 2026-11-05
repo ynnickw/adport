@@ -245,6 +245,9 @@ export class TikTokAdsProvider implements AdProvider {
     const payload = op.payload as never;
     switch (op.tool) {
       case 'tiktok_rename_product_set':
+      case 'tiktok_create_product_set':
+      case 'tiktok_update_product_set_conditions':
+      case 'tiktok_delete_product_sets':
       case 'tiktok_update_catalog':
       case 'tiktok_set_catalog_access':
         return this.catalogs.plan(op);

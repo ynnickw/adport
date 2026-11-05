@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { TikTokClient } from './client.js';
 import { catalogId, catalogInput } from './catalog-schema.js';
 import { nativeListComplete } from './pagination.js';
+import { describeProductSetConditions, nativeProductSetConditions, productSetConditions } from './product-set-conditions.js';
 
 const count = z.number().int().nonnegative().safe();
 const nativeId = z.union([catalogId, z.number().int().positive().safe()]).transform(String);
@@ -23,11 +24,22 @@ export const productSetRename = selected.omit({ account_id: true }).extend({
   expected_configuration_hash: z.string().regex(/^[a-f0-9]{64}$/),
   acknowledge_shared_effects: z.literal(true),
 }).strict();
+export const productSetCreate = catalogInput.omit({ account_id: true }).extend({
+  product_set_name: z.string().trim().min(1).max(128), conditions: productSetConditions,
+  expected_catalog_hash: z.string().regex(/^[a-f0-9]{64}$/), acknowledge_shared_effects: z.literal(true),
+}).strict();
+export const productSetUpdateConditions = selected.omit({ account_id: true }).extend({
+  conditions: productSetConditions, expected_configuration_hash: z.string().regex(/^[a-f0-9]{64}$/), acknowledge_shared_effects: z.literal(true),
+}).strict();
+export const productSetDelete = catalogInput.omit({ account_id: true }).extend({
+  sets: z.array(z.object({ product_set_id: catalogId, expected_configuration_hash: z.string().regex(/^[a-f0-9]{64}$/) }).strict()).min(1).max(10).refine(rows => new Set(rows.map(row => row.product_set_id)).size === rows.length, 'Product-set IDs must be unique'),
+  acknowledge_shared_effects: z.literal(true),
+}).strict();
 
 const setRow = z.looseObject({
   product_set_id: nativeId, catalog_id: nativeId, bc_id: nativeId.optional(),
   product_set_name: z.string().optional(), name: z.string().optional(),
-  conditions: z.record(z.string(), z.unknown()), product_count: count.optional(),
+  conditions: nativeProductSetConditions, product_count: count.optional(),
 }).refine(row => typeof row.product_set_name === 'string' || typeof row.name === 'string')
   .refine(row => row.product_set_name === undefined || row.name === undefined || row.product_set_name === row.name)
   .transform(({ name, ...row }) => ({ ...row, product_set_name: row.product_set_name ?? name! }));
@@ -45,7 +57,7 @@ const invalid = () => new AdportError('PROVIDER_ERROR', 'TikTok product-set data
 export class TikTokCatalogProductSets {
   constructor(
     private readonly client: Pick<TikTokClient, 'get' | 'post'>,
-    private readonly authorizeParent: (input: CatalogSelection, write?: boolean) => Promise<unknown>,
+    private readonly authorizeParent: (input: CatalogSelection, write?: boolean) => Promise<{ configuration_hash: string }>,
   ) {}
 
   private async request(path: string, params: Record<string, unknown>): Promise<unknown> {
@@ -111,6 +123,10 @@ export class TikTokCatalogProductSets {
   }
 
   async plan(op: WriteOperation): Promise<Plan> {
+    if (op.provider !== 'tiktok') throw new AdportError('INVALID_INPUT', 'TikTok product-set provider mismatch.');
+    if (op.tool === 'tiktok_create_product_set' && op.kind === 'create') return this.createPlan(op);
+    if (op.tool === 'tiktok_update_product_set_conditions' && op.kind === 'update') return this.conditionsPlan(op);
+    if (op.tool === 'tiktok_delete_product_sets' && op.kind === 'remove') return this.deletePlan(op);
     if (op.provider !== 'tiktok' || op.kind !== 'update' || op.tool !== 'tiktok_rename_product_set') throw new AdportError('INVALID_INPUT', 'Unsupported TikTok product-set mutation.');
     const input = productSetRename.parse(op.payload), scope = catalogInput.parse({ account_id: op.accountId, bc_id: input.bc_id, catalog_id: input.catalog_id });
     await this.authorizeParent(scope, true);
@@ -131,6 +147,85 @@ export class TikTokCatalogProductSets {
           return [input.product_set_id];
         } catch {
           throw new AdportError('PROVIDER_ERROR', 'TikTok product-set rename outcome is unconfirmed. Read the known set before another write; do not replay automatically.', { resource_ids: [input.product_set_id] });
+        }
+      },
+    };
+  }
+
+  private async createPlan(op: WriteOperation): Promise<Plan> {
+    const input = productSetCreate.parse(op.payload), scope = catalogInput.parse({ account_id: op.accountId, bc_id: input.bc_id, catalog_id: input.catalog_id });
+    const verifyParent = async () => {
+      const parent = await this.authorizeParent(scope, true);
+      if (parent.configuration_hash !== input.expected_catalog_hash) throw new AdportError('INVALID_INPUT', 'Catalog configuration changed. Read the catalog and review creation again.');
+    };
+    await verifyParent();
+    const notes = ['Creates a filter-defined set in the selected catalog; it does not create or activate an ad.', 'Field names and catalog-specific values are checked by TikTok on apply; this is a local preview. Adport allows up to 1,024 combined values.', 'No automatic retry. An unknown creation outcome must be reconciled before another create.'];
+    return {
+      summary: `Create TikTok product set ${input.product_set_name}`, changes: [`+ Product set ${JSON.stringify(input.product_set_name)}`, `+ Product selection ${canonical(input.conditions)}`], coercions: [], budgetDeltas: [], notes,
+      review: { provider: 'tiktok', accountId: scope.account_id, kind: 'create', title: 'Create product set', subject: input.product_set_name, fields: [{ label: 'Catalog', after: input.catalog_id }, { label: 'Product selection', after: describeProductSetConditions(input.conditions), format: 'text' }], notices: notes },
+      execute: async () => {
+        await verifyParent();let createdId: string | undefined;
+        try {
+          const receipt = z.object({ product_set_id: nativeId }).parse(await this.client.post('catalog/set/create', { bc_id: input.bc_id, catalog_id: input.catalog_id, product_set_name: input.product_set_name, conditions: input.conditions }));
+          createdId = receipt.product_set_id;
+          const actual = (await this.native(scope, createdId))[0]!;
+          if (actual.product_set_name !== input.product_set_name || canonical(actual.conditions) !== canonical(input.conditions)) throw new Error('Creation readback differs');
+          return [createdId];
+        } catch {
+          throw new AdportError('PROVIDER_ERROR', 'TikTok product-set creation outcome is unconfirmed. Inspect catalog sets before another create; do not replay automatically.', createdId ? { resource_ids: [createdId] } : undefined);
+        }
+      },
+    };
+  }
+
+  private async conditionsPlan(op: WriteOperation): Promise<Plan> {
+    const input = productSetUpdateConditions.parse(op.payload), scope = catalogInput.parse({ account_id: op.accountId, bc_id: input.bc_id, catalog_id: input.catalog_id });
+    await this.authorizeParent(scope, true);
+    const current = (await this.native(scope, input.product_set_id))[0]!;
+    if (hash(scope, current) !== input.expected_configuration_hash) throw new AdportError('INVALID_INPUT', 'Product-set configuration changed. Read and review it again.');
+    const notes = ['Replaces the complete filter definition. Existing ads using this shared set may select different products after apply.', 'The name is preserved. No ad is activated and no budget or tracking event is changed.', 'Catalog-specific fields and values are checked by TikTok on apply; preview is local. No automatic retry after an uncertain result.'];
+    return {
+      summary: `Change TikTok product selection for ${current.product_set_name}`, changes: [`~ Product selection ${canonical(current.conditions)} → ${canonical(input.conditions)}`], coercions: [], budgetDeltas: [], notes,
+      review: { provider: 'tiktok', accountId: scope.account_id, kind: 'update', title: 'Change product selection', subject: current.product_set_name, fields: [{ label: 'Product selection', before: describeProductSetConditions(current.conditions), after: describeProductSetConditions(input.conditions), format: 'text' }, { label: 'Catalog', after: input.catalog_id }, { label: 'Product set', after: input.product_set_id }], notices: notes },
+      execute: async () => {
+        await this.authorizeParent(scope, true);
+        try {
+          const receipt = z.object({ product_set_id: nativeId }).parse(await this.client.post('catalog/set/update', { bc_id: input.bc_id, catalog_id: input.catalog_id, product_set_id: input.product_set_id, conditions: input.conditions }));
+          if (receipt.product_set_id !== input.product_set_id) throw new Error('Set ID differs');
+          const actual = (await this.native(scope, input.product_set_id))[0]!;
+          if (canonical(configuration(actual)) !== canonical({ ...configuration(current), conditions: input.conditions })) throw new Error('Filter or name preservation differs');
+          return [input.product_set_id];
+        } catch {
+          throw new AdportError('PROVIDER_ERROR', 'TikTok product-set filter change outcome is unconfirmed. Read the known set before another write; do not replay automatically.', { resource_ids: [input.product_set_id] });
+        }
+      },
+    };
+  }
+
+  private async deletePlan(op: WriteOperation): Promise<Plan> {
+    const input = productSetDelete.parse(op.payload), scope = catalogInput.parse({ account_id: op.accountId, bc_id: input.bc_id, catalog_id: input.catalog_id });
+    await this.authorizeParent(scope, true);
+    const current: ProductSet[] = [];
+    for (const target of input.sets) {
+      const row = (await this.native(scope, target.product_set_id))[0]!;
+      if (hash(scope, row) !== target.expected_configuration_hash) throw new AdportError('INVALID_INPUT', 'A product-set configuration changed. Read and review every selected set again.');
+      current.push(row);
+    }
+    const ids = current.map(row => row.product_set_id);
+    const notes = ['Permanently deletes the selected shared set definitions. Existing ads may reference them; there is no automatic restoration.', 'The full selected set list and each configuration hash are checked before apply. TikTok checks native dependencies and eligibility.', 'No automatic retry after a partial or uncertain result. Reconcile every known ID before another delete.'];
+    return {
+      summary: `Delete ${current.length} TikTok product set${current.length === 1 ? '' : 's'}`, changes: current.map(row => `- Product set ${row.product_set_id}: ${JSON.stringify(row.product_set_name)}`), coercions: [], budgetDeltas: [], notes,
+      review: { provider: 'tiktok', accountId: scope.account_id, kind: 'remove', title: 'Delete product sets', subject: current.length === 1 ? current[0]!.product_set_name : `${current.length} product sets`, fields: current.map(row => ({ label: `Product set ${row.product_set_id}`, before: row.product_set_name, after: 'Permanently deleted' })), notices: notes },
+      execute: async () => {
+        await this.authorizeParent(scope, true);
+        try {
+          const receipt = z.object({ product_set_ids: z.array(nativeId).min(1).max(10) }).parse(await this.client.post('catalog/set/delete', { bc_id: input.bc_id, catalog_id: input.catalog_id, product_set_ids: ids }));
+          if (receipt.product_set_ids.length !== ids.length || new Set(receipt.product_set_ids).size !== ids.length || receipt.product_set_ids.some(id => !ids.includes(id))) throw new Error('Deletion receipt differs');
+          const remaining = await this.native(scope);
+          if (remaining.some(row => ids.includes(row.product_set_id))) throw new Error('Deleted set remains in catalog');
+          return ids;
+        } catch {
+          throw new AdportError('PROVIDER_ERROR', 'TikTok product-set deletion outcome is partial or unconfirmed. Inspect every known set ID before another write; do not replay automatically.', { resource_ids: ids });
         }
       },
     };

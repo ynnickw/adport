@@ -57,10 +57,10 @@ describe('TikTok catalog product-set scope and reads', () => {
     for (const patch of [{ page_size: 2 }, { return_product_count: true }, { product_set_id: S }]) await expect(f.service.list({ ...input, page_size: 1, ...patch, cursor: first.next_cursor })).rejects.toThrow('changed');
     changed = true;await expect(f.service.list({ ...input, page_size: 1, cursor: first.next_cursor })).rejects.toThrow('changed');await expect(f.service.list({ ...input, cursor: 'invalid-json' })).rejects.toThrow('Invalid product-set cursor');
   });
-  it.each(['wrong-catalog', 'wrong-bc', 'wrong-set', 'duplicate', 'empty-exact', 'partial', 'unsafe-id', 'conflicting-name', 'too-many'])('rejects %s set responses', async fault => {
+  it.each(['wrong-catalog', 'wrong-bc', 'wrong-set', 'duplicate', 'empty-exact', 'partial', 'unsafe-id', 'unsafe-filter-number', 'conflicting-name', 'too-many'])('rejects %s set responses', async fault => {
     const f = await fixture('read', call => {
       if (!call.url.pathname.endsWith('/catalog/set/get/')) return;
-      let list: unknown[] = [{ ...set, ...(fault === 'wrong-catalog' ? { catalog_id: '999' } : {}), ...(fault === 'wrong-bc' ? { bc_id: '999' } : {}), ...(fault === 'wrong-set' ? { product_set_id: '999' } : {}), ...(fault === 'unsafe-id' ? { product_set_id: Number.MAX_SAFE_INTEGER + 1 } : {}), ...(fault === 'conflicting-name' ? { name: 'Different' } : {}) }];
+      let list: unknown[] = [{ ...set, ...(fault === 'wrong-catalog' ? { catalog_id: '999' } : {}), ...(fault === 'wrong-bc' ? { bc_id: '999' } : {}), ...(fault === 'wrong-set' ? { product_set_id: '999' } : {}), ...(fault === 'unsafe-id' ? { product_set_id: Number.MAX_SAFE_INTEGER + 1 } : {}), ...(fault === 'unsafe-filter-number' ? { conditions: { or: [{ field: 'item_id', operation: 'EQUAL', value: Number.MAX_SAFE_INTEGER + 1 }] } } : {}), ...(fault === 'conflicting-name' ? { name: 'Different' } : {}) }];
       if (fault === 'duplicate') list = [set, set];if (fault === 'empty-exact') list = [];if (fault === 'too-many') list = Array.from({ length: 5001 }, (_, n) => ({ ...set, product_set_id: String(n + 1) }));
       return { list, ...(fault === 'partial' ? { page_info: { page: 1, total_page: 2 } } : {}) };
     });await expect(f.service.list({ ...input, product_set_id: S })).rejects.toMatchObject({ code: 'PROVIDER_ERROR' });

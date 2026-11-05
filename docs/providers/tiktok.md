@@ -102,6 +102,9 @@ administrative tools are omitted from hosted MCP and public REST catalogs.
 | `tiktok_product_sets` | `GET /open_api/v1.3/catalog/set/get/`, optionally filtered by exact `product_set_id` |
 | `tiktok_product_set_products` | `GET /open_api/v1.3/catalog/set/product/get/` with exact parent IDs and native pages |
 | `tiktok_rename_product_set` | `POST /open_api/v1.3/catalog/set/update/` with `product_set_name` and independent set readback |
+| `tiktok_create_product_set` | `POST /open_api/v1.3/catalog/set/create/` with native conditions, followed by exact created-ID readback |
+| `tiktok_update_product_set_conditions` | `POST /open_api/v1.3/catalog/set/update/` replacing conditions while preserving the name |
+| `tiktok_delete_product_sets` | `POST /open_api/v1.3/catalog/set/delete/` for 1–10 snapshot-verified sets, followed by independent absence verification |
 
 `tiktok_get_catalog` never enumerates a whole Business Center. It verifies a
 single native result and its `bc_info.bc_id`, preserves native configuration,
@@ -144,9 +147,51 @@ not as a complete inventory. Large string IDs remain exact; unsafe numeric IDs
 are rejected rather than rounded. The SDK/widget checks use synthetic native
 responses and do not prove live provider or Claude/ChatGPT host success.
 
-Creation/deletion, feeds, product imports/edits, set creation/filter editing,
-catalog videos, event-source bindings and migration from advertiser-owned
-catalogs remain separate work.
+Product-set creation requires the selected catalog's `configuration_hash` as
+`expected_catalog_hash`, a name, conditions, and `acknowledge_shared_effects:
+true`. Catalog access and configuration are rechecked before creating the set.
+A successful native receipt is followed by an independent exact-ID read that
+must confirm the name and filter definition. An uncertain response is never
+automatically replayed; a known created ID is retained for reconciliation.
+
+Conditions contain exactly one nonempty `and` or `or` group. Scalar operators
+(`EQUAL`, `NOT_EQUAL`, `GT`, `LT`, `GTE`, `LTE`) require one value; list operators
+(`CONTAIN`, `I_CONTAIN`, `EXCLUDE`, `I_EXCLUDE`) require a list. Substring/prefix
+operators accept strings or lists of strings. Numeric values retain their
+native units; use strings for integers beyond JavaScript's safe range. Adport
+bounds the combined value count to 1,024, each text value to 2,048 characters,
+and field names to 128 characters with optional dotted paths such as
+`address.city`. TikTok validates catalog-specific fields, values and eligibility
+on apply; the preview is local, not native validation.
+Native filter definitions also reject unsafe numeric values before hashing;
+oversized or deeply nested definitions fail the bounded inspection instead of
+producing an approval hash from rounded or incompletely inspected data.
+
+Filter replacement requires the current set's `configuration_hash` and shared
+effects acknowledgement. Its preview shows the old and new product selection
+and explains that existing ads using this set may select different products.
+The existing name is preserved and independently verified. This operation has
+a destructive hint because it replaces the full filter definition; name-only
+renaming retains a non-destructive write hint.
+
+Deletion takes `sets: [{ product_set_id, expected_configuration_hash }]`, with
+1–10 unique entries, plus shared effects acknowledgement. The preview names
+every selected set. All snapshots must still match before the native batch
+request. Adport requires an exact ID receipt and a complete catalog-set read
+confirming absence. The existing 5,000-set read bound applies to this readback;
+an oversized, partial or inconsistent response leaves the result unconfirmed.
+Partial outcomes retain all selected IDs, do not restore anything automatically
+and never trigger a replay. This permanently removes shared set definitions;
+existing ads may reference them.
+
+The shared records/review widget presents readable filter criteria and the
+same project/account/Business Center/catalog selection as the agent's approved
+arguments. SDK and DOM checks use synthetic responses; native provider and
+actual Claude/ChatGPT host execution remain unverified.
+
+Catalog creation/deletion, feeds, product imports/edits, catalog videos,
+event-source bindings and migration from advertiser-owned catalogs remain
+separate work.
 Read/rename and permission controls are contract, policy, SDK/widget and
 disposable-Postgres tested; positive native provider and Claude/ChatGPT host
 verification remain pending.
@@ -155,5 +200,8 @@ Contracts inspected 2026-11-05: [Get catalogs](https://business-api.tiktok.com/p
 [Update catalog](https://business-api.tiktok.com/portal/docs?id=1740306544966657),
 [Get product sets](https://business-api.tiktok.com/portal/docs?id=1740570556295169),
 [Get products in a set](https://business-api.tiktok.com/portal/docs?id=1740571478441986),
-and [Update product set](https://business-api.tiktok.com/portal/docs?id=1740572974725122)
+[Update product set](https://business-api.tiktok.com/portal/docs?id=1740572974725122),
+[Create product set](https://business-api.tiktok.com/portal/docs?id=1740572891104257),
+[Delete product sets](https://business-api.tiktok.com/portal/docs?id=1740573143966722),
+and [Product set operators and fields](https://business-api.tiktok.com/portal/docs?id=1740673108747265)
 and the [official SDK](https://github.com/tiktok/tiktok-business-api-sdk/tree/f809c396520df2d7b201a9ccc5378d822b728ed3).
