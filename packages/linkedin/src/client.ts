@@ -57,8 +57,16 @@ export class LinkedInAdsClient {
   }
   async get<T>(path: string, schema: z.ZodType<T>, params: Record<string, RestliValue> = {}): Promise<T> {
     const response = await this.request(path, 'GET', params);
-    const parsed = schema.safeParse(await response.json());
-    if (!parsed.success) throw new AdportError('PROVIDER_ERROR', 'linkedin: malformed API response');
+    const raw: unknown = await response.json(), parsed = schema.safeParse(raw);
+    if (!parsed.success) {
+      const issues = parsed.error.issues.slice(0, 12).flatMap(issue => {
+        if (!issue.path.every(part => typeof part === 'number' && Number.isSafeInteger(part) && part >= 0 || typeof part === 'string' && /^[A-Za-z_][A-Za-z0-9_]{0,80}$/.test(part))) return [];
+        let value = raw;
+        for (const part of issue.path) value = value && typeof value === 'object' && Object.hasOwn(value, part) ? (value as Record<PropertyKey, unknown>)[part] : undefined;
+        return [{ field_path: '/' + issue.path.join('/'), code: issue.code, received_type: value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value, ...('expected' in issue && typeof issue.expected === 'string' ? { expected_type: issue.expected } : {}) }];
+      });
+      throw new AdportError('PROVIDER_ERROR', 'linkedin: malformed API response', { resource: path.split('/')[0], schema_issues: issues });
+    }
     return parsed.data;
   }
   async create(path: string, body: unknown): Promise<string> {

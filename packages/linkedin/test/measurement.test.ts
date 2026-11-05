@@ -43,12 +43,12 @@ async function reference(provider: LinkedInAdsProvider) { return { conversion_id
 async function creation(provider: LinkedInAdsProvider) { return { expected_account_hash: (await provider.measurement.conversions({ account_id: A })).account_snapshot_hash, name: 'New QA rule', type: 'LEAD' }; }
 
 describe('LinkedIn measurement native reads', () => {
-  it('defines each shared lazy tool once and classifies reversible configuration writes honestly', () => {
+  it('defines each shared lazy tool once and distinguishes additive creation from existing-data edits', () => {
     const tools = linkedinTools(new Proxy({} as LinkedInAdsProvider, { get() { throw new Error('Eager provider access'); } }));
     const names = ['linkedin_insight_tags', 'linkedin_insight_tag_domains', 'linkedin_conversions', 'linkedin_get_conversion', 'linkedin_campaign_conversions', 'linkedin_create_insight_tag', 'linkedin_update_insight_tag', 'linkedin_create_conversion', 'linkedin_update_conversion', 'linkedin_set_campaign_conversion'];
     for (const name of names) { expect(tools.filter(tool => tool.name === name)).toHaveLength(1); expect(tools.find(tool => tool.name === name)?.catalog).toMatchObject({ category: 'measurement' }); }
     for (const name of names.slice(0, 5)) expect(tools.find(tool => tool.name === name)).toMatchObject({ presentation: 'records', annotations: { readOnly: true } });
-    for (const name of names.slice(5)) expect(tools.find(tool => tool.name === name)).toMatchObject({ annotations: { readOnly: false, destructive: false } });
+    for (const name of names.slice(5)) expect(tools.find(tool => tool.name === name)).toMatchObject({ annotations: { readOnly: false, destructive: !name.startsWith('linkedin_create_') } });
   });
   it('pins account finder, offset, protocol/version headers and native owned snapshots', async () => {
     const f = fixture(), result = await f.provider.measurement.conversions({ account_id: A });
@@ -87,6 +87,13 @@ describe('LinkedIn measurement native reads', () => {
     expect(await f.provider.measurement.conversions({ account_id: A })).toMatchObject({ complete: null });
     expect((await f.provider.measurement.conversions({ account_id: A })).next_start).toBeUndefined();
     await expect(f.provider.measurement.conversions({ account_id: A, start: 50 })).rejects.toThrow('pagination');
+  });
+  it('reports bounded schema field/type diagnostics without exposing native values', async () => {
+    const f = fixture(call => call.url.pathname === '/rest/conversions' ? { elements: [{ ...native, enabled: 'do-not-disclose-native-value' }] } : undefined);
+    let error: unknown;
+    try { await f.provider.measurement.conversions({ account_id: A }); } catch (value) { error = value; }
+    expect(error).toMatchObject({ code: 'PROVIDER_ERROR', details: { resource: 'conversions', schema_issues: [{ field_path: '/elements/0/enabled', code: 'invalid_type', received_type: 'string', expected_type: 'boolean' }] } });
+    expect(JSON.stringify(error)).not.toContain('do-not-disclose-native-value'); expect(mutations(f.calls)).toEqual([]);
   });
 });
 
