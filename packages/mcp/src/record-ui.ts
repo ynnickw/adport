@@ -84,6 +84,7 @@ export const RECORD_UI_SCRIPT = String.raw`
     }
     function renderRecords(data,meta) {
       if(meta.tool==='projects_list')return renderProjects(data,meta);
+      if(meta.tool==='apple_report')return renderAppleReport(data,meta);
       const payload=recordPayload(data),entries=recordEntries(payload),rows=entries ?? [payload];
       const title=human(String(meta.tool||'Results').replace(/^(?:google|meta|tiktok|apple|microsoft|reddit|snapchat|spotify|pinterest|linkedin|x)_/,'').replace(/^(?:list|get)_/,'').replace(/_(?:list|get)$/,'').replaceAll('_',' '));
       const parent=object(data.parent)?Object.entries(data.parent).filter(([key])=>/_id$/.test(key)).map(([key,value])=>human(key.replace(/_id$/,''))+' '+value).join(' · '):'';

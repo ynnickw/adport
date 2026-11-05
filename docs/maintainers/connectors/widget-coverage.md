@@ -60,6 +60,13 @@ keyboard-scrollable list. Generic collections prefer named record arrays over
 warnings/errors. Monetary fields with explicit micros/cents units are converted;
 unknown currencies remain account units. Full source responses remain in Details.
 
+`apple_report` reads Apple's native `metadata`, `totalMetrics`, `granularMetrics`
+and `summary.grandTotal` explicitly. Campaign/ad-group/ad names, keyword text and
+search terms accompany spend, taps, total installs and total CPI. Provider totals
+remain separate from paginated rows; currencies are retained per amount. Missing
+metrics stay unavailable and zero installs show no CPI. Returned time buckets and
+breakdown dimensions are retained without inventing days or summing repeated totals.
+
 Recommendations show the native reason and suggested action directly. Processing
 and bulk receipts show only reported counts, statuses and individual outcomes.
 Resource IDs do not imply processed counts. Google diagnostic counts can overlap;
@@ -111,7 +118,7 @@ Attempts are keyed to the pending token. A host echo cannot offer a second apply
 and a late response cannot replace a newer preview. Host facts include resource
 receipts and project/account scope, but never a reusable pending token.
 
-The widget resource is `ui://adport/insight-card-v13.html`. Previous v2–v12 URIs are
+The widget resource is `ui://adport/insight-card-v14.html`. Previous v2–v13 URIs are
 retained as aliases. Existing creative resource domains keep their configured CSP; provider logos
 and scripts are embedded.
 
