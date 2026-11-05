@@ -261,7 +261,65 @@ Unknown outcomes retain known IDs and must be reconciled before another upload.
 No ad is activated; the shared policy, audit and central-library distribution
 tracking apply. Native provider and Claude/ChatGPT host verification remain pending.
 
-Catalog creation/deletion, product imports/edits,
+### Product browsing and file imports
+
+`tiktok_catalog_products` browses compact product summaries and image/video
+previews in one explicitly granted catalog. Filter by native `product_ids`, or
+by `sku_ids` for E-commerce catalogs. IDs remain strings, including leading-zero
+SKUs and native IDs beyond JavaScript's safe-integer range. Each page is limited
+to 100 items; TikTok permits access to only the first 10,000 matching results.
+Narrow larger catalogs with ID filters. Missing or contradictory native paging
+keeps completeness unknown; no next page is fabricated beyond the access cap.
+Descriptions are clipped at 300 characters with an explicit truncation flag.
+This is a compact browsing view, not full editable product configuration.
+Previews require HTTPS URLs without embedded credentials. The shared widget
+allows the two native media origins shown in TikTok's current video-info
+contract: `p16-sign-sg.tiktokcdn.com` and `v16-tiktokcdn-com.akamaized.net`.
+Arbitrary merchant origins and legacy HTTP/relative media paths are not
+silently trusted or upgraded; a returned URL alone does not prove host playback.
+
+`tiktok_import_catalog_file` consumes a ready `text/csv` project file for a
+one-time import into an existing data or country feed. Upload through an agent,
+the widget, dashboard or cloud media CLI, then provide `media_id`, SHA-256,
+Business Center/catalog/feed IDs, and fresh hashes from `tiktok_get_catalog` and
+`tiktok_catalog_feeds`. The hosted private media resolver supplies the temporary
+download capability; agents do not supply arbitrary URLs or server file paths.
+Local stdio without that private staging capability cannot submit this import.
+
+The tool verifies complete CSV structure, distinct nonempty headers, at least
+one product row, and the library's 50 MiB/100,000-total-row bounds. TikTok checks
+catalog-specific columns, feed ownership and product eligibility asynchronously;
+a locally valid CSV is not proof of a valid provider template. Use the official
+[catalog feed templates and import contract](https://business-api.tiktok.com/portal/docs?id=1740496787164161).
+INCREMENTAL adds or updates matching products while preserving omitted products.
+OVERWRITE can remove feed products absent from the file and requires a separate
+acknowledgement. Both modes can affect existing ads using those products.
+The one-time mode does not change the feed's saved mode; scheduling is managed
+separately. Read fresh feed state before changing automation.
+
+Preview verifies source bytes and snapshots without minting a provider URL or
+submitting a native mutation. Apply rechecks them, issues the private source
+capability and submits native `catalog/product/file`. The returned `feed_log_id`
+is independently read back against the selected catalog/feed. The apply receipt
+reports `ACCEPTED_FOR_PROCESSING` with `processed: false`, plus the next status tool/arguments.
+It does not claim completed ingestion. Temporary URLs, provider error bodies,
+and native diagnostic download capabilities stay out of results and audit logs.
+
+`tiktok_catalog_product_log` reads that exact job. WAITING/PROCESSING are pending;
+SUCCESS/FAILED are terminal, with native add/update/delete/error/warning counts
+when reported. Missing counts remain unavailable. SUCCESS can still contain
+item errors and does not establish ad eligibility. Diagnostic field/count groups
+are capped at 50 per severity; free-form messages and product samples are omitted.
+An initial failed job, item errors or unconfirmed readback retains the known job
+ID for reconciliation. No import is automatically replayed. Source distribution
+history records acceptance separately from processing. If a queued provider job
+cannot fetch its temporary source before expiry, inspect its final status and
+review a new import rather than treating acceptance as success.
+
+These flows have contract, policy and synthetic dual-bridge widget tests.
+Positive native TikTok imports and actual Claude/ChatGPT host checks remain pending.
+
+Catalog creation/deletion, JSON product creation/editing/deletion,
 catalog videos, event-source bindings and migration from advertiser-owned
 catalogs remain separate work.
 Read/rename and permission controls are contract, policy, SDK/widget and
@@ -279,6 +337,10 @@ Contracts inspected 2026-11-05: [Get catalogs](https://business-api.tiktok.com/p
 [Delete product sets](https://business-api.tiktok.com/portal/docs?id=1740573143966722),
 [Product set operators and fields](https://business-api.tiktok.com/portal/docs?id=1740673108747265),
 [Get feeds](https://business-api.tiktok.com/portal/docs?id=1740665183073281),
+[Get catalog products](https://business-api.tiktok.com/portal/docs?id=1740564136678402),
+[Import catalog CSV](https://business-api.tiktok.com/portal/docs?id=1740496787164161),
+[Get product import status](https://business-api.tiktok.com/portal/docs?id=1740570027173889),
+[Get video information](https://business-api.tiktok.com/portal/docs?id=1740050161973250),
 [Create feed](https://business-api.tiktok.com/portal/docs?id=1740665161957377),
 [Update feed](https://business-api.tiktok.com/portal/docs?id=1740665197662210),
 [Delete feed](https://business-api.tiktok.com/portal/docs?id=1740665210863617),
