@@ -108,6 +108,13 @@ export class LinkedInAdsClient {
     const response = await this.request(path, 'DELETE', {});
     if (response.status !== 204) throw new AdportError('PROVIDER_ERROR', 'linkedin: delete did not return 204; inspect the account before retrying');
   }
+  async setCampaignConversion(campaignId: string, conversionId: string, associated: boolean): Promise<void> {
+    if (![campaignId, conversionId].every(value => /^[1-9]\d*$/.test(value))) throw new AdportError('INVALID_INPUT', 'linkedin: invalid campaign/conversion identity');
+    const campaign = `urn:li:sponsoredCampaign:${campaignId}`, conversion = `urn:lla:llaPartnerConversion:${conversionId}`;
+    const path = `campaignConversions/(campaign:${restli(campaign)},conversion:${restli(conversion)})`;
+    const response = await this.request(path, associated ? 'PUT' : 'DELETE', {}, associated ? { campaign, conversion } : undefined);
+    if (response.status !== 204) throw new AdportError('PROVIDER_ERROR', 'linkedin: campaign-conversion change was not acknowledged; reconcile the association before retrying');
+  }
   async uploadImage(url: string, bytes: Uint8Array<ArrayBuffer>): Promise<void> {
     const target = new URL(url);
     if (target.origin !== 'https://www.linkedin.com' || !target.pathname.startsWith('/dms-uploads/') || target.username || target.password || target.hash) throw new AdportError('PROVIDER_ERROR', 'linkedin: unrecognized native image upload destination');
@@ -134,8 +141,9 @@ export class LinkedInAdsClient {
     const response = await this.request('videos', 'POST', { action: 'finalizeUpload' }, body);
     if (response.status !== 200) throw new AdportError('PROVIDER_ERROR', 'linkedin: video finalization was not acknowledged');
   }
-  private async request(path: string, method: 'GET' | 'POST' | 'DELETE', params: Record<string, RestliValue>, body?: unknown, partial = false, retry = true, version: string = LINKEDIN_API_VERSION): Promise<Response> {
-    if (!/^[a-zA-Z]+(?:\/(?:[a-zA-Z0-9]+|urn%3Ali%3A[a-zA-Z]+%3A[a-zA-Z0-9_-]+))*$/.test(path)) throw new AdportError('INVALID_INPUT', 'linkedin: invalid API resource path');
+  private async request(path: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', params: Record<string, RestliValue>, body?: unknown, partial = false, retry = true, version: string = LINKEDIN_API_VERSION): Promise<Response> {
+    const campaignConversion = /^campaignConversions\/\(campaign:urn%3Ali%3AsponsoredCampaign%3A[1-9]\d*,conversion:urn%3Alla%3AllaPartnerConversion%3A[1-9]\d*\)$/.test(path);
+    if (!campaignConversion && !/^[a-zA-Z]+(?:\/(?:[a-zA-Z0-9]+|urn%3Ali%3A[a-zA-Z]+%3A[a-zA-Z0-9_-]+))*$/.test(path)) throw new AdportError('INVALID_INPUT', 'linkedin: invalid API resource path');
     const query = Object.entries(params).map(([key, value]) => `${encodeURIComponent(key)}=${key === 'fields' && typeof value === 'string' ? value.split(',').map(restli).join(',') : restli(value)}`).join('&');
     const url = new URL(path, LINKEDIN_API_BASE); url.search = query;
     const token = await this.accessToken();
