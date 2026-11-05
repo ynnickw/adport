@@ -19,7 +19,7 @@ const association = z.looseObject({ campaign: campaignUrn, conversion: conversio
 const conversion = z.looseObject({ id: nativeId, account: accountUrn, name: z.string(), type: z.string(), enabled: z.boolean(), conversionMethod: z.string().optional(), ownershipType: z.enum(['OWNED', 'SHARED']).optional(), attributionType: z.string().optional(), postClickAttributionWindowSize: z.number().int().nonnegative().optional(), viewThroughAttributionWindowSize: z.number().int().nonnegative().optional(), value: money.optional(), valueType: z.string().optional(), urlMatchRuleExpression: rules.optional(), campaigns: z.array(campaignUrn).optional(), associatedCampaigns: z.array(association).optional(), lastModified: z.number().int().nonnegative().safe().optional(), imagePixelTag: z.string().optional() });
 const insightTag = z.looseObject({ id: nativeId, sponsoredAccounts: z.array(accountUrn).min(1), firstPartyTrackingEnabled: z.boolean(), tag: z.string().optional() });
 const domain = z.looseObject({ domainName: z.string(), insightTag: tagUrn, blocked: z.boolean(), created: z.number().int().nonnegative().safe().optional(), lastCallbackAt: z.number().int().nonnegative().safe().optional() });
-const paging = z.looseObject({ start: z.number().int().nonnegative().safe(), count: z.number().int().nonnegative().safe(), total: z.number().int().nonnegative().safe().optional(), links: z.array(z.looseObject({ rel: z.string() })).optional() });
+const paging = z.looseObject({ start: z.number().int().nonnegative().safe(), count: z.number().int().nonnegative().safe(), total: z.number().int().safe().optional(), links: z.array(z.looseObject({ rel: z.string(), href: z.string().optional() })).optional() });
 const pageInput = { start: z.number().int().nonnegative().safe().default(0), count: z.number().int().min(1).max(100).default(50) };
 const listInput = z.object({ account_id: id, ...pageInput, include_shared: z.boolean().default(false) }).strict();
 const associationInput = z.object({ account_id: id, campaign_id: id, ...pageInput, complete_snapshot: z.boolean().default(false) }).strict();
@@ -46,12 +46,24 @@ const snapshot = (value: z.infer<typeof conversion>) => digest(Object.fromEntrie
 const tagSnapshot = (value: z.infer<typeof insightTag>) => digest({ id: value.id, sponsoredAccounts: value.sponsoredAccounts, firstPartyTrackingEnabled: value.firstPartyTrackingEnabled });
 const notices = ['Local preview only. No tracking code is installed or executed and no conversion events are sent.', 'Native writes are not retried automatically. Reconcile returned resource IDs before a new approval after an uncertain result.'];
 
-function pageState<T>(result: { elements: T[]; paging?: z.infer<typeof paging> }, start: number, count: number) {
+function pageState<T>(result: { elements: T[]; paging?: z.infer<typeof paging> }, start: number, count: number, resource: string) {
   const p = result.paging;
   if (result.elements.length > count || p && (p.start !== start || p.count > count || p.count < result.elements.length) || !p && start > 0) throw new AdportError('PROVIDER_ERROR', 'linkedin: measurement pagination returned an inconsistent offset or size');
-  const next = Boolean(p?.links?.some(link => link.rel === 'next')) || (p?.total !== undefined ? start + result.elements.length < p.total : result.elements.length === (p?.count ?? count));
-  if (next && (!result.elements.length || p?.count === 0) || p?.total !== undefined && result.elements.length && start + result.elements.length > p.total) throw new AdportError('PROVIDER_ERROR', 'linkedin: measurement pagination did not advance or contradicted its total');
-  return { truncated: next, complete: p ? start === 0 && !next : null, ...(next && p ? { next_start: start + p.count } : {}), ...(!p ? { notes: ['Native paging metadata is absent; collection completeness is unknown and no continuation is invented.'] } : {}) };
+  // Live conversion finders can return a negative signed total. Preserve it as
+  // native metadata, never as a count or an empty-collection assertion.
+  const total = p?.total !== undefined && p.total >= 0 ? p.total : undefined;
+  const next = Boolean(p?.links?.some(link => link.rel === 'next')) || (total !== undefined ? start + result.elements.length < total : result.elements.length === (p?.count ?? count));
+  if (next && (!result.elements.length || p?.count === 0) || total !== undefined && result.elements.length && start + result.elements.length > total) throw new AdportError('PROVIDER_ERROR', 'linkedin: measurement pagination did not advance or contradicted its total');
+  let offset = start + (total === undefined ? result.elements.length : p?.count ?? count);
+  for (const link of p?.links ?? []) if (link.rel === 'next' && link.href) {
+    try {
+      const url = new URL(link.href, `https://api.linkedin.com/rest/${resource}`), value = url.searchParams.get('start'), candidate = value && /^\d+$/.test(value) ? Number(value) : NaN;
+      // Extract only a bounded numeric offset. The next request always rebuilds
+      // its original account/campaign filters and never follows a returned URL.
+      if (url.origin === 'https://api.linkedin.com' && url.pathname === `/rest/${resource}` && url.searchParams.getAll('start').length === 1 && Number.isSafeInteger(candidate) && candidate > start && candidate >= start + result.elements.length && candidate <= start + p!.count) offset = candidate;
+    } catch { /* An untrusted link cannot change scope or request destination. */ }
+  }
+  return { truncated: next, complete: p ? start === 0 && !next : null, ...(next && p ? { next_start: offset } : {}), ...(!p ? { notes: ['Native paging metadata is absent; collection completeness is unknown and no continuation is invented.'] } : p.total !== undefined && p.total < 0 ? { notes: ['The native total is negative and is not a row count. Paging uses native links and returned segments.'] } : {}) };
 }
 
 /** Marketing202608 conversion tracking and Conversions API contracts checked2026-11-05. */
@@ -70,7 +82,7 @@ export class LinkedInMeasurementService {
     const result = await this.client.get('conversions', z.looseObject({ elements: z.array(conversion), paging: paging.optional() }), { q: 'account', account: selectedAccount(input.account_id), start: input.start, count: input.count, ...(input.include_shared ? { conversionOwnershipTypes: ['OWNED', 'SHARED'] } : {}) });
     const elements = result.elements.map(value => input.include_shared && value.ownershipType === 'SHARED' ? { ...value, editable: false } : { ...this.owned(input.account_id, value), editable: true });
     if (new Set(elements.map(value => value.id)).size !== elements.length) throw new AdportError('PROVIDER_ERROR', 'linkedin: conversion finder repeated an identity');
-    return { ...context, ...result, elements, records: elements.map(value => this.conversionRecord(value)), ...pageState(result, input.start, input.count) };
+    return { ...context, ...result, elements, records: elements.map(value => this.conversionRecord(value)), ...pageState(result, input.start, input.count, 'conversions') };
   }
   async getConversion(account: string, conversionId: string) { const context = await this.account(account), value = await this.ownedConversion(account, conversionId); return { ...context, conversion: value, records: [this.conversionRecord(value)] }; }
   private async tags(account: string) {
@@ -84,7 +96,7 @@ export class LinkedInMeasurementService {
     if (!tags.length) return { ...context, elements: [], records: [], complete: true, truncated: false };
     const result = await this.client.get('insightTagDomains', z.looseObject({ elements: z.array(domain), paging: paging.optional() }), { q: 'account', account: selectedAccount(input.account_id), start: input.start, count: input.count });
     if (result.elements.some(value => value.insightTag !== `urn:tscp:insightTag:${tags[0]!.id}`) || new Set(result.elements.map(value => value.domainName)).size !== result.elements.length) throw new AdportError('PROVIDER_ERROR', 'linkedin: Insight Tag domain identity mismatch');
-    return { ...context, ...result, records: result.elements.map(value => ({ domain: value.domainName, status: value.blocked ? 'Blocked' : 'Allowed', ...(value.lastCallbackAt !== undefined ? { last_callback_at: value.lastCallbackAt } : {}) })), ...pageState(result, input.start, input.count) };
+    return { ...context, ...result, records: result.elements.map(value => ({ domain: value.domainName, status: value.blocked ? 'Blocked' : 'Allowed', ...(value.lastCallbackAt !== undefined ? { last_callback_at: value.lastCallbackAt } : {}) })), ...pageState(result, input.start, input.count, 'insightTagDomains') };
   }
   async campaignConversions(raw: z.input<typeof associationInput>) {
     const input = associationInput.parse(raw), context = await this.account(input.account_id); await this.provider.getCampaign(input.account_id, input.campaign_id);
@@ -95,15 +107,19 @@ export class LinkedInMeasurementService {
     }
     const result = await this.client.get('campaignConversions', z.looseObject({ elements: z.array(association), paging: paging.optional() }), { q: 'campaigns', campaigns: [`urn:li:sponsoredCampaign:${input.campaign_id}`], start: input.start, count: input.count });
     if (result.elements.some(value => value.campaign !== `urn:li:sponsoredCampaign:${input.campaign_id}`) || new Set(result.elements.map(value => value.conversion)).size !== result.elements.length) throw new AdportError('PROVIDER_ERROR', 'linkedin: campaign-conversion scope or duplicate identity mismatch');
-    const state = pageState(result, input.start, input.count);
+    const state = pageState(result, input.start, input.count, 'campaignConversions');
     return { ...context, campaign_id: input.campaign_id, ...result, records: result.elements.map(value => ({ conversion: value.conversion, campaign: value.campaign, ...(value.associatedAt !== undefined ? { associated_at: value.associatedAt } : {}) })), ...state, ...(state.complete === true ? { associations_snapshot_hash: digest(result.elements) } : {}) };
   }
   private async completeAssociations(account: string, campaign: string) {
-    const values: z.infer<typeof association>[] = [], seen = new Set<string>(); let start = 0;
+    const values: z.infer<typeof association>[] = [], seen = new Set<string>(); let start = 0, knownTotal: number | undefined;
     for (let pages = 0; pages < 50; pages++) {
       const page = await this.campaignConversions({ account_id: account, campaign_id: campaign, start, count: 100 });
+      if ('paging' in page && page.paging?.total !== undefined && page.paging.total >= 0) {
+        if (knownTotal !== undefined && knownTotal !== page.paging.total) throw new AdportError('PROVIDER_ERROR', 'linkedin: campaign-conversion total changed during pagination');
+        knownTotal = page.paging.total;
+      }
       for (const value of page.elements) { if (seen.has(value.conversion)) throw new AdportError('PROVIDER_ERROR', 'linkedin: repeated campaign-conversion membership'); seen.add(value.conversion); values.push(value); }
-      if (!('next_start' in page) || page.next_start === undefined) { if (page.complete === null) throw new AdportError('PROVIDER_ERROR', 'linkedin: campaign-conversion membership completeness is unknown'); return values; }
+      if (!('next_start' in page) || page.next_start === undefined) { if (page.complete === null || knownTotal !== undefined && values.length !== knownTotal) throw new AdportError('PROVIDER_ERROR', 'linkedin: campaign-conversion membership completeness is unknown or contradicts its total'); return values; }
       start = page.next_start;
     }
     throw new AdportError('PROVIDER_ERROR', 'linkedin: campaign-conversion membership exceeded 5,000; no write attempted');

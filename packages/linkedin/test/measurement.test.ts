@@ -88,6 +88,21 @@ describe('LinkedIn measurement native reads', () => {
     expect((await f.provider.measurement.conversions({ account_id: A })).next_start).toBeUndefined();
     await expect(f.provider.measurement.conversions({ account_id: A, start: 50 })).rejects.toThrow('pagination');
   });
+  it.each([-1, -7])('preserves a negative native total%d without treating it as zero or dropping returned rules', async total => {
+    const f = fixture(call => call.url.pathname === '/rest/conversions' ? { elements: [native], paging: { start: 0, count: 1, total, links: [] } } : undefined);
+    const result = await f.provider.measurement.conversions({ account_id: A, count: 1 });
+    expect(result).toMatchObject({ elements: [{ id: V }], paging: { total }, complete: false, truncated: true, next_start: 1 });
+    expect(result.notes?.join(' ')).toContain('not a row count');
+  });
+  it('accepts an exhausted empty page with an unknown negative total without inventing a numeric total', async () => {
+    const f = fixture(call => call.url.pathname === '/rest/conversions' ? { elements: [], paging: { start: 0, count: 10, total: -1, links: [] } } : undefined);
+    const result = await f.provider.measurement.conversions({ account_id: A, count: 10 });
+    expect(result).toMatchObject({ elements: [], paging: { total: -1 }, complete: true, truncated: false }); expect(result.next_start).toBeUndefined();
+  });
+  it('honors a native relative offset by extracting only the number and rebuilding scoped requests', async () => {
+    const f = fixture(call => call.url.pathname === '/rest/conversions' ? { elements: [native], paging: { start: 0, count: 10, total: 20, links: [{ rel: 'next', href: `https://api.linkedin.com/rest/conversions?q=account&account=${encodeURIComponent(urn)}&start=1&count=10` }] } } : undefined);
+    expect(await f.provider.measurement.conversions({ account_id: A, count: 10 })).toMatchObject({ next_start: 1, truncated: true }); expect(f.calls).toHaveLength(2);
+  });
   it('reports bounded schema field/type diagnostics without exposing native values', async () => {
     const f = fixture(call => call.url.pathname === '/rest/conversions' ? { elements: [{ ...native, enabled: 'do-not-disclose-native-value' }] } : undefined);
     let error: unknown;
@@ -207,6 +222,10 @@ describe('LinkedIn Insight Tag and campaign association contracts', () => {
     const result = await f.provider.measurement.campaignConversions({ account_id: A, campaign_id: C, complete_snapshot: true });
     expect(result).toMatchObject({ complete: true, truncated: false }); expect(result.elements).toHaveLength(125); expect(result.records).toHaveLength(100); expect(result.associations_snapshot_hash).toMatch(/^[a-f0-9]{64}$/);
     expect(f.calls.filter(call => call.url.pathname === '/rest/campaignConversions').map(call => call.url.searchParams.get('start'))).toEqual(['0', '100']);
+  });
+  it('refuses a supposedly complete association snapshot when the collected membership misses its known total', async () => {
+    const f = fixture(call => call.url.pathname === '/rest/campaignConversions' ? { elements: [{ campaign: cu, conversion: Number(call.url.searchParams.get('start')) === 0 ? vu : 'urn:lla:llaPartnerConversion:1002', associatedAt: 1700000000000 }], paging: { start: Number(call.url.searchParams.get('start')), count: 100, total: 101, links: [] } } : undefined);
+    await expect(f.provider.measurement.campaignConversions({ account_id: A, campaign_id: C, complete_snapshot: true })).rejects.toThrow('completeness'); expect(mutations(f.calls)).toEqual([]);
   });
   it('rejects incomplete or foreign campaign membership and stale association snapshots', async () => {
     const f = fixture(call => call.url.pathname === '/rest/campaignConversions' ? { elements: [] } : undefined), rule = await reference(f.provider);
