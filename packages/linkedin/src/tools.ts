@@ -8,9 +8,11 @@ import { linkedinMediaTools } from './media.js';
 import { linkedinSponsoredTools } from './sponsored-tools.js';
 import { linkedinPlanningTools } from './planning.js';
 import { linkedinAudienceTools } from './audiences.js';
+import { linkedinReportingTools } from './reporting.js';
 
 export function linkedinTools(provider: LinkedInAdsProvider): AnyToolDefinition[] {
   return [
+    ...linkedinReportingTools(provider),
     ...linkedinPlanningTools(provider),
     ...linkedinAudienceTools(provider),
     ...linkedinCreativeTools(provider),

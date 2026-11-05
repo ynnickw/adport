@@ -28,7 +28,30 @@ Access-only tokens are supported; reauthorize/import when they expire. LinkedIn 
 - Account currency is used, with no currency conversion. Budgets accepted in integer micros are converted to exact decimal strings; reporting decimal strings already represent currency units.
 - No server dry-run endpoint is used: previews are local and may still be rejected by LinkedIn for account eligibility, targeting, creative format, minimum bid, or budget restrictions.
 
-Analytics uses `timeGranularity=ALL`, explicit inclusive UTC start/end dates and one account per request. Fields: `costInLocalCurrency`, `impressions`, chargeable `clicks`, `externalWebsiteConversions`, and `conversionValueInLocalCurrency`. Attribution follows the advertiser's conversion rules; no arbitrary cross-provider attribution window is imposed.
+Normalized analytics uses `timeGranularity=ALL`, explicit inclusive UTC start/end dates and one account per request. Fields: `costInLocalCurrency`, `impressions`, chargeable `clicks`, `externalWebsiteConversions`, and `conversionValueInLocalCurrency`. Attribution follows the advertiser's conversion rules; no arbitrary cross-provider attribution window is imposed.
+
+## Professional-demographic reporting
+
+`linkedin_demographic_report` reads account-scoped native analytics by company size, industry, seniority, job title, job function, country, region or company. It supports `ALL`, `DAILY`, `MONTHLY` and `YEARLY` periods, selected metrics, and an optional list of verified account-owned campaign IDs. Dates are inclusive UTC calendar dates. Returned periods are checked against the requested range; queries rounded by LinkedIn to wider month/year boundaries must be repeated with those explicit boundaries instead of being silently relabeled.
+
+```json
+{
+  "account_id": "YOUR_ACCOUNT_ID",
+  "pivot": "MEMBER_INDUSTRY",
+  "date_range": { "start": "2026-10-01", "end": "2026-10-31" },
+  "metrics": ["impressions", "clicks", "costInLocalCurrency"],
+  "resolve_names": true,
+  "limit": 100
+}
+```
+
+Amounts remain exact native decimal strings in currency units. Missing metrics remain `null`; an absent row is not a zero. Conversion value, unique reach and carousel fields are not accepted for these demographic pivots. Structured `rows` retain native URNs, periods and numeric/decimal values; compact widget `records` include currency labels. No advertiser total is derived by adding the returned segments.
+
+LinkedIn approximates these metrics, suppresses segments below three events, and limits each creative/day to its top 100 demographic values. Reporting can lag by 12–24 hours. `complete` therefore remains false even when `truncated` is false. Empty data can mean no activity or insufficient data access. The native endpoint does not support pagination and caps a response at 15,000 rows. Adport also reports a local row limit explicitly. Narrow the date/campaign selection when limited; there is no invented `start`, `count` or continuation cursor.
+
+With `resolve_names`, one bounded `adTargetingEntities` lookup resolves up to the first 100 distinct returned URNs. A missing/denied optional name lookup preserves the analytics and original URNs without repeating the report. `linkedin_resolve_targeting_entities` performs the same exact `q=urns`, `QUERY_USES_URNS`, `SINGLE_NODE` lookup for up to 100 supplied taxonomy URNs, with optional locale. It verifies selected-account access and reports unresolved names; it does not expand descendants. Neither tool changes scopes, targeting, campaigns, money or delivery.
+
+Contracts: [Reporting](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads-reporting/ads-reporting?view=li-lms-2026-08), [metric and pivot schema](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads-reporting/ads-reporting-schema?view=li-lms-2026-08), [targeting URN resolution](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads/advertising-targeting/ads-targeting?view=li-lms-2026-08). These use Marketing API `202608`; the newer DMA pivot is not exposed by this versioned workflow.
 
 ## Text creatives and native images
 
