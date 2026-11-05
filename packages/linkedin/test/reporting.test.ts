@@ -104,12 +104,26 @@ describe('LinkedIn professional demographic reporting',()=>{
     const f=fixture(call=>call.url.pathname==='/rest/adTargetingEntities'?Response.json({message:'denied'},{status:403}):undefined);
     const result=await f.provider.reporting.demographics({...args,resolve_names:true});expect(result.rows[0]?.urn).toBe(U);expect(result.rows[0]).not.toHaveProperty('name');expect(result.notes.join(' ')).toContain('Optional name lookup was not confirmed');expect(f.calls.filter(call=>call.url.pathname==='/rest/adAnalytics')).toHaveLength(1);
   });
-  it('returns missing names explicitly and rejects foreign/duplicate URN resolution',async()=>{
+  it('returns missing names explicitly and rejects unrequested URN resolution',async()=>{
     const f=fixture(call=>call.url.pathname==='/rest/adTargetingEntities'?{elements:[]}:undefined);
     expect((await f.provider.reporting.resolveEntities({account_id:A,urns:[U]})).unresolved_urns).toEqual([U]);
-    for(const elements of [[{urn:'urn:li:industry:5',name:'Other'}],[{urn:U,name:'First'},{urn:U,name:'Duplicate'}]]){
-      const bad=fixture(call=>call.url.pathname==='/rest/adTargetingEntities'?{elements}:undefined);await expect(bad.provider.reporting.resolveEntities({account_id:A,urns:[U]})).rejects.toMatchObject({code:'PROVIDER_ERROR',message:expect.stringContaining('unrequested or duplicate'),details:{requested_urns:[U],returned_count:elements.length,unrequested_urns:elements.length===1?['urn:li:industry:5']:[],duplicate_urns:elements.length===2?[U]:[]}});
-    }
+    const bad=fixture(call=>call.url.pathname==='/rest/adTargetingEntities'?{elements:[{urn:'urn:li:industry:5',name:'Other'}]}:undefined);await expect(bad.provider.reporting.resolveEntities({account_id:A,urns:[U]})).rejects.toMatchObject({code:'PROVIDER_ERROR',message:expect.stringContaining('unrequested entity'),details:{requested_urns:[U],returned_count:1,unrequested_urns:['urn:li:industry:5']}});
     expect(resolveEntitiesInput.safeParse({account_id:A,urns:[U,U]}).success).toBe(false);expect(resolveEntitiesInput.safeParse({account_id:A,urns:['urn:li:person:123']}).success).toBe(false);
+  });
+  it('preserves the four live geo facets and resolves a requested URN once',async()=>{
+    // Observed in the real existing grant on2026-11-05: the three requested
+    // URNs returned six rows because Germany appears under four facets.
+    const geo='urn:li:geo:101282230',facets=['locations','profileLocations','ipLocations','contextualCountries'];
+    const elements=[...facets.map(facet=>({urn:geo,name:'Germany',facetUrn:`urn:li:adTargetingFacet:${facet}`})),{urn:U,name:'Computer Hardware Manufacturing',facetUrn:'urn:li:adTargetingFacet:industries'},{urn:'urn:li:seniority:9',name:'Partner',facetUrn:'urn:li:adTargetingFacet:seniorities'}];
+    const f=fixture(call=>call.url.pathname==='/rest/adTargetingEntities'?{elements}:undefined);
+    const result=await f.provider.reporting.resolveEntities({account_id:A,urns:[geo,U,'urn:li:seniority:9']});
+    expect(result.elements).toHaveLength(6);expect(result.entities).toHaveLength(3);expect(result.records).toHaveLength(3);
+    expect(result.entities[0]).toEqual({urn:geo,name:'Germany',names:['Germany'],facet_urns:facets.map(facet=>`urn:li:adTargetingFacet:${facet}`)});
+    expect(result.records[0]).toMatchObject({name:'Germany',facets});expect(result.unresolved_urns).toEqual([]);expect(result.ambiguous_urns).toEqual([]);
+  });
+  it('preserves conflicting names without choosing one for a report',async()=>{
+    const f=fixture(call=>call.url.pathname==='/rest/adTargetingEntities'?{elements:[{urn:U,name:'First'},{urn:U,name:'Other'}]}:undefined);
+    const resolved=await f.provider.reporting.resolveEntities({account_id:A,urns:[U]});expect(resolved.ambiguous_urns).toEqual([U]);expect(resolved.entities[0]).not.toHaveProperty('name');expect(resolved.records[0]).toMatchObject({name:U,names:['First','Other']});
+    const report=await f.provider.reporting.demographics({...args,resolve_names:true});expect(report.rows[0]).not.toHaveProperty('name');expect(report.notes.join(' ')).toContain('unavailable or ambiguous');
   });
 });

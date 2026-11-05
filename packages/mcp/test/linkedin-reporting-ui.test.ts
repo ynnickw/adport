@@ -4,6 +4,16 @@ import { LinkedInAdsClient, LinkedInAdsProvider } from '@adport/provider-linkedi
 import { ADPORT_UI_HTML, structuredResult } from '../src/ui.js';
 
 describe('LinkedIn demographic read widget',()=>{
+  it('shows one country for its native facet variants',async()=>{
+    const account='551814436',urn='urn:li:geo:101282230',facets=['locations','profileLocations','ipLocations','contextualCountries'];
+    const provider=new LinkedInAdsProvider(new LinkedInAdsClient({accessToken:'qa-only'},async(url)=>new URL(String(url)).pathname===`/rest/adAccounts/${account}`?Response.json({id:Number(account),name:'QA',currency:'USD',status:'DRAFT'}):Response.json({elements:facets.map(facet=>({urn,name:'Germany',facetUrn:`urn:li:adTargetingFacet:${facet}`}))})));
+    const data=await provider.reporting.resolveEntities({account_id:account,urns:[urn]});
+    const dom=new JSDOM(ADPORT_UI_HTML,{runScripts:'dangerously',url:'https://widget.example'});
+    try {
+      dom.window.dispatchEvent(new dom.window.MessageEvent('message',{source:dom.window.parent,data:{jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:structuredResult('linkedin_resolve_targeting_entities','records',data)}}}));
+      expect(dom.window.document.querySelectorAll('article')).toHaveLength(1);expect(dom.window.document.querySelector('.record-name')?.textContent).toBe('Germany');expect(data.elements).toHaveLength(4);expect(data.entities[0]?.facet_urns).toHaveLength(4);
+    }finally{dom.window.close();}
+  });
   it.each([false,true])('renders actual provider output with empty=%s without treating filters as records or implying exact totals',async empty=>{
     const account='551814436',urn='urn:li:industry:4',calls:string[]=[];
     const client=new LinkedInAdsClient({accessToken:'qa-only'},async(url)=>{

@@ -30,7 +30,8 @@ const metricFields = Object.fromEntries(metrics.map(metric => [metric, metric.st
 const rowSchema = z.object({ pivotValues: z.array(taxonomyUrn).length(1), dateRange, ...metricFields });
 const paging = z.object({ start: z.number().int().nonnegative().safe().optional(), count: z.number().int().nonnegative().safe().optional(), total: z.number().int().nonnegative().safe().optional(), links: z.array(z.object({ rel: z.string() })).optional() });
 const responseSchema = z.object({ elements: z.array(rowSchema).max(15_000), paging: paging.optional() });
-const entitySchema = z.object({ urn: taxonomyUrn, name: z.string().min(1).max(1000), facetUrn: z.string().optional() });
+const entitySchema = z.object({ urn: taxonomyUrn, name: z.string().min(1).max(1000), facetUrn: z.string().max(200).optional() });
+const resolvedEntity = z.object({ urn: taxonomyUrn, name: z.string().optional(), names: z.array(z.string()), facet_urns: z.array(z.string()) });
 const cell = z.union([z.string(), z.number().finite(), z.null()]);
 const demographicOutput = z.object({
   account_id: linkedinId, currency: z.string().regex(/^[A-Z]{3}$/), request: demographicInput,
@@ -39,7 +40,7 @@ const demographicOutput = z.object({
   truncated: z.boolean(), complete: z.literal(false),
   coverage: z.object({ approximate: z.literal(true), minimum_events: z.literal(3), top_values_per_creative_day: z.literal(100), native_row_limit: z.literal(15_000), pagination_supported: z.literal(false) }), notes: z.array(z.string()),
 });
-const resolveOutput = z.object({ account_id: linkedinId, elements: z.array(entitySchema).max(100), records: z.array(entitySchema).max(100), paging: paging.optional(), unresolved_urns: z.array(taxonomyUrn).max(100), notes: z.array(z.string()) });
+const resolveOutput = z.object({ account_id: linkedinId, elements: z.array(entitySchema).max(1000), entities: z.array(resolvedEntity).max(100), records: z.array(z.object({ id: taxonomyUrn, name: z.string(), names: z.array(z.string()).optional(), facets: z.array(z.string()) })).max(100), paging: paging.optional(), unresolved_urns: z.array(taxonomyUrn).max(100), ambiguous_urns: z.array(taxonomyUrn).max(100), notes: z.array(z.string()) });
 const pivotType: Record<(typeof pivots)[number], string> = { MEMBER_COMPANY_SIZE: 'staffCountRange', MEMBER_INDUSTRY: 'industry', MEMBER_SENIORITY: 'seniority', MEMBER_JOB_TITLE: 'title', MEMBER_JOB_FUNCTION: 'function', MEMBER_COUNTRY_V2: 'geo', MEMBER_REGION_V2: 'geo', MEMBER_COMPANY: 'organization' };
 const toDate = (iso: string) => { const [year, month, day] = iso.split('-').map(Number); return { year: year!, month: month!, day: day! }; };
 const fromDate = (value: z.infer<typeof nativeDate>) => {
@@ -52,17 +53,25 @@ const fromDate = (value: z.infer<typeof nativeDate>) => {
 export class LinkedInReportingService {
   constructor(private readonly client: LinkedInAdsClient, private readonly provider: LinkedInAdsProvider) {}
   private async names(urns: string[], selectedLocale?: z.infer<typeof locale>) {
-    const result = await this.client.get('adTargetingEntities', z.object({ elements: z.array(entitySchema).max(100), paging: paging.optional() }), {
+    const result = await this.client.get('adTargetingEntities', z.object({ elements: z.array(entitySchema).max(1000), paging: paging.optional() }), {
       q: 'urns', queryVersion: 'QUERY_USES_URNS', fetchType: 'SINGLE_NODE', urns, ...(selectedLocale ? { locale: selectedLocale } : {}),
     });
-    const returned = result.elements.map(entity => entity.urn), unrequested = [...new Set(returned.filter(urn => !urns.includes(urn)))], duplicates = [...new Set(returned.filter((urn, index) => returned.indexOf(urn) !== index))];
-    if (unrequested.length || duplicates.length) throw new AdportError('PROVIDER_ERROR', 'linkedin: URN resolution returned an unrequested or duplicate entity', { requested_urns: urns, returned_count: result.elements.length, unrequested_urns: unrequested, duplicate_urns: duplicates, duplicate_variants: result.elements.filter(entity => duplicates.includes(entity.urn)) });
-    return { ...result, unresolved_urns: urns.filter(urn => !result.elements.some(entity => entity.urn === urn)) };
+    const unrequested = [...new Set(result.elements.filter(entity => !urns.includes(entity.urn)).map(entity => entity.urn))];
+    if (unrequested.length) throw new AdportError('PROVIDER_ERROR', 'linkedin: URN resolution returned an unrequested entity', { requested_urns: urns, returned_count: result.elements.length, unrequested_urns: unrequested });
+    // One geo URN is returned under locations/profileLocations/ipLocations/
+    // contextualCountries. Those are native facet variants, not foreign IDs.
+    const entities = urns.flatMap(urn => {
+      const variants = result.elements.filter(entity => entity.urn === urn);
+      if (!variants.length) return [];
+      const names = [...new Set(variants.map(entity => entity.name))], facets = [...new Set(variants.flatMap(entity => entity.facetUrn ? [entity.facetUrn] : []))];
+      return [{ urn, ...(names.length === 1 ? { name: names[0]! } : {}), names, facet_urns: facets }];
+    });
+    return { ...result, entities, unresolved_urns: urns.filter(urn => !entities.some(entity => entity.urn === urn)), ambiguous_urns: entities.filter(entity => entity.name === undefined).map(entity => entity.urn) };
   }
   async resolveEntities(raw: z.input<typeof resolveEntitiesInput>) {
     const input = resolveEntitiesInput.parse(raw); await this.provider.getAccount(input.account_id);
     const result = await this.names(input.urns, input.locale);
-    return { account_id: input.account_id, ...result, records: result.elements, notes: result.unresolved_urns.length ? ['Some requested URNs were not resolved. Their names are unavailable; no descendant or alternate-identity lookup was made.'] : [] };
+    return { account_id: input.account_id, ...result, records: result.entities.map(entity => ({ id: entity.urn, name: entity.name ?? entity.urn, ...(entity.name === undefined ? { names: entity.names } : {}), facets: entity.facet_urns.map(facet => facet.split(':').at(-1)!) })), notes: [...(result.unresolved_urns.length ? ['Some requested URNs were not resolved. Their names are unavailable; no descendant or alternate-identity lookup was made.'] : []), ...(result.ambiguous_urns.length ? ['Some URNs have conflicting native names. All variants are preserved; no single name was selected for them.'] : [])] };
   }
   async demographics(raw: z.input<typeof demographicInput>) {
     const input = demographicInput.parse(raw), account = await this.provider.getAccount(input.account_id);
@@ -96,8 +105,8 @@ export class LinkedInReportingService {
       const urns = [...new Set(selected.map(row => row.urn))].slice(0, 100);
       try {
         const resolved = await this.names(urns, input.locale);
-        resolved.elements.forEach(entity => labels.set(entity.urn, entity.name));
-        if (resolved.unresolved_urns.length || new Set(selected.map(row => row.urn)).size > 100) notes.push('Names are unavailable for some values; only the first 100 distinct returned URNs were resolved. Original URNs are preserved.');
+        resolved.entities.forEach(entity => { if (entity.name !== undefined) labels.set(entity.urn, entity.name); });
+        if (resolved.unresolved_urns.length || resolved.ambiguous_urns.length || new Set(selected.map(row => row.urn)).size > 100) notes.push('Names are unavailable or ambiguous for some values; only the first 100 distinct returned URNs were resolved. Original URNs are preserved.');
       } catch { notes.push('Optional name lookup was not confirmed. Original demographic URNs are preserved; the analytics read was not repeated.'); }
     }
     return {
