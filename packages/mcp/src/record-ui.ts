@@ -54,6 +54,7 @@ export const RECORD_UI_SCRIPT = String.raw`
       app.querySelectorAll('.project-logo img').forEach(image=>image.addEventListener('error',()=>{const parent=image.parentElement;parent.textContent=parent.dataset.projectInitial;},{once:true}));
     }
     function recordPayload(data) {
+      if(object(data)&&Array.isArray(data.records))return {records:data.records};
       const value=data.value ?? data.data ?? data.result ?? data;
       if(!object(value))return value;
       for(const key of ['keyword','audience','pixel','capi_integration','mobile_app','dataset','board','campaign','ad_group','ad','asset','customer_list'])if(object(value[key]))return value[key];

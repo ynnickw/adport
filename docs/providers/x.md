@@ -145,6 +145,57 @@ The first local live initialize request timed out without a returned upload ID. 
 
 Official contracts: [v2 OpenAPI](https://github.com/xdevplatform/docs/blob/2f701ee04b362fffcc1dfee042b11b64ab884fda/openapi.json), [chunked media upload](https://docs.x.com/x-api/media/quickstart/media-upload-chunked).
 
+## Custom audiences
+
+`x_custom_audiences` and `x_get_custom_audience` inspect owned or already shared
+audiences, native processing diagnostics and a `configuration_hash`. Lists use
+native cursors and the compact widget's **Load more**. `with_total_count` requests
+a total on the initial page; continuation automatically omits that flag because
+X does not allow it alongside a cursor. A missing native cursor marker leaves
+completeness unconfirmed.
+
+`x_create_custom_audience` creates an empty CRM placeholder. Metadata edits use
+`x_update_custom_audience`, a current configuration hash and the shared
+preview/apply gate. Omitted name/description fields stay unchanged. Create and
+metadata writes independently read back their results. They upload no members,
+add no targeting, grant no sharing and activate no ads.
+
+`x_update_custom_audience_users` submits explicit native `Update`/`Delete` groups.
+Each group contains `params.users` and optional UTC `effective_at`/`expires_at`.
+All identifiers must already be normalized SHA256 hashes, except the native
+`partner_user_id` exception. Previews show counts and a batch checksum; member
+identifiers stay out of previews, audit summaries and widget approval arguments.
+Hosted pending arguments use the existing encrypted project approval store.
+The tool is marked destructive because batches can remove members.
+
+Native limits are 2,500 operation groups and a 5,000,000-byte JSON body. Adport
+also limits one approved request to 2,500 total user records. The native receipt's
+success and total counts must both match the submitted record count. A successful
+receipt means **accepted for processing**, with readiness explicitly unconfirmed;
+it does not prove exact membership or targeting availability. Existing ads using
+the audience can be affected. X describes processing batches on a 6–8-hour cycle.
+Transport failures, partial counts and operation errors never trigger automatic
+replay. Permissions remain provider-controlled; tool availability does not grant
+audience API approval.
+
+`x_custom_audience_permissions` inspects existing sharing. `x_custom_audience_usage`
+checks targeted campaigns, inactive groups, direct inclusion/exclusion criteria
+and sharing grants, returning a `usage_hash`. It requires complete native paging,
+with bounds of 25 pages per scan and 5,000 rows/line items/criteria. Deletion uses
+both hashes through `x_delete_custom_audience`, rejects referenced or shared
+audiences and independently verifies native `deleted=true`. These checks cannot
+atomically lock other clients; no restore endpoint is claimed.
+
+Ordinary CRM lifecycle and inspection are implemented. Flexible-audience batch
+creation (documented closed beta), sharing/revocation and Do Not Reach list
+management are separate workflows. Conversion configuration and normalization
+remain separate work. The new audience tools are contract/widget tested; live
+X account and Claude/ChatGPT validation remain unverified.
+
+Contracts: [current audience reference](https://docs.x.com/x-ads-api/audiences/reference)
+and [provider-owned Python SDK](https://github.com/xdevplatform/twitter-python-ads-sdk/blob/a3dd5819341e77aa469d0b4b3399f0bcd028c80c/twitter_ads/audience.py),
+inspected 2026-11-05. No SDK retry or cleanup behavior is executed by Adport.
+
 ## Access and commercial boundary
 
 Ads API approval is separate from general X API access. An active developer app
