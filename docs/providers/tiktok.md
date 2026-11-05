@@ -98,6 +98,12 @@ administrative tools are omitted from hosted MCP and public REST catalogs.
 | --- | --- |
 | `tiktok_catalog_access` | Read the selected project/account's explicit grants |
 | `tiktok_get_catalog` | `GET /open_api/v1.3/catalog/get/` with exact `bc_id` and `catalog_id` |
+| `tiktok_catalog_feeds` | `GET /open_api/v1.3/catalog/feed/get/`, optionally filtered by exact `feed_id` |
+| `tiktok_catalog_feed_log` | `GET /open_api/v1.3/catalog/feed/log/` for the latest 10 processing operations |
+| `tiktok_create_catalog_feed` | `POST /open_api/v1.3/catalog/feed/create/` with catalog hash and independent feed readback |
+| `tiktok_update_catalog_feed` | `POST /open_api/v1.3/catalog/feed/update/` with mode and optional source/schedule replacement |
+| `tiktok_set_catalog_feed_schedule_status` | `POST /open_api/v1.3/catalog/feed/switch/` with an opposite `ON`/`OFF` state |
+| `tiktok_delete_catalog_feed` | `POST /open_api/v1.3/catalog/feed/delete/` followed by complete feed-list absence verification |
 | `tiktok_update_catalog` | `POST /open_api/v1.3/catalog/update/` followed by independent exact-ID readback |
 | `tiktok_product_sets` | `GET /open_api/v1.3/catalog/set/get/`, optionally filtered by exact `product_set_id` |
 | `tiktok_product_set_products` | `GET /open_api/v1.3/catalog/set/product/get/` with exact parent IDs and native pages |
@@ -147,7 +153,7 @@ not as a complete inventory. Large string IDs remain exact; unsafe numeric IDs
 are rejected rather than rounded. The SDK/widget checks use synthetic native
 responses and do not prove live provider or Claude/ChatGPT host success.
 
-Product-set creation requires the selected catalog's `configuration_hash` as
+Condition-based product-set creation requires the selected catalog's `configuration_hash` as
 `expected_catalog_hash`, a name, conditions, and `acknowledge_shared_effects:
 true`. Catalog access and configuration are rechecked before creating the set.
 A successful native receipt is followed by an independent exact-ID read that
@@ -189,9 +195,55 @@ same project/account/Business Center/catalog selection as the agent's approved
 arguments. SDK and DOM checks use synthetic responses; native provider and
 actual Claude/ChatGPT host execution remain unverified.
 
-Catalog creation/deletion, feeds, product imports/edits, catalog videos,
-event-source bindings and migration from advertiser-owned catalogs remain
-separate work.
+Feed reads use the same exact advertiser/Business Center/catalog grant. The
+native list endpoint is unpaged; Adport bounds it to 5,000 feeds and provides
+snapshot-bound local `cursor` navigation with up to 100 feeds per page. Feed
+configuration hashes include known source/schedule settings and status, while
+excluding volatile product counts and next-run timestamps. Source origins and
+fingerprints are visible; source paths, query values, authentication values and
+unknown native extensions stay hidden. Native reads cannot confirm stored
+passwords, so these hashes cannot detect password-only changes made elsewhere.
+
+Feed creation requires `expected_catalog_hash`; other feed mutations require
+`expected_configuration_hash`. All require shared-effects acknowledgement.
+Creation, updates and schedule changes also require
+`acknowledge_automatic_processing: true`: scheduled sources can start native
+product processing, and `OVERWRITE` can remove products missing from the source.
+Creating without a schedule must read back as `OFF` without a source URI.
+`COUNTRY_FEED` requires a verified multi-country catalog; TikTok checks the
+additional existing-product eligibility on apply.
+
+Create modes are `INCREMENTAL` and `OVERWRITE`; updates also support native
+`SUPPLEMENT`. Optional `schedule_param` accepts a complete source/schedule:
+HTTP(S), FTP or SFTP URI; optional username/password; `interval_type`,
+`interval_count`, IANA `timezone`, hour and minute; and an explicit
+`day_of_month` for monthly runs. Intervals follow TikTok's 1–23 hourly, 1–30
+daily and 1–12 monthly bounds. Adport defaults count to 1 and hour/minute to 0
+and sends those values explicitly. Feed names are bounded to 256 characters.
+URI user information, fragments and unsupported protocols are rejected; supply
+authentication in its separate fields. When replacing a schedule, explicitly
+supply any required authentication because native credential values cannot be
+read back for preservation. Saved configuration is not proof that source
+authentication or product ingestion succeeded.
+
+Source-bearing arguments are marked private in the shared definition. Their
+widget preview shows origin/fingerprint, schedule and effects; it does not echo
+the source or credentials into widget approval arguments. The agent applies
+the identical private arguments with the pending token. Source-free changes,
+including schedule switches and deletion, retain normal widget approvals.
+Schedule switches require a known opposite state. Enabling requires a configured
+URI, interval and time zone; disabling does not undo earlier imports. Mutations
+check current scope and snapshots, then independently verify saved settings or
+deletion absence. Uncertain outcomes retain known feed IDs and never replay.
+
+The processing log is a window of the latest 10 operations, not full history.
+It reports native status, counts and timestamps; `SUCCESS` does not establish
+catalog ad eligibility. SDK/widget tests use synthetic responses and do not
+prove real provider or Claude/ChatGPT host success.
+
+Catalog creation/deletion, CSV-file-defined product sets, product imports/edits,
+catalog videos, event-source bindings and migration from advertiser-owned
+catalogs remain separate work.
 Read/rename and permission controls are contract, policy, SDK/widget and
 disposable-Postgres tested; positive native provider and Claude/ChatGPT host
 verification remain pending.
@@ -203,5 +255,11 @@ Contracts inspected 2026-11-05: [Get catalogs](https://business-api.tiktok.com/p
 [Update product set](https://business-api.tiktok.com/portal/docs?id=1740572974725122),
 [Create product set](https://business-api.tiktok.com/portal/docs?id=1740572891104257),
 [Delete product sets](https://business-api.tiktok.com/portal/docs?id=1740573143966722),
-and [Product set operators and fields](https://business-api.tiktok.com/portal/docs?id=1740673108747265)
+[Product set operators and fields](https://business-api.tiktok.com/portal/docs?id=1740673108747265),
+[Get feeds](https://business-api.tiktok.com/portal/docs?id=1740665183073281),
+[Create feed](https://business-api.tiktok.com/portal/docs?id=1740665161957377),
+[Update feed](https://business-api.tiktok.com/portal/docs?id=1740665197662210),
+[Delete feed](https://business-api.tiktok.com/portal/docs?id=1740665210863617),
+[Feed log](https://business-api.tiktok.com/portal/docs?id=1740665225631810),
+and [Feed schedule status](https://business-api.tiktok.com/portal/docs?id=1750349624999937)
 and the [official SDK](https://github.com/tiktok/tiktok-business-api-sdk/tree/f809c396520df2d7b201a9ccc5378d822b728ed3).

@@ -5,6 +5,7 @@ import { catalogAccessChange, catalogInput, catalogRename } from './catalog-tool
 import { catalogScopeKey, requireCatalogAccess, type TikTokCatalogAccessStore, type TikTokCatalogScope } from './catalog-access.js';
 import type { TikTokClient } from './client.js';
 import { TikTokCatalogProductSets } from './catalog-product-sets.js';
+import { TikTokCatalogFeeds } from './catalog-feeds.js';
 
 type Row = Record<string, unknown>;
 type Plan = Omit<WritePreview, 'serverValidated'> & { execute(): Promise<string[]> };
@@ -23,12 +24,15 @@ const nativeError = (error: unknown) => {
 /** Account scope and catalog-resource scope are independent authorization checks. */
 export class TikTokCatalogService {
   readonly productSets: TikTokCatalogProductSets;
+  readonly feeds: TikTokCatalogFeeds;
   constructor(private readonly client: Pick<TikTokClient, 'get' | 'post'>, private readonly store?: TikTokCatalogAccessStore) {
-    this.productSets = new TikTokCatalogProductSets(client, async (input, write) => {
+    const authorizeParent = async (input: z.infer<typeof catalogInput>, write?: boolean) => {
       await requireCatalogAccess(this.store, scopeOf(input), write);
       const catalog = await this.native(input);
       return { ...catalog, configuration_hash: configurationHash(input.account_id, catalog) };
-    });
+    };
+    this.productSets = new TikTokCatalogProductSets(client, authorizeParent);
+    this.feeds = new TikTokCatalogFeeds(client, authorizeParent);
   }
   private manager() {
     if (!this.store?.canManage) throw new AdportError('POLICY_VIOLATION', 'Only the local owner or a signed-in project owner/admin in Accounts can change catalog access.');
@@ -57,6 +61,7 @@ export class TikTokCatalogService {
     return { catalog: data, records: [{ id: catalog.catalog_id, name: catalog.catalog_name, native_ad_eligibility: catalog.ad_creation_eligible ?? 'Not reported', type: catalog.catalog_type, business_center: catalog.bc_info.bc_name ?? input.bc_id, currency: catalog.catalog_conf.currency ?? 'Not reported', country: catalog.catalog_conf.country ?? 'Not reported' }] };
   }
   async plan(op: WriteOperation): Promise<Plan> {
+    if (['tiktok_create_catalog_feed', 'tiktok_update_catalog_feed', 'tiktok_set_catalog_feed_schedule_status', 'tiktok_delete_catalog_feed'].includes(op.tool)) return this.feeds.plan(op);
     if (['tiktok_create_product_set', 'tiktok_update_product_set_conditions', 'tiktok_delete_product_sets', 'tiktok_rename_product_set'].includes(op.tool)) return this.productSets.plan(op);
     if (op.provider !== 'tiktok' || op.kind !== 'update') throw new AdportError('INVALID_INPUT', 'TikTok catalog provider/operation kind mismatch.');
     const account = id.parse(op.accountId);
