@@ -238,10 +238,10 @@ export class TikTokAdsProvider implements AdProvider {
   async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> {
     const plan = await this.plan(op, guard);
     const resourceIds = await plan.execute();
-    if (op.tool === 'tiktok_import_catalog_file') {
-      const payload = op.payload as { bc_id: string; catalog_id: string; feed_id: string; media_id: string; expected_sha256: string };
+    if (['tiktok_import_catalog_file', 'tiktok_upsert_catalog_products', 'tiktok_update_catalog_products', 'tiktok_delete_catalog_products'].includes(op.tool)) {
+      const payload = op.payload as { bc_id: string; catalog_id: string; feed_id: string; media_id: string; expected_sha256: string; media_assets?: unknown[] };
       return { applied: true, resourceIds, details: { status: 'ACCEPTED_FOR_PROCESSING', processed: false, feed_log_id: resourceIds[0], feed_id: payload.feed_id,
-        source_media_id: payload.media_id, source_sha256: payload.expected_sha256, next_tool: 'tiktok_catalog_product_log',
+        ...(op.tool === 'tiktok_import_catalog_file' ? { source_media_id: payload.media_id, source_sha256: payload.expected_sha256 } : payload.media_assets?.length ? { source_media_assets: payload.media_assets } : {}), next_tool: 'tiktok_catalog_product_log',
         next_arguments: { account_id: op.accountId, bc_id: payload.bc_id, catalog_id: payload.catalog_id, feed_id: payload.feed_id, feed_log_id: resourceIds[0] },
       } };
     }
@@ -251,6 +251,9 @@ export class TikTokAdsProvider implements AdProvider {
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
     const payload = op.payload as never;
     switch (op.tool) {
+      case 'tiktok_upsert_catalog_products':
+      case 'tiktok_update_catalog_products':
+      case 'tiktok_delete_catalog_products':
       case 'tiktok_create_catalog_feed':
       case 'tiktok_import_catalog_file':
       case 'tiktok_update_catalog_feed':

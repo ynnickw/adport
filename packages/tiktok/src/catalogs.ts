@@ -7,6 +7,7 @@ import type { TikTokClient } from './client.js';
 import { TikTokCatalogProductSets } from './catalog-product-sets.js';
 import { TikTokCatalogFeeds } from './catalog-feeds.js';
 import { TikTokCatalogProducts } from './catalog-products.js';
+import { TikTokCatalogProductAuthoring } from './catalog-product-authoring.js';
 
 type Row = Record<string, unknown>;
 type Plan = Omit<WritePreview, 'serverValidated'> & { execute(): Promise<string[]> };
@@ -27,6 +28,7 @@ export class TikTokCatalogService {
   readonly productSets: TikTokCatalogProductSets;
   readonly feeds: TikTokCatalogFeeds;
   readonly products: TikTokCatalogProducts;
+  readonly productAuthoring: TikTokCatalogProductAuthoring;
   constructor(private readonly client: Pick<TikTokClient, 'get' | 'post'> & Partial<Pick<TikTokClient, 'postMultipart'>>, private readonly store?: TikTokCatalogAccessStore, media?: MediaResolver) {
     const authorizeParent = async (input: z.infer<typeof catalogInput>, write?: boolean) => {
       await requireCatalogAccess(this.store, scopeOf(input), write);
@@ -36,6 +38,7 @@ export class TikTokCatalogService {
     this.productSets = new TikTokCatalogProductSets(client, authorizeParent, media);
     this.feeds = new TikTokCatalogFeeds(client, authorizeParent);
     this.products = new TikTokCatalogProducts(client, authorizeParent, this.feeds, media);
+    this.productAuthoring = new TikTokCatalogProductAuthoring(client, authorizeParent, this.feeds, this.products, media);
   }
   private manager() {
     if (!this.store?.canManage) throw new AdportError('POLICY_VIOLATION', 'Only the local owner or a signed-in project owner/admin in Accounts can change catalog access.');
@@ -64,6 +67,7 @@ export class TikTokCatalogService {
     return { catalog: data, records: [{ id: catalog.catalog_id, name: catalog.catalog_name, native_ad_eligibility: catalog.ad_creation_eligible ?? 'Not reported', type: catalog.catalog_type, business_center: catalog.bc_info.bc_name ?? input.bc_id, currency: catalog.catalog_conf.currency ?? 'Not reported', country: catalog.catalog_conf.country ?? 'Not reported' }] };
   }
   async plan(op: WriteOperation): Promise<Plan> {
+    if (this.productAuthoring.supports(op.tool)) return this.productAuthoring.plan(op);
     if (op.tool === 'tiktok_import_catalog_file') return this.products.plan(op);
     if (['tiktok_create_catalog_feed', 'tiktok_update_catalog_feed', 'tiktok_set_catalog_feed_schedule_status', 'tiktok_delete_catalog_feed'].includes(op.tool)) return this.feeds.plan(op);
     if (['tiktok_create_product_set', 'tiktok_upload_product_set', 'tiktok_update_product_set_conditions', 'tiktok_delete_product_sets', 'tiktok_rename_product_set'].includes(op.tool)) return this.productSets.plan(op);

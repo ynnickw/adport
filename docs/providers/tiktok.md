@@ -322,7 +322,11 @@ review a new import rather than treating acceptance as success.
 These flows have contract, policy and synthetic dual-bridge widget tests.
 Positive native TikTok imports and actual Claude/ChatGPT host checks remain pending.
 
-Catalog creation/deletion, JSON product creation/editing/deletion,
+See [JSON catalog products](tiktok-json-products.md) for schema discovery across
+all ten catalog types, snapshot-bound field updates/removal, asynchronous jobs
+and checksum-bound reuse of central Adport media.
+
+Catalog creation/deletion,
 catalog videos, event-source bindings and migration from advertiser-owned
 catalogs remain separate work.
 Read/rename and permission controls are contract, policy, SDK/widget and
