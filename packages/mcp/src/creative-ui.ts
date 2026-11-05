@@ -49,11 +49,12 @@ export const CREATIVE_UI_SCRIPT = String.raw`
         return '<article class="creative-card" data-media-id="'+esc(creative.id)+'"><div class="creative-heading">'+(providerSvg[creative.provider]?logo(creative.provider):'')+'<span class="creative-name" title="'+esc(name)+'">'+esc(name)+'</span>'+(menuFor?menuFor(creative):'')+'</div>'+mediaView(creative)+'<div class="creative-copy">'+(headline?'<strong title="'+esc(headline)+'">'+esc(headline)+'</strong>':'')+(copy?'<p title="'+esc(copy)+'">'+esc(copy)+'</p>':'')+'</div><div class="creative-footer"><span class="creative-status'+(active?' creative-status-active':'')+'">'+esc(status.label)+'</span>'+(destination?'<a class="creative-destination" href="'+esc(destination.href)+'" target="_blank" rel="noopener noreferrer">'+esc(destination.hostname.replace(/^www\./,''))+'</a>':'')+'</div></article>';
       }).join('');
     }
-    function bindCreativeErrors(root) {
+    function bindCreativeErrors(root,recover) {
       root.querySelectorAll('.creative-media img,.creative-media video,.creative-media audio').forEach(media=>{
         if(media.dataset.previewBound) return;media.dataset.previewBound='true';
         if(media.matches('video[data-first-frame]')) media.addEventListener('loadedmetadata',()=>{if(Number.isFinite(media.duration)&&media.duration>0)media.currentTime=Math.min(.1,media.duration/2);},{once:true});
         media.addEventListener('error',()=>{
+          if(recover?.(media)) return;
           const placeholder=document.createElement('span');placeholder.className='creative-placeholder';placeholder.textContent='Preview unavailable';
           media.closest('.creative-media-item').replaceChildren(placeholder);
         },{once:true});
