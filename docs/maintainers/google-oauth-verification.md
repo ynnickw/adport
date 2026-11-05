@@ -4,7 +4,7 @@ Google's August 2026 message is a consolidated audit checklist, not an approval 
 
 ## Scope and justification
 
-The Google Ads connection requests exactly one Google scope:
+Each Google connection requests its own scopes. The Google Ads connection requests exactly one Google scope:
 
 ```text
 https://www.googleapis.com/auth/adwords
@@ -37,7 +37,7 @@ Automated checks cover exact scope/PKCE, encryption with tenant-bound authentica
 - Verify the production domain and ensure the homepage identifies Adport, explains the product, and links the same privacy URL configured on the consent screen.
 - Set the app publishing status to **In production** when submitting. Use a separate staging/test project for unverified changes.
 - Register the exact production web redirect: `https://<cloud-domain>/api/oauth/google/callback`. Remove obsolete redirects before recording.
-- Configure only `https://www.googleapis.com/auth/adwords` in Data Access. Confirm the code, Console, justification, and expanded consent screen match character-for-character.
+- Keep the approved `https://www.googleapis.com/auth/adwords` scope in Data Access. For GTM verification, also configure the three scopes in the GTM section below. Each connection must request only its own scopes; confirm its code, justification, and expanded consent screen match character-for-character.
 - Confirm app name, logo, support email, developer contact, homepage, privacy URL, and authorized domains all use the production Adport identity.
 - Inspect the scope classification shown by Cloud Console. If Google classifies any requested scope as **Restricted**, follow the CASA assessment instructions Google provides; do not assume CASA is or is not required from the generic email alone.
 - Do not expose the unverified production client to public traffic. Keep new/unverified consent changes in staging until approved.
@@ -80,7 +80,9 @@ Do not edit the video after submitting unless you also update the review respons
 - **Retention/deletion:** credentials until disconnect/deletion; OAuth transaction cleanup; one-hour rate buckets; 90-day configurable tenant-event retention; report results not stored by default; cascading organization deletion.
 - **Limited Use:** no sale, targeted advertising, data brokerage, lending, unrelated profiling, surveillance, or general/shared AI model training.
 
-## Reply draft
+## Google Ads reply template
+
+This template covers the earlier Ads-only review. For the GTM extension, include the three GTM scopes, its justification and a new GTM demo; do not claim that Adport requests only `adwords` across all connections.
 
 > Hello Third Party Data Safety Team,
 >
