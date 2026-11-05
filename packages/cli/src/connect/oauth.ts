@@ -12,12 +12,13 @@ export function buildGoogleAuthUrl(
   redirectUri: string,
   codeChallenge: string,
   state: string,
+  scopes: readonly string[] = [GOOGLE_ADS_SCOPE],
 ): string {
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: GOOGLE_ADS_SCOPE,
+    scope: scopes.join(' '),
     access_type: 'offline',
     prompt: 'consent',
     code_challenge: codeChallenge,

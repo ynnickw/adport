@@ -42,7 +42,7 @@ suite('one-time provider account selection (local database)', () => {
     await closeDbForTests(); await admin.end();
   });
   beforeEach(async () => {
-    await db()`delete from public.connections where organization_id = ${principal.organizationId} and provider = 'google'`;
+    await db()`delete from public.connections where organization_id = ${principal.organizationId} and provider in ('google', 'gtm')`;
     id = randomUUID();
     connectionId = await upsertProviderConnection({ organizationId: principal.organizationId, userId: principal.userId!, provider: 'google', credential: { refreshToken: 'fixture-only' }, selectionId: id });
     await stageAccountSelection({ principal, id, connectionId, provider: 'google', accounts, returnPath: '/dashboard/accounts?select_provider=google' });
@@ -56,6 +56,22 @@ suite('one-time provider account selection (local database)', () => {
     expect((await getAccountSelection(principal, id))?.accounts).toEqual(accounts);
     const [row] = await admin`select ciphertext from private.provider_account_selections where id = ${id}`;
     expect(row!.ciphertext).not.toContain('Do not import');
+  });
+
+  it('stores a GTM grant with tenant-bound encryption and enables only the chosen GTM account', async () => {
+    const selectionId = randomUUID();
+    const connectionId = await upsertProviderConnection({ organizationId: principal.organizationId, userId: principal.userId!,
+      provider: 'gtm', credential: { refreshToken: 'gtm-fixture-only' }, selectionId });
+    await stageAccountSelection({ principal, id: selectionId, connectionId, provider: 'gtm',
+      accounts: [{ provider: 'gtm', id: '101', name: 'Tracking account' }], returnPath: '/dashboard/accounts' });
+    await expect(getAccountSelection(other, selectionId)).resolves.toBeUndefined();
+    await saveAccountSelection(principal, selectionId, ['101'], undefined,
+      { maxActiveAccounts: 3, currentPlan: 'Free', currentPlanId: 'reader' });
+    expect((await loadEnabledAccountIds(principal.organizationId)).gtm).toEqual(new Set(['101']));
+    expect((await loadProviderCredentials(principal.organizationId)).gtm).toMatchObject({ refreshToken: 'gtm-fixture-only' });
+    expect((await loadProviderCredentials(other.organizationId)).gtm).toBeUndefined();
+    const [credential] = await admin`select ciphertext from private.provider_credentials where connection_id = ${connectionId}`;
+    expect(credential!.ciphertext).not.toContain('gtm-fixture-only');
   });
 
   it('saves only the selected subset, removes the snapshot and rejects replay', async () => {

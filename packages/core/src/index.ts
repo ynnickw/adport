@@ -54,6 +54,7 @@ export {
   type ToolAnnotations,
   type ToolContext,
 } from './tools/registry.js';
+export { gtmTools, gtmWriteSchemas, GTM_SCOPES, type GtmReader } from './tools/gtm.js';
 export { guardedWriteTool } from './tools/write.js';
 export { reviewWrite, type ReviewField, type WriteReview } from './tools/review.js';
 export { builtinTools } from './tools/builtin.js';

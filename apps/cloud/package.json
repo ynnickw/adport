@@ -39,7 +39,8 @@
     "stripe": "^22.5.0",
     "zod": "^4.4.3",
     "@napi-rs/canvas": "1.1.0",
-    "pdfjs-dist": "6.5.438"
+    "pdfjs-dist": "6.5.438",
+    "@adport/provider-gtm": "workspace:*"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.3",

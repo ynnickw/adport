@@ -92,7 +92,7 @@ export function ProviderAccountPicker({ organizationId, selectionId, provider, a
         <td data-label="Account"><strong>{account.name}</strong><div className="cell-sub">{account.id}</div></td>
         <td data-label="Currency">{account.currency ?? '—'}</td><td data-label="Platform status"><span className="status neutral">{account.status ?? 'available'}</span></td>
       </tr>)}</tbody>
-    </table></div> : <div className="empty"><h3>{accounts.length ? 'No matching accounts' : 'No ad accounts returned'}</h3><p>{accounts.length ? 'Try another name or account ID.' : 'The provider did not return any ad accounts for this authorization. You can finish without adding accounts and re-authorize later.'}</p></div>}
+    </table></div> : <div className="empty"><h3>{accounts.length ? 'No matching accounts' : 'No accounts returned'}</h3><p>{accounts.length ? 'Try another name or account ID.' : 'The provider did not return any accounts for this authorization. You can finish without adding accounts and re-authorize later.'}</p></div>}
     {provider === 'meta' && pages !== undefined ? <section aria-labelledby="meta-pages-heading">
       <div className="card-head"><h2 id="meta-pages-heading">Facebook Pages</h2><span className="card-note" aria-live="polite">{selectedPages.size} of {pages.length} selected</span></div>
       <div className="account-picker-help"><span>Optional Page access</span><InfoTooltip label="About Page access">Choose which Pages Adport and your connected agents may read. Pages are separate from ad accounts; selecting one does not link it to an account or publish content.</InfoTooltip></div>
