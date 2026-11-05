@@ -1,12 +1,53 @@
 import { JSDOM } from 'jsdom';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { LinkedInAdsClient, LinkedInAdsProvider, linkedinTools } from '@adport/provider-linkedin';
-import { createContext } from '@adport/core';
+import { AuditLog, createContext, DEFAULT_POLICY, PendingStore, PolicyEngine } from '@adport/core';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createMcpServer } from '../src/index.js';
 import { ADPORT_UI_HTML, structuredResult } from '../src/ui.js';
 
 describe('LinkedIn measurement record widgets', () => {
+  it('renders an actionable account-bound tag review from the actual guarded SDK preview without writing to LinkedIn', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'adport-tag-review-'));
+    const account = '551000001', requests: string[] = [];
+    const provider = new LinkedInAdsProvider(new LinkedInAdsClient({ accessToken: 'synthetic-only' }, async (url, init) => {
+      requests.push(init?.method ?? 'GET');
+      if (init?.method && init.method !== 'GET') throw new Error('Preview must not mutate LinkedIn');
+      return new URL(String(url)).pathname === `/rest/adAccounts/${account}`
+        ? Response.json({ id: Number(account), name: 'QA', currency: 'EUR', status: 'DRAFT' })
+        : Response.json({ elements: [] });
+    }));
+    const pending = new PendingStore(path.join(dir, 'pending'));
+    const runtime = await createContext({ engine: new PolicyEngine(DEFAULT_POLICY, pending, new AuditLog(path.join(dir, 'audit'))), providerModules: [{ provider, tools: linkedinTools(provider) }] });
+    const server = createMcpServer({ runtime, scopes: ['tools:read', 'tools:write'] }), host = new Client({ name: 'tag-review-test', version: '1' }), [ct, st] = InMemoryTransport.createLinkedPair();
+    await server.connect(st); await host.connect(ct);
+    let dom: JSDOM | undefined;
+    try {
+      const baseline = await provider.measurement.insightTags(account);
+      const args = { account_id: account, expected_account_hash: baseline.account_snapshot_hash };
+      const result = await host.callTool({ name: 'linkedin_create_insight_tag', arguments: args });
+      expect(result.isError).not.toBe(true);
+      expect(result.structuredContent).toMatchObject({ status: 'pending_validation', applied: false, preview: { review: {
+        provider: 'linkedin', accountId: account, kind: 'create',
+        fields: [{ label: 'Account', after: account }, { label: 'First-party tracking (native default)', after: true }],
+      } }, _adport: { approval: { arguments: args }, capabilities: { can_write: true } } });
+      const pendingId = (result.structuredContent as Record<string, unknown>).pending_operation_id as string;
+      expect((await pending.get(pendingId))?.preview.review?.fields).toHaveLength(2);
+      const callTool = vi.fn();
+      dom = new JSDOM(ADPORT_UI_HTML, { runScripts: 'dangerously', url: 'https://widget.example', beforeParse(window) { Object.defineProperty(window, 'openai', { value: { callTool } }); } });
+      dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window.parent, data: { jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: result } }));
+      const main = dom.window.document.querySelector('main')!;
+      expect(main.textContent).toContain('First-party tracking (native default)');
+      expect(main.textContent).toContain(account);
+      expect(main.querySelector('[data-approve]')?.textContent).toBe('Hold to apply');
+      expect(main.textContent).not.toContain('No change details were returned');
+      expect(callTool).not.toHaveBeenCalled();
+      expect(requests.every(method => method === 'GET')).toBe(true);
+    } finally { dom?.window.close(); await host.close(); await server.close(); await rm(dir, { recursive: true, force: true }); }
+  });
   it('renders real configuration data without fetching a native tracking pixel or executing tag code', async () => {
     const account = '551000001', conversion = '1001', calls: string[] = [];
     const provider = new LinkedInAdsProvider(new LinkedInAdsClient({ accessToken: 'synthetic-only' }, async url => {

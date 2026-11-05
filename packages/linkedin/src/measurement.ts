@@ -141,7 +141,11 @@ export class LinkedInMeasurementService {
       const input = tagCreateInput.parse(op.payload);
       if (input.expected_account_hash !== context.account_snapshot_hash || (await this.tags(op.accountId)).length) throw new AdportError('INVALID_INPUT', 'linkedin: advertiser changed or already has an Insight Tag; read current settings');
       const body = { sponsoredAccounts: [selectedAccount(op.accountId)] };
-      return { ...base, summary: 'Create an unused LinkedIn Insight Tag', changes: [`+ ${JSON.stringify(body)}. Native first-party tracking defaults to true; no website installation is performed.`], execute: async () => {
+      return { ...base, summary: 'Create an unused LinkedIn Insight Tag', changes: [`+ ${JSON.stringify(body)}. Native first-party tracking defaults to true; no website installation is performed.`], review: {
+        provider: 'linkedin', accountId: op.accountId, kind: 'create', title: 'Create Insight Tag',
+        fields: [{ label: 'Account', after: op.accountId }, { label: 'First-party tracking (native default)', after: true }],
+        notices: ['Creates an unused tag. No website code is installed and no conversion events are sent.'],
+      }, execute: async () => {
         const resource = await this.client.create('insightTags', body);
         await this.verified(resource, async () => { const found = (await this.tags(op.accountId)).find(value => value.id === resource); return !!found && same(found.sponsoredAccounts, body.sponsoredAccounts); });
         return { applied: true, resourceIds: [resource] };
