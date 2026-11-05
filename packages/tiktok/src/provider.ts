@@ -20,6 +20,7 @@ import { TikTokClient } from './client.js';
 import { TikTokCreativeService } from './creatives.js';
 import { TikTokAudienceService } from './audiences.js';
 import { TikTokMeasurementService } from './measurement.js';
+import { TikTokAutomatedRulesService } from './automated-rules.js';
 
 /** TikTok budgets are floats in whole account-currency units. */
 export const UNITS_TO_MICROS = 1_000_000;
@@ -56,12 +57,13 @@ export class TikTokAdsProvider implements AdProvider {
   readonly creatives: TikTokCreativeService;
   readonly audiences: TikTokAudienceService;
   readonly measurement: TikTokMeasurementService;
+  readonly automatedRules: TikTokAutomatedRulesService;
 
   constructor(
     private readonly client: TikTokClient,
     private readonly app: { appId: string; secret: string },
     media: MediaResolver = new LocalMediaResolver(),
-  ) { this.creatives = new TikTokCreativeService(client, media); this.audiences = new TikTokAudienceService(client); this.measurement = new TikTokMeasurementService(client); }
+  ) { this.creatives = new TikTokCreativeService(client, media); this.audiences = new TikTokAudienceService(client); this.measurement = new TikTokMeasurementService(client); this.automatedRules = new TikTokAutomatedRulesService(client); }
 
   capabilities(): ProviderCapabilities {
     // No server-side dry run in the Marketing API — previews are client-side diffs.
@@ -466,6 +468,9 @@ function validateTikTokPath(path: string): string {
 
 function validateTikTokMutationPath(path: string, kind: 'create' | 'update' | 'delete'): string {
   const normalized = validateTikTokPath(path);
+  if (normalized.startsWith('optimizer/rule/')) {
+    throw new AdportError('INVALID_INPUT', 'tiktok: automated-rule mutations require a verified direct-advertiser workflow with scheduled-action budget and account checks; raw dispatch cannot enforce these limits');
+  }
   if (!normalized.endsWith(`/${kind}`)) {
     throw new AdportError('INVALID_INPUT', `tiktok: ${kind} tool requires an endpoint ending in /${kind}`);
   }
