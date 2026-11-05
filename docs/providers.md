@@ -116,6 +116,8 @@ System-user tokens are preferred. Extended user tokens normally expire and requi
 
 See [Meta audiences](providers/meta-audiences.md) for empty containers, metadata editing, usage checks, guarded deletion, website rules and lookalikes. Audience previews are local; native permissions and eligibility still apply.
 
+See [Meta custom conversions](providers/meta-conversions.md) for account-owned website definitions, native stats, partial metadata editing, bounded usage checks and guarded deletion. These previews are local; native default values are preserved without inferred currency conversion.
+
 See [Meta app campaigns](providers/meta-app-campaigns.md) for account-scoped app discovery, campaign-level SKAdNetwork binding and app ad-set targeting with native validation.
 
 ## TikTok Ads

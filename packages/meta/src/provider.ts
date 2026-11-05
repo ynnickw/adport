@@ -20,6 +20,7 @@ import { campaignOutput } from './outputs.js';
 import { adSetAppPromotedObject, appPromotedObject, advertisableApplication, type AppPromotedObject } from './app-schemas.js';
 import { MetaCreativeService } from './creatives.js';
 import { MetaAudienceService } from './audiences.js';
+import { MetaConversionService } from './conversions.js';
 
 /** Meta budgets are minor currency units (cents); the policy engine speaks micros. */
 export const CENTS_TO_MICROS = 10_000;
@@ -72,6 +73,8 @@ interface MetaPagePostRow {
 interface WritePlan extends Omit<WritePreview, 'serverValidated'> {
   execute: (validateOnly: boolean) => Promise<string[]>;
   serverValidated?: boolean;
+  resultDetails?: () => Record<string, unknown>;
+  resultWarnings?: () => string[];
 }
 
 export class MetaAdsProvider implements AdProvider {
@@ -79,10 +82,12 @@ export class MetaAdsProvider implements AdProvider {
 
   readonly creatives: MetaCreativeService;
   readonly audiences: MetaAudienceService;
+  readonly conversions: MetaConversionService;
 
   constructor(private readonly client: MetaGraphClient, private readonly selectedPageIds?: ReadonlySet<string>, media?: MediaResolver) {
     this.creatives = new MetaCreativeService(client, () => this.listPages(), media);
     this.audiences = new MetaAudienceService(client);
+    this.conversions = new MetaConversionService(client);
   }
 
   capabilities(): ProviderCapabilities {
@@ -335,13 +340,15 @@ export class MetaAdsProvider implements AdProvider {
       serverValidated,
       ...(plan.fieldChanges ? { fieldChanges: plan.fieldChanges } : {}),
       ...(plan.notes ? { notes: plan.notes } : {}),
+      ...(plan.review ? { review: plan.review } : {}),
     };
   }
 
   async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> {
     const plan = await this.plan(op, guard);
     const resourceIds = await plan.execute(false);
-    return { applied: true, resourceIds };
+    const warnings = plan.resultWarnings?.();
+    return { applied: true, resourceIds, ...(plan.resultDetails ? { details: plan.resultDetails() } : {}), ...(warnings?.length ? { warnings } : {}) };
   }
 
   // ---- write planning ------------------------------------------------------
@@ -369,7 +376,7 @@ export class MetaAdsProvider implements AdProvider {
       case 'meta_api_delete':
         return this.planApiDelete(act, payload);
       default:
-        return this.audiences.supports(op.tool) ? this.audiences.plan(op) : this.creatives.plan(op, guard);
+        return this.conversions.supports(op.tool) ? this.conversions.plan(op) : this.audiences.supports(op.tool) ? this.audiences.plan(op) : this.creatives.plan(op, guard);
     }
   }
 
