@@ -101,7 +101,8 @@ which is not evidence of a clean import.
 
 ## Remaining scope and verification
 
-Feed management and manual product mutations remain outstanding. The current
+[Feed management](reddit-catalog-feeds.md) uses these same catalog grants.
+Manual product mutations remain outstanding. The current
 v3 OpenAPI's batch-upsert schema omits title and description even though the
 catalog requirements list both. Adport does not invent undocumented write
 fields or claim complete product authoring from a partial payload. This needs

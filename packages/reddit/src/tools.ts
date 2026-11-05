@@ -5,10 +5,12 @@ import { createCampaign, setCampaignBudget, setCampaignStatus } from './schemas.
 import { redditCreativeTools } from './creative-tools.js';
 import { redditCatalogTools } from './catalog-tools.js';
 import { redditCatalogContentTools } from './catalog-content-tools.js';
+import { redditCatalogFeedTools } from './catalog-feed-tools.js';
 import { redditManagementTools } from './management-tools.js';
 
 export function redditTools(provider: RedditAdsProvider, options: { catalogAccessManagement?: boolean } = {}): AnyToolDefinition[] {
   return [
+    ...redditCatalogFeedTools(provider),
     ...redditCatalogContentTools(provider),
     ...redditCatalogTools(provider, options.catalogAccessManagement === true),
     ...redditCreativeTools(provider),
