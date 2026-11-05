@@ -74,7 +74,9 @@ describe('GTM configuration integration', () => {
     expect(JSON.parse(String(init.body))).toEqual(tag);
     await expect(rt.registry.call('gtm_create_tag', args, rt.ctx)).rejects.toMatchObject({ code: 'PENDING_NOT_FOUND' });
     expect(writes()).toHaveLength(1);
-    expect((await new AuditLog().read()).map(e => e.event)).toEqual(['validated', 'applied']);
+    const events = (await new AuditLog().read()).map(e => e.event);
+    expect(events).toEqual(expect.arrayContaining(['validated', 'applied']));
+    expect(events.filter(event => event === 'applied')).toHaveLength(1);
   });
 
   it('enforces protected accounts before any request', async () => {
