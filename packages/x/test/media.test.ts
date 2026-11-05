@@ -57,6 +57,15 @@ describe('X current native v2 media upload and account registration', () => {
   it('checks exact SHA bytes again at apply and creates no upload for changed input', async () => {
     const { provider, calls, changeBytes } = fixture(), operation = op('x_upload_media', upload); await provider.previewWrite(operation, guard); changeBytes(); await expect(provider.applyWrite(operation, guard)).rejects.toThrow('SHA-256 mismatch'); expect(writeCalls(calls)).toEqual([]);
   });
+  it('reviews the exact file and partial-upload warning without exposing upload receipts', async () => {
+    const { provider, calls } = fixture(), preview = await provider.previewWrite(op('x_upload_media', upload), guard);
+    expect(writeCalls(calls)).toEqual([]);
+    expect(preview.review).toMatchObject({ title: 'Upload image', subject: 'qa.png', fields: [{ label: 'Type', after: 'image/png' }, { label: 'Size', after: `${png.length.toLocaleString('en-US')} bytes` }, { label: 'Author', after: U }, { label: 'SHA-256', after: hash }], notices: expect.arrayContaining(['X validates on apply. An incomplete upload may remain until it expires.']) });
+    const receipt = details(await provider.applyWrite(op('x_upload_media', upload), guard)).resource_receipt;
+    const registration = await provider.previewWrite(op('x_register_uploaded_media', { resource_receipt: receipt, name: 'QA', file_name: 'qa.png' }), guard);
+    expect(registration.review).toMatchObject({ title: 'Add media to X library', subject: 'QA', fields: [{ label: 'Media', after: KEY }, { label: 'File name', after: 'qa.png' }, { label: 'SHA-256', after: hash }] });
+    expect(JSON.stringify(registration.review)).not.toContain(receipt);
+  });
   it('binds status reads to the signed account/author, rejects tampering, expiry and another grant', async () => {
     const { provider, calls, client } = fixture(), result = await provider.applyWrite(op('x_upload_media', upload), guard), receipt = details(result).resource_receipt;
     expect(await provider.mediaUploads.status(A, receipt)).toMatchObject({ state: 'succeeded', bound: { media_id: ID, media_key: KEY } }); const status = calls.at(-1)!; expect(status.url.href).toBe(`https://api.x.com/2/media/upload?media_id=${ID}&command=STATUS`);
