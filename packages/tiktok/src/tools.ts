@@ -4,6 +4,7 @@ import type { TikTokAdsProvider } from './provider.js';
 import { tiktokCreativeTools } from './creative-tools.js';
 import { tiktokAudienceTools } from './audiences.js';
 import { tiktokMeasurementTools } from './measurement.js';
+import { tiktokAutomatedRuleTools } from './automated-rules.js';
 
 const OBJECTIVES = [
   'REACH',
@@ -23,6 +24,7 @@ export function tiktokTools(provider: TikTokAdsProvider): AnyToolDefinition[] {
     ...tiktokCreativeTools(provider),
     ...tiktokAudienceTools(provider),
     ...tiktokMeasurementTools(provider),
+    ...tiktokAutomatedRuleTools(provider),
     defineTool({
       name: 'tiktok_api_read',
       namespace: 'tiktok',

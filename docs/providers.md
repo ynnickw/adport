@@ -129,6 +129,10 @@ TikTok supports a sandbox for development; production access requires an approve
 
 Keep the environment consistent: sandbox credentials cannot be used against production endpoints.
 
+See [automated-rule inspection and native limits](providers/tiktok.md) for typed
+rule/history reads, pagination and TikTok's direct-advertiser creation restriction.
+Generic mutation dispatch does not bypass scheduled-action policy checks.
+
 ## Apple Ads
 
 For local CLI use, Apple Ads uses the OAuth 2.0 client-credentials flow with API-user key material. Adport Cloud instead uses Adport's Apple-approved service-provider authorization-code flow, so cloud tenants authorize in the browser and never provide private keys.
