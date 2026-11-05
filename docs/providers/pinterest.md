@@ -60,6 +60,55 @@ on 2026-11-04. Existing OAuth `ads:read`/`ads:write` permissions are used; Adpor
 does not mint a separate conversion token. Contract tests do not prove live app
 eligibility, attribution, matching or successful live-event processing.
 
+## Catalogs and feeds
+
+Catalog access is a separate opt-in: `adport connect pinterest --catalog-management`
+requests `catalogs:read` and `catalogs:write`. Combine it with `--secret-pins` or
+`--pin-management` to request those grants too. Hosted Connections offers **Enable
+catalogs** and retains existing public/secret Pin permissions on reconnection.
+The actual granted scope set is checked before replacing a connection. Catalog
+program and endpoint eligibility remain native Pinterest requirements.
+
+`pinterest_catalogs` supplies the advertiser-owner `context_hash` needed to create
+an empty catalog. `pinterest_get_catalog` uses the native scoped finder; Pinterest
+has no GET-by-catalog-ID endpoint. Adport requires the advertiser and catalog
+explicitly on every feed operation. Lists use native bookmarks and widget **Load
+more**; exact membership lookups stop at 10,000 rows rather than assuming absence.
+
+`pinterest_feeds` and `pinterest_get_feed` return configuration snapshots, source
+origin/fingerprint and authentication presence. Full source paths, query values
+and passwords are hidden. `pinterest_create_feed` defaults to **INACTIVE**.
+`pinterest_update_feed` patches supplied settings and preserves omitted ones.
+Both support native formats, schedules and optional source credentials. New
+sources/authentication require source-access confirmation. Activation and changes
+affecting an active feed's processing additionally require publication
+confirmation because Pinterest can create/update product Pins used by catalog
+ads. A name-only rename does not change processing. `credentials: null` explicitly
+removes feed authentication. Password-only changes elsewhere cannot be detected
+by the public configuration snapshot.
+
+`pinterest_delete_feed` requires the current snapshot and permanent deletion
+confirmation; it has no exposed restore endpoint. `pinterest_ingest_feed` is a
+partner-restricted processing request with separate source/publication
+confirmations. A `PROCESSING` receipt means accepted, not imported. Read
+`pinterest_feed_processing_results` for native outcomes and
+`pinterest_feed_item_issues` for sampled errors/warnings (up to 20 affected items
+per code). Item-number and validation-issue filters cannot be combined.
+
+All mutations retain the normal preview/apply gate and single-attempt audit.
+Source/auth changes are applied by agents with identical arguments; private
+arguments are not copied into widget approval metadata. Name-only changes retain
+the widget approval button. Hosted pending arguments are encrypted with project
+and approval binding. Local pending files retain their existing private-file
+permissions. Saved credential presence is not proof that Pinterest can authenticate
+to a source; processing results must establish that separately.
+
+Contracts and wire fixtures were checked against the [Pinterest-owned OpenAPI
+5.28.0, commit 2503147](https://github.com/pinterest/api-description/blob/2503147fd9f86f26230891b8534b678c31cc849a/v5/openapi.json)
+on 2026-11-05. Catalog item batches, product groups, reports and local inventory
+are separate API families and are not provided by these feed tools. Contract tests
+do not establish live catalog access or successful feed ingestion.
+
 ## Contract and reporting decisions
 
 Inspected against Pinterest's [official OpenAPI 5.28.0](https://github.com/pinterest/api-description/blob/main/v5/openapi.json) on 2026-08-31, plus [OAuth documentation](https://developers.pinterest.com/docs/getting-started/set-up-authentication-and-authorization/) and [redirect setup](https://developers.pinterest.com/docs/getting-started/connect-app/).

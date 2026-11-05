@@ -8,9 +8,17 @@ import { linkedinMediaTools } from './media.js';
 import { linkedinSponsoredTools } from './sponsored-tools.js';
 import { linkedinPlanningTools } from './planning.js';
 import { linkedinAudienceTools } from './audiences.js';
+import { linkedinReportingTools } from './reporting.js';
+import { linkedinMeasurementTools } from './measurement.js';
+import { linkedinLeadCreativeTools } from './lead-creatives.js';
+import { linkedinLeadFormTools } from './lead-forms.js';
 
 export function linkedinTools(provider: LinkedInAdsProvider): AnyToolDefinition[] {
   return [
+    ...linkedinLeadFormTools(provider),
+    ...linkedinLeadCreativeTools(provider),
+    ...linkedinMeasurementTools(provider),
+    ...linkedinReportingTools(provider),
     ...linkedinPlanningTools(provider),
     ...linkedinAudienceTools(provider),
     ...linkedinCreativeTools(provider),

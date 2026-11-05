@@ -49,6 +49,16 @@ export function restli(value: RestliValue): string {
   return encodeURIComponent(String(value)).replace(/[!'()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
+/** Native Long identifiers must survive JSON decoding without IEEE-754 rounding. */
+function exactJson(text: string): unknown {
+  return JSON.parse(text, (_key, value: unknown, context?: { source?: string }) => {
+    if (typeof value === 'number' && !Number.isFinite(value)) throw new AdportError('PROVIDER_ERROR', 'linkedin: native number cannot be decoded exactly');
+    if (typeof value !== 'number' || !Number.isInteger(value) || Number.isSafeInteger(value)) return value;
+    if (!context?.source || !/^-?\d+$/.test(context.source)) throw new AdportError('PROVIDER_ERROR', 'linkedin: native integer cannot be decoded exactly');
+    return context.source;
+  });
+}
+
 export class LinkedInAdsClient {
   private tokens: Partial<LinkedInTokens>;
   private refreshing?: Promise<string>;
@@ -57,8 +67,16 @@ export class LinkedInAdsClient {
   }
   async get<T>(path: string, schema: z.ZodType<T>, params: Record<string, RestliValue> = {}): Promise<T> {
     const response = await this.request(path, 'GET', params);
-    const parsed = schema.safeParse(await response.json());
-    if (!parsed.success) throw new AdportError('PROVIDER_ERROR', 'linkedin: malformed API response');
+    const raw = exactJson(await response.text()), parsed = schema.safeParse(raw);
+    if (!parsed.success) {
+      const issues = parsed.error.issues.slice(0, 12).flatMap(issue => {
+        if (!issue.path.every(part => typeof part === 'number' && Number.isSafeInteger(part) && part >= 0 || typeof part === 'string' && /^[A-Za-z_][A-Za-z0-9_]{0,80}$/.test(part))) return [];
+        let value = raw;
+        for (const part of issue.path) value = value && typeof value === 'object' && Object.hasOwn(value, part) ? (value as Record<PropertyKey, unknown>)[part] : undefined;
+        return [{ field_path: '/' + issue.path.join('/'), code: issue.code, received_type: value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value, ...('expected' in issue && typeof issue.expected === 'string' ? { expected_type: issue.expected } : {}) }];
+      });
+      throw new AdportError('PROVIDER_ERROR', 'linkedin: malformed API response', { resource: path.split('/')[0], schema_issues: issues });
+    }
     return parsed.data;
   }
   async create(path: string, body: unknown): Promise<string> {
@@ -81,10 +99,17 @@ export class LinkedInAdsClient {
     if (response.status !== 201 || !id || !/^urn:li:sponsoredCreative:[1-9]\d*$/.test(id)) throw new AdportError('PROVIDER_ERROR', 'linkedin: creative create did not return 201 and a valid sponsoredCreative URN; inspect the account before retrying');
     return id;
   }
+  async createPost(body: unknown): Promise<string> {
+    const response = await this.request('posts', 'POST', {}, body), raw = response.headers.get('x-restli-id');
+    let id: string | undefined;
+    try { id = raw ? decodeURIComponent(raw) : undefined; } catch { /* Invalid receipt is unconfirmed. */ }
+    if (response.status !== 201 || !id || !/^urn:li:(?:share|ugcPost):[1-9]\d*$/.test(id)) throw new AdportError('PROVIDER_ERROR', 'linkedin: post create did not return 201 and an exact post URN; reconcile before retrying');
+    return id;
+  }
   async creativeMetadata<T>(path: string, schema: z.ZodType<T>): Promise<T> {
     // Metadata exists only on single-creative GETs from 202610. Do not project it
     // on the older finder schema or change unrelated mutation API versions.
-    const response = await this.request(path, 'GET', { fields: 'id,account,campaign,name,intendedStatus,content,metadata' }, undefined, false, true, LINKEDIN_CREATIVE_METADATA_VERSION);
+    const response = await this.request(path, 'GET', { fields: 'id,account,campaign,name,intendedStatus,content,leadgenCallToAction,metadata' }, undefined, false, true, LINKEDIN_CREATIVE_METADATA_VERSION);
     const parsed = schema.safeParse(await response.json());
     if (!parsed.success) throw new AdportError('PROVIDER_ERROR', 'linkedin: malformed creative metadata response');
     return parsed.data;
@@ -107,6 +132,13 @@ export class LinkedInAdsClient {
   async remove(path: string): Promise<void> {
     const response = await this.request(path, 'DELETE', {});
     if (response.status !== 204) throw new AdportError('PROVIDER_ERROR', 'linkedin: delete did not return 204; inspect the account before retrying');
+  }
+  async setCampaignConversion(campaignId: string, conversionId: string, associated: boolean): Promise<void> {
+    if (![campaignId, conversionId].every(value => /^[1-9]\d*$/.test(value))) throw new AdportError('INVALID_INPUT', 'linkedin: invalid campaign/conversion identity');
+    const campaign = `urn:li:sponsoredCampaign:${campaignId}`, conversion = `urn:lla:llaPartnerConversion:${conversionId}`;
+    const path = `campaignConversions/(campaign:${restli(campaign)},conversion:${restli(conversion)})`;
+    const response = await this.request(path, associated ? 'PUT' : 'DELETE', {}, associated ? { campaign, conversion } : undefined);
+    if (response.status !== 204) throw new AdportError('PROVIDER_ERROR', 'linkedin: campaign-conversion change was not acknowledged; reconcile the association before retrying');
   }
   async uploadImage(url: string, bytes: Uint8Array<ArrayBuffer>): Promise<void> {
     const target = new URL(url);
@@ -134,8 +166,9 @@ export class LinkedInAdsClient {
     const response = await this.request('videos', 'POST', { action: 'finalizeUpload' }, body);
     if (response.status !== 200) throw new AdportError('PROVIDER_ERROR', 'linkedin: video finalization was not acknowledged');
   }
-  private async request(path: string, method: 'GET' | 'POST' | 'DELETE', params: Record<string, RestliValue>, body?: unknown, partial = false, retry = true, version: string = LINKEDIN_API_VERSION): Promise<Response> {
-    if (!/^[a-zA-Z]+(?:\/(?:[a-zA-Z0-9]+|urn%3Ali%3A[a-zA-Z]+%3A[a-zA-Z0-9_-]+))*$/.test(path)) throw new AdportError('INVALID_INPUT', 'linkedin: invalid API resource path');
+  private async request(path: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', params: Record<string, RestliValue>, body?: unknown, partial = false, retry = true, version: string = LINKEDIN_API_VERSION): Promise<Response> {
+    const campaignConversion = /^campaignConversions\/\(campaign:urn%3Ali%3AsponsoredCampaign%3A[1-9]\d*,conversion:urn%3Alla%3AllaPartnerConversion%3A[1-9]\d*\)$/.test(path);
+    if (!campaignConversion && !/^[a-zA-Z]+(?:\/(?:[a-zA-Z0-9]+|urn%3Ali%3A[a-zA-Z]+%3A[a-zA-Z0-9_-]+))*$/.test(path)) throw new AdportError('INVALID_INPUT', 'linkedin: invalid API resource path');
     const query = Object.entries(params).map(([key, value]) => `${encodeURIComponent(key)}=${key === 'fields' && typeof value === 'string' ? value.split(',').map(restli).join(',') : restli(value)}`).join('&');
     const url = new URL(path, LINKEDIN_API_BASE); url.search = query;
     const token = await this.accessToken();

@@ -28,6 +28,7 @@ export const MEDIA_LIBRARY_STYLES = String.raw`
 /** Central library only. Pagination and queue updates retain existing media nodes. */
 export const MEDIA_LIBRARY_UI = String.raw`
     let mediaLibrary=null;
+    const libraryPreviewReads=new Map();
     function mediaLibraryProject(data,meta) {
       const project=meta.context?.project_id || data.upload_config?.project_id;
       return uploadUuid(project) && (!data.upload_config?.project_id || data.upload_config.project_id===project)?project:null;
@@ -38,12 +39,12 @@ export const MEDIA_LIBRARY_UI = String.raw`
     }
     function mediaUploadMarkup(context) {
       if(!context) return '';
-      return '<label class="media-button primary media-file-label">Upload files<input type="file" multiple data-upload-files aria-label="Upload files" accept="'+esc(context.config.content_types.join(','))+'"></label>';
+      return '<label class="media-button primary media-file-label" title="Choose, drop or paste files">Upload files<input type="file" multiple data-upload-files aria-label="Upload files" accept="'+esc(context.config.content_types.join(','))+'"></label>';
     }
     function renderMediaLibrary(data,meta) {
       const project=mediaLibraryProject(data,meta),key=libraryFilterKey(meta);
       const retain=mediaLibrary?.project===project && mediaLibrary.key===key && app.querySelector('[data-media-gallery]');
-      mediaLibrary={project,key,data,meta,loading:false,seen:retain?mediaLibrary.seen:new Set()};
+      mediaLibrary={project,key,data,meta,loading:false,seen:retain?mediaLibrary.seen:new Set(),previews:retain?mediaLibrary.previews:new Map()};
       if(!retain) app.innerHTML=chrome('<div class="media-library" data-upload-drop><div class="media-toolbar"><h2>Media library<small data-library-count></small></h2><div data-upload-picker></div></div><section data-upload-panel aria-label="Upload queue"></section><div data-library-notes></div><div class="creative-grid" data-media-gallery role="region" aria-label="Creative previews" tabindex="0"></div><div data-library-pages></div></div>','');
       app.querySelector('[data-library-count]').textContent=arr(data.creatives).length+' files';
       app.querySelector('[data-upload-picker]').innerHTML=mediaUploadMarkup(uploadContext(data,meta));
@@ -56,13 +57,59 @@ export const MEDIA_LIBRARY_UI = String.raw`
         if(old) {
           // Signed URLs renew independently; keep healthy players and their playback state.
           for(const selector of ['.creative-heading','.creative-copy','.creative-footer']) old.querySelector(selector)?.replaceChildren(...card.querySelector(selector).childNodes);
-          if(!old.querySelector('img,video,audio') && card.querySelector('.creative-media')) {const media=card.querySelector('.creative-media');if(old.querySelector('.creative-media')) old.querySelector('.creative-media').replaceWith(media);else old.querySelector('.creative-copy').before(media);bindCreativeErrors(old);}
-        } else {gallery.append(card);bindCreativeErrors(card);}
+          if(!old.querySelector('img,video,audio') && !old.querySelector('[data-preview-retry]') && card.querySelector('.creative-media')) {const media=card.querySelector('.creative-media');if(old.querySelector('.creative-media')) old.querySelector('.creative-media').replaceWith(media);else old.querySelector('.creative-copy').before(media);bindLibraryPreviews(old);}
+        } else {gallery.append(card);bindLibraryPreviews(card);}
       }
       for(const [id,card] of existing) if(!keep.has(id)) card.remove();
       gallery.querySelector('.empty')?.remove();
       if(!keep.size) gallery.innerHTML='<div class="empty">'+(uploadContext(data,meta)?'Drop files here or choose Upload files.':'No files to preview.')+'</div>';
       renderLibraryPages();uploadDraw();bindWidgetUpload(uploadContext(data,meta));
+    }
+    function bindLibraryPreviews(root) {bindCreativeErrors(root,recoverLibraryPreview);}
+    function libraryPreviewActive(scope,card,asset) {
+      const current=arr(mediaLibrary?.data.assets).find(item=>item.id===asset.id);
+      return mediaLibrary?.previews===scope && app.contains(card) && current?.sha256===asset.sha256 && current.status==='READY';
+    }
+    function libraryPreviewMessage(card,entry,loading=false) {
+      const item=card.querySelector('.creative-media-item');if(!item) return;
+      const message=document.createElement('span');message.className='creative-placeholder';message.setAttribute('role','status');message.textContent=loading?'Refreshing preview…':'Preview unavailable';
+      // An expired image's anchor must not remain an active stale download link.
+      const holder=document.createElement('div');holder.className='creative-media-item';holder.append(message);item.replaceWith(holder);
+      if(!loading) {const retry=document.createElement('button');retry.className='media-button';retry.type='button';retry.dataset.previewRetry='true';retry.textContent='Retry';retry.setAttribute('aria-label','Retry preview: '+entry.asset.name);retry.addEventListener('click',()=>renewLibraryPreview(card,entry));holder.append(retry);}
+    }
+    function recoverLibraryPreview(media) {
+      const card=media.closest('article'),asset=arr(mediaLibrary?.data.assets).find(item=>item.id===card?.dataset.mediaId);
+      if(!card || !uploadUuid(asset?.id) || !/^[a-f0-9]{64}$/i.test(asset.sha256 || '') || asset.status!=='READY') return false;
+      const scope=mediaLibrary.previews,key=asset.id+':'+asset.sha256;
+      let entry=scope.get(key);
+      if(!entry) {entry={asset,scope,project:mediaLibrary.project,pending:false};scope.set(key,entry);renewLibraryPreview(card,entry);}
+      else libraryPreviewMessage(card,entry,entry.pending);
+      return true;
+    }
+    async function renewLibraryPreview(card,entry) {
+      const {asset,scope,project}=entry;if(entry.pending || !libraryPreviewActive(scope,card,asset)) return;
+      entry.pending=true;libraryPreviewMessage(card,entry,true);
+      libraryPreviewReads.set(project+':'+asset.id,entry);
+      try {
+        const response=await callTool('media_get',{media_id:asset.id,project_id:project},60000),value=resultData(response),fresh=value.asset;
+        if(response?.isError || value.error || value._adport?.tool!=='media_get' || value._adport?.context?.project_id!==project || fresh?.id!==asset.id || fresh.sha256!==asset.sha256 || fresh.byte_length!==asset.byte_length || fresh.content_type!==asset.content_type || fresh.status!=='READY') throw new Error('Preview could not be confirmed.');
+        if(!libraryPreviewActive(scope,card,asset)) return;
+        const creative=arr(mediaLibrary.data.creatives).find(item=>item.id===asset.id),kind=fresh.content_type.split('/')[0];
+        const media=fresh.preview_cover_url && fresh.preview_url?[{type:'image',url:fresh.preview_cover_url,open_url:fresh.preview_url,alt:creative.name+' — first page'}]:fresh.preview_url && ['image','video','audio'].includes(kind)?[{type:kind,url:fresh.preview_url,alt:creative.name}]:[];
+        const updated={...creative,media},template=document.createElement('template');template.innerHTML=creativeCards([updated]);
+        const preview=template.content.querySelector('.creative-media');if(!preview || !preview.querySelector('img,video,audio')) throw new Error('Preview unavailable.');
+        card.querySelector('.creative-media').replaceWith(preview);bindLibraryPreviews(card);
+        const data={...mediaLibrary.data,assets:arr(mediaLibrary.data.assets).map(item=>item.id===asset.id?fresh:item),creatives:arr(mediaLibrary.data.creatives).map(item=>item.id===asset.id?updated:item)};
+        mediaLibrary.data=data;state.hasLocalResult=true;state.result={structuredContent:{...data,_adport:mediaLibrary.meta}};
+      } catch {if(libraryPreviewActive(scope,card,asset)) libraryPreviewMessage(card,entry);}
+      finally {
+        entry.pending=false;
+        // Keep every in-flight echo bound, even when a large page expires together.
+        for(const [key,read] of libraryPreviewReads) {if(libraryPreviewReads.size<=32) break;if(!read.pending) libraryPreviewReads.delete(key);}
+      }
+    }
+    function mediaLibraryIgnoreEcho(data) {
+      return !!app.querySelector('[data-media-gallery]') && data?._adport?.tool==='media_get' && [...libraryPreviewReads.values()].some(entry=>data._adport.context?.project_id===entry.project && (entry.asset.id===data.asset?.id || entry.pending && !data.asset));
     }
     function renderLibraryPages(message='') {
       if(!mediaLibrary || !app.querySelector('[data-library-pages]')) return;
@@ -101,8 +148,8 @@ export const MEDIA_LIBRARY_UI = String.raw`
       const gallery=app.querySelector('[data-media-gallery]'),template=document.createElement('template');template.innerHTML=creativeCards([creative]);
       gallery.querySelector('.empty')?.remove();
       const existing=[...gallery.querySelectorAll('article')].find(card=>card.dataset.mediaId===asset.id);
-      if(!existing) {gallery.prepend(template.content);bindCreativeErrors(gallery);}
-      else if(!existing.querySelector('img,video,audio') && template.content.querySelector('.creative-media')) {existing.querySelector('.creative-media')?.remove();existing.querySelector('.creative-copy').before(template.content.querySelector('.creative-media'));bindCreativeErrors(existing);}
+      if(!existing) {gallery.prepend(template.content);bindLibraryPreviews(gallery);}
+      else if(!existing.querySelector('img,video,audio') && template.content.querySelector('.creative-media')) {existing.querySelector('.creative-media')?.remove();existing.querySelector('.creative-copy').before(template.content.querySelector('.creative-media'));bindLibraryPreviews(existing);}
       mediaLibrary.data=data;state.hasLocalResult=true;state.result={structuredContent:{...data,_adport:mediaLibrary.meta}};
       app.querySelector('[data-library-count]').textContent=data.creatives.length+' files';
     }

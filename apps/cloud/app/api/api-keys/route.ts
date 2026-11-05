@@ -1,14 +1,17 @@
 import { z } from 'zod';
 import { sessionPrincipal } from '@/lib/cloud/auth';
-import { createApiKey } from '@/lib/cloud/repository';
+import { createApiKey, revokeApiKey } from '@/lib/cloud/repository';
 import { listMcpOAuthGrants } from '@/lib/cloud/mcp-oauth-repository';
 import { db } from '@/lib/db';
 import { apiError, noStoreJson } from '@/lib/http';
+import { loadToolSelection, saveToolSelection } from '@/lib/cloud/tool-catalog';
+import { toolSelectionSchema } from '@/lib/mcp-tool-selection';
 
 const inputSchema = z.object({
   organization_id: z.string().uuid(),
   name: z.string().min(1).max(120),
   scopes: z.array(z.enum(['tools:read', 'tools:write'])).min(1),
+  selection: toolSelectionSchema.default({ profile: 'standard', providers: null }),
 });
 
 export async function GET(request: Request) {
@@ -25,7 +28,10 @@ export async function GET(request: Request) {
       `,
       listMcpOAuthGrants(principal.organizationId),
     ]);
-    return noStoreJson({ keys, oauthGrants });
+    const selectedKeys = await Promise.all(keys.map(async key => ({ ...key,
+      toolSelection: await loadToolSelection({ organizationId: principal.organizationId, apiKeyId: key.id }),
+    })));
+    return noStoreJson({ keys: selectedKeys, oauthGrants });
   } catch (error) {
     return apiError(error, 403);
   }
@@ -44,6 +50,12 @@ export async function POST(request: Request) {
       name: input.name,
       scopes,
     });
+    try {
+      await saveToolSelection({ ...principal, apiKeyId: created.id }, input.selection);
+    } catch (error) {
+      await revokeApiKey(principal, created.id);
+      throw error;
+    }
     return noStoreJson(created, 201);
   } catch (error) {
     return apiError(error, 403);

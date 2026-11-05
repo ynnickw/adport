@@ -43,4 +43,70 @@ Delete **ad drafts first**, then ad-set drafts, then the campaign draft. `spotif
 
 ## Verification limits
 
-Real-account verification covered draft hierarchy creation/editing, complete audio hierarchy validation, gallery copy, category/targeting discovery and SHA-bound image/audio uploads. A publication test exposed the forced ACTIVE transition; the test campaign was immediately paused and confirmed PAUSED/OFF. It remains paused because the API rejected archiving. Contract tests enforce default-policy publication rejection, explicit active-launch acknowledgement, hierarchy versions, failed-validation prevention, budget caps, account ownership and shared approval tokens. Provider video upload, advanced measurement and live host widgets require their own verification.
+Real-account verification covered draft hierarchy creation/editing, complete audio hierarchy validation, gallery copy, category/targeting discovery and SHA-bound image/audio uploads. A publication test exposed the forced ACTIVE transition; the test campaign was immediately paused and confirmed PAUSED/OFF. It remains paused because the API rejected archiving. Contract tests enforce default-policy publication rejection, explicit active-launch acknowledgement, hierarchy versions, failed-validation prevention, budget caps, account ownership and shared approval tokens. Provider video upload and live host widgets require their own verification. Measurement resource capabilities are described below; contract coverage is not a claim of live write verification.
+
+### Measurement resources
+
+`spotify_measurement_context` derives the owning business from the selected ad
+account, then inventories only datasets shared with that account. `spotify_datasets`
+uses the same account-scoped collection. Spotify documents no limit or offset
+query for this endpoint; missing or inconsistent totals are never presented as
+proof of a complete inventory. `spotify_mobile_apps` uses the native account
+collection with `limit`, `offset` and `next_offset`.
+
+Use `spotify_get_dataset`, `spotify_get_pixel`, `spotify_get_capi_integration` or
+`spotify_get_mobile_app` for a full resource snapshot and its `configuration_hash`.
+Collection rows may omit configuration, so they are not mutation snapshots.
+Writes recheck native account/business identity, resource sharing and the current
+hash at preview and apply. A business-wide name/configuration change is rejected
+if another account shares the resource or sharing dependencies are unknown.
+Other account identities and native MMP link tokens are excluded from responses.
+
+The named write tools cover:
+
+- Pixel creation and name/domain updates. AAM is off by default; opting in requires
+  explicit fields and acknowledgement. The native update endpoint exposes only
+  name/domain, so existing AAM settings are preserved.
+- CAPI connection creation and name updates. Pass an existing authorized
+  `dataset_id` with its hash to put CAPI alongside a Pixel. Omitting it creates a
+  native dataset. Resource creation verifies the returned integration and shares
+  its dataset only with the selected ad account.
+- Dataset creation from explicit integration/source snapshots, name updates,
+  integration removal and selected-account sharing. Regrouping can affect native
+  source routing; independent readback rejects inconsistent dataset links.
+  Removing an integration creates a new dataset rather than deleting the source.
+- Mobile-app registration, metadata updates and selected-account sharing.
+  Requests retain the required native name and support the current MMP enum,
+  including `SINGULAR`. Registration does not install a partner SDK.
+
+All mutations use the common policy preview/apply gate. No endpoint here installs
+website code, sends events, launches ads or changes budgets. These are native
+resource workflows; CAPI token provisioning/storage and direct event submission
+remain separate work.
+
+New business-owned resources can initially be unshared. Their approved creation
+returns a signed seven-day `resource_receipt`, bound to the exact account,
+business and resource. `spotify_created_measurement` reconciles only those IDs
+without repeating a create or share. A partial response retains verified IDs;
+unknown outcomes never cause an automatic write retry. Native account/business
+access is checked again on every read, including after OAuth refresh rotation.
+Arbitrary unshared business IDs do not gain access through this recovery path.
+
+Sharing changes have a separate receipt purpose.
+`spotify_measurement_sharing_status` reports only the selected account's current
+sharing state. Its receipt does not grant resource-content access after unsharing.
+Unsharing and integration removal require explicit acknowledgement of measurement
+effects; other account shares are preserved.
+
+`spotify_dataset_diagnostics` sends the required `granularities` query and optional
+source filters. It retains native counts, including unavailable/suppressed values.
+Allow at least 20 minutes for implementation diagnostics; received activity does
+not establish campaign attribution, optimization or delivery.
+
+The wire authority is Spotify's
+[current v3 OpenAPI](https://developer.spotify.com/reference/ads-api/v3/api.yaml).
+The provider-owned
+[measurement guide](https://github.com/spotify/ads-agentic-tools/blob/65d6776eef29b51f9e11f33a083845b6e78f5335/skills/measurement-setup/SKILL.md)
+adds topology and implementation context. The live schema takes precedence where
+its fields or enums differ. No Pixel/CAPI deletion endpoint or business-wide
+inventory permission is invented.

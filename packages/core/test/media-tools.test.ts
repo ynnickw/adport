@@ -1,4 +1,4 @@
-import { createContext, DEFAULT_POLICY, PolicyEngine, type ManagedMediaLibrary, type PendingOperation, type WriteOperation } from '../src/index.js';
+import { createContext, DEFAULT_POLICY, PolicyEngine, type ManagedMediaLibrary, type MediaAsset, type PendingOperation, type WriteOperation } from '../src/index.js';
 import { describe, expect, it } from 'vitest';
 
 function fixture() {
@@ -48,5 +48,39 @@ describe('project media tools through the shared policy gate', () => {
     await expect(other.registry.call('media_import_file', { ...input, pending_operation_id: preview.pending_operation_id }, other.ctx)).rejects.toMatchObject({ code: 'PENDING_MISMATCH' });
     expect(await runtime.registry.call('media_import_file', { ...input, pending_operation_id: preview.pending_operation_id }, runtime.ctx)).toMatchObject({ applied: true });
     expect(f.calls.at(-1)).toMatchObject({ provider: 'media', accountId: 'project-a', kind: 'create', payload: input });
+  });
+
+  it.each([
+    ['image/png', 'image'], ['video/mp4', 'video'], ['audio/mpeg', 'audio'], ['application/pdf', 'image'],
+  ])('previews one ready %s source without listing or reading its bytes', async (content_type, kind) => {
+    const f = fixture(), id = '11111111-1111-4111-8111-111111111111';
+    const asset: MediaAsset = { id, ...metadata, content_type, status: 'READY', preview_url: 'https://storage.example/original', ...(content_type === 'application/pdf' ? { preview_cover_url: 'https://storage.example/cover.png' } : {}), tags: ['qa'], platforms: ['meta'], metadata_version: 3 };
+    const library = f.media('project-a'), reads: string[] = [];
+    library.get = async value => { reads.push(value); return asset; };
+    library.list = async () => { throw new Error('No list expected'); };
+    const runtime = await createContext({ engine: f.engine, media: library });
+    const result = await runtime.registry.call('media_get', { media_id: id }, runtime.ctx);
+    expect(result).toMatchObject({ asset, truncated: false, creatives: [{ id, name: metadata.name, status: 'READY', descriptions: ['17 bytes', 'Tags: qa', 'Platforms: meta'], actions: [], media: [{ type: kind, url: content_type === 'application/pdf' ? asset.preview_cover_url : asset.preview_url, ...(content_type === 'application/pdf' ? { open_url: asset.preview_url } : {}) }] }] });
+    expect(reads).toEqual([id]); expect(f.calls).toEqual([]);
+    expect(runtime.registry.get('media_get').output!.safeParse(result).success).toBe(true);
+  });
+
+  it.each(['PROCESSING', 'FAILED', 'DELETED'] as const)('keeps %s metadata visible without offering its media as ready', async status => {
+    const f = fixture(), id = '11111111-1111-4111-8111-111111111111', library = f.media('project-a');
+    library.get = async () => ({ id, ...metadata, status, preview_url: 'https://storage.example/stale.png' });
+    const runtime = await createContext({ engine: f.engine, media: library });
+    expect(await runtime.registry.call('media_get', { media_id: id }, runtime.ctx)).toMatchObject({ asset: { status }, creatives: [{ status, media: [] }], truncated: false });
+    expect(f.calls).toEqual([]);
+  });
+
+  it('preserves a local HTTP source for headless download without exposing it as a browser preview', async () => {
+    const f = fixture(), id = '11111111-1111-4111-8111-111111111111', library = f.media('project-a');
+    const asset: MediaAsset = { id, ...metadata, status: 'READY', preview_url: 'http://127.0.0.1:54321/storage/v1/object/sign/creative-media/local-source' };
+    library.get = async () => asset;
+    const runtime = await createContext({ engine: f.engine, media: library });
+    const result = await runtime.registry.call('media_get', { media_id: id }, runtime.ctx);
+    expect(result).toMatchObject({ asset, creatives: [{ media: [] }] });
+    expect(runtime.registry.get('media_get').output!.safeParse(result).success).toBe(true);
+    expect(f.calls).toEqual([]);
   });
 });

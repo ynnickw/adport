@@ -40,6 +40,17 @@ describe('compact provider connection list', () => {
     expect(render({ connections: [pinterest], canManage: false })).not.toContain('Enable secret Pin management');
     expect(render({ connections: [{ ...pinterest, accountSelectionId: 'pending' }] })).not.toContain('Enable secret Pin management');
   });
+  it('offers catalogs separately and preserves all existing Pinterest grants in either upgrade direction', () => {
+    const pinterest = { ...connection, provider: 'pinterest', pinManagementEnabled: true, secretPinsEnabled: true };
+    const html = render({ connections: [pinterest] });
+    expect(html).toContain('two additional catalog permissions'); expect(html).toContain('secret_pins=1&amp;catalog_management=1');
+    const enabled = render({ connections: [{ ...pinterest, catalogManagementEnabled: true }] });
+    expect(enabled).not.toContain('Enable catalogs'); expect(enabled).toContain('secret_pins=1&amp;catalog_management=1');
+    const catalogOnly = render({ connections: [{ ...pinterest, secretPinsEnabled: false, pinManagementEnabled: false, catalogManagementEnabled: true }] });
+    expect(catalogOnly).toContain('catalog_management=1&amp;pin_management=1');
+    expect(render({ connections: [pinterest], canManage: false })).not.toContain('Enable catalogs');
+    expect(render({ connections: [{ ...pinterest, accountSelectionId: 'pending' }] })).not.toContain('Enable catalogs');
+  });
   it('offers conversion permission separately and retains it on later Google reconnection', () => {
     const basic = render();
     expect(basic).toContain('Authorize Google conversion imports with additional Data Manager permission');

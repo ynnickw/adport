@@ -68,3 +68,104 @@ describe('compact central media library',()=>{
     } finally {f.dom.window.close();}
   });
 });
+
+const previewId='33333333-3333-4333-8333-333333333333';
+const previewAsset={id:previewId,name:'QA video',sha256:'a'.repeat(64),byte_length:1234,content_type:'video/mp4',status:'READY',preview_url:'https://storage.example/expired.mp4'};
+function previewPage(context=project) {
+  const result=page([video(previewId),video('healthy')],cursor,context);
+  Object.assign(result.structuredContent,{assets:[previewAsset]});
+  return result;
+}
+const renewed=(overrides: Record<string,unknown>={},context=project)=>({structuredContent:structuredResult('media_get','data',{asset:{...previewAsset,preview_url:'https://storage.example/renewed.mp4',...overrides}},undefined,{project_id:context})});
+
+describe('central widget preview renewal',()=>{
+  it('renews just the failed source through a scoped read and ignores host echoes',async()=>{
+    const f=fixture();
+    try {
+      f.notify(previewPage());
+      const gallery=f.document.querySelector<HTMLElement>('[data-media-gallery]')!,healthy=f.document.querySelectorAll('video')[1]!;
+      gallery.scrollTop=70;healthy.currentTime=8;
+      let resolve!: (value: unknown)=>void;f.callTool.mockImplementationOnce(()=>new Promise(done=>{resolve=done;}));
+      f.document.querySelector('video')!.dispatchEvent(new f.dom.window.Event('error'));
+      await vi.waitFor(()=>expect(f.callTool).toHaveBeenCalledTimes(1));
+      expect(f.callTool).toHaveBeenCalledWith('media_get',{media_id:previewId,project_id:project});
+      f.notify(renewed());
+      expect(f.document.querySelector('[data-media-gallery]')).toBe(gallery);
+      resolve(renewed());
+      await vi.waitFor(()=>expect(f.document.querySelector('video')?.getAttribute('src')).toBe('https://storage.example/renewed.mp4'));
+      expect(f.document.querySelectorAll('video')[1]).toBe(healthy);expect(healthy.currentTime).toBe(8);expect(gallery.scrollTop).toBe(70);
+      expect(f.document.querySelector('[data-library-more]')).not.toBeNull();
+      f.notify(renewed());expect(f.document.querySelector('[data-media-gallery]')).toBe(gallery);
+    } finally {f.dom.window.close();}
+  });
+
+  it('bounds automatic renewal and permits a deliberate single-flight retry',async()=>{
+    const f=fixture();
+    try {
+      f.notify(previewPage());f.callTool.mockResolvedValueOnce(renewed());
+      f.document.querySelector('video')!.dispatchEvent(new f.dom.window.Event('error'));
+      await vi.waitFor(()=>expect(f.document.querySelector('video')?.getAttribute('src')).toContain('renewed'));
+      f.document.querySelector('video')!.dispatchEvent(new f.dom.window.Event('error'));
+      expect(f.callTool).toHaveBeenCalledTimes(1);
+      const retry=f.document.querySelector<HTMLButtonElement>('[data-preview-retry]')!;
+      expect(retry.getAttribute('aria-label')).toBe('Retry preview: QA video');
+      let resolve!: (value: unknown)=>void;f.callTool.mockImplementationOnce(()=>new Promise(done=>{resolve=done;}));
+      retry.click();retry.click();await vi.waitFor(()=>expect(f.callTool).toHaveBeenCalledTimes(2));
+      resolve(renewed({preview_url:'https://storage.example/manual.mp4'}));
+      await vi.waitFor(()=>expect(f.document.querySelector('video')?.getAttribute('src')).toContain('manual'));
+    } finally {f.dom.window.close();}
+  });
+
+  it.each([
+    [{sha256:'b'.repeat(64)},project],
+    [{status:'DELETED'},project],
+    [{content_type:'image/png'},project],
+    [{byte_length:1},project],
+    [{},'22222222-2222-4222-8222-222222222222'],
+    [{preview_url:'javascript:alert(1)'},project],
+  ])('rejects mismatched or unsafe renewal %j',async(overrides,context)=>{
+    const f=fixture();
+    try {
+      f.notify(previewPage());f.callTool.mockResolvedValueOnce(renewed(overrides,context));
+      f.document.querySelector('video')!.dispatchEvent(new f.dom.window.Event('error'));
+      await vi.waitFor(()=>expect(f.document.querySelector('[data-preview-retry]')).not.toBeNull());
+      expect(f.document.querySelectorAll('video')).toHaveLength(1);expect(f.callTool).toHaveBeenCalledTimes(1);
+    } finally {f.dom.window.close();}
+  });
+
+  it('discards a late renewal after a filter or project change',async()=>{
+    const f=fixture();
+    try {
+      f.notify(previewPage());let resolve!: (value: unknown)=>void;
+      f.callTool.mockImplementationOnce(()=>new Promise(done=>{resolve=done;}));
+      f.document.querySelector('video')!.dispatchEvent(new f.dom.window.Event('error'));
+      await vi.waitFor(()=>expect(f.callTool).toHaveBeenCalledTimes(1));
+      f.notify(previewPage('22222222-2222-4222-8222-222222222222'));const current=f.document.querySelector('video');
+      f.notify(renewed());expect(f.document.querySelector('video')).toBe(current);
+      resolve(renewed());await new Promise(done=>setTimeout(done,0));
+      expect(f.document.querySelector('video')).toBe(current);expect(current?.getAttribute('src')).not.toContain('renewed');
+    } finally {f.dom.window.close();}
+  });
+
+  it('does not use central media reads for native provider IDs or assets without a checksum',()=>{
+    const f=fixture();
+    try {f.document.querySelector('video')!.dispatchEvent(new f.dom.window.Event('error'));expect(f.callTool).not.toHaveBeenCalled();expect(f.document.querySelector('[data-preview-retry]')).toBeNull();}
+    finally {f.dom.window.close();}
+  });
+
+  it('retains in-flight echo guards when more than 32 previews expire together',async()=>{
+    const f=fixture();
+    try {
+      const assets=Array.from({length:40},(_,i)=>({...previewAsset,id:`33333333-3333-4333-8333-${String(i).padStart(12,'0')}`}));
+      const many=page(assets.map(asset=>video(asset.id)));Object.assign(many.structuredContent,{assets});f.notify(many);
+      f.callTool.mockImplementation(()=>new Promise(()=>{}));
+      f.document.querySelectorAll('video').forEach(player=>player.dispatchEvent(new f.dom.window.Event('error')));
+      await vi.waitFor(()=>expect(f.callTool).toHaveBeenCalledTimes(40));
+      const next=page([video('different-project')],undefined,'22222222-2222-4222-8222-222222222222');f.notify(next);
+      const gallery=f.document.querySelector('[data-media-gallery]');
+      f.notify(renewed({id:assets[0]!.id}));
+      expect(f.document.querySelector('[data-media-gallery]')).toBe(gallery);
+      expect(f.document.querySelector('.creative-name')?.textContent).toBe('different-project');
+    } finally {f.dom.window.close();}
+  });
+});

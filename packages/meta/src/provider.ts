@@ -17,11 +17,13 @@ import {
 } from '@adport/core';
 import { ACCOUNT_STATUS, MetaGraphClient, normalizeAccountId } from './client.js';
 import { campaignOutput } from './outputs.js';
+import { adSetAppPromotedObject, appPromotedObject, advertisableApplication, type AppPromotedObject } from './app-schemas.js';
 import { MetaCreativeService } from './creatives.js';
 import { MetaAudienceService } from './audiences.js';
 
 /** Meta budgets are minor currency units (cents); the policy engine speaks micros. */
 export const CENTS_TO_MICROS = 10_000;
+const CAMPAIGN_FIELDS = 'id,account_id,name,status,effective_status,objective,daily_budget,lifetime_budget,is_skadnetwork_attribution,promoted_object';
 
 const INSIGHTS_LEVEL = {
   account: 'account',
@@ -277,7 +279,7 @@ export class MetaAdsProvider implements AdProvider {
   async listCampaigns(input: { account_id: string; limit: number }) {
     const account = normalizeAccountId(input.account_id);
     const rows = await this.client.getPaged<unknown>(`act_${account}/campaigns`, {
-      fields: 'id,account_id,name,status,effective_status,objective,daily_budget,lifetime_budget',
+      fields: CAMPAIGN_FIELDS,
       limit: '100',
     }, input.limit);
     const campaigns = rows.map(row => campaignOutput.parse(row));
@@ -291,12 +293,34 @@ export class MetaAdsProvider implements AdProvider {
     const account = normalizeAccountId(input.account_id);
     if (!/^\d+$/.test(input.campaign_id)) throw new AdportError('INVALID_INPUT', 'Meta campaign_id must be numeric.');
     const campaign = campaignOutput.parse(await this.client.get<unknown>(input.campaign_id, {
-      fields: 'id,account_id,name,status,effective_status,objective,daily_budget,lifetime_budget',
+      fields: CAMPAIGN_FIELDS,
     }));
     if (campaign.id !== input.campaign_id || normalizeAccountId(campaign.account_id) !== account) {
       throw new AdportError('INVALID_INPUT', 'Meta campaign does not belong to the selected ad account.');
     }
     return campaign;
+  }
+
+  async advertisableApplications(input: { account_id: string; app_id?: string; limit: number; after?: string }) {
+    const account = normalizeAccountId(input.account_id);
+    if (input.app_id !== undefined && !/^\d+$/.test(input.app_id)) throw new AdportError('INVALID_INPUT', 'Meta app_id must be numeric.');
+    const page = await this.client.getPage<unknown>(`act_${account}/advertisable_applications`, {
+      fields: 'id,name,object_store_urls', limit: String(input.limit),
+      ...(input.app_id ? { app_id: input.app_id } : {}),
+      ...(input.after ? { after: input.after } : {}),
+    });
+    const applications = page.rows.map(row => advertisableApplication.parse(row));
+    if (input.app_id && applications.some(app => app.id !== input.app_id)) {
+      throw new AdportError('PROVIDER_ERROR', 'Meta returned an application outside the requested app filter.');
+    }
+    return { applications, count: applications.length, ...(page.next_cursor ? { next_cursor: page.next_cursor } : {}), truncated: !!page.next_cursor };
+  }
+
+  private async verifyAdvertisableApplication(act: string, applicationId: string): Promise<void> {
+    const result = await this.advertisableApplications({ account_id: act, app_id: applicationId, limit: 100 });
+    if (!result.applications.some(app => app.id === applicationId)) {
+      throw new AdportError('INVALID_INPUT', 'The Meta application is not available to the selected ad account. Use meta_advertisable_applications to find the app binding.');
+    }
   }
 
   async previewWrite(op: WriteOperation, guard: WriteGuard): Promise<WritePreview> {
@@ -460,9 +484,19 @@ export class MetaAdsProvider implements AdProvider {
       special_ad_categories?: string[];
       daily_budget_cents?: number;
       is_adset_budget_sharing_enabled?: boolean;
+      is_skadnetwork_attribution?: boolean;
+      promoted_object?: AppPromotedObject;
     },
     guard: WriteGuard,
   ): Promise<WritePlan> {
+    if (payload.is_skadnetwork_attribution && (payload.objective !== 'OUTCOME_APP_PROMOTION' || !payload.promoted_object?.object_store_url)) {
+      throw new AdportError('INVALID_INPUT', 'SKAdNetwork requires OUTCOME_APP_PROMOTION, promoted_object.application_id and object_store_url at campaign creation.');
+    }
+    if (payload.promoted_object) {
+      appPromotedObject.parse(payload.promoted_object);
+      if (payload.objective !== 'OUTCOME_APP_PROMOTION') throw new AdportError('INVALID_INPUT', 'The typed application binding requires OUTCOME_APP_PROMOTION.');
+      await this.verifyAdvertisableApplication(act, payload.promoted_object.application_id);
+    }
     const coercions: string[] = [];
     let status = payload.status ?? 'ACTIVE';
     if (guard.forcePausedCreation && status === 'ACTIVE') {
@@ -475,9 +509,13 @@ export class MetaAdsProvider implements AdProvider {
       status,
       // Required by the API even when empty.
       special_ad_categories: payload.special_ad_categories ?? [],
+      ...(payload.is_skadnetwork_attribution !== undefined ? { is_skadnetwork_attribution: payload.is_skadnetwork_attribution } : {}),
+      ...(payload.promoted_object ? { promoted_object: payload.promoted_object } : {}),
     };
     const budgetDeltas: WritePreview['budgetDeltas'] = [];
     const changes = [`+ campaign "${payload.name}" objective=${payload.objective} status=${status}`];
+    if (payload.promoted_object) changes.push(`+ application ${payload.promoted_object.application_id}` + (payload.promoted_object.object_store_url ? ` store=${payload.promoted_object.object_store_url}` : ''));
+    if (payload.is_skadnetwork_attribution !== undefined) changes.push(`+ SKAdNetwork attribution ${payload.is_skadnetwork_attribution ? 'enabled' : 'disabled'}`);
     if (payload.daily_budget_cents) {
       fields.daily_budget = payload.daily_budget_cents;
       changes.push(`+ campaign-level (Advantage/CBO) daily budget ${payload.daily_budget_cents} minor units`);
@@ -585,6 +623,8 @@ export class MetaAdsProvider implements AdProvider {
       dsa_payor?: string;
       countries: string[];
       status?: string;
+      promoted_object?: AppPromotedObject;
+      user_os?: string[];
     },
     guard: WriteGuard,
   ): Promise<WritePlan> {
@@ -597,9 +637,9 @@ export class MetaAdsProvider implements AdProvider {
     const fields: Record<string, unknown> = {
       name: payload.name,
       campaign_id: payload.campaign_id,
-      optimization_goal: payload.optimization_goal ?? 'LINK_CLICKS',
+      optimization_goal: payload.optimization_goal ?? (payload.promoted_object ? 'APP_INSTALLS' : 'LINK_CLICKS'),
       billing_event: payload.billing_event ?? 'IMPRESSIONS',
-      targeting: { geo_locations: { countries: payload.countries } },
+      targeting: { geo_locations: { countries: payload.countries }, ...(payload.user_os ? { user_os: payload.user_os } : {}) },
       status,
     };
     // Never override campaign bidding for CBO, or infer a strategy when a caller
@@ -618,6 +658,25 @@ export class MetaAdsProvider implements AdProvider {
       payload.bid_constraints === undefined || !['VALUE', 'ADVERTISER_SILOED_VALUE'].includes(String(fields.optimization_goal))
     )) {
       throw new AdportError('INVALID_INPUT', 'LOWEST_COST_WITH_MIN_ROAS requires bid_constraints.roas_average_floor and VALUE or ADVERTISER_SILOED_VALUE optimization.');
+    }
+    const campaign = await this.getCampaign({ account_id: act, campaign_id: payload.campaign_id });
+    if (campaign.objective === 'OUTCOME_APP_PROMOTION' && !payload.promoted_object) {
+      throw new AdportError('INVALID_INPUT', 'App-promotion ad sets require promoted_object.application_id and object_store_url.');
+    }
+    if (campaign.is_skadnetwork_attribution && !campaign.promoted_object?.application_id) {
+      throw new AdportError('INVALID_INPUT', 'The SKAdNetwork campaign has no application binding. Meta requires this binding at campaign creation; create a new paused campaign with promoted_object.');
+    }
+    if (payload.promoted_object) {
+      adSetAppPromotedObject.parse(payload.promoted_object);
+      if (campaign.objective !== 'OUTCOME_APP_PROMOTION') throw new AdportError('INVALID_INPUT', 'The application binding requires an OUTCOME_APP_PROMOTION parent campaign.');
+      if (campaign.promoted_object?.application_id && campaign.promoted_object.application_id !== payload.promoted_object.application_id) {
+        throw new AdportError('INVALID_INPUT', 'The ad set application must match the campaign application binding.');
+      }
+      if (campaign.promoted_object?.object_store_url && campaign.promoted_object.object_store_url !== payload.promoted_object.object_store_url) {
+        throw new AdportError('INVALID_INPUT', 'The ad set store URL must match the campaign application binding.');
+      }
+      await this.verifyAdvertisableApplication(act, payload.promoted_object.application_id);
+      fields.promoted_object = payload.promoted_object;
     }
     if (bidStrategy !== undefined) fields.bid_strategy = bidStrategy;
     if (payload.bid_amount !== undefined) fields.bid_amount = payload.bid_amount;
@@ -643,6 +702,8 @@ export class MetaAdsProvider implements AdProvider {
           (payload.bid_constraints !== undefined ? ` bid_constraints=${JSON.stringify(payload.bid_constraints)}` : ''),
         ...(payload.dsa_beneficiary !== undefined ? [`+ advertiser (DSA beneficiary)=${payload.dsa_beneficiary}`] : []),
         ...(payload.dsa_payor !== undefined ? [`+ payer (DSA)=${payload.dsa_payor}`] : []),
+        ...(payload.promoted_object ? [`+ application ${payload.promoted_object.application_id} store=${payload.promoted_object.object_store_url}`] : []),
+        ...(payload.user_os ? [`+ operating systems=[${payload.user_os.join(', ')}]`] : []),
       ],
       coercions,
       budgetDeltas,

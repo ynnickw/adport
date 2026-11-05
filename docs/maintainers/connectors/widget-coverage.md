@@ -118,7 +118,7 @@ Attempts are keyed to the pending token. A host echo cannot offer a second apply
 and a late response cannot replace a newer preview. Host facts include resource
 receipts and project/account scope, but never a reusable pending token.
 
-The widget resource is `ui://adport/insight-card-v14.html`. Previous v2–v13 URIs are
+The widget resource is `ui://adport/insight-card-v22.html`. Previous v2–v21 URIs are
 retained as aliases. Existing creative resource domains keep their configured CSP; provider logos
 and scripts are embedded.
 

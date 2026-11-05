@@ -6,7 +6,7 @@ import { createMcpServer } from '@adport/mcp';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { db, closeDbForTests } from '@/lib/db';
-import { PostgresPendingStore, PostgresAuditStore, resolveMembership } from '@/lib/cloud/repository';
+import { PostgresPendingStore, PostgresAuditStore, resolveMembership, listPendingOperations } from '@/lib/cloud/repository';
 
 const describeDatabase = process.env.ADPORT_RUN_DATABASE_TESTS === '1' ? describe : describe.skip;
 describeDatabase('atomic project approval consumption', () => {
@@ -38,8 +38,25 @@ describeDatabase('atomic project approval consumption', () => {
     expect(await store().consume(value.id, 'different-hash')).toBe(false); expect(await store().get(value.id)).toBeDefined();
     const results = await Promise.all(Array.from({ length: 8 }, () => store().consume(value.id, value.opHash)));
     expect(results.filter(Boolean)).toHaveLength(1); expect(await store().get(value.id)).toBeUndefined();
-    const expired = pending(new Date(Date.now() - 1).toISOString()); await store().put(expired);
+    const expired = pending(); await store().put(expired);
+    await db()`update public.pending_operations set expires_at = clock_timestamp() - interval '1 second' where id = ${expired.id}`;
     expect(await store().consume(expired.id, expired.opHash)).toBe(false);
+  });
+
+  it('seals stored payloads, keeps dashboard summaries free of arguments, and reads legacy rows', async () => {
+    const value = pending(); value.op = { ...op, payload: { ...op.payload, password: 'synthetic-private-password' } };
+    await store().put(value);
+    const rows = await db()<Array<{ operation: unknown }>>`select operation from public.pending_operations where id = ${value.id} and organization_id = ${projects[0]!}`;
+    expect(JSON.stringify(rows[0]!.operation)).not.toContain('synthetic-private-password');
+    expect((await store().get(value.id))?.op).toEqual(value.op);
+    expect((await listPendingOperations(projects[0]!)).find(row => row.id === value.id)?.operation).toEqual({ tool: op.tool, accountId: op.accountId });
+    const other = pending(); await store().put(other);
+    await db()`update public.pending_operations set operation = ${db().json(rows[0]!.operation as never)} where id = ${other.id} and organization_id = ${projects[0]!}`;
+    await expect(store().get(other.id)).rejects.toThrow('could not be verified');
+    await store().delete(other.id);
+    await db()`update public.pending_operations set operation = ${db().json(value.op as never)} where id = ${value.id} and organization_id = ${projects[0]!}`;
+    expect((await store().get(value.id))?.op).toEqual(value.op);
+    await store().delete(value.id);
   });
 
   it('checks expiry after waiting for an existing row lock', async () => {

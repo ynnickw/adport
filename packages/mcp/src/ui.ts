@@ -5,11 +5,12 @@ import { RECORD_UI_SCRIPT, RECORD_UI_STYLES } from './record-ui.js';
 import { RECEIPT_UI_SCRIPT, RECEIPT_UI_STYLES } from './receipt-ui.js';
 import { INSIGHT_UI_SCRIPT, INSIGHT_UI_STYLES } from './insight-ui.js';
 import { CREATIVE_UI_SCRIPT, CREATIVE_UI_STYLES } from './creative-ui.js';
+import { PROVIDER_GALLERY_UI, PROVIDER_GALLERY_STYLES } from './provider-gallery-ui.js';
 import { PROVIDER_LOGOS } from './provider-logos.js';
 import { OPERATION_UI_SCRIPT } from './operation-ui.js';
 import { APPLE_REPORT_UI_SCRIPT, APPLE_REPORT_UI_STYLES } from './apple-report-ui.js';
 
-export const ADPORT_UI_URI = 'ui://adport/insight-card-v14.html';
+export const ADPORT_UI_URI = 'ui://adport/insight-card-v22.html';
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
 export const ADPORT_UI_RESOURCE_DOMAINS = [ADPORT_UI_DOMAIN, 'https://*.fbcdn.net', 'https://*.fbsbx.com', 'https://*.googleusercontent.com', 'https://tpc.googlesyndication.com', 'https://www.bing.com', 'https://*.scdn.co', 'https://*.spotifycdn.com', 'https://storage.googleapis.com', 'https://*.pinimg.com', 'https://*.redd.it', 'https://*.redditmedia.com', 'https://*.redditstatic.com', 'https://*.licdn.com', 'https://*.licdn-ei.com', 'https://pbs.twimg.com', 'https://video.twimg.com', 'https://ton.twimg.com'];
 
@@ -65,7 +66,7 @@ export function toolInvocationLabels(view: AdportView): { invoking: string; invo
   }
 }
 
-export function structuredResult(tool: string, view: AdportView, result: unknown, approval?: { arguments: Record<string, unknown> }, context?: { project_id: string }, capabilities?: { can_write: boolean }, refresh?: { arguments: Record<string, unknown> }, next?: { arguments: Record<string, unknown> }, descriptor?: { provider?: string; accountId?: string }): Record<string, unknown> {
+export function structuredResult(tool: string, view: AdportView, result: unknown, approval?: { arguments: Record<string, unknown> }, context?: { project_id: string }, capabilities?: { can_write: boolean }, refresh?: { arguments: Record<string, unknown> }, next?: { arguments: Record<string, unknown> }, descriptor?: { provider?: string; accountId?: string; pagination?: { cursorInput: string } }): Record<string, unknown> {
   const payload = result && typeof result === 'object' && !Array.isArray(result)
     ? result as Record<string, unknown>
     : { value: result };
@@ -221,6 +222,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     @media (max-width:620px) { .kpis { grid-template-columns:repeat(2,minmax(0,1fr)) }.top,.content { padding-left:12px; padding-right:12px } }
     @media (max-width:420px) { .bar-row { grid-template-columns:minmax(0,1fr) auto; gap:5px }.bar-name { grid-column:1/-1 }.bar-name > span:last-child { white-space:normal }.bars { gap:12px } }
 ${CREATIVE_UI_STYLES}
+${PROVIDER_GALLERY_STYLES}
 ${MEDIA_LIBRARY_STYLES}
 ${RECORD_UI_STYLES}
 ${APPLE_REPORT_UI_STYLES}
@@ -329,6 +331,7 @@ ${TREND_UI_SCRIPT}
 ${MEDIA_UPLOAD_UI}
 ${MEDIA_LIBRARY_UI}
 ${CREATIVE_UI_SCRIPT}
+${PROVIDER_GALLERY_UI}
     function renderPlanning(data,meta) {
       const planning=data.planning || {}, columns=arr(planning.columns).filter(v=>typeof v?.key==='string'&&typeof v?.label==='string').slice(0,12), rows=arr(planning.rows), pageSize=100, pages=Math.max(1,Math.ceil(rows.length/pageSize));
       state.planningPage=Math.max(0,Math.min(state.planningPage,pages-1));
@@ -344,6 +347,8 @@ ${CREATIVE_UI_SCRIPT}
       let data=resultData(result);
       if (!object(data)) data={value:data};
       const meta = data._adport || {};
+      recordPages=null;
+      if(providerGallery && meta.view!=='creatives' && (!providerGallery.review || meta.view!=='operation' || meta.tool!==providerGallery.review.tool || meta.accountId!==providerGallery.meta.accountId || meta.context?.project_id!==providerGallery.meta.context?.project_id)) providerGallery=null;
       syntheticResult = data.data_source === 'synthetic';
       if (data.cancelled) {
         app.innerHTML=chrome('<p class="notice">'+esc(data.message || 'The host interrupted this request. Check the tool response before retrying.')+'</p>','Request interrupted');
@@ -355,7 +360,7 @@ ${CREATIVE_UI_SCRIPT}
       }
       if (meta.view === 'accounts') return renderAccounts(data,meta);
       if (meta.view === 'report') return renderReport(data,meta);
-      if (meta.view === 'operation') return renderOperation(data,meta);
+      if (meta.view === 'operation') {renderOperation(data,meta);providerGalleryReviewControls(data,meta);return;}
       if (meta.view === 'records') return renderRecords(data,meta);
       if (meta.view === 'receipt') return renderReceipt(data,meta);
       if (meta.view === 'creatives') return renderCreatives(data,meta);
@@ -366,6 +371,7 @@ ${CREATIVE_UI_SCRIPT}
     function acceptResult(result,local=false) {
       if (!result || typeof result !== 'object') return;
       const incoming=resultData(result);
+      if(!local && (providerGalleryIgnoreEcho(incoming) || mediaLibraryIgnoreEcho(incoming) || recordPagesIgnoreEcho(incoming))) return;
       if(!local && (app.querySelector('[data-media-gallery]') && uploads.items.length>0 && ['media_prepare_upload','media_finalize_upload','media_get'].includes(incoming?._adport?.tool || result._meta?.adport?.tool) || mediaLibrary?.loading && incoming?._adport?.tool==='media_list' && mediaLibraryProject(incoming,incoming._adport)===mediaLibrary.project)) return;
       const fingerprint=JSON.stringify(incoming);
       // Host state updates can echo an old tool result after a local edit/apply.

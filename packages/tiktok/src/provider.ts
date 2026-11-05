@@ -18,6 +18,9 @@ import {
 } from '@adport/core';
 import { TikTokClient } from './client.js';
 import { TikTokCreativeService } from './creatives.js';
+import { TikTokAudienceService } from './audiences.js';
+import { TikTokMeasurementService } from './measurement.js';
+import { TikTokAutomatedRulesService } from './automated-rules.js';
 
 /** TikTok budgets are floats in whole account-currency units. */
 export const UNITS_TO_MICROS = 1_000_000;
@@ -47,23 +50,20 @@ interface TikTokCampaign {
   objective_type: string;
 }
 
-interface WritePlan {
-  summary: string;
-  changes: string[];
-  coercions: string[];
-  budgetDeltas: WritePreview['budgetDeltas'];
-  execute: () => Promise<string[]>;
-}
+type WritePlan = Omit<WritePreview, 'serverValidated'> & { execute: () => Promise<string[]> };
 
 export class TikTokAdsProvider implements AdProvider {
   readonly id = 'tiktok';
   readonly creatives: TikTokCreativeService;
+  readonly audiences: TikTokAudienceService;
+  readonly measurement: TikTokMeasurementService;
+  readonly automatedRules: TikTokAutomatedRulesService;
 
   constructor(
     private readonly client: TikTokClient,
     private readonly app: { appId: string; secret: string },
     media: MediaResolver = new LocalMediaResolver(),
-  ) { this.creatives = new TikTokCreativeService(client, media); }
+  ) { this.creatives = new TikTokCreativeService(client, media); this.audiences = new TikTokAudienceService(client); this.measurement = new TikTokMeasurementService(client); this.automatedRules = new TikTokAutomatedRulesService(client); }
 
   capabilities(): ProviderCapabilities {
     // No server-side dry run in the Marketing API — previews are client-side diffs.
@@ -227,13 +227,8 @@ export class TikTokAdsProvider implements AdProvider {
   async previewWrite(op: WriteOperation, guard: WriteGuard): Promise<WritePreview> {
     const plan = await this.plan(op, guard);
     // No validate_only equivalent — the preview is a client-side diff from live lookups.
-    return {
-      summary: plan.summary,
-      changes: plan.changes,
-      coercions: plan.coercions,
-      budgetDeltas: plan.budgetDeltas,
-      serverValidated: false,
-    };
+    const { execute: _execute, ...preview } = plan;
+    return { ...preview, serverValidated: false };
   }
 
   async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> {
@@ -245,6 +240,12 @@ export class TikTokAdsProvider implements AdProvider {
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
     const payload = op.payload as never;
     switch (op.tool) {
+      case 'tiktok_create_pixel':
+      case 'tiktok_update_pixel':
+        return this.measurement.plan(op);
+      case 'tiktok_create_saved_audience':
+      case 'tiktok_delete_saved_audiences':
+        return this.audiences.plan(op);
       case 'tiktok_create_ad_group':
       case 'tiktok_create_ads':
       case 'tiktok_set_ad_group_status':
@@ -467,6 +468,9 @@ function validateTikTokPath(path: string): string {
 
 function validateTikTokMutationPath(path: string, kind: 'create' | 'update' | 'delete'): string {
   const normalized = validateTikTokPath(path);
+  if (normalized.startsWith('optimizer/rule/')) {
+    throw new AdportError('INVALID_INPUT', 'tiktok: automated-rule mutations require a verified direct-advertiser workflow with scheduled-action budget and account checks; raw dispatch cannot enforce these limits');
+  }
   if (!normalized.endsWith(`/${kind}`)) {
     throw new AdportError('INVALID_INPUT', `tiktok: ${kind} tool requires an endpoint ending in /${kind}`);
   }

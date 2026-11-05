@@ -149,6 +149,20 @@ describe('hosted provider OAuth broker', () => {
     expect(await secretAdapter.exchange({ code: 'code', verifier: 'unused' })).toEqual({ refreshToken: 'refresh' });
   });
 
+  it('adds catalog access separately while retaining the verified secret Pin grant', async () => {
+    vi.stubEnv('PINTEREST_CLIENT_ID', 'pinterest-client'); vi.stubEnv('PINTEREST_CLIENT_SECRET', 'pinterest-secret'); vi.stubEnv('PINTEREST_OAUTH_ENABLED', 'true'); resetEnvForTests();
+    const old = oauthAdapter('pinterest', { pinterestSecretPins: true });
+    expect(old.scopes).not.toContain('catalogs:read');
+    const adapter = oauthAdapter('pinterest', { pinterestSecretPins: true, pinterestCatalogManagement: true });
+    expect(adapter.scopes).toEqual([...old.scopes, 'catalogs:read', 'catalogs:write']);
+    expect(new URL(adapter.authorizationUrl({ state: 'bound', challenge: 'unused' })).searchParams.get('scope')?.split(',')).toEqual(adapter.scopes);
+    expect(() => oauthAdapter('meta', { pinterestCatalogManagement: true })).toThrow('only for Pinterest');
+    const request = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ access_token: 'access', expires_in: 3600, refresh_token: 'refresh', scope: old.scopes.join(' ') }));
+    await expect(adapter.exchange({ code: 'code', verifier: 'unused' })).rejects.toThrow('previous connection was preserved');
+    request.mockResolvedValueOnce(Response.json({ access_token: 'access', expires_in: 3600, refresh_token: 'refresh', scope: adapter.scopes.join(' ') }));
+    expect(await adapter.exchange({ code: 'code', verifier: 'unused' })).toEqual({ refreshToken: 'refresh' });
+  });
+
   it('injects the Adport-owned application identity into tenant grants at runtime', () => {
     Object.assign(process.env, APP_ENV);
     resetEnvForTests();

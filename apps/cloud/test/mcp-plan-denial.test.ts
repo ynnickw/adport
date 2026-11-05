@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   membership: vi.fn(),
 }));
 
+vi.mock('@/lib/cloud/tool-catalog', () => ({ principalToolSelection: async () => ({ profile: 'full', providers: null }) }));
 vi.mock('@/lib/db', () => ({ db: () => mocks.membership }));
 vi.mock('@/lib/cloud/auth', () => ({ apiPrincipal: mocks.principal }));
 vi.mock('@/lib/cloud/runtime', () => ({ createTenantRuntime: mocks.runtime }));

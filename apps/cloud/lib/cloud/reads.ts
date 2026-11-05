@@ -1,5 +1,5 @@
 import 'server-only';
-import type { Account, ReportRow } from '@adport/core';
+import type { Account, ReportRow, DatePreset, DateRange } from '@adport/core';
 import { createTenantRuntime } from './runtime';
 import { listConnections } from './repository';
 import { describeProviderError } from './provider-errors';
@@ -46,7 +46,7 @@ export async function readAccounts(principal: TenantPrincipal): Promise<ReadResu
 }
 
 /** Server-side campaign report across connected providers, via the shared registry. */
-export async function readReport(principal: TenantPrincipal, dateRange: 'last_7_days' | 'last_30_days'): Promise<ReadResult<{ rows: ReportRow[]; truncated: boolean; summary?: DashboardReportSummary }>> {
+export async function readReport(principal: TenantPrincipal, dateRange: DatePreset | DateRange): Promise<ReadResult<{ rows: ReportRow[]; truncated: boolean; summary?: DashboardReportSummary }>> {
   const connected = await hasConnectedProvider(principal.organizationId);
   if (!connected) return { ok: true, data: { rows: [], truncated: false }, connected, warnings: [] };
   try {

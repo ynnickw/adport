@@ -31,9 +31,9 @@ function table(rows: Array<Record<string, unknown>>): string {
   return [line(keys), line(widths.map((w) => '-'.repeat(w))), ...rows.map((r) => line(keys.map((k) => String(r[k] ?? ''))))].join('\n');
 }
 
-async function runtime(includeMock?: boolean): Promise<AdportRuntime> {
+async function runtime(includeMock?: boolean, includeRawTools = false): Promise<AdportRuntime> {
   const { assembleRuntime } = await import('@adport/mcp');
-  return assembleRuntime({ includeMock });
+  return assembleRuntime({ includeMock, includeRawTools });
 }
 
 export function buildProgram(io: ProgramIO = defaultIO): Command {
@@ -41,9 +41,10 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
   program
     .description('The open control plane for paid media (MCP + CLI)')
     .option('--demo', 'Use synthetic mock accounts and tools (never real provider data)')
+    .option('--raw-api-tools', 'Enable advanced generic provider API tools locally')
     .version(packageJson.version)
     .configureOutput({ writeOut: (s) => io.out(s.trimEnd()), writeErr: (s) => io.err(s.trimEnd()) });
-  const commandRuntime = () => runtime(program.opts<{ demo?: boolean }>().demo === true ? true : undefined);
+  const commandRuntime = () => runtime(program.opts<{ demo?: boolean }>().demo === true ? true : undefined, program.opts<{ rawApiTools?: boolean }>().rawApiTools === true);
 
   const tools = program.command('tools').description('Inspect and invoke the shared tool registry');
 
@@ -60,6 +61,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
             defs.map((t: AnyToolDefinition) => ({
               name: t.name,
               namespace: t.namespace,
+              catalog: t.catalog,
               readOnly: t.annotations.readOnly ?? false,
               destructive: t.annotations.destructive ?? false,
             })),
@@ -240,10 +242,12 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .option('--data-manager', 'Google only: explicitly request the additional Data Manager OAuth scope')
     .option('--pin-management', 'Pinterest only: explicitly request public board, Pin and native media permissions')
     .option('--secret-pins', 'Pinterest only: additionally authorize secret boards and Pins (includes --pin-management permissions)')
-    .action(async (provider: string, opts: { browser: boolean; dataManager?: boolean; pinManagement?: boolean; secretPins?: boolean }) => {
+    .option('--catalog-management', 'Pinterest only: explicitly request catalog and feed management permissions')
+    .action(async (provider: string, opts: { browser: boolean; dataManager?: boolean; pinManagement?: boolean; secretPins?: boolean; catalogManagement?: boolean }) => {
       if (opts.dataManager && provider !== 'google') throw new Error('--data-manager is supported only for Google');
       if (opts.pinManagement && provider !== 'pinterest') throw new Error('--pin-management is supported only for Pinterest');
       if (opts.secretPins && provider !== 'pinterest') throw new Error('--secret-pins is supported only for Pinterest');
+      if (opts.catalogManagement && provider !== 'pinterest') throw new Error('--catalog-management is supported only for Pinterest');
       if (provider === 'google') {
         const { connectGoogle } = await import('./connect/google.js');
         await connectGoogle({ openBrowser: opts.browser, dataManager: opts.dataManager, io });
@@ -286,7 +290,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
       }
       if (provider === 'pinterest') {
         const { connectPinterest } = await import('./connect/pinterest.js');
-        await connectPinterest({ openBrowser: opts.browser, pinManagement: opts.pinManagement, secretPins: opts.secretPins, io });
+        await connectPinterest({ openBrowser: opts.browser, pinManagement: opts.pinManagement, secretPins: opts.secretPins, catalogManagement: opts.catalogManagement, io });
         return;
       }
       if (provider === 'linkedin') {
@@ -408,7 +412,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .description('Start the adport MCP server on stdio')
     .action(async () => {
       const { runStdioServer } = await import('@adport/mcp');
-      await runStdioServer(await commandRuntime());
+      await runStdioServer(await commandRuntime(), undefined, program.opts<{ rawApiTools?: boolean }>().rawApiTools === true);
       // Keep the process alive for the stdio transport.
       await new Promise(() => {});
     });

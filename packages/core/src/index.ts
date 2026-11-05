@@ -46,6 +46,7 @@ export { FindingsStore, type FindingsRepository } from './audit/store.js';
 export { AuditRunner, type AuditRunOptions, type AuditRunResult } from './audit/runner.js';
 export { auditTools } from './audit/tools.js';
 export { CredentialStore, type CredentialRecord, type CredentialSource } from './credentials/store.js';
+export { FileResourceSecretStore, resourceSecretKey, type ResourceSecretScope, type ResourceSecretStore } from './credentials/resources.js';
 export { policySchema, loadPolicy, DEFAULT_POLICY, type Policy, type LoadedPolicy } from './policy/policy.js';
 export { PendingStore, type PendingOperation, type PendingOperationStore } from './policy/pending.js';
 export { AuditLog, type AuditEntry, type AuditEntryStore } from './policy/audit.js';
@@ -59,6 +60,7 @@ export {
   type ToolContext,
 } from './tools/registry.js';
 export { guardedWriteTool } from './tools/write.js';
+export { TOOL_PROVIDERS, classifyTool, toolInSelection, type ToolProvider, type ToolProfile, type ToolSelection, type ToolCatalogMetadata } from './tools/catalog.js';
 export { reviewWrite, type ReviewField, type WriteReview } from './tools/review.js';
 export { planningViewSchema, type PlanningView } from './planning.js';
 export { builtinTools } from './tools/builtin.js';
@@ -67,6 +69,7 @@ export { MockProvider, mockTools } from './testing/mock-provider.js';
 export { SyntheticProvider, syntheticTools, syntheticSeed, syntheticStateSchema, type SyntheticCampaign, type SyntheticStateStore } from './testing/synthetic-provider.js';
 export {
   createContext,
+  selectRuntimeCatalog,
   type AdportRuntime,
   type CreateContextOptions,
   type ProviderModule,

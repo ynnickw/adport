@@ -136,7 +136,8 @@ export class LinkedInSponsoredService {
     return { post, associations: associationFacts, ...hashes, creatives: [card], warnings, truncated: false };
   }
 
-  private campaignFormat(campaign: Row, expected: string) {
+  private campaignFormat(campaign: Row, expected: string, lead = false) {
+    if (lead) { this.provider.leadCreatives.campaign(campaign, expected); return; }
     if (campaign.type !== 'SPONSORED_UPDATES' || campaign.format !== expected) throw new AdportError('INVALID_INPUT', `linkedin: this content requires a SPONSORED_UPDATES campaign with format ${expected}`);
     if (campaign.objectiveType === 'LEAD_GENERATION') throw new AdportError('INVALID_INPUT', 'linkedin: lead-generation creation/reuse requires dedicated account-owned form and single-use document checks');
     if (['REMOVED', 'CANCELED', 'PENDING_DELETION', 'ARCHIVED'].includes(String(campaign.status))) throw new AdportError('INVALID_INPUT', 'linkedin: parent campaign is archived, removed, canceled or pending deletion');
@@ -148,10 +149,18 @@ export class LinkedInSponsoredService {
     const plan = (summary: string, changes: string[], execute: () => Promise<WriteResult>, coercions: string[] = []): Plan => ({ summary, changes, execute, coercions, budgetDeltas: [] });
     if (create) {
       const input = op.tool === 'linkedin_create_sponsored_ad' ? createSponsored.parse(op.payload) : createReference.parse(op.payload), campaign = await this.provider.getCampaign(account, input.campaign_id);
-      const status = guard.forcePausedCreation ? 'PAUSED' : input.status;
-      let fields: Row, postId: string | undefined, inlinePost: Row | undefined;
+      const status = guard.forcePausedCreation && input.status === 'ACTIVE' ? 'PAUSED' : input.status;
+      let fields: Row, postId: string | undefined, inlinePost: Row | undefined, documentToCheck: string | undefined;
+      let formCta: { destination: string; label: string } | undefined, leadContentFormat: string | undefined;
       if ('content' in input) {
-        const content = input.content; this.campaignFormat(campaign, formats[content.type]);
+        const content = input.content; this.campaignFormat(campaign, formats[content.type], Boolean(input.lead_form));
+        if (input.lead_form) {
+          if (!input.lead_form.confirm_public_post) throw new AdportError('INVALID_INPUT', 'linkedin: creating this lead ad publishes a URL-accessible dark post; confirm_public_post is required');
+          if (input.lead_form.expected_source_hash) throw new AdportError('INVALID_INPUT', 'linkedin: an inline lead ad does not reuse a source creative');
+          formCta = await this.provider.leadCreatives.createBinding(account, campaign, input.lead_form, formats[content.type]);
+          leadContentFormat = formats[content.type];
+          if (content.type === 'DOCUMENT') { documentToCheck = content.document_id; await this.provider.leadCreatives.assertUnusedDocument(account, documentToCheck); }
+        }
         if (campaign.associatedEntity !== input.author_organization) throw new AdportError('PENDING_MISMATCH', 'linkedin: author differs from the current campaign organization');
         if (['WEBSITE_VISIT', 'WEBSITE_VISITS', 'WEBSITE_CONVERSION', 'WEBSITE_CONVERSIONS'].includes(String(campaign.objectiveType)) && !input.landing_page && content.type !== 'ARTICLE') throw new AdportError('INVALID_INPUT', 'linkedin: this campaign objective requires an explicit landing page');
         if (input.call_to_action && !input.landing_page && content.type !== 'ARTICLE') throw new AdportError('INVALID_INPUT', 'linkedin: a call to action requires a destination');
@@ -162,21 +171,55 @@ export class LinkedInSponsoredService {
         const nativeContent = content.type === 'TEXT' ? undefined : content.type === 'ARTICLE' ? { article: { source: content.source, title: content.title, ...(content.description !== undefined ? { description: content.description } : {}), ...(content.thumbnail ? { thumbnail: content.thumbnail } : {}) } } : content.type === 'CAROUSEL' ? { carousel: { cards: content.cards.map(card => ({ media: { id: card.image_id, title: card.title, ...(card.alt_text !== undefined ? { altText: card.alt_text } : {}) }, landingPage: card.landing_page })) } } : { media: { id: content.type === 'IMAGE' ? content.image_id : content.type === 'VIDEO' ? content.video_id : content.document_id, title: content.title, ...('alt_text' in content && content.alt_text !== undefined ? { altText: content.alt_text } : {}) } };
         const post = { author: input.author_organization, commentary: input.commentary, visibility: 'PUBLIC', lifecycleState: 'PUBLISHED', distribution: { feedDistribution: 'NONE', targetEntities: [], thirdPartyDistributionChannels: [] }, isReshareDisabledByAuthor: true, adContext: { dscAdAccount: aurn(account), dscStatus: 'ACTIVE' }, ...(nativeContent ? { content: nativeContent } : {}), ...(input.landing_page ? { contentLandingPage: input.landing_page } : {}), ...(input.call_to_action ? { contentCallToActionLabel: input.call_to_action } : {}) };
         inlinePost = post;
-        fields = { creative: { campaign: `urn:li:sponsoredCampaign:${input.campaign_id}`, intendedStatus: status, name: input.name, inlineContent: { post } } };
+        fields = { creative: { campaign: `urn:li:sponsoredCampaign:${input.campaign_id}`, intendedStatus: status, name: input.name, ...(formCta ? { leadgenCallToAction: formCta } : {}), inlineContent: { post } } };
       } else {
         const source = await this.provider.creatives.owned(account, input.source_creative_id), parent = await this.provider.getCampaign(account, source.campaign.split(':').at(-1)!);
-        const format = String(parent.format); this.campaignFormat(parent, format); this.campaignFormat(campaign, format);
-        if (!Object.values(formats).includes(format as typeof formats[keyof typeof formats]) || !organizationUrn.safeParse(parent.associatedEntity).success || parent.associatedEntity !== campaign.associatedEntity) throw new AdportError('INVALID_INPUT', 'linkedin: source and destination sponsored campaigns must use a supported matching format and organization');
+        const format = String(parent.format), leadFormats: Record<string, string> = { LEAD_GENERATION_FORM_SPONSORED_CONTENT: 'STANDARD_UPDATE', VIDEO_LEAD_GENERATION_FORM_SPONSORED_CONTENT: 'SINGLE_VIDEO', LEAD_GENERATION_FORM_CAROUSEL_SPONSORED_CONTENT: 'CAROUSEL' }, sourceFormat = leadFormats[format] ?? format;
+        this.campaignFormat(parent, sourceFormat, parent.objectiveType === 'LEAD_GENERATION' && Boolean(input.lead_form)); this.campaignFormat(campaign, sourceFormat, Boolean(input.lead_form));
+        if (!Object.values(formats).includes(sourceFormat as typeof formats[keyof typeof formats]) || !organizationUrn.safeParse(parent.associatedEntity).success || parent.associatedEntity !== campaign.associatedEntity) throw new AdportError('INVALID_INPUT', 'linkedin: source and destination sponsored campaigns must use a supported matching format and organization');
+        if (input.lead_form) {
+          if (sourceFormat === formats.DOCUMENT) throw new AdportError('INVALID_INPUT', 'linkedin: lead document creatives cannot reuse a post/document already referenced by another creative; upload a fresh document');
+          if (!input.lead_form.expected_source_hash || this.provider.leadCreatives.sourceHash(source) !== input.lead_form.expected_source_hash) throw new AdportError('PENDING_MISMATCH', 'linkedin: source creative changed or its hash is missing; read lead-ad context again');
+          formCta = await this.provider.leadCreatives.createBinding(account, campaign, input.lead_form, sourceFormat);
+          leadContentFormat = sourceFormat;
+        }
         postId = reference(source.content);
-        fields = { campaign: `urn:li:sponsoredCampaign:${input.campaign_id}`, intendedStatus: status, name: input.name, content: format === formats.DOCUMENT ? { documentAd: { reference: postId } } : { reference: postId } };
+        fields = { campaign: `urn:li:sponsoredCampaign:${input.campaign_id}`, intendedStatus: status, name: input.name, ...(formCta ? { leadgenCallToAction: formCta } : {}), content: sourceFormat === formats.DOCUMENT ? { documentAd: { reference: postId } } : { reference: postId } };
       }
       const inline = 'creative' in fields;
-      return plan(`Create LinkedIn ${inline ? 'sponsored ad and dark post' : 'post-reference ad'} “${input.name}”`, [NON_DISCRIMINATION_NOTICE, `Advertiser confirmation: ${NON_POLITICAL_CONSENT}`, ...(inline ? ['Native inline post uses lifecycle PUBLISHED and visibility PUBLIC; anyone with a direct URL may view it. feedDistribution NONE and disabled resharing prevent organic feed distribution. The new creative remains PAUSED under policy. Native Page permissions still apply.'] : ['Reuses an existing account creative’s post. Does not publish or edit another post.']), JSON.stringify(fields)], async () => {
-        const resource = await this.client.createCreative(`adAccounts/${account}/creatives`, fields, inline ? { action: 'createInline' } : {});
+      return plan(`Create LinkedIn ${inline ? 'sponsored ad and dark post' : 'post-reference ad'} “${input.name}”`, [NON_DISCRIMINATION_NOTICE, `Advertiser confirmation: ${NON_POLITICAL_CONSENT}`, ...(inline ? ['Native dark post uses lifecycle PUBLISHED and visibility PUBLIC; anyone with a direct URL may view it. feedDistribution NONE and disabled resharing prevent organic feed distribution. The creative is DRAFT or PAUSED under policy. Native Page permissions still apply.'] : ['Reuses an existing account creative’s post. Does not publish or edit another post.']), JSON.stringify(fields)], async () => {
+        let resource: string;
+        try {
+          if (inline && formCta) {
+            if (documentToCheck) await this.provider.leadCreatives.assertUnusedDocument(account, documentToCheck);
+            await this.provider.leadCreatives.createBinding(account, await this.provider.getCampaign(account, input.campaign_id), input.lead_form!, leadContentFormat!);
+          }
+          // A known post URN permits the documented documentAd.reference/gated
+          // fields without guessing their shape on createInline's union.
+          if (inline && formCta && documentToCheck && input.lead_form?.gated_preview_page_count !== undefined) {
+            postId = await this.client.createPost(inlinePost);
+            const base = fields.creative as Row;
+            const content = documentToCheck ? { documentAd: { reference: postId, ...(input.lead_form?.gated_preview_page_count !== undefined ? { gatedLeadgenPreviewPageCount: input.lead_form.gated_preview_page_count } : {}) } } : { reference: postId };
+            const { inlineContent: _post, ...creative } = base;
+            resource = await this.client.createCreative(`adAccounts/${account}/creatives`, { ...creative, content });
+          } else {
+            if (formCta) {
+              await this.provider.leadCreatives.createBinding(account, await this.provider.getCampaign(account, input.campaign_id), input.lead_form!, leadContentFormat!);
+              if ('source_creative_id' in input && this.provider.leadCreatives.sourceHash(await this.provider.creatives.owned(account, input.source_creative_id)) !== input.lead_form!.expected_source_hash) throw new AdportError('PENDING_MISMATCH', 'linkedin: source changed before creative creation');
+            }
+            resource = await this.client.createCreative(`adAccounts/${account}/creatives`, fields, inline ? { action: 'createInline' } : {});
+          }
+        } catch (error) {
+          if (!postId || !inline || !formCta) throw error;
+          const existing = error instanceof AdportError && Array.isArray((error.details as Row | undefined)?.resource_ids) ? (error.details as Row).resource_ids as string[] : [];
+          throw new AdportError('PROVIDER_ERROR', 'linkedin: lead-ad creation was not fully confirmed; a dark post may exist. Reconcile these IDs before any new approval; no automatic replay.', { resource_ids: [postId, ...existing] });
+        }
         let postState: string | undefined;
         try {
           const value = await this.provider.creatives.owned(account, resource);
           if (value.campaign !== `urn:li:sponsoredCampaign:${input.campaign_id}` || value.intendedStatus !== status || value.name !== input.name || postId && reference(value.content) !== postId) throw new Error('creative receipt mismatch');
+          if (formCta && !contains(value.leadgenCallToAction, formCta)) throw new Error('lead form association did not match');
+          if (documentToCheck && input.lead_form?.gated_preview_page_count !== undefined && row(value.content?.documentAd).gatedLeadgenPreviewPageCount !== input.lead_form.gated_preview_page_count) throw new Error('gated preview did not match');
           postId = reference(value.content);
           if (inlinePost) {
             const post = await this.readPost(postId); this.ownDarkPost(account, post, String(inlinePost.author));
@@ -184,7 +227,7 @@ export class LinkedInSponsoredService {
             postState = post.lifecycleState;
           }
         } catch { throw new AdportError('PROVIDER_ERROR', 'linkedin: sponsored creative was created but creative/post readback was not confirmed; post reads require native Page permission. Reconcile these IDs before any retry', { resource_ids: [resource, ...(postId ? [postId] : [])] }); }
-        return { applied: true, resourceIds: [resource], details: { post_id: postId, intended_status: status, ...(postState ? { post_lifecycle_state: postState, post_readback_verified: true } : {}), next_tool: 'linkedin_creative_preview', note: inline ? 'The dark post is URL-accessible; no organic feed distribution was requested. Creative delivery is separate and remains paused when forced by policy.' : 'Existing post reused without another publication.' } };
+        return { applied: true, resourceIds: [resource, ...(inline && formCta && postId ? [postId] : [])], details: { post_id: postId, intended_status: status, ...(postState ? { post_lifecycle_state: postState, post_readback_verified: true } : {}), next_tool: formCta ? 'linkedin_creative_lead_form' : 'linkedin_creative_preview', note: inline ? `The dark post is URL-accessible; no organic feed distribution was requested. Creative delivery is separate and remains ${status}.` : 'Existing post reused without another publication.' } };
       }, input.status !== status ? ['intendedStatus coerced to PAUSED by policy (paused_creation)'] : []);
     }
     const changes = op.tool === 'linkedin_update_sponsored_post' ? updateSponsoredPost.parse(op.payload) : undefined;

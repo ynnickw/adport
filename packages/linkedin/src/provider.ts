@@ -9,6 +9,10 @@ import { LinkedInSponsoredService } from './sponsored.js';
 import { LINKEDIN_SPONSORED_WRITES } from './sponsored-tools.js';
 import { LinkedInPlanningService } from './planning.js';
 import { LinkedInAudienceService } from './audiences.js';
+import { LinkedInReportingService } from './reporting.js';
+import { LinkedInMeasurementService } from './measurement.js';
+import { LinkedInLeadCreativeService } from './lead-creatives.js';
+import { LinkedInLeadFormService } from './lead-forms.js';
 
 interface Plan extends Omit<WritePreview, 'serverValidated'> { execute: () => Promise<string[] | WriteResult> }
 const FIELDS = { spend: 'costInLocalCurrency', impressions: 'impressions', clicks: 'clicks', conversions: 'externalWebsiteConversions', conversion_value: 'conversionValueInLocalCurrency' } as const;
@@ -38,7 +42,11 @@ export class LinkedInAdsProvider implements AdProvider {
   readonly sponsored: LinkedInSponsoredService;
   readonly planning: LinkedInPlanningService;
   readonly audiences: LinkedInAudienceService;
-  constructor(private readonly client: LinkedInAdsClient, media?: MediaResolver) { this.creatives = new LinkedInCreativeService(client, this, media); this.management = new LinkedInManagementService(client, this); this.media = new LinkedInMediaService(client, this, media); this.sponsored = new LinkedInSponsoredService(client, this); this.planning = new LinkedInPlanningService(client, this); this.audiences = new LinkedInAudienceService(client, this); }
+  readonly reporting: LinkedInReportingService;
+  readonly measurement: LinkedInMeasurementService;
+  readonly leadCreatives: LinkedInLeadCreativeService;
+  readonly leadForms: LinkedInLeadFormService;
+  constructor(private readonly client: LinkedInAdsClient, media?: MediaResolver) { this.creatives = new LinkedInCreativeService(client, this, media); this.management = new LinkedInManagementService(client, this); this.media = new LinkedInMediaService(client, this, media); this.sponsored = new LinkedInSponsoredService(client, this); this.planning = new LinkedInPlanningService(client, this); this.audiences = new LinkedInAudienceService(client, this); this.reporting = new LinkedInReportingService(client, this); this.measurement = new LinkedInMeasurementService(client, this); this.leadForms = new LinkedInLeadFormService(client, this); this.leadCreatives = new LinkedInLeadCreativeService(client, this); }
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions { return { pauseCampaign: (accountId, campaignId) => ({ tool: 'linkedin_set_campaign_status', input: { account_id: accountId, campaign_id: campaignId, status: 'PAUSED' } }) }; }
   private async search<T extends { id: number }>(path: string, schema: z.ZodType<T>, search?: RestliValue): Promise<T[]> {
@@ -129,6 +137,9 @@ export class LinkedInAdsProvider implements AdProvider {
   }
   async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> { const result = await (await this.plan(op, guard)).execute(); return Array.isArray(result) ? { applied: true, resourceIds: result } : result; }
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<Plan> {
+    if (this.leadCreatives.supports(op.tool)) return this.leadCreatives.plan(op);
+    if (this.leadForms.supports(op.tool)) return this.leadForms.plan(op);
+    if (this.measurement.supports(op.tool)) return this.measurement.plan(op);
     if (this.audiences.supports(op.tool)) return this.audiences.plan(op);
     if (LINKEDIN_SPONSORED_WRITES.has(op.tool)) return this.sponsored.plan(op, guard);
     if (LINKEDIN_MEDIA_WRITES.has(op.tool)) return this.media.plan(op);

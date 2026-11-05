@@ -5,7 +5,7 @@ import { ApiKeyManager } from '@/app/dashboard/agents/api-key-manager';
 
 const mocks = vi.hoisted(() => ({ tenant: vi.fn(), grants: vi.fn() }));
 vi.mock('@/lib/cloud/dashboard', () => ({ requireDashboardTenant: mocks.tenant, canAdminister: (tenant: { role: string }) => ['owner', 'admin'].includes(tenant.role) }));
-vi.mock('@/lib/cloud/repository', () => ({ listOrganizationAdAccounts: async () => [{ enabled: true }] }));
+vi.mock('@/lib/cloud/repository', () => ({ listOrganizationAdAccounts: async () => [{ enabled: true, provider: 'meta' }] }));
 vi.mock('@/lib/cloud/mcp-oauth-repository', () => ({ listMcpOAuthGrants: mocks.grants }));
 
 const grant = { clientId: 'client', userId: 'user', clientName: 'Codex', clientUri: null, scopes: ['tools:read'], resource: 'https://app.adport.test/mcp', createdAt: new Date(), expiresAt: new Date(Date.now() + 86400000), lastUsedAt: new Date(), status: 'active' };
@@ -56,5 +56,20 @@ describe('project assistant access', () => {
     expect(html).not.toContain('Refresh status');
     expect(html).not.toContain('Create key');
     expect(html).not.toContain('Connected assistants');
+  });
+
+  it('keeps a settings link in the intended project and preserves its target connection when switching', async () => {
+    mocks.tenant.mockResolvedValue({ organizationId: 'other-project', role: 'owner', projects: [{ id: 'project', name: 'Client project' }] });
+    const html = renderToStaticMarkup(await AgentsPage({ searchParams: Promise.resolve({ projectId: 'project', connection: 'client', kind: 'oauth' }) }));
+    expect(html).toContain('Open Client project');
+    expect(html).toContain('connection=client&amp;kind=oauth#connected-assistants');
+    expect(mocks.grants).not.toHaveBeenCalled();
+  });
+
+  it('does not expose a target project’s grants when a settings link is unauthorized', async () => {
+    mocks.tenant.mockResolvedValue({ organizationId: 'other-project', role: 'owner', projects: [] });
+    const html = renderToStaticMarkup(await AgentsPage({ searchParams: Promise.resolve({ projectId: 'project' }) }));
+    expect(html).toContain('project you cannot access');
+    expect(mocks.grants).not.toHaveBeenCalled();
   });
 });

@@ -24,6 +24,8 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   destructive?: boolean;
   openWorld?: boolean;
   fileInputs?: AnyToolDefinition['fileInputs'];
+  sensitiveInputs?: AnyToolDefinition['sensitiveInputs'];
+  catalog?: AnyToolDefinition['catalog'];
   /** Project resources use the same policy gate without inventing an ad account. */
   contextTarget?: (ctx: ToolContext) => { provider: AdProvider; accountId: string };
 }): AnyToolDefinition {
@@ -41,7 +43,9 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
     description: `${def.description}\n\n${TWO_STEP_NOTE}`,
     input,
     output: writeOutput,
+    ...(def.catalog ? { catalog: def.catalog } : {}),
     ...(def.fileInputs ? { fileInputs: def.fileInputs } : {}),
+    ...(def.sensitiveInputs ? { sensitiveInputs: def.sensitiveInputs } : {}),
     annotations: { readOnly: false, destructive: def.destructive ?? !MEDIA_UPLOAD_TOOLS.has(def.name), ...(def.openWorld === undefined ? {} : { openWorld: def.openWorld }) },
     async handler(raw, ctx) {
       const { account_id, pending_operation_id, ...payload } = raw as Record<string, unknown> & {

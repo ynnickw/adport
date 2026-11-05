@@ -29,4 +29,18 @@ describe('private creative media verification', () => {
     await expect(library.read({ file_path: '/etc/passwd', expected_sha256: '0'.repeat(64) })).rejects.toThrow('server file paths');
     await expect(library.read({ media_id: 'invalid', expected_sha256: '0'.repeat(64) })).rejects.toThrow('valid project media_id');
   });
+
+  it('reviews verified uploads without duplicate payload fields or attached bytes', async () => {
+    const bytes = await sharp({ create: { width: 10, height: 10, channels: 3, background: '#fff' } }).png().toBuffer();
+    const library = new ProjectMediaLibrary({ organizationId: '00000000-0000-4000-8000-000000000001', role: 'owner', scopes: ['tools:read', 'tools:write'] });
+    const op = { tool: 'media_upload', provider: 'media', accountId: library.scopeId, kind: 'create' as const, payload: { name: 'qa.png', content_type: 'image/png', byte_length: bytes.length, sha256: hash(bytes), data_base64: bytes.toString('base64') } };
+    const preview = await library.previewWrite(op);
+    expect(preview.review?.fields).toEqual([{ label: 'Type', after: 'image/png' }, { label: 'Size', after: `${bytes.length} bytes` }, { label: 'SHA-256', after: hash(bytes) }]);
+    expect(preview.review).toMatchObject({ title: 'Upload file', subject: 'qa.png', notices: expect.arrayContaining(['File bytes, type, size and SHA-256 verified.']) });
+    expect(JSON.stringify(preview.review)).not.toContain(bytes.toString('base64')); expect(preview.serverValidated).toBe(false);
+    await expect(library.previewWrite({ ...op, payload: { ...op.payload, sha256: '0'.repeat(64) } })).rejects.toThrow('SHA-256');
+    const reserved = await library.previewWrite({ ...op, tool: 'media_prepare_upload', payload: { ...op.payload, data_base64: undefined } });
+    expect(reserved.review?.title).toBe('Prepare upload'); expect(reserved.review?.notices).toContain('File bytes will be verified after transfer.');
+    expect(reserved.review?.notices).not.toContain('File bytes, type, size and SHA-256 verified.');
+  });
 });

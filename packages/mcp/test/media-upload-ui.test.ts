@@ -50,18 +50,65 @@ function fixture(options: { bridge?: 'mcp'; readOnly?: boolean; context?: string
     if (options.bridge && message.method === 'tools/call') void result(message.params.name, message.params.arguments).then(value => dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window.parent, data: { jsonrpc: '2.0', id: message.id, result: value } })));
   });
   dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window.parent, data: { jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: gallery() } }));
+  const filesFor = (names: string[], bytes = Buffer.from('exact private bytes'), type = 'image/png') => names.map(name => { const file = new dom.window.File([bytes], name, { type }); Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) }); return file; });
   const choose = (names: string[], bytes = Buffer.from('exact private bytes'), type = 'image/png', drop = false) => {
-    const files = names.map(name => { const file = new dom.window.File([bytes], name, { type }); Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) }); return file; });
+    const files = filesFor(names, bytes, type);
     const target = dom.window.document.querySelector(drop ? '[data-upload-drop]' : '[data-upload-files]')!;
     const event = new dom.window.Event(drop ? 'drop' : 'change', { bubbles: true, cancelable: true });
     if (drop) Object.defineProperty(event, 'dataTransfer', { value: { files } }); else Object.defineProperty(target, 'files', { value: files, configurable: true });
     target.dispatchEvent(event);
   };
+  const paste = (names: string[], options: { target?: Element; prevented?: boolean; bytes?: Buffer<ArrayBuffer>; type?: string } = {}) => {
+    const event = new dom.window.Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'clipboardData', { value: { files: filesFor(names, options.bytes, options.type) } });
+    if (options.prevented) event.preventDefault();
+    (options.target ?? dom.window.document.querySelector('[data-upload-drop]')!).dispatchEvent(event);
+    return event;
+  };
   const click = (selector: string) => (dom.window.document.querySelector(selector) as HTMLButtonElement).click();
-  return { dom, calls, transfers, messages, choose, click, maxActive: () => maxActive, gallery };
+  return { dom, calls, transfers, messages, choose, paste, click, maxActive: () => maxActive, gallery };
 }
 
 describe('direct widget media upload', () => {
+  it.each([undefined, 'mcp'] as const)('queues pasted files through the %s bridge and uploads only after the upload button', async bridge => {
+    const f=fixture({bridge,existing:true}), bytes=Buffer.from('exact clipboard file bytes');
+    try {
+      const player=f.dom.window.document.querySelector('video')!;player.currentTime=8;
+      const event=f.paste(['pasted-one.png','pasted-two.png'],{bytes});
+      expect(event.defaultPrevented).toBe(true);expect(f.calls).toHaveLength(0);expect(f.transfers).toHaveLength(0);
+      expect(f.dom.window.document.querySelectorAll('[data-upload-key]')).toHaveLength(2);
+      f.click('[data-upload-start]');
+      await vi.waitFor(()=>expect(f.dom.window.document.querySelector('main')!.textContent).toContain('2 saved to your library'));
+      expect(f.transfers).toHaveLength(2);expect(f.transfers.every(transfer=>Buffer.from(transfer.bytes as ArrayBuffer).equals(bytes))).toBe(true);
+      for(const name of ['pasted-one.png','pasted-two.png'])expect(f.calls.find(call=>call.tool==='media_prepare_upload'&&!call.args.pending_operation_id&&call.args.name===name)?.args).toEqual({name,content_type:'image/png',byte_length:bytes.length,sha256:sha(bytes),project_id:project});
+      expect(f.calls.filter(call=>call.args.pending_operation_id)).toHaveLength(4);
+      expect(f.dom.window.document.querySelector('video')).toBe(player);expect(player.currentTime).toBe(8);
+      expect(f.dom.window.location.href).toBe('https://widget.example/');
+    }finally{f.dom.window.close();}
+  });
+  it('leaves text, editable content and previously handled paste events alone',()=>{
+    const f=fixture();
+    try {
+      expect(f.paste([]).defaultPrevented).toBe(false);
+      const root=f.dom.window.document.querySelector('[data-upload-drop]')!;
+      for(const tag of ['textarea','input','div']){
+        const target=f.dom.window.document.createElement(tag);if(tag==='div')target.setAttribute('contenteditable','true');root.append(target);
+        expect(f.paste(['ignored.png'],{target}).defaultPrevented).toBe(false);target.remove();
+      }
+      f.paste(['already-handled.png'],{prevented:true});
+      expect(f.dom.window.document.querySelector('[data-upload-queue]')).toBeNull();expect(f.calls).toHaveLength(0);
+    }finally{f.dom.window.close();}
+  });
+  it('does not consume read-only file pastes or add files during an active upload',async()=>{
+    const readOnly=fixture({readOnly:true});
+    try{expect(readOnly.paste(['private.png']).defaultPrevented).toBe(false);expect(readOnly.calls).toHaveLength(0);}finally{readOnly.dom.window.close();}
+    const f=fixture();
+    try{
+      f.choose(['first.png']);f.click('[data-upload-start]');expect(f.paste(['second.png']).defaultPrevented).toBe(false);
+      await vi.waitFor(()=>expect(f.dom.window.document.querySelector('main')!.textContent).toContain('1 saved to your library'));
+      expect(f.transfers).toHaveLength(1);expect(f.dom.window.document.querySelector('main')!.textContent).not.toContain('second.png');
+    }finally{f.dom.window.close();}
+  });
   it.each([undefined, 'mcp'] as const)('uploads through the %s bridge with exact source bytes and normal preview/apply, then appends in place without reloading the library', async bridge => {
     const f = fixture({ bridge, context: null }), bytes = Buffer.alloc(2 * 1024 * 1024 + 17, 19);
     try {

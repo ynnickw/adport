@@ -13,11 +13,15 @@ import { ConnectAssistantButton } from '@/components/assistant-connect';
 import { getAssistantConnectionStatus } from '@/lib/cloud/assistant-connection';
 import { getAssistantListings } from '@/lib/cloud/assistant-listings';
 import { env } from '@/lib/env';
+import { overviewRangeFromParams, type OverviewRange } from '@/lib/overview-range';
 
 export const metadata = { title: 'Overview' };
 
-export default async function OverviewPage() {
+export default async function OverviewPage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> } = {}) {
   const tenant = await requireDashboardTenant();
+  const query = await searchParams ?? {};
+  let initialRange: OverviewRange = 'last_7_days';
+  try { initialRange = overviewRangeFromParams(new URLSearchParams(Object.entries(query).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))); } catch { /* Invalid shared links use the default reporting period. */ }
   if (isSyntheticReviewer(tenant.organizationId)) return <SyntheticReviewer tenant={tenant} />;
   const [connections, pending, accounts, onboarding] = await Promise.all([
     listConnections(tenant.organizationId, tenant.userId),
@@ -74,7 +78,7 @@ export default async function OverviewPage() {
             <div><strong>{accounts.length ? 'Enable account access to get started' : 'Choose your ad accounts'}</strong><p>{canManage ? accounts.length ? 'Your platforms are connected. Choose which accounts Adport can use.' : 'The connection is ready. Add the accounts you want to use in this project.' : 'Ask a project owner or admin to make accounts available.'}</p></div>
             <Link className="button secondary small" href={accounts.length ? '/dashboard/accounts' : '/dashboard/connections'}>{accounts.length ? 'Open accounts' : 'Choose accounts'}</Link>
           </section> : null}
-          {usableAccounts.length ? <LiveData key={tenant.organizationId} organizationId={tenant.organizationId} connected /> : null}
+          {usableAccounts.length ? <LiveData key={tenant.organizationId} organizationId={tenant.organizationId} connected initialRange={initialRange} /> : null}
             <section className="card" style={{ marginTop: '1rem' }}>
               <div className="card-head"><h2>Platforms</h2><Link className="card-note" href="/dashboard/connections" prefetch={false}>Manage</Link></div>
               <div className="card-body stack">

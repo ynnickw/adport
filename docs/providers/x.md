@@ -95,7 +95,7 @@ Name/schedule edits, status, daily/total caps and bidding have separate named to
 
 `x_delete_line_item` requires its relevant promoted-post/account/media children to be removed first, then uses native DELETE and checks the returned deleted flag. Unknown product types are rejected for deletion rather than assuming all child types have been checked. All advertising writes still use the same exact-argument preview/apply gate, audit log, protected-account and budget rules. X does not provide server validation for this workflow.
 
-Published-post/card authoring, audience management and measurement remain outstanding. Native promoted-post associations are created ACTIVE and cannot be updated through a PUT endpoint; a tool must account for this explicitly instead of promising ad-level PAUSED creation or an unsupported status edit. The current additions are partial API coverage. The current provider-owned [MCP reference](https://github.com/xdevplatform/docs/blob/2f701ee04b362fffcc1dfee042b11b64ab884fda/x-ads-api/mcp/reference.mdx) maps additional tool families to v12 routes; this mapping is an API comparison source, not evidence that Adport implements every route.
+Published-post authoring, audience management and measurement remain outstanding. Native promoted-post associations are created ACTIVE and cannot be updated through a PUT endpoint; a tool must account for this explicitly instead of promising ad-level PAUSED creation or an unsupported status edit. The current additions are partial API coverage. The current provider-owned [MCP reference](https://github.com/xdevplatform/docs/blob/2f701ee04b362fffcc1dfee042b11b64ab884fda/x-ads-api/mcp/reference.mdx) maps additional tool families to v12 routes; this mapping is an API comparison source, not evidence that Adport implements every route.
 
 ## Targeting
 
@@ -119,6 +119,18 @@ Media metadata updates preserve omitted settings and verify the returned media k
 
 Live verification on 2026-11-03 covered account permissions/FULL author discovery, native media-library pagination and real image/video previews, then a named text-only QA draft create → read → copy edit → rename → delete lifecycle. Every write used the shared preview/apply gate; the exact deleted draft returned 404 afterward. Live text-only PUT omitted the unchanged name, so updates accept a partial receipt and require a complete readback to verify preservation. The temporary draft was never published or associated with an ad. Media metadata/deletion and attachment-based draft creation still need live verification.
 
+## Website, app and carousel cards
+
+`x_cards` lists native modern cards with optional legacy inclusion, account-bound configuration hashes, cursor pagination and bounded image/video previews. It preserves every returned card when the provider exceeds the requested count. Media hydration stops at 100 distinct references and reports missing previews without hiding native content. `x_get_card` reads one modern numeric card ID; the existing `x_get_cards` remains the separate exact-URI lookup through `cards/all`.
+
+`x_create_card` authors an unattached website/app card, a single-destination image/video/mixed carousel, or a multi-destination website carousel. Components preserve native order; carousel layouts use two to six media. Every referenced image/video must be ready and associated with the selected account. App destinations require country and at least one store identifier, with matching store IDs for supplied deep links. These tools do not publish posts or create promoted-post associations. Lead-form/button-group and legacy-specific authoring are separate workflows.
+
+`x_update_card` requires a current configuration hash and `acknowledge_shared_creative_effects: true`. Omitted name/layout fields are preserved. Supplied components or slides replace the layout. Title, website URL and app-button shortcuts preserve the supported current layout; multi-destination copy changes require an explicit zero-based `slide_index`. Unsupported native component fields are retained in reads and rejected by copy shortcuts rather than silently discarded. The widget provides guarded name/copy/button edits with the exact displayed snapshot.
+
+Updates and deletion can affect existing posts or ads that reuse a card. `x_delete_card` requires the same snapshot and effects acknowledgement, verifies the exact native deleted receipt and independently reads its tombstone. No restore endpoint has been established. None of these operations changes campaign/line-item status or budgets, and deletion is not an ad pause. The normal policy preview/apply and append-only audit gate apply to every mutation.
+
+Card writes use native JSON bodies. POST returns an object; GET/PUT/DELETE return arrays. Adport checks these distinct shapes and independently verifies approved content. A mismatch or uncertain result retains original/returned IDs for reconciliation and is never automatically retried. Native eligibility and content limits remain authoritative; previews are local, not server validation. Current official contracts were rechecked on 2026-11-05 against [the provider-owned reference](https://github.com/xdevplatform/docs/blob/a9226e1066661622a1e4f9528888927cb3d31c2a/x-ads-api/creatives/reference.mdx). Native QA status is recorded separately from wire-contract tests.
+
 ## Checksum-bound native uploads
 
 `x_upload_media` reads an immutable project media ID in hosted runtimes or an absolute local file through the CLI/stdio resolver. The exact SHA-256, content type, byte size and author appear in the preview and are verified again at apply. Hosted runtimes reject server file paths. Application limits are 5 MiB for images, 15 MiB for GIFs and 50 MiB for video; native duration/account eligibility can impose additional limits.
@@ -132,6 +144,57 @@ A finalized upload returns a short-lived HMAC receipt bound to the account, auth
 The first local live initialize request timed out without a returned upload ID. A separate unauthenticated connectivity check also timed out against api.x.com while ads-api.x.com remained reachable. No automatic write retry occurred. Native v2 upload/registration is contract-tested and awaiting successful live endpoint verification; earlier Ads API draft/media reads and draft lifecycle verification are separate evidence.
 
 Official contracts: [v2 OpenAPI](https://github.com/xdevplatform/docs/blob/2f701ee04b362fffcc1dfee042b11b64ab884fda/openapi.json), [chunked media upload](https://docs.x.com/x-api/media/quickstart/media-upload-chunked).
+
+## Custom audiences
+
+`x_custom_audiences` and `x_get_custom_audience` inspect owned or already shared
+audiences, native processing diagnostics and a `configuration_hash`. Lists use
+native cursors and the compact widget's **Load more**. `with_total_count` requests
+a total on the initial page; continuation automatically omits that flag because
+X does not allow it alongside a cursor. A missing native cursor marker leaves
+completeness unconfirmed.
+
+`x_create_custom_audience` creates an empty CRM placeholder. Metadata edits use
+`x_update_custom_audience`, a current configuration hash and the shared
+preview/apply gate. Omitted name/description fields stay unchanged. Create and
+metadata writes independently read back their results. They upload no members,
+add no targeting, grant no sharing and activate no ads.
+
+`x_update_custom_audience_users` submits explicit native `Update`/`Delete` groups.
+Each group contains `params.users` and optional UTC `effective_at`/`expires_at`.
+All identifiers must already be normalized SHA256 hashes, except the native
+`partner_user_id` exception. Previews show counts and a batch checksum; member
+identifiers stay out of previews, audit summaries and widget approval arguments.
+Hosted pending arguments use the existing encrypted project approval store.
+The tool is marked destructive because batches can remove members.
+
+Native limits are 2,500 operation groups and a 5,000,000-byte JSON body. Adport
+also limits one approved request to 2,500 total user records. The native receipt's
+success and total counts must both match the submitted record count. A successful
+receipt means **accepted for processing**, with readiness explicitly unconfirmed;
+it does not prove exact membership or targeting availability. Existing ads using
+the audience can be affected. X describes processing batches on a 6–8-hour cycle.
+Transport failures, partial counts and operation errors never trigger automatic
+replay. Permissions remain provider-controlled; tool availability does not grant
+audience API approval.
+
+`x_custom_audience_permissions` inspects existing sharing. `x_custom_audience_usage`
+checks targeted campaigns, inactive groups, direct inclusion/exclusion criteria
+and sharing grants, returning a `usage_hash`. It requires complete native paging,
+with bounds of 25 pages per scan and 5,000 rows/line items/criteria. Deletion uses
+both hashes through `x_delete_custom_audience`, rejects referenced or shared
+audiences and independently verifies native `deleted=true`. These checks cannot
+atomically lock other clients; no restore endpoint is claimed.
+
+Ordinary CRM lifecycle and inspection are implemented. Flexible-audience batch
+creation (documented closed beta), sharing/revocation and Do Not Reach list
+management are separate workflows. Conversion configuration and normalization
+remain separate work. The new audience tools are contract/widget tested; live
+X account and Claude/ChatGPT validation remain unverified.
+
+Contracts: [current audience reference](https://docs.x.com/x-ads-api/audiences/reference)
+and [provider-owned Python SDK](https://github.com/xdevplatform/twitter-python-ads-sdk/blob/a3dd5819341e77aa469d0b4b3399f0bcd028c80c/twitter_ads/audience.py),
+inspected 2026-11-05. No SDK retry or cleanup behavior is executed by Adport.
 
 ## Access and commercial boundary
 

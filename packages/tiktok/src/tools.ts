@@ -2,6 +2,9 @@ import { defineTool, guardedWriteTool, type AnyToolDefinition } from '@adport/co
 import { z } from 'zod';
 import type { TikTokAdsProvider } from './provider.js';
 import { tiktokCreativeTools } from './creative-tools.js';
+import { tiktokAudienceTools } from './audiences.js';
+import { tiktokMeasurementTools } from './measurement.js';
+import { tiktokAutomatedRuleTools } from './automated-rules.js';
 
 const OBJECTIVES = [
   'REACH',
@@ -19,6 +22,9 @@ const operationStatusSchema = z.enum(['ENABLE', 'DISABLE']);
 export function tiktokTools(provider: TikTokAdsProvider): AnyToolDefinition[] {
   return [
     ...tiktokCreativeTools(provider),
+    ...tiktokAudienceTools(provider),
+    ...tiktokMeasurementTools(provider),
+    ...tiktokAutomatedRuleTools(provider),
     defineTool({
       name: 'tiktok_api_read',
       namespace: 'tiktok',

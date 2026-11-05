@@ -12,7 +12,7 @@ import {
   revokeGoogleToken,
 } from './google-oauth';
 import type { OAuthProvider, ProviderCredentialMap, StoredProviderCredential } from './types';
-import { extraOAuthAdapters, pinterestPinManagementAdapter } from './provider-oauth-extra';
+import { extraOAuthAdapters, pinterestManagementAdapter } from './provider-oauth-extra';
 import { xOAuthAdapter } from './provider-oauth-x';
 import { providerAllowedForOrganization } from './provider-rollout';
 
@@ -382,10 +382,10 @@ const reddit: OAuthAdapter<'reddit'> = {
 
 const adapters = { google, meta, tiktok, microsoft, reddit, apple, ...extraOAuthAdapters, x: xOAuthAdapter } satisfies { [P in OAuthProvider]: OAuthAdapter<P> };
 
-export function oauthAdapter<P extends OAuthProvider>(provider: P, options: { googleDataManager?: boolean; pinterestPinManagement?: boolean; pinterestSecretPins?: boolean } = {}): OAuthAdapter<P> {
-  if (options.pinterestPinManagement || options.pinterestSecretPins) {
+export function oauthAdapter<P extends OAuthProvider>(provider: P, options: { googleDataManager?: boolean; pinterestPinManagement?: boolean; pinterestSecretPins?: boolean; pinterestCatalogManagement?: boolean } = {}): OAuthAdapter<P> {
+  if (options.pinterestPinManagement || options.pinterestSecretPins || options.pinterestCatalogManagement) {
     if (provider !== 'pinterest' || options.googleDataManager) throw new Error('Pin management authorization is supported only for Pinterest.');
-    return pinterestPinManagementAdapter(options.pinterestSecretPins === true) as OAuthAdapter<P>;
+    return pinterestManagementAdapter({ pinManagement: options.pinterestPinManagement === true, secretPins: options.pinterestSecretPins === true, catalogManagement: options.pinterestCatalogManagement === true }) as OAuthAdapter<P>;
   }
   if (options.googleDataManager) {
     if (provider !== 'google') throw new Error('Data Manager authorization is supported only for Google.');

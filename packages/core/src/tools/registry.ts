@@ -5,6 +5,17 @@ import { AdportError } from '../errors.js';
 import type { PolicyEngine } from '../policy/engine.js';
 import type { ProviderRegistry } from '../provider.js';
 import type { MediaLibrary } from '../media.js';
+import { classifyTool, type ToolCatalogMetadata, type ToolSelection } from './catalog.js';
+
+export interface ToolCatalogContext {
+  tools: readonly AnyToolDefinition[];
+  selection: ToolSelection;
+  connectedProviders: readonly string[];
+  includeRawTools: boolean;
+  canWrite?: boolean;
+  manageAccessUrl?: string;
+  excludedTools?: readonly string[];
+}
 
 export interface ToolAnnotations {
   readOnly?: boolean;
@@ -23,12 +34,15 @@ export interface ToolContext {
   /** Hosted runtimes inject a tenant-scoped findings repository. */
   findings?: FindingsRepository;
   media?: MediaLibrary;
+  /** Metadata discovery never invokes hidden handlers or changes access. */
+  catalog?: ToolCatalogContext;
 }
 
 export interface AnyToolDefinition {
   name: string;
   /** Grouping key used for config-based enable/disable ("core", "mock", "google", ...). */
   namespace: string;
+  catalog?: ToolCatalogMetadata;
   description: string;
   input: z.ZodObject<z.ZodRawShape>;
   /** Successful result contract, shared by all transports. Errors use their own envelope. */
@@ -40,6 +54,8 @@ export interface AnyToolDefinition {
   pagination?: { cursorInput: string; cursorOutput?: string };
   /** Top-level host file inputs, declared once for transport adapters. */
   fileInputs?: readonly string[];
+  /** Dot paths whose presence prevents adapters from echoing arguments into widget approvals. */
+  sensitiveInputs?: readonly string[];
   handler: (input: never, ctx: ToolContext) => Promise<unknown>;
 }
 
@@ -53,11 +69,14 @@ export function defineTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   presentation?: AnyToolDefinition['presentation'];
   pagination?: AnyToolDefinition['pagination'];
   fileInputs?: AnyToolDefinition['fileInputs'];
+  sensitiveInputs?: AnyToolDefinition['sensitiveInputs'];
+  catalog?: ToolCatalogMetadata;
   handler: (input: z.infer<S>, ctx: ToolContext) => Promise<unknown>;
 }): AnyToolDefinition {
   const openWorldByDefault = !['core', 'mock', 'audit'].includes(def.namespace);
   return {
     ...def,
+    catalog: def.catalog ?? classifyTool(def.name, def.namespace),
     annotations: {
       readOnly: def.annotations?.readOnly ?? false,
       // Directory reviewers treat modifying tools, not just deletions, as

@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({ session: vi.fn(), projects: vi.fn(), client: v
 vi.mock('@/lib/cloud/auth', () => ({ sessionPrincipal: mocks.session }));
 vi.mock('@/lib/cloud/workspaces', () => ({ listProjectAccess: mocks.projects }));
 vi.mock('@/lib/cloud/mcp-oauth-repository', () => ({ getMcpOAuthClient: mocks.client, createMcpAuthorizationCode: mocks.code }));
+vi.mock('@/lib/cloud/tool-catalog', () => ({ saveToolSelection: vi.fn() }));
 import { POST } from '@/app/oauth/authorize/consent/route';
 
 const company = '11111111-1111-4111-8111-111111111111';

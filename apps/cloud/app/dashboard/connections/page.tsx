@@ -8,7 +8,7 @@ import { ProviderConnections, type OAuthProviderView } from './provider-connecti
 import { GOOGLE_DATA_MANAGER_SCOPE } from '@/lib/cloud/google-oauth';
 import { isSyntheticReviewer } from '@/lib/cloud/synthetic-reviewer';
 import { SyntheticReviewer } from '@/components/synthetic-reviewer';
-import { PINTEREST_PIN_SCOPES, PINTEREST_SECRET_PIN_SCOPES } from '@adport/provider-pinterest';
+import { PINTEREST_PIN_SCOPES, PINTEREST_SECRET_PIN_SCOPES, PINTEREST_CATALOG_SCOPES } from '@adport/provider-pinterest';
 
 export const metadata = { title: 'Platforms' };
 
@@ -39,6 +39,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
           dataManagerEnabled: connection.provider === 'google' && connection.scopes.includes(GOOGLE_DATA_MANAGER_SCOPE),
           pinManagementEnabled: connection.provider === 'pinterest' && PINTEREST_PIN_SCOPES.every(scope => connection.scopes.includes(scope)),
           secretPinsEnabled: connection.provider === 'pinterest' && PINTEREST_SECRET_PIN_SCOPES.every(scope => connection.scopes.includes(scope)),
+          catalogManagementEnabled: connection.provider === 'pinterest' && PINTEREST_CATALOG_SCOPES.every(scope => connection.scopes.includes(scope)),
           externalLabel: connection.externalLabel,
           lastError: connection.lastError,
           connectedAt: connection.connectedAt.toISOString(),

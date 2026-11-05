@@ -4,11 +4,13 @@ import { apiError, noStoreJson } from '@/lib/http';
 import { adWritePlanLimit } from '@/lib/cloud/write-plan-limit';
 import { PlanLimitError } from '@/lib/cloud/plan-limit';
 import { env } from '@/lib/env';
+import { principalToolSelection } from '@/lib/cloud/tool-catalog';
 
 export async function POST(request: Request, { params }: { params: Promise<{ tool: string }> }) {
   try {
     const principal = await apiPrincipal(request);
-    const runtime = await createTenantRuntime(principal, { surface: 'api' });
+    const catalog = await principalToolSelection(principal);
+    const runtime = await createTenantRuntime(principal, { surface: 'api', catalog });
     const { tool } = await params;
     const definition = runtime.registry.get(tool);
     if (!definition.annotations.readOnly && !principal.scopes.includes('tools:write')) {

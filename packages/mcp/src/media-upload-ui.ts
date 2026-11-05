@@ -117,6 +117,11 @@ export const MEDIA_UPLOAD_UI = String.raw`
       const input=app.querySelector('[data-upload-files]');
       if(input) input.onchange=event=>{queueWidgetFiles(event.target.files,context);input.value='';};
       const drop=app.querySelector('[data-upload-drop]');if(!drop) return;
+      drop.onpaste=event=>{
+        if(!context || uploads.running || event.defaultPrevented || event.target?.closest?.('textarea,input:not([type="file"]),[contenteditable]:not([contenteditable="false"])')) return;
+        const files=Array.from(event.clipboardData?.files || []);if(!files.length) return;
+        event.preventDefault();queueWidgetFiles(files,context);
+      };
       let depth=0;
       const hasFiles=event=>Array.from(event.dataTransfer?.types || []).includes('Files');
       drop.ondragenter=event=>{if(!context||!hasFiles(event))return;event.preventDefault();depth++;if(!uploads.running)drop.classList.add('dragging');};

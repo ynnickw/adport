@@ -1,4 +1,4 @@
-import { AdportError, LocalMediaResolver, type MediaResolver, type WriteOperation, type WritePreview, type WriteResult } from '@adport/core';
+import { AdportError, LocalMediaResolver, type MediaResolver, type WriteOperation, type WritePreview, type WriteResult, type WriteReview } from '@adport/core';
 import { z } from 'zod';
 import { mediaKey, snowflake } from './creative-tools.js';
 import { registerMedia, uploadMedia } from './media-tools.js';
@@ -39,7 +39,7 @@ export class XMediaService {
   async plan(op: WriteOperation): Promise<MediaPlan> {
     const account = xId.parse(op.accountId);
     if (op.provider !== 'x' || op.kind !== 'create') throw new AdportError('INVALID_INPUT', 'x: media provider/kind mismatch');
-    const plan = (summary: string, changes: string[], execute: () => Promise<WriteResult>): MediaPlan => ({ summary, changes, execute, coercions: [], budgetDeltas: [] });
+    const plan = (summary: string, changes: string[], execute: () => Promise<WriteResult>, review: WriteReview): MediaPlan => ({ summary, changes, execute, review, coercions: [], budgetDeltas: [] });
     if (op.tool === 'x_upload_media') {
       const input = uploadMedia.parse(op.payload); nativeId.parse(input.as_user_id); await this.author(account, input.as_user_id, true);
       const file = await this.media.read(input, { maxBytes: 50 * 1024 * 1024, contentTypes: ['image/png', 'image/jpeg', 'image/gif', 'video/mp4'] }), kind = file.contentType === 'image/gif' ? 'GIF' : file.contentType.startsWith('image/') ? 'IMAGE' : 'VIDEO';
@@ -56,7 +56,7 @@ export class XMediaService {
           if (result.state === 'failed') throw new Error('x: native media processing failed');
           return { applied: true, resourceIds: [bound.media_key ?? bound.media_id], details: { upload_id: bound.media_id, ...(bound.media_key ? { media_key: bound.media_key } : {}), status: result.state, resource_receipt: result.resource_receipt, expires_at: new Date(bound.expires_at * 1000).toISOString(), next_tool: result.state === 'succeeded' ? 'x_register_uploaded_media' : 'x_media_upload_status', note: 'Upload finalized; this does not register a library entry, publish a post or prove ad eligibility.' } };
         } catch (error) { throw new AdportError('PROVIDER_ERROR', error instanceof Error ? error.message : 'x: upload failed; reconcile before retrying', { resource_ids: [bound.media_key ?? bound.media_id], resource_receipt: this.provider.client.resourceReceipt(bound), note: 'Upload was not replayed. Native incomplete bytes may remain until provider expiry.' }); }
-      });
+      }, { provider: 'x', accountId: account, kind: 'create', title: `Upload ${kind.toLowerCase()}`, subject: file.name, fields: [{ label: 'Type', after: file.contentType }, { label: 'Size', after: `${file.bytes.byteLength.toLocaleString('en-US')} bytes` }, { label: 'Author', after: input.as_user_id }, { label: 'SHA-256', after: file.sha256 }], notices: ['X validates on apply. An incomplete upload may remain until it expires.', 'Publishing and library registration are separate actions.'] });
     }
     if (op.tool !== 'x_register_uploaded_media') throw new AdportError('INVALID_INPUT', 'x: unsupported media operation');
     const input = registerMedia.parse(op.payload), bound = this.receipt(account, input.resource_receipt); await this.author(account, bound.user_id, true);
@@ -75,6 +75,6 @@ export class XMediaService {
         if (observed.deleted || observed.media_type !== bound.media_type || Object.entries(fields).some(([field, value]) => observed[field] !== value)) throw new Error('x: registered media metadata readback mismatch');
         return { applied: true, resourceIds: [key], details: { status: observed.media_status, next_tool: 'x_get_media_library_item' } };
       } catch (error) { throw new AdportError('PROVIDER_ERROR', error instanceof Error ? error.message : 'x: library registration failed; reconcile before retrying', { resource_ids: [key], resource_receipt: input.resource_receipt }); }
-    });
+    }, { provider: 'x', accountId: account, kind: 'create', title: 'Add media to X library', subject: input.name, fields: [{ label: 'Media', after: key }, ...(input.file_name === undefined ? [] : [{ label: 'File name', after: input.file_name }]), ...(input.title === undefined ? [] : [{ label: 'Title', after: input.title }]), ...(input.description === undefined ? [] : [{ label: 'Description', after: input.description }]), { label: 'SHA-256', after: bound.sha256 }], notices: ['Adds the approved upload to this account’s media library. Publishing is a separate action.'] });
   }
 }

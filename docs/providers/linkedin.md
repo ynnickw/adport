@@ -28,7 +28,66 @@ Access-only tokens are supported; reauthorize/import when they expire. LinkedIn 
 - Account currency is used, with no currency conversion. Budgets accepted in integer micros are converted to exact decimal strings; reporting decimal strings already represent currency units.
 - No server dry-run endpoint is used: previews are local and may still be rejected by LinkedIn for account eligibility, targeting, creative format, minimum bid, or budget restrictions.
 
-Analytics uses `timeGranularity=ALL`, explicit inclusive UTC start/end dates and one account per request. Fields: `costInLocalCurrency`, `impressions`, chargeable `clicks`, `externalWebsiteConversions`, and `conversionValueInLocalCurrency`. Attribution follows the advertiser's conversion rules; no arbitrary cross-provider attribution window is imposed.
+Normalized analytics uses `timeGranularity=ALL`, explicit inclusive UTC start/end dates and one account per request. Fields: `costInLocalCurrency`, `impressions`, chargeable `clicks`, `externalWebsiteConversions`, and `conversionValueInLocalCurrency`. Attribution follows the advertiser's conversion rules; no arbitrary cross-provider attribution window is imposed.
+
+## Professional-demographic reporting
+
+`linkedin_demographic_report` reads account-scoped native analytics by company size, industry, seniority, job title, job function, country, region or company. It supports `ALL`, `DAILY`, `MONTHLY` and `YEARLY` periods, selected metrics, and an optional list of verified account-owned campaign IDs. Dates are inclusive UTC calendar dates. Returned periods are checked against the requested range; queries rounded by LinkedIn to wider month/year boundaries must be repeated with those explicit boundaries instead of being silently relabeled.
+
+```json
+{
+  "account_id": "YOUR_ACCOUNT_ID",
+  "pivot": "MEMBER_INDUSTRY",
+  "date_range": { "start": "2026-10-01", "end": "2026-10-31" },
+  "metrics": ["impressions", "clicks", "costInLocalCurrency"],
+  "resolve_names": true,
+  "limit": 100
+}
+```
+
+Amounts remain exact native decimal strings in currency units. Missing metrics remain `null`; an absent row is not a zero. Conversion value, unique reach and carousel fields are not accepted for these demographic pivots. Structured `rows` retain native URNs, periods and numeric/decimal values; compact widget `records` include currency labels. No advertiser total is derived by adding the returned segments.
+
+LinkedIn approximates these metrics, suppresses segments below three events, and limits each creative/day to its top 100 demographic values. Reporting can lag by 12–24 hours. `complete` therefore remains false even when `truncated` is false. Empty data can mean no activity or insufficient data access. The native endpoint does not support pagination and caps a response at 15,000 rows. Adport also reports a local row limit explicitly. Narrow the date/campaign selection when limited; there is no invented `start`, `count` or continuation cursor.
+
+With `resolve_names`, one bounded `adTargetingEntities` lookup resolves up to the first 100 distinct returned URNs. A missing/denied optional name lookup preserves the analytics and original URNs without repeating the report. `linkedin_resolve_targeting_entities` performs the same exact `q=urns`, `QUERY_USES_URNS`, `SINGLE_NODE` lookup for up to 100 supplied taxonomy URNs, with optional locale. It verifies selected-account access and reports unresolved names; it does not expand descendants. One URN can appear under several native facets: Germany was live-verified under `locations`, `profileLocations`, `ipLocations` and `contextualCountries`. Native `elements` preserve those variants; `entities` and widget `records` group them by requested URN. Conflicting names remain explicit in `ambiguous_urns` and are not selected for report labels. Unrequested identities are rejected. Neither tool changes scopes, targeting, campaigns, money or delivery.
+
+Contracts: [Reporting](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads-reporting/ads-reporting?view=li-lms-2026-08), [metric and pivot schema](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads-reporting/ads-reporting-schema?view=li-lms-2026-08), [targeting URN resolution](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads/advertising-targeting/ads-targeting?view=li-lms-2026-08). These use Marketing API `202608`; the newer DMA pivot is not exposed by this versioned workflow.
+
+## Lead form configuration
+
+`linkedin_lead_forms` lists forms owned by the selected advertiser with native offset paging, compact widget records, account and form snapshot hashes. `linkedin_get_lead_form` verifies one exact form ID and advertiser owner. IDs are decimal **strings**, including native 64-bit JSON integer IDs; decoding preserves their original digits. These tools read configuration, never submitted leads. The existing `rw_ads` permission supports form management; reading lead responses requires the separate Lead Sync permission/program and is not added automatically.
+
+`linkedin_create_lead_form_draft` uses `expected_account_hash` from the finder and always creates `DRAFT`. Supply `creation_locale`, a name and `content` containing a localized headline, at least one question and legal information. Optional content includes a description, consent checkboxes and a thank-you message/action. Questions support documented predefined fields, custom text, multiple-choice options and work-email criteria. Localized fields must include the preferred creation locale; optional `hidden_fields` supports up to 20 entries. No creative is linked or published by these tools.
+
+`linkedin_update_lead_form` binds `form_id` and `expected_snapshot_hash`. Name-only edits and content edits use native top-level partial updates. Content edits merge with the current snapshot before setting the content record; granular nested patches are not used. Supplied localized maps and question/consent/hidden-field arrays replace their prior values, while omitted configuration and unknown native fields are carried forward. Generated question/legal IDs are read-only and excluded from the write body. Readback checks the merged configuration, including omitted fields and retained native IDs; a mismatch is unconfirmed and never retried automatically. Optional `clear_fields` explicitly removes a description, legal disclaimer or thank-you section. Reviews show observed previous and requested values. Question/schema edits can require remapping fields in connected CRM systems.
+
+Full schema/name/locale/hidden-field edits require a form whose native state is `DRAFT`. For `PUBLISHED`, only headline/description, privacy URL/disclaimer and thank-you edits are exposed; LinkedIn still enforces linked-ad eligibility. Unassociated published forms can have broader native pre-publication edit eligibility, but this workflow does not assume their association state. Published forms linked to InMail or Conversation Ads may reject edits.
+
+`linkedin_archive_lead_form` exposes the documented `PUBLISHED` → `ARCHIVED` transition with a snapshot-bound preview. Archiving can stop the form and linked creatives serving. No publish, delete or undocumented restore transition is invented. Form creation/editing alone does not create an ad. Use the lead-ad workflow below to bind it to a creative.
+
+All writes use the shared preview/apply gate and independent native readback. Unexpected outcomes retain available resource IDs and are never retried automatically. Native validation occurs on apply; local form size/collection bounds do not replace provider eligibility checks. Read-only widgets render configuration as inert text and do not load URLs or collect responses.
+
+Contracts: [Lead Forms](https://learn.microsoft.com/en-us/linkedin/marketing/lead-sync/leadsync?view=li-lms-2026-08), [Lead Form Schema](https://learn.microsoft.com/en-us/linkedin/marketing/lead-sync/lead-sync-schema?view=li-lms-2026-08), [Rest.li partial updates](https://linkedin.github.io/rest.li/spec/protocol#partial-update).
+
+## Conversion configuration and Insight Tags
+
+`linkedin_insight_tags` reads the advertiser's single native Insight Tag, its associated accounts and first-party tracking flag. `linkedin_insight_tag_domains` reads account-scoped domain/callback diagnostics. Tag and pixel snippets remain inert structured text: widgets do not embed them, install site code, fetch pixels or send conversion events. An empty tag finder is a verified absence under LinkedIn's one-tag-per-account contract.
+
+`linkedin_create_insight_tag` uses `expected_account_hash` from the current tag read and refuses an existing tag. Native creation defaults first-party tracking to true; the preview discloses that behavior. `linkedin_update_insight_tag` changes the flag using the current tag snapshot and verifies native readback. Because the flag propagates across all accounts sharing a tag, this single-account workflow rejects shared-tag flag changes until a dedicated multi-account authorization workflow is used. These tools do not grant/revoke tag access or change OAuth permissions.
+
+`linkedin_conversions` lists account-owned rules, including disabled rules, with exact configuration and snapshot hashes. `include_shared=true` additionally requests native shared rules; those entries remain read-only and have no editable snapshot. `linkedin_get_conversion` reads one owned rule using both its ID and the selected account query. Foreign or mismatched identities reject. Offset paging preserves native metadata, extracts a bounded numeric offset from valid native next links and rebuilds the original scoped request. Returned URLs are never followed. Negative native totals are retained as metadata and treated as unknown counts; they never imply zero rules. Missing paging means unknown completeness, without an invented continuation. Complete campaign-membership snapshots also verify their collected size against every available nonnegative total.
+
+Create a rule with `linkedin_create_conversion` and the current `expected_account_hash`. The default source is Insight Tag, and **enabled defaults to false**. Creation supplies explicit attribution windows/model and omits `autoAssociationType`, so the native default creates no campaign associations. Website rules support documented conversion types and 1/7/30-day windows; optional `url_match_rule_expression` uses an OR of AND groups, with `EXACT`, `STARTS_WITH` or `CONTAINS` matches. Omitting the expression creates an event-specific definition, without firing an event.
+
+The `CONVERSIONS_API` source additionally supports native CAPI types, value handling and attribution windows. 180/365-day windows are restricted to their documented type set, including the Marketing/Sales Qualified Lead types available from `202608`. Native CAPI permission (`rw_conversions`, with the appropriate advertising access and account role) remains required; the existing advertising grant is not assumed to include it. No scope upgrade or event streaming happens automatically.
+
+`linkedin_update_conversion` changes only supplied name, enabled state, type, windows, attribution model, value handling, exact-currency value or complete URL expression after matching `expected_snapshot_hash`. Monetary strings remain exact and must use the account currency. A supplied URL expression replaces that whole field; omitted fields, unknown native configuration and campaign associations remain unchanged. `NO_VALUE` stops using monetary values without silently deleting an omitted stored value. `enabled=false` disables a rule through native partial update; Adport does not invent a conversion-rule DELETE endpoint.
+
+`linkedin_campaign_conversions` verifies campaign ownership and returns native association pages. `complete_snapshot=true` traverses up to 5,000 associations, rejecting duplicate, incomplete or foreign membership, and returns a complete `associations_snapshot_hash`; the widget displays at most 100 records. `linkedin_set_campaign_conversion` uses that hash and the conversion's current hash to associate or detach one owned rule with native composite-key PUT/DELETE. This changes measurement/optimization eligibility, while preserving campaign status and budgets. Detaching an association is reversible through the same tool.
+
+All mutations use the ordinary shared preview/apply policy gate, recheck current settings, perform no automatic write retries and independently verify readback. Additive creation has `destructiveHint=false`; edits retain MCP's conservative modify-existing-data hint, which is independent of the CLI's read/write mode. An uncertain readback reports the resource ID for reconciliation; it does not imply the write failed. Native requests do not provide atomic compare-and-swap across the separate read and write.
+
+Contracts: [Conversion tracking and campaign associations](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads-reporting/conversion-tracking?view=li-lms-2026-08), [Conversions API](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads-reporting/conversions-api?view=li-lms-2026-08), [CAPI schema and attribution limits](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads-reporting/conversions-api-schema?view=li-lms-2026-08). Native live-test evidence is recorded separately from mocked contract tests.
 
 ## Text creatives and native images
 
@@ -157,3 +216,59 @@ Core contracts reviewed 2026-08-31; sponsored content and descriptive metadata r
 Rejected API requests expose only allowlisted machine diagnostics: HTTP/native/service codes, validation field paths, numeric limits and a provider correlation ID when returned. Free-form messages, descriptions and submitted values are omitted, credential echoes are excluded, and error bodies are bounded. Native failures are not retried automatically. See [LinkedIn's error schema](https://learn.microsoft.com/en-us/linkedin/marketing/error-responses?view=li-lms-2026-08).
 
 Tests use synthetic fixtures shaped by these references and assert outgoing URLs, headers, bodies, response contracts and policy behavior. On 2026-11-03, an existing scoped hosted grant uploaded a private QA image through Claude's native approval widget; the account-library finder confirmed ownership and AVAILABLE status, and the gallery supported a verified library rename. The individual-image endpoint returned403. On 2026-11-04, headless PDF source staging and a native document upload/readback reached AVAILABLE. A separate paused campaign creation preview passed locally, but its native apply returned422 without an ID; the older client did not retain the validation details. This does not establish campaign or sponsored-post creation support for that live grant. Native metadata202610, sponsored formats, shared post edits and other management operations still require live verification. A local LinkedIn credential is unavailable.
+
+
+## Lead-ad creation and form association
+
+`linkedin_lead_ad_context` reads an advertiser-owned form and, optionally, a
+supported lead-generation campaign and source creative. It returns exact form,
+campaign and source hashes for the existing `linkedin_create_sponsored_ad` and
+`linkedin_create_reference_ad` tools. Supply their optional `lead_form` object
+with `form_id`, `expected_form_hash`, `expected_campaign_hash` and `label`.
+Reference reuse additionally requires `expected_source_hash`.
+
+Native format matching is explicit:
+
+| Content | Lead campaign format |
+| --- | --- |
+| Text/image/article | `LEAD_GENERATION_FORM_SPONSORED_CONTENT` |
+| Video | `VIDEO_LEAD_GENERATION_FORM_SPONSORED_CONTENT` |
+| Carousel | `LEAD_GENERATION_FORM_CAROUSEL_SPONSORED_CONTENT` |
+| Document | `SPONSORED_UPDATE_NATIVE_DOCUMENT` |
+
+Creating a new lead ad also requires `lead_form.confirm_public_post: true`.
+The native dark post has `PUBLISHED`/`PUBLIC` visibility and is accessible by URL,
+with organic feed distribution and resharing disabled. Ordinary lead ads use
+the existing native inline-creative API. Explicit gated-document preview settings
+use the documented Posts-then-Creatives sequence, requiring native Page write
+permission in addition to Ads access. If that second write fails, the post ID
+is returned for reconciliation; the approval cannot be replayed. Successful
+receipts retain both created IDs. `DRAFT` creatives stay DRAFT and editable;
+policy coerces requested `ACTIVE` to `PAUSED`. Campaign activation remains separate.
+No form responses, tracking events or submitted leads are read or generated.
+
+Lead document ads cannot reuse a post or document already referenced by another
+creative. Upload a fresh document, then use sponsored-ad creation. A complete
+selected-account creative/reference scan checks current use before creation;
+unreadable posts, repeated/foreign pages or a scan exceeding 5,000 creatives leave
+uniqueness unconfirmed and stop the write. Post reads are deduplicated and use
+at most four concurrent requests. Native LinkedIn still enforces concurrent
+uniqueness. Optional `lead_form.gated_preview_page_count` is sent only as the
+native document creative's `gatedLeadgenPreviewPageCount`.
+
+`linkedin_creative_lead_form` shows the current association, CTA and hashes in a
+compact native creative widget. Agents use `linkedin_set_creative_lead_form` to
+prepare an exact before/after approval card. A form destination can change only
+while the creative is DRAFT. Outside DRAFT, the existing form must remain the
+same and only its CTA label may change. Content, name and delivery status are
+verified unchanged on readback. Label changes can affect serving ads. Archived
+forms cannot be selected as new targets. Stale creative, campaign or form hashes
+reject before mutation; native writes are never automatically retried.
+
+These contracts were checked against LinkedIn's [Creatives API](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads/account-structure/create-and-manage-creatives?view=li-lms-2026-08),
+[campaign objectives](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads/account-structure/campaign-objectives?view=li-lms-2026-08)
+and [Document Ads API](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads/advertising-targeting/version/document-ads?view=li-lms-2026-08)
+on 2026-11-05. Wire tests and MCP/DOM tests verify schemas and reviews; they do not
+establish live Page permission, successful publication or a live form association.
+Message, Conversation and Event ad creation use their own native content models
+and are not supplied by the sponsored-content form workflow.

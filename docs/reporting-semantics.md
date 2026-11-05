@@ -26,6 +26,13 @@ Explicit ranges are ISO dates and inclusive at both ends. Presets resolve as fol
 
 Providers may interpret report dates in an account time zone. Adport currently sends the resolved calendar dates to each provider and does not shift hourly data between zones. For decisions near midnight, record the provider account time zone and use an explicit range. Cross-provider daily comparisons can have boundary skew when accounts use different zones.
 
+The dashboard Overview range picker uses these same presets and supports custom
+inclusive dates. Apply updates both the summary and campaign activity; Cancel
+preserves the current report. The selected range is retained in the page URL for
+refreshing or sharing within an authorized project. Invalid, reversed and future
+dates are rejected before any provider report is read. Overview does not filter
+by hours within a day.
+
 ## Attribution and freshness
 
 Conversions and conversion value retain each provider's configured attribution model, window, identity rules, and postback latency. A Meta conversion and a Google conversion can both be valid without representing the same causal event. Adport does not deduplicate cross-platform conversions or restate them under a common attribution model.

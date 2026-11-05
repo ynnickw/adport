@@ -13,6 +13,7 @@ import {
   getMcpOAuthClient,
 } from '@/lib/cloud/mcp-oauth-repository';
 import { closeDbForTests, db } from '@/lib/db';
+import { saveToolSelection } from '@/lib/cloud/tool-catalog';
 import {
   mcpResourceUrl,
   pkceChallenge,
@@ -232,6 +233,27 @@ describeHttp('running cloud server', () => {
     expect(tools.tools.length).toBeGreaterThan(0);
     expect(tools.tools.some((tool) => tool.name === 'accounts_list')).toBe(true);
     await client.close();
+  });
+
+  it('discovers a hidden workflow over authenticated HTTP without enabling its tools', async () => {
+    await saveToolSelection({ organizationId, userId, apiKeyId }, { profile: 'standard', providers: ['meta'] });
+    const client = new Client({ name: 'capability-http-test', version: '1' });
+    try {
+      await client.connect(new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), { requestInit: { headers: { authorization: `Bearer ${apiKey}` } } }));
+      const { tools } = await client.listTools();
+      expect(tools.some(tool => tool.name === 'capabilities_list')).toBe(true);
+      expect(tools.some(tool => tool.name === 'meta_create_lookalike_audience')).toBe(false);
+      expect(tools.some(tool => /_api_/.test(tool.name))).toBe(false);
+      const response = await client.callTool({ name: 'capabilities_list', arguments: { provider: 'meta', query: 'lookalike' } });
+      expect(response.isError).not.toBe(true);
+      expect(response.structuredContent).toMatchObject({ profile: 'standard',
+        manage_access_url: expect.stringContaining(`projectId=${organizationId}`),
+        tools: expect.arrayContaining([expect.objectContaining({ name: 'meta_create_lookalike_audience', enabled: false, blockers: expect.arrayContaining(['profile_disabled', 'not_connected']) })]) });
+      await expect(client.callTool({ name: 'meta_create_lookalike_audience', arguments: {} })).rejects.toThrow(/not found/);
+    } finally {
+      await client.close();
+      await saveToolSelection({ organizationId, userId, apiKeyId }, { profile: 'full', providers: null });
+    }
   });
 });
 
