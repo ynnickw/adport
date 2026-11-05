@@ -2,10 +2,15 @@ import type { CredentialStore, ProviderModule } from '@adport/core';
 import { TikTokClient, type TikTokCredentials } from './client.js';
 import { TikTokAdsProvider } from './provider.js';
 import { tiktokTools } from './tools.js';
+import { FileTikTokCatalogAccessStore } from './catalog-access.js';
+import { LocalMediaResolver } from '@adport/core';
 
 export { TikTokClient, TIKTOK_API_VERSION, type TikTokCredentials } from './client.js';
 export { TikTokAdsProvider, UNITS_TO_MICROS } from './provider.js';
 export { tiktokTools } from './tools.js';
+export { TikTokCatalogService } from './catalogs.js';
+export { tiktokCatalogTools } from './catalog-tools.js';
+export { FileTikTokCatalogAccessStore, catalogGrant, catalogScope, catalogScopeKey, requireCatalogAccess, type TikTokCatalogAccessMode, type TikTokCatalogAccessStore, type TikTokCatalogGrant, type TikTokCatalogScope } from './catalog-access.js';
 
 export async function resolveTikTokCredentials(
   store: CredentialStore,
@@ -37,6 +42,6 @@ export async function createTikTokModule(store: CredentialStore): Promise<Provid
   const provider = new TikTokAdsProvider(new TikTokClient(credentials), {
     appId: credentials.appId,
     secret: credentials.secret,
-  });
-  return { provider, tools: tiktokTools(provider) };
+  }, new LocalMediaResolver(), new FileTikTokCatalogAccessStore());
+  return { provider, tools: tiktokTools(provider, { catalogAccessManagement: true }) };
 }

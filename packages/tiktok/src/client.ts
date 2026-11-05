@@ -66,6 +66,8 @@ export class TikTokClient {
         ...(typeof init.body === 'string' ? { 'content-type': 'application/json' } : {}),
       },
       body: init.body,
+      redirect: 'error',
+      signal: AbortSignal.timeout(30_000),
     });
     const raw = await response.text();
     if (!response.ok) {

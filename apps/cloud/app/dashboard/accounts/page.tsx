@@ -14,6 +14,7 @@ import { isOAuthProvider } from '@/lib/cloud/types';
 import { AccountAccessManager } from './account-access-manager';
 import { isSyntheticReviewer } from '@/lib/cloud/synthetic-reviewer';
 import { SyntheticReviewer } from '@/components/synthetic-reviewer';
+import { CatalogAccessManager } from './catalog-access-manager';
 
 export const metadata = { title: 'Accounts' };
 
@@ -67,6 +68,8 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
           providerFilter={providerFilter}
         />
       )}
+      {canManage && (!providerFilter || providerFilter === 'tiktok') ? <CatalogAccessManager key={tenant.organizationId} organizationId={tenant.organizationId} projectName={tenant.organizationName}
+        accounts={inventory.filter(account => account.provider === 'tiktok').map(account => ({ accountId: account.accountId, name: account.name, ready: account.enabled && connections.some(connection => connection.provider === 'tiktok' && connection.status === 'connected' && !connection.accountSelectionId) }))} /> : null}
     </main>
   );
 }

@@ -1472,3 +1472,20 @@ input.control-checkbox:disabled { cursor: not-allowed; opacity: .45; }
 .assistant-tool-access { margin-top: .65rem; max-width: 34rem; border: 0; }
 .assistant-tool-access > summary { padding: .4rem 0; font-size: .8125rem; }
 .assistant-tool-access > .disclosure-content { padding: .75rem 0 .25rem; }
+.catalog-access-control { margin-top:16px; }
+.catalog-access-launch { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+.catalog-access-launch .inline-note { flex:1; margin:0; }
+.catalog-access-launch label { display:flex; align-items:center; gap:8px; }
+.catalog-access-fields { display:grid; gap:12px; }
+.catalog-access-fields label { display:grid; gap:6px; }
+.catalog-access-review { margin-top:16px; padding:14px; border:1px solid var(--line); border-radius:10px; }
+.catalog-access-review dl { display:grid; gap:8px; margin:12px 0; }
+.catalog-access-review dl > div { display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+.catalog-access-review dt { color:var(--muted); }
+.catalog-access-review dd { margin:0; overflow-wrap:anywhere; }
+.catalog-access-list { margin-top:20px; border-top:1px solid var(--line); padding-top:16px; }
+.catalog-access-list h3 { margin:0; }
+.catalog-access-list ul { list-style:none; margin:8px 0; padding:0; max-height:240px; overflow:auto; }
+.catalog-access-list li > button { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; padding:10px 0; text-align:left; border:0; border-bottom:1px solid var(--line); background:transparent; }
+.catalog-access-list small { display:block; color:var(--muted); margin-top:3px; }
+@media(min-width:600px) { .catalog-access-fields { grid-template-columns:1fr 1fr; } .catalog-access-fields label:last-child { grid-column:1/-1; } }

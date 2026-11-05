@@ -21,6 +21,8 @@ import { TikTokCreativeService } from './creatives.js';
 import { TikTokAudienceService } from './audiences.js';
 import { TikTokMeasurementService } from './measurement.js';
 import { TikTokAutomatedRulesService } from './automated-rules.js';
+import { TikTokCatalogService } from './catalogs.js';
+import type { TikTokCatalogAccessStore } from './catalog-access.js';
 
 /** TikTok budgets are floats in whole account-currency units. */
 export const UNITS_TO_MICROS = 1_000_000;
@@ -58,12 +60,14 @@ export class TikTokAdsProvider implements AdProvider {
   readonly audiences: TikTokAudienceService;
   readonly measurement: TikTokMeasurementService;
   readonly automatedRules: TikTokAutomatedRulesService;
+  readonly catalogs: TikTokCatalogService;
 
   constructor(
     private readonly client: TikTokClient,
     private readonly app: { appId: string; secret: string },
     media: MediaResolver = new LocalMediaResolver(),
-  ) { this.creatives = new TikTokCreativeService(client, media); this.audiences = new TikTokAudienceService(client); this.measurement = new TikTokMeasurementService(client); this.automatedRules = new TikTokAutomatedRulesService(client); }
+    catalogAccess?: TikTokCatalogAccessStore,
+  ) { this.creatives = new TikTokCreativeService(client, media); this.audiences = new TikTokAudienceService(client); this.measurement = new TikTokMeasurementService(client); this.automatedRules = new TikTokAutomatedRulesService(client); this.catalogs = new TikTokCatalogService(client, catalogAccess); }
 
   capabilities(): ProviderCapabilities {
     // No server-side dry run in the Marketing API — previews are client-side diffs.
@@ -240,6 +244,9 @@ export class TikTokAdsProvider implements AdProvider {
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
     const payload = op.payload as never;
     switch (op.tool) {
+      case 'tiktok_update_catalog':
+      case 'tiktok_set_catalog_access':
+        return this.catalogs.plan(op);
       case 'tiktok_create_pixel':
       case 'tiktok_update_pixel':
         return this.measurement.plan(op);

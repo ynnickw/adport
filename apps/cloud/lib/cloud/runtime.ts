@@ -34,6 +34,7 @@ import { HttpError } from '@/lib/http';
 import { ProjectMediaLibrary } from './media';
 import { instrumentCloudTools } from './analytics-tools';
 import { PostgresResourceSecretStore } from './resource-credentials';
+import { PostgresTikTokCatalogAccessStore } from './tiktok-catalog-access';
 
 export interface TenantRuntimeOptions {
   /** Used only immediately after OAuth exchange to discover provider accounts. */
@@ -117,7 +118,8 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
   }
   if (credentials.tiktok) {
     const resolved = hydrateTikTok(credentials.tiktok);
-    const provider = new TikTokAdsProvider(new TikTokClient(resolved), { appId: resolved.appId, secret: resolved.secret }, media);
+    const catalogAccess = new PostgresTikTokCatalogAccessStore(principal, enabledAccountIds.tiktok ?? new Set());
+    const provider = new TikTokAdsProvider(new TikTokClient(resolved), { appId: resolved.appId, secret: resolved.secret }, media, catalogAccess);
     modules.push({ provider: scopeProvider(provider), tools: tiktokTools(provider) });
   }
   if (credentials.apple) {
