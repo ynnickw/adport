@@ -25,6 +25,7 @@ import { GoogleConversionService, GOOGLE_CONVERSION_WRITES } from './conversions
 import { GoogleDataManagerService } from './data-manager.js';
 import { GoogleExperimentService, GOOGLE_EXPERIMENT_WRITES } from './experiments.js';
 import { GooglePerformanceMaxService, GOOGLE_PMAX_WRITES } from './pmax.js';
+import { GoogleTargetingService } from './targeting.js';
 
 const LEVEL_RESOURCE = {
   account: 'customer',
@@ -59,6 +60,7 @@ export class GoogleAdsProvider implements AdProvider {
   readonly dataManager: GoogleDataManagerService;
   readonly experiments: GoogleExperimentService;
   readonly performanceMax: GooglePerformanceMaxService;
+  readonly targeting: GoogleTargetingService;
 
   constructor(private readonly client: GoogleAdsRestClient, media?: MediaResolver) {
     this.assets = new GoogleAssetService(client, media);
@@ -68,6 +70,7 @@ export class GoogleAdsProvider implements AdProvider {
     this.dataManager = new GoogleDataManagerService(client, this.conversions);
     this.experiments = new GoogleExperimentService(client);
     this.performanceMax = new GooglePerformanceMaxService(client);
+    this.targeting = new GoogleTargetingService(client);
   }
 
   keywordPlanning(customerId: string, method: 'generateKeywordIdeas' | 'generateKeywordHistoricalMetrics', body: Record<string, unknown>) {
@@ -334,6 +337,7 @@ export class GoogleAdsProvider implements AdProvider {
       budgetDeltas: plan.budgetDeltas,
       ...(plan.fieldChanges ? { fieldChanges: plan.fieldChanges } : {}),
       ...(plan.notes ? { notes: plan.notes } : {}),
+      ...(plan.review ? { review: plan.review } : {}),
       serverValidated: plan.serverValidated ?? true,
     };
   }
@@ -354,6 +358,7 @@ export class GoogleAdsProvider implements AdProvider {
     if (op.tool === 'google_ingest_conversion_events') return this.dataManager.plan(op);
     if (GOOGLE_EXPERIMENT_WRITES.has(op.tool)) return this.experiments.plan(op, guard);
     if (GOOGLE_PMAX_WRITES.has(op.tool)) return this.performanceMax.plan(op, guard);
+    if (op.tool === 'google_update_targeting') return this.targeting.plan(op);
     const cid = normalizeCustomerId(op.accountId);
     // Tool input was already zod-validated at the registry boundary.
     const payload = op.payload as never;
@@ -487,6 +492,7 @@ export class GoogleAdsProvider implements AdProvider {
       coercions.push('status coerced to PAUSED by policy (paused_creation)');
     }
     const channelType = payload.channel_type ?? 'SEARCH';
+    if (channelType === 'SEARCH' && payload.language_ids?.length) throw new AdportError('INVALID_INPUT', 'google: Search no longer supports manual language criteria. Omit language_ids; matching uses creative/landing-page language and user preferences. Existing legacy language criteria can only be removed.');
     if (channelType === 'PERFORMANCE_MAX') throw new AdportError('INVALID_INPUT', 'google: use google_create_performance_max_campaign to create the complete campaign, brand assets and asset-group hierarchy atomically');
     if (channelType !== 'SEARCH' && (payload.search_partners !== undefined || payload.display_expansion !== undefined)) {
       throw new AdportError('INVALID_INPUT', 'search_partners and display_expansion require a SEARCH campaign');

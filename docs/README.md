@@ -7,6 +7,7 @@
 - [Reporting semantics](reporting-semantics.md): currencies, date ranges, attribution, and comparison limits
 - [Write safety and audit](write-safety.md): previews, approval binding, policy, and audit records
 - [Creative editing and private media](creative-media.md): visual tools, project uploads, immutable assets, and provider workflows
+- [Google campaign targeting](providers/google-targeting.md): locations, exclusions, schedules, devices and current language rules
 - [Apple campaign setup](apple-campaign-setup.md)
 - [TikTok campaign and creative setup](tiktok-campaign-setup.md)
 - [TikTok automated-rule inspection and native limits](providers/tiktok.md)

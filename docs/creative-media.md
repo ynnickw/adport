@@ -69,6 +69,13 @@ The library supports images, video and audio previews. PDF sources retain their 
 
 ## Creative tools
 
+Google's [campaign targeting tools](providers/google-targeting.md) provide a paged
+configuration view and native validation-backed reviews for existing-campaign
+location/language deltas, schedules, device multipliers and location intent.
+Search languages follow Google's current automatic matching rules; legacy
+criteria are read/removable. These edits preserve campaign/ad statuses and
+monetary budgets and can affect delivery on an enabled campaign.
+
 Google's `google_ads` reads real ad copy and serving status. `google_update_responsive_search_ad` edits supplied fields, preserves positional pinning and leaves serving status unchanged. `google_set_ad_status` changes the ad-level status independently of its parent ad group and campaign.
 
 Meta's `meta_list_ads` and `meta_list_creatives` return creative content and configuration with visual actions. Meta creative content is immutable: create a replacement with `meta_create_link_creative` or `meta_create_creative`, then attach its ID with `meta_update_ad`. Creating a creative does not replace an existing ad. `meta_create_ad` creates an account-owned ad and respects paused creation. Replacing an active ad's creative preserves its serving status and can trigger review; the preview reports that state.
