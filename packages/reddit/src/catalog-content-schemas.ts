@@ -27,7 +27,7 @@ export function validFilter(value: string) {
   };
   try { return visit(JSON.parse(value), 0); } catch { return false; }
 }
-export const setFilter = z.string().min(2).max(65_536).refine(validFilter, 'Use the documented Reddit product-filter JSON grammar');
+export const setFilter = z.string().min(2).max(65_536).refine(value => Buffer.byteLength(value, 'utf8') <= 65_536, 'Filter JSON must not exceed 64 KiB in UTF-8').refine(validFilter, 'Use the documented Reddit product-filter JSON grammar');
 export const setCreate = catalogInput.omit({ account_id: true }).extend({ name: z.string().min(1).max(100), filter: setFilter, expected_catalog_configuration_hash: hash, acknowledge_shared_effects: z.literal(true) }).strict();
 export const setUpdate = setInput.omit({ account_id: true }).extend({ name: z.string().min(1).max(100).optional(), filter: setFilter.optional(), expected_configuration_hash: hash, acknowledge_shared_effects: z.literal(true) }).strict().refine(input => input.name !== undefined || input.filter !== undefined, 'Provide a name or filter');
 export const setDelete = setInput.omit({ account_id: true }).extend({ expected_configuration_hash: hash, confirm_name: z.string().min(1).max(100), acknowledge_shared_effects: z.literal(true), acknowledge_remove_set: z.literal(true) }).strict();

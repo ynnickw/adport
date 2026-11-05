@@ -7,7 +7,7 @@ import { RedditAdsClient } from '../src/client.js';
 import { RedditAdsProvider } from '../src/provider.js';
 import { FileRedditCatalogAccessStore, catalogGrant } from '../src/catalog-access.js';
 import { redditTools } from '../src/tools.js';
-import { validFilter } from '../src/catalog-content-schemas.js';
+import { validFilter, setFilter } from '../src/catalog-content-schemas.js';
 
 // Official v3 OpenAPI and Filter Products guide refreshed 2026-11-05.
 const A = 'a2_qa', B = '1e200a0b-4e98-32cc-dd47-3006e4c85bb2', C = 'catalog_qa', S = 'set_qa', NEW = 'set_new', I = 'import_qa', scope = { account_id: A, business_id: B, catalog_id: C }, selected = { ...scope, product_set_id: S }, resource = { accountId: A, businessId: B, resourceId: C, kind: 'catalog' as const }, guard = { forcePausedCreation: true }, F = '{"brand":{"eq":"QA"}}';
@@ -70,6 +70,7 @@ describe('Reddit product-set filter contract and guarded lifecycle', () => {
   it.each(['is_any', 'is_not_any', 'i_is_any', 'i_is_not_any'])('accepts documented array operator %s', operator => { expect(validFilter(JSON.stringify({ brand: { [operator]: ['A', 'B'] } }))).toBe(true); });
   it.each(['{}', '{"__proto__":{"eq":"x"}}', '{"brand":{"eval":"x"}}', '{"brand":{"eq":2}}', '{"brand":{"is_any":[]}}', '{"and":[]}', '{"brand":{"eq":"x"},"color":{"eq":"red"}}', 'not-json'])('refuses unknown/ambiguous/unsafe filter grammar %s', filter => { expect(validFilter(filter)).toBe(false); });
   it('limits recursive rules and total filter size', () => { let value: unknown = { brand: { eq: 'QA' } };for (let i = 0; i < 9; i++) value = { and: [value] };expect(validFilter(JSON.stringify(value))).toBe(false); });
+  it('enforces the documented UTF-8 byte limit for valid multibyte filter rules', () => { const filter = (text: string) => JSON.stringify({ and: Array.from({ length: 10 }, () => ({ brand: { eq: text.repeat(3000) } })) }), ascii = filter('a'), multibyte = filter('界');expect(setFilter.safeParse(ascii).success).toBe(true);expect(multibyte.length).toBeLessThan(65_536);expect(validFilter(multibyte)).toBe(true);expect(setFilter.safeParse(multibyte).success).toBe(false); });
   it('POSTs native data once, preserves filter-string encoding and independently checks the new exact ID', async () => {
     const f = await fixture(), args = await f.create(), op = f.op('reddit_create_catalog_product_set', args);expect((await f.provider.previewWrite(op, guard)).review?.title).toBe('Create product set');expect(f.writes()).toHaveLength(0);expect(await f.provider.applyWrite(op, guard)).toMatchObject({ resourceIds: [NEW] });expect(f.writes()).toHaveLength(1);expect(f.writes()[0]).toMatchObject({ method: 'POST', body: { data: { name: 'New QA', filter: args.filter } } });expect(f.calls.at(-1)!.url.pathname).toBe('/api/v3/product_sets/' + NEW);
   });
