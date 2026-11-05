@@ -12,9 +12,9 @@ export const TOOL_PROFILE_OPTIONS = [
   { value: 'full', label: 'Full' },
 ];
 export const TOOL_PROFILE_DESCRIPTIONS = {
-  standard: 'Everyday reporting and campaign workflows. Specialist tools stay out of the way.',
-  reporting: 'Read-only tools for performance, account inspection and audits.',
-  full: 'Every supported operation, including specialist workflows.',
+  standard: 'Performance reports, campaigns, budgets, ads and creative uploads.',
+  reporting: 'Read-only access to performance, account inspection and available configuration.',
+  full: 'All supported tools for your selected platforms, including advanced workflows.',
 };
 
 export function toolSelectionFromForm(form: FormData): ToolSelection {

@@ -3,6 +3,11 @@ import type { AnyToolDefinition } from './registry.js';
 export const TOOL_PROVIDERS = ['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const;
 export type ToolProvider = (typeof TOOL_PROVIDERS)[number];
 export type ToolProfile = 'standard' | 'reporting' | 'full';
+export const TOOL_CATEGORIES = {
+  core: 'Projects and accounts', reporting: 'Performance and reporting', campaigns: 'Campaigns and budgets',
+  creatives: 'Ads and creative assets', audiences: 'Audiences and targeting', experiments: 'Experiments',
+  measurement: 'Conversions and measurement', administration: 'Platform administration',
+} as const;
 export interface ToolCatalogMetadata {
   category: 'core' | 'reporting' | 'campaigns' | 'creatives' | 'audiences' | 'experiments' | 'measurement' | 'administration';
   exposure: 'standard' | 'specialist' | 'raw';
@@ -15,7 +20,7 @@ export interface ToolSelection {
 
 // Complete everyday flows, rather than a numerical limit on available tools.
 const STANDARD_TOOLS = new Set([
-  'projects_list', 'accounts_list', 'report', 'audit_preview', 'audit_run', 'recommendations_list', 'recommendation_dismiss',
+  'projects_list', 'capabilities_list', 'accounts_list', 'report', 'audit_preview', 'audit_run', 'recommendations_list', 'recommendation_dismiss',
   'media_list', 'media_get', 'media_upload', 'media_prepare_upload', 'media_upload_part', 'media_finalize_upload',
   'media_import_file', 'media_inspect_file', 'media_distribution_plan', 'media_distributions',
   'media_rename', 'media_update_metadata', 'media_delete',

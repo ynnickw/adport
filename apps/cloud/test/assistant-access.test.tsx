@@ -57,4 +57,19 @@ describe('project assistant access', () => {
     expect(html).not.toContain('Create key');
     expect(html).not.toContain('Connected assistants');
   });
+
+  it('keeps a settings link in the intended project and preserves its target connection when switching', async () => {
+    mocks.tenant.mockResolvedValue({ organizationId: 'other-project', role: 'owner', projects: [{ id: 'project', name: 'Client project' }] });
+    const html = renderToStaticMarkup(await AgentsPage({ searchParams: Promise.resolve({ projectId: 'project', connection: 'client', kind: 'oauth' }) }));
+    expect(html).toContain('Open Client project');
+    expect(html).toContain('connection=client&amp;kind=oauth#connected-assistants');
+    expect(mocks.grants).not.toHaveBeenCalled();
+  });
+
+  it('does not expose a target project’s grants when a settings link is unauthorized', async () => {
+    mocks.tenant.mockResolvedValue({ organizationId: 'other-project', role: 'owner', projects: [] });
+    const html = renderToStaticMarkup(await AgentsPage({ searchParams: Promise.resolve({ projectId: 'project' }) }));
+    expect(html).toContain('project you cannot access');
+    expect(mocks.grants).not.toHaveBeenCalled();
+  });
 });

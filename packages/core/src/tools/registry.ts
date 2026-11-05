@@ -5,7 +5,17 @@ import { AdportError } from '../errors.js';
 import type { PolicyEngine } from '../policy/engine.js';
 import type { ProviderRegistry } from '../provider.js';
 import type { MediaLibrary } from '../media.js';
-import { classifyTool, type ToolCatalogMetadata } from './catalog.js';
+import { classifyTool, type ToolCatalogMetadata, type ToolSelection } from './catalog.js';
+
+export interface ToolCatalogContext {
+  tools: readonly AnyToolDefinition[];
+  selection: ToolSelection;
+  connectedProviders: readonly string[];
+  includeRawTools: boolean;
+  canWrite?: boolean;
+  manageAccessUrl?: string;
+  excludedTools?: readonly string[];
+}
 
 export interface ToolAnnotations {
   readOnly?: boolean;
@@ -24,6 +34,8 @@ export interface ToolContext {
   /** Hosted runtimes inject a tenant-scoped findings repository. */
   findings?: FindingsRepository;
   media?: MediaLibrary;
+  /** Metadata discovery never invokes hidden handlers or changes access. */
+  catalog?: ToolCatalogContext;
 }
 
 export interface AnyToolDefinition {

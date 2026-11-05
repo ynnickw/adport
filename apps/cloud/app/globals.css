@@ -1449,6 +1449,19 @@ input.control-checkbox:disabled { cursor: not-allowed; opacity: .45; }
 }
 
 .tool-catalog-fields { display: grid; gap: .85rem; }
+.tool-profile-features { display: grid; gap: .8rem; margin: 0 0 .85rem; font-size: .8125rem; line-height: 1.6; }
+.tool-profile-features dt { font-weight: 600; }
+.tool-profile-features dd { margin: .15rem 0 0; color: var(--muted); }
+.date-range-trigger { gap: .55rem; font-size: .8125rem; }
+.date-range-trigger svg { width: 1rem; height: 1rem; flex: none; }
+.date-range-dialog { width: min(30rem, calc(100vw - 2rem)); }
+.date-range-presets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+.date-range-presets .button { font-size: .8125rem; }
+.date-range-presets .button[aria-pressed="true"] { border-color: var(--signal); background: var(--signal-wash); }
+.date-range-inputs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+.date-range-inputs .control-input { min-width: 0; width: 100%; }
+.date-range-actions { display: flex; justify-content: flex-end; gap: .5rem; }
+@media (max-width: 420px) { .date-range-inputs { grid-template-columns: 1fr; } .date-range-trigger { max-width: 100%; white-space: normal; text-align: left; } .performance-toolbar { flex-wrap: wrap; } }
 .tool-catalog-fields .select-control { display: flex; width: 100%; }
 .tool-platform-disclosure { border: 1px solid var(--line-soft); border-radius: .6rem; }
 .tool-platform-disclosure > summary { padding: .75rem .85rem; font-size: .8125rem; }

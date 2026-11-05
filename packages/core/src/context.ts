@@ -10,6 +10,8 @@ import type { FindingsRepository } from './audit/store.js';
 import { mediaTools } from './tools/media.js';
 import type { MediaLibrary } from './media.js';
 import { toolInSelection, type ToolSelection } from './tools/catalog.js';
+import { capabilityTools } from './tools/capabilities.js';
+import type { ToolCatalogContext } from './tools/registry.js';
 
 export interface ProviderModule {
   provider: AdProvider;
@@ -43,7 +45,8 @@ export interface AdportRuntime {
 }
 
 /** Filter execution as well as discovery; shared reads also see only selected providers. */
-export function selectRuntimeCatalog(runtime: AdportRuntime, selection: ToolSelection, includeRawTools = false): AdportRuntime {
+export function selectRuntimeCatalog(runtime: AdportRuntime, selection: ToolSelection, includeRawTools = false,
+  discovery: Pick<ToolCatalogContext, 'canWrite' | 'manageAccessUrl' | 'excludedTools'> = {}): AdportRuntime {
   const registry = new ToolRegistry();
   registry.register(runtime.registry.list().filter(tool => toolInSelection(tool, selection, includeRawTools)));
   // Keep transport instrumentation and the owning registry's validation path.
@@ -56,6 +59,10 @@ export function selectRuntimeCatalog(runtime: AdportRuntime, selection: ToolSele
     if (selection.providers === null || selection.providers.some(id => id === provider.id)) providers.register(provider);
   }
   return { ...runtime, registry, ctx: { ...runtime.ctx, providers, registry,
+    catalog: { ...(runtime.ctx.catalog ?? { tools: runtime.registry.list(), selection,
+      connectedProviders: runtime.ctx.providers.list().map(provider => provider.id) }), ...discovery,
+      includeRawTools: includeRawTools && (runtime.ctx.catalog?.includeRawTools ?? true),
+      canWrite: runtime.ctx.catalog?.canWrite === false ? false : discovery.canWrite ?? runtime.ctx.catalog?.canWrite },
     authorizeToolCall: (tool, input) => runtime.ctx.authorizeToolCall?.(tool, input),
   } };
 }
@@ -71,6 +78,7 @@ export async function createContext(options: CreateContextOptions = {}): Promise
 
   const registry = new ToolRegistry();
   registry.register(builtinTools());
+  registry.register(capabilityTools());
   registry.register(mediaTools());
   registry.register(auditTools());
 

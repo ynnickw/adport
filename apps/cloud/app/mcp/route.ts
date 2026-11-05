@@ -56,8 +56,8 @@ async function handle(request: Request): Promise<Response> {
         ...uiOptions,
         runtime,
         instructions: principal.oauthTokenId
-          ? `Call projects_list to discover the projects and platforms authorized for this connection. Use project_id on operations to choose the intended project; it is required when multiple projects are available. Each project has its own accounts and policies. This connection uses the ${catalog.profile} tool profile. Tool access and platforms can be changed on Adport's AI assistants page; refresh the assistant's tool list after changing them.`
-          : undefined,
+          ? `Call projects_list to discover authorized projects and platforms. Use project_id on operations; it is required with multiple projects. Each project has its own accounts and policies. This connection uses the ${catalog.profile} tool profile. Before saying a workflow is unsupported or a needed tool is missing, call capabilities_list with relevant keywords and project_id. It discovers hidden tools, explains access requirements and returns a direct Manage tool access link. After saving, refresh the assistant’s tool list or reconnect if it stays unchanged. Access changes never run the requested operation automatically.`
+          : `This connection uses the ${catalog.profile} tool profile. If a needed tool is missing, call capabilities_list before claiming the workflow is unsupported. It returns supported workflows, enablement steps and a Manage tool access link. Refresh the assistant’s tool list after access changes.`,
         productionOnly: true,
         scopes: toolScopes,
         scopeDenials: writePlanDenial ? { 'tools:write': writePlanDenial } : undefined,

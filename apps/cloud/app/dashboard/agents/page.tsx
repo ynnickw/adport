@@ -8,11 +8,20 @@ import Link from 'next/link';
 import type { ToolProvider } from '@adport/core';
 import { listOrganizationAdAccounts } from '@/lib/cloud/repository';
 import { listMcpOAuthGrants } from '@/lib/cloud/mcp-oauth-repository';
+import { selectProjectAction } from '../projects/actions';
+import { Button } from '@/components/controls';
 
 export const metadata = { title: 'AI assistants' };
 
-export default async function AgentsPage() {
-  const tenant = await requireDashboardTenant();
+export default async function AgentsPage({ searchParams }: { searchParams?: Promise<{ projectId?: string; connection?: string; kind?: string; scope?: string }> } = {}) {
+  const [tenant, query] = await Promise.all([requireDashboardTenant(), searchParams ?? Promise.resolve({} as { projectId?: string; connection?: string; kind?: string; scope?: string })]);
+  if (query.projectId && query.projectId !== tenant.organizationId) {
+    const target = tenant.projects?.find(project => project.id === query.projectId);
+    const destination = '/dashboard/agents?' + new URLSearchParams({ ...(query.connection ? { connection: query.connection } : {}), ...(query.kind ? { kind: query.kind } : {}), ...(query.scope ? { scope: query.scope } : {}) }) + '#connected-assistants';
+    return <main className="page"><PageHeader title="Manage tool access" showDescription description={target ? `This assistant connection is in ${target.name}. Switch projects to review its tool access.` : 'This connection belongs to a project you cannot access. Ask its owner to review tool access.'} />
+      {target ? <form action={selectProjectAction}><input type="hidden" name="projectId" value={target.id} /><input type="hidden" name="return_to" value={destination} /><Button type="submit" className="button">Open {target.name}</Button></form> : <Link className="button secondary" href="/dashboard/agents">View your assistants</Link>}
+    </main>;
+  }
   const baseUrl = env().ADPORT_CLOUD_BASE_URL.replace(/\/$/, '');
   const canManage = canAdminister(tenant);
   const [accounts, grants] = await Promise.all([

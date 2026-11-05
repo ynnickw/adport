@@ -30,7 +30,7 @@ export interface OAuthGrantSummary {
 
 function AssistantConnection({ grant, checkedAt, organizationId, currentUserId, onSaved }: { grant: OAuthGrantSummary; checkedAt: number; organizationId: string; currentUserId?: string; onSaved: () => void }) {
   return <div className="row-item assistant-connection">
-    <AgentIdentityLogo name={grant.clientName} /><div className="assistant-connection-details">
+    <AgentIdentityLogo name={grant.clientName} clientUri={grant.clientUri} /><div className="assistant-connection-details">
       <div className="agent-identity"><strong>{grant.clientName}</strong><span className={'status' + (grant.status === 'active' && grant.lastUsedAt ? '' : ' neutral')}>{grant.status === 'active' ? grant.lastUsedAt ? 'In use' : 'Authorized' : grant.status === 'revoked' ? 'Disconnected' : 'Sign in again'}</span><InfoTooltip label={`Connection details for ${grant.clientName}`}>Access: {grant.scopes.includes('tools:write') ? 'Read and propose changes' : 'Read only'}. Authorized {formatDate(grant.createdAt)}. Sign-in expires {formatDate(grant.expiresAt)}.</InfoTooltip></div>
       <p className="cell-sub">{grant.organizationGroupId ? 'All accessible projects · ' : ''}{grant.status === 'active' ? grant.lastUsedAt ? `Last reached Adport ${formatRelative(grant.lastUsedAt, checkedAt)}` : 'Authorized, waiting for its first request.' : 'Reconnect from your assistant to authorize access again.'}</p>
       {grant.status === 'active' && grant.userId === currentUserId ? <ToolCatalogEditor organizationId={organizationId}

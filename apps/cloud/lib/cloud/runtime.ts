@@ -1,5 +1,6 @@
 import 'server-only';
 import { AdportError, createContext, selectRuntimeCatalog, PolicyEngine, type ToolSelection, type AdportRuntime, type AnyToolDefinition, type ProviderModule } from '@adport/core';
+import { toolAccessPath } from '@/lib/tool-access-link';
 import { AppleAdsClient, AppleAdsProvider, appleTools } from '@adport/provider-apple';
 import { GoogleAdsProvider, GoogleAdsRestClient, googleTools } from '@adport/provider-google';
 import { MetaAdsProvider, MetaGraphClient, metaTools } from '@adport/provider-meta';
@@ -160,7 +161,10 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     media,
   });
   if (options.surface === 'mcp') completeMcpCatalog(runtime);
-  const selected = options.catalog ? selectRuntimeCatalog(runtime, options.catalog) : runtime;
+  const selected = options.catalog ? selectRuntimeCatalog(runtime, options.catalog, false, {
+    canWrite: principal.scopes.includes('tools:write'), excludedTools: ['recommendation_apply'],
+    manageAccessUrl: new URL(toolAccessPath(principal.organizationId, principal.apiKeyId ?? principal.clientId ?? '', principal.apiKeyId ? 'key' : 'oauth', principal.oauthOrganizationGroupId), env().ADPORT_CLOUD_BASE_URL).href,
+  }) : runtime;
   return enforceAccountScope ? instrumentCloudTools(selected, principal, options.surface ?? 'dashboard') : selected;
 }
 

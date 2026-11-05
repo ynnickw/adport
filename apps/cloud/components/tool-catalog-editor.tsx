@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { ToolSelection } from '@adport/core/tool-catalog';
 import { Button, Disclosure } from './controls';
 import { ToolCatalogFields } from './tool-catalog-fields';
@@ -16,6 +16,18 @@ export function ToolCatalogEditor({ organizationId, connection, initialSelection
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string>();
   const [error, setError] = useState<string>();
+  const details = useRef<HTMLDetailsElement>(null);
+  const connectionId = connection.type === 'key' ? connection.id : connection.client_id;
+  const connectionScope = connection.type === 'oauth' ? connection.organization_group_id ?? 'project' : undefined;
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (query.get('connection') === connectionId && query.get('kind') === connection.type
+      && (connection.type === 'key' || query.get('scope') === connectionScope) && details.current) {
+      details.current.open = true;
+      details.current.scrollIntoView({ block: 'center' });
+      details.current.querySelector('summary')?.focus({ preventScroll: true });
+    }
+  }, [connectionId, connection.type, connectionScope]);
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const selection = toolSelectionFromForm(new FormData(event.currentTarget));
@@ -32,7 +44,7 @@ export function ToolCatalogEditor({ organizationId, connection, initialSelection
     finally { setBusy(false); }
   }
   const profile = TOOL_PROFILE_OPTIONS.find(option => option.value === savedSelection.profile)!.label;
-  return <Disclosure className="assistant-tool-access" label={`Tool access · ${profile} · ${savedSelection.providers === null ? 'All platforms' : `${savedSelection.providers.length} platforms`}`}>
+  return <Disclosure ref={details} className="assistant-tool-access" label={`Tool access · ${profile} · ${savedSelection.providers === null ? 'All platforms' : `${savedSelection.providers.length} platforms`}`}>
     <form className="stack" onSubmit={event => void save(event)}>
       <ToolCatalogFields initialSelection={savedSelection} disabled={busy} />
       <p className="field-hint">Applies to this connection across its authorized projects. Your account permissions and approval requirements stay the same.</p>

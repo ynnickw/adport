@@ -1,4 +1,4 @@
-import { createContext } from '@adport/core';
+import { createContext, selectRuntimeCatalog } from '@adport/core';
 import { AppleAdsClient, AppleAdsProvider, appleTools } from '@adport/provider-apple';
 import { GoogleAdsProvider, GoogleAdsRestClient, googleTools } from '@adport/provider-google';
 import { MetaAdsProvider, MetaGraphClient, metaTools } from '@adport/provider-meta';
@@ -56,6 +56,26 @@ describe('all-provider shared tool surface', () => {
       ],
     });
     names = runtime.registry.list().map((tool) => tool.name);
+  });
+
+  it('discovers hidden Meta workflows through a schema-valid MCP response while keeping execution disabled', async () => {
+    const selected = selectRuntimeCatalog(runtime, { profile: 'standard', providers: ['google', 'meta'] }, false,
+      { canWrite: true, manageAccessUrl: 'https://app.adport.test/dashboard/agents?connection=fixture' });
+    const server = createMcpServer({ runtime: selected, productionOnly: true });
+    const host = new Client({ name: 'capability-discovery', version: '1' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport); await host.connect(clientTransport);
+    try {
+      const { tools } = await host.listTools();
+      expect(tools.some(tool => tool.name === 'capabilities_list')).toBe(true);
+      expect(tools.some(tool => tool.name === 'meta_create_lookalike_audience')).toBe(false);
+      expect(tools.some(tool => /_api_/.test(tool.name))).toBe(false);
+      const result = await host.callTool({ name: 'capabilities_list', arguments: { provider: 'meta', query: 'lookalike' } });
+      expect(result.isError).not.toBe(true);
+      expect(result.structuredContent).toMatchObject({ profile: 'standard', manage_access_url: expect.stringContaining('/dashboard/agents'),
+        tools: expect.arrayContaining([expect.objectContaining({ name: 'meta_create_lookalike_audience', enabled: false, blockers: ['profile_disabled'] })]) });
+      await expect(host.callTool({ name: 'meta_create_lookalike_audience', arguments: {} })).rejects.toThrow(/not found/);
+    } finally { await host.close(); await server.close(); }
   });
 
   it('registers native read/create/update/delete tools once for both CLI and MCP adapters', async () => {
