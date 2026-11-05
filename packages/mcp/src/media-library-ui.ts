@@ -89,7 +89,7 @@ export const MEDIA_LIBRARY_UI = String.raw`
     async function renewLibraryPreview(card,entry) {
       const {asset,scope,project}=entry;if(entry.pending || !libraryPreviewActive(scope,card,asset)) return;
       entry.pending=true;libraryPreviewMessage(card,entry,true);
-      libraryPreviewReads.set(project+':'+asset.id,entry);if(libraryPreviewReads.size>32) libraryPreviewReads.delete(libraryPreviewReads.keys().next().value);
+      libraryPreviewReads.set(project+':'+asset.id,entry);
       try {
         const response=await callTool('media_get',{media_id:asset.id,project_id:project},60000),value=resultData(response),fresh=value.asset;
         if(response?.isError || value.error || value._adport?.tool!=='media_get' || value._adport?.context?.project_id!==project || fresh?.id!==asset.id || fresh.sha256!==asset.sha256 || fresh.byte_length!==asset.byte_length || fresh.content_type!==asset.content_type || fresh.status!=='READY') throw new Error('Preview could not be confirmed.');
@@ -102,7 +102,11 @@ export const MEDIA_LIBRARY_UI = String.raw`
         const data={...mediaLibrary.data,assets:arr(mediaLibrary.data.assets).map(item=>item.id===asset.id?fresh:item),creatives:arr(mediaLibrary.data.creatives).map(item=>item.id===asset.id?updated:item)};
         mediaLibrary.data=data;state.hasLocalResult=true;state.result={structuredContent:{...data,_adport:mediaLibrary.meta}};
       } catch {if(libraryPreviewActive(scope,card,asset)) libraryPreviewMessage(card,entry);}
-      finally {entry.pending=false;}
+      finally {
+        entry.pending=false;
+        // Keep every in-flight echo bound, even when a large page expires together.
+        for(const [key,read] of libraryPreviewReads) {if(libraryPreviewReads.size<=32) break;if(!read.pending) libraryPreviewReads.delete(key);}
+      }
     }
     function mediaLibraryIgnoreEcho(data) {
       return !!app.querySelector('[data-media-gallery]') && data?._adport?.tool==='media_get' && [...libraryPreviewReads.values()].some(entry=>data._adport.context?.project_id===entry.project && (entry.asset.id===data.asset?.id || entry.pending && !data.asset));

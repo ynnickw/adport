@@ -152,4 +152,20 @@ describe('central widget preview renewal',()=>{
     try {f.document.querySelector('video')!.dispatchEvent(new f.dom.window.Event('error'));expect(f.callTool).not.toHaveBeenCalled();expect(f.document.querySelector('[data-preview-retry]')).toBeNull();}
     finally {f.dom.window.close();}
   });
+
+  it('retains in-flight echo guards when more than 32 previews expire together',async()=>{
+    const f=fixture();
+    try {
+      const assets=Array.from({length:40},(_,i)=>({...previewAsset,id:`33333333-3333-4333-8333-${String(i).padStart(12,'0')}`}));
+      const many=page(assets.map(asset=>video(asset.id)));Object.assign(many.structuredContent,{assets});f.notify(many);
+      f.callTool.mockImplementation(()=>new Promise(()=>{}));
+      f.document.querySelectorAll('video').forEach(player=>player.dispatchEvent(new f.dom.window.Event('error')));
+      await vi.waitFor(()=>expect(f.callTool).toHaveBeenCalledTimes(40));
+      const next=page([video('different-project')],undefined,'22222222-2222-4222-8222-222222222222');f.notify(next);
+      const gallery=f.document.querySelector('[data-media-gallery]');
+      f.notify(renewed({id:assets[0]!.id}));
+      expect(f.document.querySelector('[data-media-gallery]')).toBe(gallery);
+      expect(f.document.querySelector('.creative-name')?.textContent).toBe('different-project');
+    } finally {f.dom.window.close();}
+  });
 });
