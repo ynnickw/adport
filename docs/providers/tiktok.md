@@ -99,6 +99,9 @@ administrative tools are omitted from hosted MCP and public REST catalogs.
 | `tiktok_catalog_access` | Read the selected project/account's explicit grants |
 | `tiktok_get_catalog` | `GET /open_api/v1.3/catalog/get/` with exact `bc_id` and `catalog_id` |
 | `tiktok_update_catalog` | `POST /open_api/v1.3/catalog/update/` followed by independent exact-ID readback |
+| `tiktok_product_sets` | `GET /open_api/v1.3/catalog/set/get/`, optionally filtered by exact `product_set_id` |
+| `tiktok_product_set_products` | `GET /open_api/v1.3/catalog/set/product/get/` with exact parent IDs and native pages |
+| `tiktok_rename_product_set` | `POST /open_api/v1.3/catalog/set/update/` with `product_set_name` and independent set readback |
 
 `tiktok_get_catalog` never enumerates a whole Business Center. It verifies a
 single native result and its `bc_info.bc_id`, preserves native configuration,
@@ -120,12 +123,37 @@ mandatory trailing slashes, redirect rejection and a 30-second timeout. Provider
 permission/error envelopes remain errors and do not become empty inventories.
 Sensitive provider error bodies are excluded from the new catalog workflows.
 
-Creation/deletion, feeds, products, product sets, catalog videos, event-source
-bindings and migration from advertiser-owned catalogs remain separate work.
+Product-set reads and renaming use the same explicit catalog grants. Set reads
+return a `configuration_hash` bound to the advertiser, Business Center, catalog,
+set name and filter conditions. Renaming requires that hash and
+`acknowledge_shared_effects: true`; filter conditions are preserved, product
+counts do not invalidate the snapshot, and an uncertain result retains the set
+ID for reconciliation without replaying the write.
+
+The native product-set list endpoint is unpaged. Adport bounds it to 5,000 sets
+and offers local `cursor` / `page_size` navigation, with at most 100 sets per
+page. Changing the selection or set configuration invalidates the cursor;
+refresh the first page. `return_product_count` defaults to `false` because
+TikTok warns that counts can time out on large sets. This is local pagination,
+not a claim that the native endpoint provides server-side paging.
+
+Products within a verified set use native `page` / `page_size` navigation, with
+at most 100 products per request. Widgets can load more while retaining existing
+cards. Missing or inconsistent pagination is reported as unknown completeness,
+not as a complete inventory. Large string IDs remain exact; unsafe numeric IDs
+are rejected rather than rounded. The SDK/widget checks use synthetic native
+responses and do not prove live provider or Claude/ChatGPT host success.
+
+Creation/deletion, feeds, product imports/edits, set creation/filter editing,
+catalog videos, event-source bindings and migration from advertiser-owned
+catalogs remain separate work.
 Read/rename and permission controls are contract, policy, SDK/widget and
 disposable-Postgres tested; positive native provider and Claude/ChatGPT host
 verification remain pending.
 
 Contracts inspected 2026-11-05: [Get catalogs](https://business-api.tiktok.com/portal/docs?id=1740315452868610),
-[Update catalog](https://business-api.tiktok.com/portal/docs?id=1740306544966657)
+[Update catalog](https://business-api.tiktok.com/portal/docs?id=1740306544966657),
+[Get product sets](https://business-api.tiktok.com/portal/docs?id=1740570556295169),
+[Get products in a set](https://business-api.tiktok.com/portal/docs?id=1740571478441986),
+and [Update product set](https://business-api.tiktok.com/portal/docs?id=1740572974725122)
 and the [official SDK](https://github.com/tiktok/tiktok-business-api-sdk/tree/f809c396520df2d7b201a9ccc5378d822b728ed3).

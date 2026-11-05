@@ -37,14 +37,14 @@ export class TikTokClient {
     this.baseUrl = `${credentials.sandbox ? SANDBOX_BASE : PROD_BASE}/${TIKTOK_API_VERSION}`;
   }
 
-  async get<T>(path: string, params: Record<string, unknown> = {}): Promise<T> {
+  async get<T>(path: string, params: Record<string, unknown> = {}, options: { jsonContentType?: boolean } = {}): Promise<T> {
     const search = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
       if (value === undefined) continue;
       search.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
     }
     const query = search.size > 0 ? `?${search}` : '';
-    return this.send<T>(`${path}${query}`, { method: 'GET' });
+    return this.send<T>(`${path}${query}`, { method: 'GET', ...options });
   }
 
   async post<T>(path: string, body: Record<string, unknown>): Promise<T> {
@@ -55,7 +55,7 @@ export class TikTokClient {
     return this.send<T>(path, { method: 'POST', body: form });
   }
 
-  private async send<T>(pathWithQuery: string, init: { method: string; body?: string | FormData }): Promise<T> {
+  private async send<T>(pathWithQuery: string, init: { method: string; body?: string | FormData; jsonContentType?: boolean }): Promise<T> {
     // Trailing slash is mandatory before the query string.
     const [path, query] = pathWithQuery.split('?');
     const url = `${this.baseUrl}/${path!.replace(/^\/|\/$/g, '')}/${query ? `?${query}` : ''}`;
@@ -63,7 +63,7 @@ export class TikTokClient {
       method: init.method,
       headers: {
         'Access-Token': this.credentials.accessToken,
-        ...(typeof init.body === 'string' ? { 'content-type': 'application/json' } : {}),
+        ...(typeof init.body === 'string' || init.jsonContentType ? { 'content-type': 'application/json' } : {}),
       },
       body: init.body,
       redirect: 'error',

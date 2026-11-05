@@ -1,9 +1,10 @@
 import { defineTool, guardedWriteTool, type AnyToolDefinition } from '@adport/core';
 import { z } from 'zod';
 import type { TikTokAdsProvider } from './provider.js';
+import { catalogId, catalogInput } from './catalog-schema.js';
+import { productSetList, productSetProducts, productSetRename } from './catalog-product-sets.js';
 
-export const catalogId = z.string().regex(/^\d{1,30}$/);
-export const catalogInput = z.object({ account_id: catalogId, bc_id: catalogId, catalog_id: catalogId }).strict();
+export { catalogId, catalogInput } from './catalog-schema.js';
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 export const catalogRename = catalogInput.omit({ account_id: true }).extend({ name: z.string().trim().min(1).max(128), expected_configuration_hash: hash, acknowledge_shared_effects: z.literal(true) }).strict();
 export const catalogAccessChange = catalogInput.omit({ account_id: true }).extend({ mode: z.enum(['none', 'read', 'write']), expected_access_hash: hash }).strict();
@@ -13,6 +14,9 @@ export function tiktokCatalogTools(provider: Pick<TikTokAdsProvider, 'catalogs'>
   return [
     defineTool({ ...read, name: 'tiktok_catalog_access', catalog: { category: 'administration', exposure: 'specialist' }, description: 'List only this project/account’s explicit Business Center catalog grants. Advertiser access alone grants no catalog access. No native Business Center inventory is enumerated.', input: z.object({ account_id: catalogId }).strict(), handler: input => provider.catalogs.access(input.account_id) }),
     defineTool({ ...read, name: 'tiktok_get_catalog', description: 'Read one explicitly granted Business Center catalog, native eligibility and configuration_hash. Verifies exact catalog and Business Center IDs; does not enumerate unrelated catalogs.', input: catalogInput, handler: input => provider.catalogs.get(input) }),
+    defineTool({ ...read, name: 'tiktok_product_sets', catalog: { category: 'creatives', exposure: 'specialist' }, description: 'Browse one granted catalog’s product sets or an exact set, with configuration hashes. Snapshot-bound local paging; native endpoint returns all sets, bounded to 5,000. Product counts default off to avoid native timeouts.', input: productSetList, pagination: { cursorInput: 'cursor' }, handler: input => provider.catalogs.productSets.list(input) }),
+    defineTool({ ...read, name: 'tiktok_product_set_products', catalog: { category: 'creatives', exposure: 'specialist' }, description: 'Read products in one verified product set within a granted catalog. Native page navigation, safe string IDs and explicit pagination certainty. Adport limits each page to 100 products.', input: productSetProducts, pagination: { cursorInput: 'page', cursorOutput: 'next_page' }, handler: input => provider.catalogs.productSets.products(input) }),
+    guardedWriteTool({ name: 'tiktok_rename_product_set', namespace: 'tiktok', provider: 'tiktok', catalog: { category: 'creatives', exposure: 'specialist' }, kind: 'update', destructive: false, description: 'Rename one verified product set using its configuration_hash and shared-effects acknowledgement. Preserves filter conditions, independently reads back the set and never automatically replays an uncertain write.', payload: productSetRename }),
     guardedWriteTool({ name: 'tiktok_update_catalog', namespace: 'tiktok', provider: 'tiktok', kind: 'update', destructive: false, description: 'Rename an explicitly writable catalog using a fresh configuration_hash and shared-effects acknowledgement. Native JSON POST plus independent readback; no ads activated and no automatic retry.', payload: catalogRename }),
     ...(accessManagement ? [
       defineTool({ ...read, name: 'tiktok_catalog_access_snapshot', catalog: { category: 'administration', exposure: 'specialist' }, description: 'Owner settings/local owner only: read the exact current catalog grant hash before reviewing an access change. Not exposed by hosted MCP or public API.', input: catalogInput, handler: input => provider.catalogs.accessSnapshot(input) }),

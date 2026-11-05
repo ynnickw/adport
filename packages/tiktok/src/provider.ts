@@ -244,6 +244,7 @@ export class TikTokAdsProvider implements AdProvider {
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
     const payload = op.payload as never;
     switch (op.tool) {
+      case 'tiktok_rename_product_set':
       case 'tiktok_update_catalog':
       case 'tiktok_set_catalog_access':
         return this.catalogs.plan(op);
