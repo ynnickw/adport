@@ -28,8 +28,8 @@ describe('catalog runtime boundaries', () => {
   });
   it('keeps the complete central asset upload and metadata flow in Standard', () => {
     // Catalog SKU imports are tracked file uploads but require the specialist catalog workflow.
-    for (const name of ['tiktok_upload_product_set', 'tiktok_import_catalog_file']) expect(classifyTool(name, 'tiktok').exposure).toBe('specialist');
-    for (const name of [...MEDIA_UPLOAD_TOOLS].filter(name => !['tiktok_upload_product_set', 'tiktok_import_catalog_file'].includes(name)).concat([...MEDIA_PREPARATION_TOOLS,
+    for (const name of ['tiktok_upload_product_set', 'tiktok_import_catalog_file', 'tiktok_upload_catalog_videos']) expect(classifyTool(name, 'tiktok').exposure).toBe('specialist');
+    for (const name of [...MEDIA_UPLOAD_TOOLS].filter(name => !['tiktok_upload_product_set', 'tiktok_import_catalog_file', 'tiktok_upload_catalog_videos'].includes(name)).concat([...MEDIA_PREPARATION_TOOLS,
       'media_rename', 'media_update_metadata', 'media_delete', 'reddit_asset_upload_status',
       'spotify_get_asset', 'pinterest_get_media_upload', 'pinterest_create_video_pin',
       'linkedin_get_document', 'x_media_upload_status', 'x_register_uploaded_media'])) {

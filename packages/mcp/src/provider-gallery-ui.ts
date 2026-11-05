@@ -31,7 +31,7 @@ export const PROVIDER_GALLERY_UI = String.raw`
     function galleryArgsMatchScope(args,meta) {return object(args) && args.account_id===meta.accountId && args.project_id===meta.context?.project_id && !Object.hasOwn(args,'pending_operation_id');}
     function galleryActions(creative,meta) {
       if(meta.capabilities?.can_write!==true || !meta.provider || !meta.accountId || creative.provider!==meta.provider || creative.account_id!==meta.accountId) return [];
-      return arr(creative.actions).filter(action=>object(action) && typeof action.tool==='string' && action.tool.startsWith(meta.provider+'_') && object(action.arguments) && action.arguments.account_id===creative.account_id && !Object.hasOwn(action.arguments,'pending_operation_id') && (!action.arguments.project_id || action.arguments.project_id===meta.context?.project_id) && arr(action.fields).length>0 && arr(action.fields).every(field=>object(field) && typeof field.key==='string' && /^[a-z][a-z0-9_]*$/.test(field.key) && !['account_id','project_id','pending_operation_id','constructor','prototype','__proto__'].includes(field.key) && !Object.hasOwn(action.arguments,field.key) && ['text','text_list','url_list','select'].includes(field.type) && (typeof field.value==='string' || Array.isArray(field.value) && field.value.every(v=>typeof v==='string'))) && new Set(action.fields.map(field=>field.key)).size===action.fields.length).slice(0,8);
+      return arr(creative.actions).filter(action=>object(action) && typeof action.tool==='string' && action.tool.startsWith(meta.provider+'_') && object(action.arguments) && action.arguments.account_id===creative.account_id && !Object.hasOwn(action.arguments,'pending_operation_id') && (!action.arguments.project_id || action.arguments.project_id===meta.context?.project_id) && Array.isArray(action.fields) && action.fields.every(field=>object(field) && typeof field.key==='string' && /^[a-z][a-z0-9_]*$/.test(field.key) && !['account_id','project_id','pending_operation_id','constructor','prototype','__proto__'].includes(field.key) && !Object.hasOwn(action.arguments,field.key) && ['text','text_list','url_list','select'].includes(field.type) && (typeof field.value==='string' || Array.isArray(field.value) && field.value.every(v=>typeof v==='string'))) && new Set(action.fields.map(field=>field.key)).size===action.fields.length).slice(0,8);
     }
     function galleryMenu(creative) {
       const actions=galleryActions(creative,providerGallery.meta);
@@ -67,8 +67,8 @@ export const PROVIDER_GALLERY_UI = String.raw`
       if(!retain) app.innerHTML=chrome('<div data-provider-notes></div><div class="creative-grid" data-provider-gallery role="region" aria-label="Creative previews" tabindex="0"></div><div data-provider-pages></div>','');
       const root=app.querySelector('[data-provider-gallery]');
       for(const item of arr(data.creatives)) {
-        const key=galleryItemKey(item);if(gallery.items.has(key)) {const old=gallery.items.get(key);if(galleryStable(old)!==galleryStable(item) || previousWrite!==meta.capabilities?.can_write) {const card=[...root.querySelectorAll('[data-creative-key]')].find(node=>node.dataset.creativeKey===key);gallery.items.set(key,item);if(card) {if(meta.capabilities?.can_write!==true) card.querySelector('[data-creative-editor]')?.remove();updateGalleryCard(card,old,item,gallery);}}continue;}
-        gallery.items.set(key,item);gallery.sources.set(key,meta.refresh?.arguments);
+        const key=galleryItemKey(item);gallery.sources.set(key,meta.refresh?.arguments);if(gallery.items.has(key)) {const old=gallery.items.get(key);if(galleryStable(old)!==galleryStable(item) || previousWrite!==meta.capabilities?.can_write) {const card=[...root.querySelectorAll('[data-creative-key]')].find(node=>node.dataset.creativeKey===key);gallery.items.set(key,item);if(card) {if(meta.capabilities?.can_write!==true) card.querySelector('[data-creative-editor]')?.remove();updateGalleryCard(card,old,item,gallery);}}continue;}
+        gallery.items.set(key,item);
         const template=document.createElement('template');template.innerHTML=creativeCards([item],galleryMenu);const card=template.content.firstElementChild;card.dataset.creativeKey=key;root.append(card);bindGalleryCard(card,gallery);bindCreativeErrors(card);
       }
       root.querySelector('.empty')?.remove();if(!gallery.items.size) root.innerHTML='<div class="empty">No creatives to preview.</div>';
@@ -109,7 +109,7 @@ export const PROVIDER_GALLERY_UI = String.raw`
       form.innerHTML=action.fields.map((field,index)=>{const value=Array.isArray(field.value)?field.value.join('\n'):field.value;
         const input=field.type==='select'?'<select data-field="'+index+'">'+arr(field.options).filter(option=>typeof option.value==='string').map(option=>'<option value="'+esc(option.value)+'" '+(option.value===value?'selected':'')+'>'+esc(option.label || option.value)+'</option>').join('')+'</select>':field.type!=='text' || value.includes('\n') || value.length>120?'<textarea data-field="'+index+'" rows="3">'+esc(value)+'</textarea>':'<input data-field="'+index+'" value="'+esc(value)+'">';
         return '<label>'+esc(field.label || field.key)+input+'</label>';}).join('')+'<p class="provider-message" role="alert" data-editor-error hidden></p><div class="creative-editor-actions"><button class="media-button" type="button" data-editor-cancel>Cancel</button><button class="media-button primary" type="submit">Preview changes</button></div>';
-      card.append(form);form.querySelector('[data-field]')?.focus({preventScroll:true});form.scrollIntoView?.({block:'nearest'});
+      card.append(form);form.querySelector('[data-field],[type="submit"]')?.focus({preventScroll:true});form.scrollIntoView?.({block:'nearest'});
       form.querySelector('[data-editor-cancel]').addEventListener('click',()=>{if(!gallery.busy) {form.remove();card.querySelector('.creative-menu>summary')?.focus({preventScroll:true});}});
       form.addEventListener('submit',async event=>{
         event.preventDefault();if(providerGallery!==gallery || gallery.busy) return;
@@ -121,11 +121,12 @@ export const PROVIDER_GALLERY_UI = String.raw`
           gallery.busy={kind:'preview',tool:action.tool,args};form.querySelectorAll('button,input,textarea,select').forEach(node=>{node.disabled=true;});form.querySelector('[type="submit"]').textContent='Preparing preview…';
           const response=await callTool(action.tool,args,180000),value=resultData(response);if(providerGallery!==gallery) return;
           if(response?.isError || value?.error || value.status!=='pending_validation' || value.applied!==false || typeof value.pending_operation_id!=='string' || value._adport?.tool!==action.tool || value._adport?.accountId!==item.account_id || value._adport?.context?.project_id!==gallery.meta.context?.project_id) throw new Error('The preview could not be confirmed. Check the tool result before trying again.');
-          const fragment=document.createDocumentFragment(),root=app.querySelector('[data-provider-gallery]');gallery.review={fragment,key:galleryItemKey(item),tool:action.tool,pending:value.pending_operation_id,scroll:root.scrollTop};while(app.firstChild) fragment.append(app.firstChild);
+          const fragment=document.createDocumentFragment(),root=app.querySelector('[data-provider-gallery]');gallery.review={fragment,key:galleryItemKey(item),tool:action.tool,pending:value.pending_operation_id,kind:value.preview?.review?.kind,scroll:root.scrollTop};while(app.firstChild) fragment.append(app.firstChild);
           gallery.busy=null;acceptResult(response,true);
         } catch(problem) {if(providerGallery===gallery) {error.textContent=problem?.message || 'The preview could not be confirmed.';error.hidden=false;}}
         finally {if(providerGallery===gallery) {gallery.busy=null;form.querySelectorAll('button,input,textarea,select').forEach(node=>{node.disabled=false;});form.querySelector('[type="submit"]').textContent='Preview changes';}}
       });
+      if(!action.fields.length) form.requestSubmit();
     }
     function providerGalleryIgnoreEcho(data) {
       const busy=providerGallery?.busy,meta=data?._adport;
@@ -147,9 +148,16 @@ export const PROVIDER_GALLERY_UI = String.raw`
         gallery.busy={kind:'refresh',tool:gallery.meta.tool,args};renderProviderPages();
         try {
           const response=await callTool(gallery.meta.tool,args,60000),value=galleryPageValue(response,gallery,args);if(providerGallery!==gallery) return;
-          const updated=value.creatives.find(item=>galleryItemKey(item)===review.key);if(!updated) throw new Error('The edited creative is outside this page. Ask your assistant for a fresh view.');
-          const old=gallery.items.get(review.key);gallery.items.set(review.key,updated);if(card) updateGalleryCard(card,old,updated,gallery);
-          state.result={structuredContent:{...gallery.data,creatives:[...gallery.items.values()],_adport:gallery.meta}};state.hasLocalResult=true;
+          const updated=value.creatives.find(item=>galleryItemKey(item)===review.key);
+          if(!updated && !(phase==='applied' && review.kind==='remove')) throw new Error('The edited creative is outside this page. Ask your assistant for a fresh view.');
+          if(!updated) {
+            gallery.items.delete(review.key);gallery.sources.delete(review.key);card?.remove();gallery.seen.clear();
+            renderProviderGallery(value,value._adport);root.scrollTop=review.scroll;root.focus({preventScroll:true});
+          } else {
+            const old=gallery.items.get(review.key);gallery.items.set(review.key,updated);if(card) updateGalleryCard(card,old,updated,gallery);
+            state.result={structuredContent:{...gallery.data,creatives:[...gallery.items.values()],_adport:gallery.meta}};
+          }
+          state.hasLocalResult=true;
         } catch(problem) {if(providerGallery===gallery) {card?.querySelector('.creative-menu')?.remove();renderProviderPages(problem?.message || 'The updated creative could not be read. Ask your assistant for a fresh view.');}}
         finally {if(providerGallery===gallery) {gallery.busy=null;const more=app.querySelector('[data-provider-more]');more?.setAttribute('aria-disabled','false');}}
       });

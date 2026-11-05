@@ -100,6 +100,22 @@ describe('scoped provider gallery controls', () => {
   it('removes editing controls when a fresh grant becomes read-only without replacing the player', () => {
     const f = fixture();try {const player=f.document.querySelector('video')!;f.edit().click();f.notify(page([creative()], 'next-page', args, false));expect(f.document.querySelector('.creative-menu,form')).toBeNull();expect(f.document.querySelector('video')).toBe(player);expect(f.more()).not.toBeNull();expect(f.callTool).not.toHaveBeenCalled();} finally {f.dom.window.close();}
   });
+  it('previews a fieldless removal once and retains an unconfirmed target after an empty read', async () => {
+    const item = { ...creative(), actions: [{ label: 'Remove card', tool: 'x_delete_card', arguments: { account_id: account, card_id: 'card-1', expected_configuration_hash: 'a'.repeat(64), acknowledge_shared_creative_effects: true }, fields: [] }] };
+    const f = fixture(page([item], undefined));try {
+      const player = f.document.querySelector('video')!;
+      f.callTool.mockImplementation(async (tool, request) => {
+        if (tool === 'x_cards') return page([], undefined, request);
+        if (request.pending_operation_id) throw new Error('Interrupted after submission');
+        const value = preview(request);Object.assign(value.structuredContent._adport!, { tool: 'x_delete_card' });Object.assign((value.structuredContent as any).preview.review, { kind: 'remove', fields: [{ label: 'Card', after: 'card-1' }] });return value;
+      });
+      f.edit().click();await vi.waitFor(() => expect(f.document.querySelector('[data-approve]')).not.toBeNull());expect(f.callTool).toHaveBeenCalledTimes(1);
+      f.document.querySelector<HTMLButtonElement>('[data-approve]')!.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+      await vi.waitFor(() => expect(f.document.querySelector('.operation-status')?.textContent).toBe('Unconfirmed'), { timeout: 2500 });
+      f.document.querySelector<HTMLButtonElement>('[aria-label="Back to creatives"]')!.click();await vi.waitFor(() => expect(f.document.querySelector('main')!.textContent).toContain('outside this page'));
+      expect(f.document.querySelector('video')).toBe(player);expect(f.document.querySelectorAll('article')).toHaveLength(1);expect(f.document.querySelector('.creative-menu')).toBeNull();expect(f.callTool).toHaveBeenCalledTimes(3);
+    } finally { f.dom.window.close(); }
+  });
   it('updates a renamed player label without restarting it for a renewed URL', () => {
     const original = creative(), f = fixture(page([original]));try {
       const player = f.document.querySelector('video')!;player.currentTime = 3;

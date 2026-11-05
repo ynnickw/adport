@@ -8,6 +8,7 @@ import { TikTokCatalogProductSets } from './catalog-product-sets.js';
 import { TikTokCatalogFeeds } from './catalog-feeds.js';
 import { TikTokCatalogProducts } from './catalog-products.js';
 import { TikTokCatalogProductAuthoring } from './catalog-product-authoring.js';
+import { TikTokCatalogVideos } from './catalog-videos.js';
 
 type Row = Record<string, unknown>;
 type Plan = Omit<WritePreview, 'serverValidated'> & { execute(): Promise<string[]> };
@@ -29,16 +30,18 @@ export class TikTokCatalogService {
   readonly feeds: TikTokCatalogFeeds;
   readonly products: TikTokCatalogProducts;
   readonly productAuthoring: TikTokCatalogProductAuthoring;
+  readonly videos: TikTokCatalogVideos;
   constructor(private readonly client: Pick<TikTokClient, 'get' | 'post'> & Partial<Pick<TikTokClient, 'postMultipart'>>, private readonly store?: TikTokCatalogAccessStore, media?: MediaResolver) {
     const authorizeParent = async (input: z.infer<typeof catalogInput>, write?: boolean) => {
-      await requireCatalogAccess(this.store, scopeOf(input), write);
+      const grant = await requireCatalogAccess(this.store, scopeOf(input), write);
       const catalog = await this.native(input);
-      return { ...catalog, configuration_hash: configurationHash(input.account_id, catalog) };
+      return { ...catalog, configuration_hash: configurationHash(input.account_id, catalog), can_write: grant.mode === 'write' && this.store?.canWrite === true };
     };
     this.productSets = new TikTokCatalogProductSets(client, authorizeParent, media);
     this.feeds = new TikTokCatalogFeeds(client, authorizeParent);
     this.products = new TikTokCatalogProducts(client, authorizeParent, this.feeds, media);
     this.productAuthoring = new TikTokCatalogProductAuthoring(client, authorizeParent, this.feeds, this.products, media);
+    this.videos = new TikTokCatalogVideos(client, authorizeParent, media);
   }
   private manager() {
     if (!this.store?.canManage) throw new AdportError('POLICY_VIOLATION', 'Only the local owner or a signed-in project owner/admin in Accounts can change catalog access.');
@@ -67,6 +70,7 @@ export class TikTokCatalogService {
     return { catalog: data, records: [{ id: catalog.catalog_id, name: catalog.catalog_name, native_ad_eligibility: catalog.ad_creation_eligible ?? 'Not reported', type: catalog.catalog_type, business_center: catalog.bc_info.bc_name ?? input.bc_id, currency: catalog.catalog_conf.currency ?? 'Not reported', country: catalog.catalog_conf.country ?? 'Not reported' }] };
   }
   async plan(op: WriteOperation): Promise<Plan> {
+    if (['tiktok_upload_catalog_videos', 'tiktok_delete_catalog_video'].includes(op.tool)) return this.videos.plan(op);
     if (this.productAuthoring.supports(op.tool)) return this.productAuthoring.plan(op);
     if (op.tool === 'tiktok_import_catalog_file') return this.products.plan(op);
     if (['tiktok_create_catalog_feed', 'tiktok_update_catalog_feed', 'tiktok_set_catalog_feed_schedule_status', 'tiktok_delete_catalog_feed'].includes(op.tool)) return this.feeds.plan(op);
