@@ -38,6 +38,7 @@ export class RedditCatalogService {
     const parsed = nativeCatalog.safeParse(value);if (!parsed.success || parsed.data.id !== scope.catalog_id || parsed.data.business_id !== scope.business_id) throw invalid();return parsed.data;
   }
   private async parent(scope: Scope, write = false) { await requireCatalogAccess(this.store, resource(scope), write);return (await this.native(scope))!; }
+  async authorize(value: unknown, write = false) { const input = catalogInput.parse(value), row = await this.parent(input, write);return { ...row, configuration_hash: configurationHash(input, row) }; }
   private async business(id: string) {
     const parsed = z.object({ id: redditBusinessId, name: z.string().max(4000) }).safeParse(await this.read(`businesses/${encodeURIComponent(id)}`));if (!parsed.success || parsed.data.id !== id) throw invalid();return parsed.data;
   }

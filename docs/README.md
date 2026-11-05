@@ -11,6 +11,7 @@
 - [TikTok campaign and creative setup](tiktok-campaign-setup.md)
 - [TikTok automated-rule inspection and native limits](providers/tiktok.md)
 - [Reddit Business catalog access and configuration](providers/reddit-catalogs.md)
+- [Reddit product views, set management and import diagnostics](providers/reddit-catalog-content.md)
 - [Spotify campaign drafts and media](spotify-campaign-setup.md)
 - [Pinterest campaign hierarchy and previews](pinterest-campaign-setup.md)
 - [Agent plugin](../plugins/adport/README.md)

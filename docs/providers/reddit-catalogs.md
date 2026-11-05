@@ -97,9 +97,10 @@ Contents and consumers are not enumerated or frozen. Native DELETE returns
 failures do not count as absence. Uncertain results retain known IDs and are
 not replayed. Project grants remain separate owner settings.
 
-Product authoring, feeds, product sets, imports and their diagnostics remain
-outstanding. This is catalog configuration coverage, not full Reddit API
-coverage. Wire/policy tests, isolated Postgres checks, owner-route/UI tests and
+[Product views, set management and import diagnostics](reddit-catalog-content.md)
+use these same exact catalog grants. Manual product mutations and feed
+management remain outstanding. This is catalog configuration coverage, not full
+Reddit API coverage. Wire/policy tests, isolated Postgres checks, owner-route/UI tests and
 synthetic OpenAI/MCP widget bridges cover these workflows. Positive native
 catalog mutations and actual Claude/ChatGPT host execution remain unverified.
 

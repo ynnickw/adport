@@ -19,6 +19,7 @@ import { RedditAdsClient, type RedditEnvelope } from './client.js';
 import { createCampaign, redditId, setCampaignBudget, setCampaignStatus } from './schemas.js';
 import { RedditCreativeService } from './creatives.js';
 import { RedditCatalogService } from './catalogs.js';
+import { RedditCatalogContentService } from './catalog-content.js';
 import type { RedditCatalogAccessStore } from './catalog-access.js';
 import { RedditManagementService } from './management.js';
 
@@ -57,7 +58,8 @@ export class RedditAdsProvider implements AdProvider {
   readonly creatives: RedditCreativeService;
   readonly management: RedditManagementService;
   readonly catalogs: RedditCatalogService;
-  constructor(private readonly client: RedditAdsClient, media?: MediaResolver, catalogAccess?: RedditCatalogAccessStore) { this.creatives = new RedditCreativeService(client, media); this.management = new RedditManagementService(client, this.creatives);this.catalogs = new RedditCatalogService(client, catalogAccess); }
+  readonly catalogContent: RedditCatalogContentService;
+  constructor(private readonly client: RedditAdsClient, media?: MediaResolver, catalogAccess?: RedditCatalogAccessStore) { this.creatives = new RedditCreativeService(client, media); this.management = new RedditManagementService(client, this.creatives);this.catalogs = new RedditCatalogService(client, catalogAccess);this.catalogContent = new RedditCatalogContentService(client, this.catalogs); }
 
   capabilities(): ProviderCapabilities {
     return { serverDryRun: false };
@@ -240,6 +242,7 @@ export class RedditAdsProvider implements AdProvider {
   }
 
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
+    if (['reddit_create_catalog_product_set', 'reddit_update_catalog_product_set', 'reddit_delete_catalog_product_set'].includes(op.tool)) return this.catalogContent.plan(op);
     if (['reddit_set_catalog_access', 'reddit_create_catalog', 'reddit_rename_catalog', 'reddit_set_catalog_event_sources', 'reddit_delete_catalog'].includes(op.tool)) return this.catalogs.plan(op);
     if (/^reddit_(?:create_(?:customer_audience|pixel_audience|engagement_audience|saved_audience)|update_(?:audience_users|saved_audience)|delete_(?:audience|saved_audience)|send_conversion_events)$/.test(op.tool)) return this.management.plan(op, guard);
     if (/^reddit_(?:create_(?:ad_group|ad|post|text_asset)|upload_asset|import_asset_url|stage_post_copy|update_(?:ad_group|ad|targeting)|set_(?:ad_group_budget|ad_group_bidding|ad_group_status|ad_status)|archive_entity|rename_asset|delete_asset)$/.test(op.tool)) return this.creatives.plan(op, guard);
