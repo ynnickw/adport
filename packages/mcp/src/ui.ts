@@ -8,8 +8,10 @@ import { CREATIVE_UI_SCRIPT, CREATIVE_UI_STYLES } from './creative-ui.js';
 import { PROVIDER_GALLERY_UI, PROVIDER_GALLERY_STYLES } from './provider-gallery-ui.js';
 import { PROVIDER_LOGOS } from './provider-logos.js';
 import { OPERATION_UI_SCRIPT } from './operation-ui.js';
+import { APPLE_REPORT_UI_SCRIPT, APPLE_REPORT_UI_STYLES } from './apple-report-ui.js';
+import { NATIVE_REPORT_UI_SCRIPT, NATIVE_REPORT_UI_STYLES } from './native-report-ui.js';
 
-export const ADPORT_UI_URI = 'ui://adport/insight-card-v21.html';
+export const ADPORT_UI_URI = 'ui://adport/insight-card-v22.html';
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
 export const ADPORT_UI_RESOURCE_DOMAINS = [ADPORT_UI_DOMAIN, 'https://*.fbcdn.net', 'https://*.fbsbx.com', 'https://*.googleusercontent.com', 'https://tpc.googlesyndication.com', 'https://www.bing.com', 'https://*.scdn.co', 'https://*.spotifycdn.com', 'https://storage.googleapis.com', 'https://*.pinimg.com', 'https://*.redd.it', 'https://*.redditmedia.com', 'https://*.redditstatic.com', 'https://*.licdn.com', 'https://*.licdn-ei.com', 'https://pbs.twimg.com', 'https://video.twimg.com', 'https://ton.twimg.com'];
 
@@ -224,6 +226,8 @@ ${CREATIVE_UI_STYLES}
 ${PROVIDER_GALLERY_STYLES}
 ${MEDIA_LIBRARY_STYLES}
 ${RECORD_UI_STYLES}
+${APPLE_REPORT_UI_STYLES}
+${NATIVE_REPORT_UI_STYLES}
 ${RECEIPT_UI_STYLES}
 ${INSIGHT_UI_STYLES}
 ${TREND_UI_STYLES}
@@ -311,6 +315,8 @@ ${TREND_UI_STYLES}
 ${OPERATION_UI_SCRIPT}
 ${RECEIPT_UI_SCRIPT}
 ${RECORD_UI_SCRIPT}
+${APPLE_REPORT_UI_SCRIPT}
+${NATIVE_REPORT_UI_SCRIPT}
 ${INSIGHT_UI_SCRIPT}
 ${TREND_UI_SCRIPT}
     async function callTool(tool,parameters,timeoutMs=30000) {

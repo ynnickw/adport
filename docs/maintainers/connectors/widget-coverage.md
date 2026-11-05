@@ -60,6 +60,24 @@ keyboard-scrollable list. Generic collections prefer named record arrays over
 warnings/errors. Monetary fields with explicit micros/cents units are converted;
 unknown currencies remain account units. Full source responses remain in Details.
 
+`apple_report` reads Apple's native `metadata`, `totalMetrics`, `granularMetrics`
+and `summary.grandTotal` explicitly. Campaign/ad-group/ad names, keyword text and
+search terms accompany spend, taps, total installs and total CPI. Provider totals
+remain separate from paginated rows; currencies are retained per amount. Missing
+metrics stay unavailable and zero installs show no CPI. Returned time buckets and
+breakdown dimensions are retained without inventing days or summing repeated totals.
+
+Native Meta, TikTok, Reddit, Spotify, Microsoft keyword/search-term and Apple
+insight reads also use explicit report presentation. Native row identities and
+breakdowns precede reported metrics; configuration IDs do not take metric slots.
+Reddit micros and value cents are shifted exactly, including large decimal strings.
+Unreported currencies stay account units and Spotify's privacy sentinel remains
+suppressed. Microsoft offline reports remain upload diagnostics with exact counts,
+ratios, missing summaries and per-goal errors. Native reports never invent totals,
+combine attribution actions, or add edit controls. All source metrics remain in
+Details. The normalized performance report continues to cover all eleven providers;
+LinkedIn demographics retain their existing semantic records and privacy notices.
+
 Recommendations show the native reason and suggested action directly. Processing
 and bulk receipts show only reported counts, statuses and individual outcomes.
 Resource IDs do not imply processed counts. Google diagnostic counts can overlap;
@@ -111,7 +129,7 @@ Attempts are keyed to the pending token. A host echo cannot offer a second apply
 and a late response cannot replace a newer preview. Host facts include resource
 receipts and project/account scope, but never a reusable pending token.
 
-The widget resource is `ui://adport/insight-card-v16.html`. Previous v2–v15 URIs are
+The widget resource is `ui://adport/insight-card-v22.html`. Previous v2–v21 URIs are
 retained as aliases. Existing creative resource domains keep their configured CSP; provider logos
 and scripts are embedded.
 
