@@ -14,14 +14,13 @@ const localized = (value: string) => ({ localized: { en_US: value } });
 const content = () => ({ headline: localized('Synthetic QA headline'), description: localized('Not for publication'), questions: [{ name: 'firstName', question: localized('First name'), predefinedField: 'FIRST_NAME', questionDetails: { textQuestionDetails: {} } }], legalInfo: { privacyPolicyUrl: 'https://example.invalid/privacy', legalDisclaimer: localized('Synthetic QA only'), consents: [] }, postSubmissionInfo: { message: localized('Synthetic thank you'), callToAction: { callToActionLabel: 'VISIT_COMPANY_WEBSITE', callToActionTarget: { landingPageUrl: 'https://example.invalid' } } } });
 const native = () => ({ id: FORM, owner: { sponsoredAccount: urn }, creationLocale: { country: 'US', language: 'en' }, name: 'Synthetic QA form', state: 'DRAFT', content: content(), hiddenFields: [], versionId: 1, versionTag: '1', created: 1700000000000, lastModified: 1700000000000, vendorField: 'preserve' });
 type Call = { url: URL; init: RequestInit };
-const data = (call: Call) => JSON.parse(String(call.init.body));
-const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
+const data = (call: Call) => JSON.parse(String(call.init.body), (_key, value: unknown, context?: { source?: string }) => typeof value === 'number' && Number.isInteger(value) && !Number.isSafeInteger(value) ? context!.source! : value);
 const response = (value: unknown) => new Response(JSON.stringify(value).replace(/"(id|questionId|legalInfoId)":"(\d{16,19})"/g, '"$1":$2'), { headers: { 'content-type': 'application/json' } });
 function applyPatch(target: Record<string, unknown>, patch: Record<string, unknown>) {
   for (const [key, value] of Object.entries(patch)) {
     if (key === '$set') Object.assign(target, value);
     else if (key === '$delete') for (const field of value as string[]) delete target[field];
-    else { if (!object(target[key]) || !object(value)) throw new Error('Invalid nested patch'); applyPatch(target[key], value); }
+    else throw new Error('leadForms rejects nested partial updates (native HTTP400, 2026-11-05)');
   }
 }
 function fixture(custom?: (call: Call) => Response | undefined) {
@@ -116,21 +115,33 @@ describe('LinkedIn lead form configuration', () => {
     expect(data(mutations(f.calls)[0]!)).toEqual({ patch: { $set: { name: 'Renamed QA' } } });
     expect(mutations(f.calls)[0]!.init.headers).toMatchObject({ 'X-RestLi-Method': 'PARTIAL_UPDATE' }); expect(f.state.forms[0]).toMatchObject({ name: 'Renamed QA', state: 'DRAFT', vendorField: 'preserve', content: content() });
   });
-  it('patches only the supplied nested copy, preserving questions, legal IDs and unknown native fields', async () => {
+  it('uses a top-level content set preserving questions, exact native IDs and unknown fields', async () => {
     const f = fixture(), c = f.state.forms[0]!.content as Record<string, unknown>; c.vendorContent = 'preserve'; (c.legalInfo as Record<string, unknown>).legalInfoId = '6755260984438374491';
     await f.provider.applyWrite(op('linkedin_update_lead_form', { ...await reference(f.provider), content: { headline: localized('New headline'), legalInfo: { privacyPolicyUrl: 'https://example.invalid/new' } } }), guard);
-    expect(data(mutations(f.calls)[0]!)).toEqual({ patch: { content: { $set: { headline: localized('New headline') }, legalInfo: { $set: { privacyPolicyUrl: 'https://example.invalid/new' } } } } });
+    expect(data(mutations(f.calls)[0]!)).toEqual({ patch: { $set: { content: { ...content(), vendorContent: 'preserve', headline: localized('New headline'), legalInfo: { ...content().legalInfo, legalInfoId: '6755260984438374491', privacyPolicyUrl: 'https://example.invalid/new' } } } } });
+    expect(String(mutations(f.calls)[0]!.init.body)).toContain('"legalInfoId":6755260984438374491');
     expect(f.state.forms[0]!.content).toMatchObject({ vendorContent: 'preserve', questions: content().questions, legalInfo: { legalInfoId: '6755260984438374491', consents: [], legalDisclaimer: localized('Synthetic QA only') } });
   });
-  it('removes an explicitly cleared optional field without replacing its legal-info parent', async () => {
+  it('clears only the requested optional field in the merged content', async () => {
     const f = fixture(); await f.provider.applyWrite(op('linkedin_update_lead_form', { ...await reference(f.provider), clear_fields: ['legal_disclaimer'] }), guard);
-    expect(data(mutations(f.calls)[0]!)).toEqual({ patch: { content: { legalInfo: { $delete: ['legalDisclaimer'] } } } });
+    expect(data(mutations(f.calls)[0]!)).toEqual({ patch: { $set: { content: { ...content(), legalInfo: { privacyPolicyUrl: 'https://example.invalid/privacy', consents: [] } } } } });
     expect((f.state.forms[0]!.content as Record<string, unknown>).legalInfo).toEqual({ privacyPolicyUrl: 'https://example.invalid/privacy', consents: [] });
   });
   it('creates a previously absent thank-you record with a complete set instead of patching a missing record', async () => {
     const f = fixture(); delete (f.state.forms[0]!.content as Record<string, unknown>).postSubmissionInfo;
     await f.provider.applyWrite(op('linkedin_update_lead_form', { ...await reference(f.provider), content: { postSubmissionInfo: content().postSubmissionInfo } }), guard);
-    expect(data(mutations(f.calls)[0]!)).toEqual({ patch: { content: { $set: { postSubmissionInfo: content().postSubmissionInfo } } } });
+    expect(data(mutations(f.calls)[0]!)).toEqual({ patch: { $set: { content: content() } } });
+  });
+  it('marks readback unconfirmed if an omitted question or native ID changes, without retry', async () => {
+    const f = fixture(call => {
+      if (call.url.pathname === `/rest/leadForms/${FORM}` && call.init.method === 'POST') {
+        applyPatch(f.state.forms[0]!, data(call).patch);
+        (f.state.forms[0]!.content as ReturnType<typeof content>).questions = [];
+        return new Response(null, { status: 204 });
+      }
+    });
+    await expect(f.provider.applyWrite(op('linkedin_update_lead_form', { ...await reference(f.provider), content: { headline: localized('New headline') } }), guard)).rejects.toMatchObject({ details: { resource_ids: [FORM] } });
+    expect(mutations(f.calls)).toHaveLength(1);
   });
   it.each([{ name: 'New name' }, { creation_locale: { country: 'DE', language: 'de' } }, { hidden_fields: [] }, { content: { questions: content().questions } }, { content: { legalInfo: { consents: [] } } }])('rejects published schema edits without assuming pre-publication eligibility %#', async change => {
     const f = fixture(); f.state.forms[0]!.state = 'PUBLISHED';

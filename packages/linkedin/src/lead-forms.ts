@@ -61,14 +61,15 @@ function requestedMatch(actual: unknown, expected: unknown, key = ''): boolean {
 function fieldsOf(current: unknown, requested: Record<string, unknown>): ReviewField[] {
   return Object.entries(requested).flatMap(([key, after]) => structural.has(key) && object(after) ? fieldsOf(object(current) ? current[key] : undefined, after) : [{ label: labels[key] ?? key, ...(object(current) && Object.hasOwn(current, key) ? { before: current[key] } : {}), after }]);
 }
-function patchOf(current: Record<string, unknown>, requested: Record<string, unknown>): Record<string, unknown> {
-  const patch: Record<string, unknown> = {}, set: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(requested)) {
-    if (structural.has(key) && object(value) && object(current[key])) { const nested = patchOf(current[key], value); if (Object.keys(nested).length) patch[key] = nested; }
-    else set[key] = value;
+// leadForms rejects granular content patches. Carry the snapshot's complete
+// content into a top-level set, including its generated question/legal IDs.
+function wireContent(value: unknown, key = ''): unknown {
+  if (['questionId', 'legalInfoId'].includes(key) && typeof value === 'string' && /^\d{1,19}$/.test(value)) {
+    const raw = (JSON as typeof JSON & { rawJSON?: (text: string) => unknown }).rawJSON;
+    if (!raw) throw new AdportError('INVALID_INPUT', 'linkedin: this runtime cannot encode native Long form identifiers exactly');
+    return raw(value);
   }
-  if (Object.keys(set).length) patch.$set = set;
-  return patch;
+  return Array.isArray(value) ? value.map(item => wireContent(item)) : object(value) ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key, wireContent(item, key)])) : value;
 }
 function validateLocale(value: unknown, preferred: string): void {
   if (Array.isArray(value)) { for (const item of value) validateLocale(item, preferred); return; }
@@ -140,22 +141,24 @@ export class LinkedInLeadFormService {
     const requested: Record<string, unknown> = { ...(update.name !== undefined ? { name: update.name } : {}), ...(update.creation_locale ? { creationLocale: update.creation_locale } : {}), ...(update.content ? { content: update.content } : {}), ...(update.hidden_fields ? { hiddenFields: update.hidden_fields } : {}) };
     if (Buffer.byteLength(JSON.stringify(requested)) > 256 * 1024) throw new AdportError('INVALID_INPUT', 'linkedin: form configuration exceeds 256 KiB');
     if (current.state === 'PUBLISHED' && (update.name !== undefined || update.creation_locale || update.hidden_fields || update.content?.questions || update.content?.legalInfo?.consents)) throw new AdportError('INVALID_INPUT', 'linkedin: schema/name/locale/hidden-field edits require DRAFT; published forms allow copy, legal URL/disclaimer and thank-you edits subject to native eligibility');
-    const patch = patchOf(current, requested), removed: string[][] = [], review = fieldsOf(current, requested);
+    const removed: string[][] = [], review = fieldsOf(current, requested);
     for (const field of new Set(update.clear_fields)) {
       const path = clearPaths[field];
       if (at(requested, path) !== undefined || at(current, path) === undefined) throw new AdportError('INVALID_INPUT', 'linkedin: a cleared field must exist and cannot also be supplied');
-      let target = patch;
-      for (const key of path.slice(0, -1)) { if (!object(target[key])) target[key] = {}; target = target[key] as Record<string, unknown>; }
-      target.$delete = [...(Array.isArray(target.$delete) ? target.$delete : []), path.at(-1)!]; removed.push(path);
+      removed.push(path);
       review.push({ label: labels[path.at(-1)!] ?? field, before: at(current, path), after: null });
     }
     const wanted = merge(current, requested), preferred = update.creation_locale ?? current.creationLocale;
     for (const path of removed) { let target = wanted; for (const key of path.slice(0, -1)) { target[key] = { ...(target[key] as Record<string, unknown>) }; target = target[key] as Record<string, unknown>; } delete target[path.at(-1)!]; }
     validateLocale(wanted.content, [preferred.language, preferred.country, preferred.variant].filter(Boolean).join('_'));
     if (requestedMatch(current, requested) && !removed.length) throw new AdportError('INVALID_INPUT', 'linkedin: no supplied form settings would change');
+    const set = Object.fromEntries(Object.keys(requested).map(key => [key, wanted[key]]));
+    if (update.content || removed.length) set.content = wanted.content;
+    const patch = { $set: { ...set, ...(set.content ? { content: wireContent(set.content) } : {}) } };
+    if (Buffer.byteLength(JSON.stringify(patch)) > 256 * 1024) throw new AdportError('INVALID_INPUT', 'linkedin: merged form configuration exceeds 256 KiB');
     return { ...base, summary: `Update LinkedIn lead form "${current.name}"`, changes: [`~ ${JSON.stringify(patch)}`], review: { provider: 'linkedin', accountId: op.accountId, kind: 'update', title: 'Update lead form', subject: current.name, fields: review, notices: ['Supplied localized maps and question/consent/hidden-field arrays replace their previous values. Other settings remain unchanged.', 'Question/schema edits can require CRM field remapping. LinkedIn determines published edit eligibility; forms linked to InMail or Conversation Ads may reject edits.'] }, execute: async () => {
       await this.client.partialUpdate(`leadForms/${current.id}`, patch);
-      await this.verified(current.id, async () => { const value = await this.one(op.accountId, current.id); return value.state === current.state && requestedMatch(value, requested) && removed.every(path => at(value, path) === undefined); });
+      await this.verified(current.id, async () => { const value = await this.one(op.accountId, current.id); return value.state === current.state && requestedMatch(value, set) && removed.every(path => at(value, path) === undefined); });
       return { applied: true, resourceIds: [current.id] };
     } };
   }
