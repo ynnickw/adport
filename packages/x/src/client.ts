@@ -99,7 +99,7 @@ export class XAdsClient {
     }
     const parsed = schema.safeParse(body);
     if (!parsed.success) {
-      const data = method !== 'GET' && /^(?:accounts\/[a-z0-9]+\/(?:cards|draft_tweets|media_library|line_items|campaigns)(?:\/[a-z0-9_]+)?|media\/upload(?:\/[a-z0-9]+){1,2})$/.test(path) && body && typeof body === 'object' && 'data' in body ? body.data : undefined;
+      const data = method !== 'GET' && /^(?:accounts\/[a-z0-9]+\/(?:cards|draft_tweets|media_library|line_items|campaigns|tracking_tags)(?:\/[a-z0-9_]+)?|media\/upload(?:\/[a-z0-9]+){1,2})$/.test(path) && body && typeof body === 'object' && 'data' in body ? body.data : undefined;
       const rows = Array.isArray(data) ? data : data && typeof data === 'object' ? [data] : [];
       const ids = [...new Set(rows.flatMap(row => row && typeof row === 'object' ? ['id_str', 'id', 'media_key'].flatMap(key => { const value = (row as Record<string, unknown>)[key]; return typeof value === 'string' && /^(?:[a-z0-9]{1,32}|\d{1,3}_[1-9]\d{0,24})$/.test(value) ? [value] : []; }) : []))].slice(0, 500);
       throw new AdportError('PROVIDER_ERROR', `x: unexpected API response schema${method === 'GET' ? '' : '; write may have succeeded, reconcile before retrying'}`, ids.length ? { resource_ids: ids } : undefined);

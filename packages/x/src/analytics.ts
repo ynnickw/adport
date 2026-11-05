@@ -11,8 +11,9 @@ export const statsSchema = z.object({
   data_type: z.literal('stats'), time_series_length: z.literal(1),
   data: z.array(z.object({ id: xId, id_data: z.array(z.object({ segment: z.null(), metrics: z.object({
     billed_charge_local_micro: scalar, impressions: scalar, url_clicks: scalar,
-  }) })).length(1) })),
+  }).catchall(z.json()) })).length(1) })),
   request: z.object({ params: z.object({
+    account_id: xId.optional(),
     start_time: z.string(), end_time: z.string(), entity: z.string(), entity_ids: z.array(xId),
     placement: z.string(), granularity: z.literal('TOTAL'), metric_groups: z.array(z.string()),
   }) }),
@@ -42,7 +43,7 @@ export class XAdsAnalytics {
   }
   private async load(accountId: string, params: XParams, asynchronous: boolean, key: string): Promise<Stats> {
     xId.parse(accountId);
-    if (!asynchronous) return validateStats(await this.client.request('GET', `stats/accounts/${accountId}`, statsSchema, params), params);
+    if (!asynchronous) return validateStats(await this.client.request('GET', `stats/accounts/${accountId}`, statsSchema, params), params, accountId);
     const path = `stats/jobs/accounts/${accountId}`;
     let job: Job = this.jobs.get(key) ?? (await this.client.request('POST', path, z.object({ data: jobSchema }), params)).data;
     validateJob(job, accountId, params);
@@ -54,7 +55,7 @@ export class XAdsAnalytics {
       }
       if (job.status === 'SUCCESS') {
         if (!job.url) throw new AdportError('PROVIDER_ERROR', 'x: successful analytics job has no download URL');
-        const result = validateStats(await this.download(job.url, job.id_str), params);
+        const result = validateStats(await this.download(job.url, job.id_str), params, accountId);
         this.jobs.delete(key);
         return result;
       }
@@ -106,9 +107,9 @@ function matches(data: Stats['request']['params'], params: XParams): boolean {
 function validateJob(job: Job, accountId: string, params: XParams) {
   if (job.account_id !== accountId || !matches(job, params)) throw new AdportError('PROVIDER_ERROR', 'x: analytics job scope does not match the report');
 }
-function validateStats(data: Stats, params: XParams): Stats {
+function validateStats(data: Stats, params: XParams, accountId: string): Stats {
   const ids = String(params.entity_ids).split(','), returned = data.data.map(row => row.id);
-  if (!matches(data.request.params, params) || new Set(returned).size !== returned.length || returned.some(id => !ids.includes(id)) || ids.some(id => !returned.includes(id))) {
+  if (data.request.params.account_id !== undefined && data.request.params.account_id !== accountId || !matches(data.request.params, params) || new Set(returned).size !== returned.length || returned.some(id => !ids.includes(id)) || ids.some(id => !returned.includes(id))) {
     throw new AdportError('PROVIDER_ERROR', 'x: analytics returned incomplete, duplicate or incorrectly scoped data');
   }
   return data;

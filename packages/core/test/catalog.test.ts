@@ -24,6 +24,7 @@ describe('catalog runtime boundaries', () => {
     expect(classifyTool('meta_create_ad', 'meta').exposure).toBe('standard');
     expect(classifyTool('meta_advertisable_applications', 'meta').exposure).toBe('standard');
     expect(classifyTool('google_create_experiment', 'google')).toEqual({ category: 'experiments', exposure: 'specialist' });
+    for (const name of ['x_web_event_tags', 'x_get_app_event_tag', 'x_update_tracking_tag', 'x_conversion_stats']) expect(classifyTool(name, 'x')).toEqual({ category: 'measurement', exposure: 'specialist' });
   });
   it('keeps the complete central asset upload and metadata flow in Standard', () => {
     for (const name of [...MEDIA_UPLOAD_TOOLS, ...MEDIA_PREPARATION_TOOLS,

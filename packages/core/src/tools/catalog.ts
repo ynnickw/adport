@@ -52,7 +52,7 @@ export function classifyTool(name: string, namespace: string): ToolCatalogMetada
   const operation = name.startsWith(`${namespace}_`) ? name.slice(namespace.length + 1) : name;
   const standard = STANDARD_TOOLS.has(name) || (TOOL_PROVIDERS.includes(namespace as ToolProvider) && COMMON_OPERATIONS.test(operation));
   const category: ToolCatalogMetadata['category'] = /experiment|lift_test/.test(operation) ? 'experiments'
-    : /conversion|pixel|insight_tag|event_source|offline_event|measurement/.test(operation) ? 'measurement'
+    : /conversion|pixel|insight_tag|event_source|offline_event|measurement|web_event_tag|app_event_tag|tracking_tag/.test(operation) ? 'measurement'
     : /audience|targeting|demographic/.test(operation) ? 'audiences'
     : /report|insight|forecast|estimate|keyword_ideas|historical_metrics/.test(operation) ? 'reporting'
     : /creative|image|video|asset|media|product_page|pin|board|lead_form|lead_ad|catalog|feed/.test(operation) || namespace === 'media' ? 'creatives'
