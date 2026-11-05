@@ -67,7 +67,7 @@ export class TikTokAdsProvider implements AdProvider {
     private readonly app: { appId: string; secret: string },
     media: MediaResolver = new LocalMediaResolver(),
     catalogAccess?: TikTokCatalogAccessStore,
-  ) { this.creatives = new TikTokCreativeService(client, media); this.audiences = new TikTokAudienceService(client); this.measurement = new TikTokMeasurementService(client); this.automatedRules = new TikTokAutomatedRulesService(client); this.catalogs = new TikTokCatalogService(client, catalogAccess); }
+  ) { this.creatives = new TikTokCreativeService(client, media); this.audiences = new TikTokAudienceService(client); this.measurement = new TikTokMeasurementService(client); this.automatedRules = new TikTokAutomatedRulesService(client); this.catalogs = new TikTokCatalogService(client, catalogAccess, media); }
 
   capabilities(): ProviderCapabilities {
     // No server-side dry run in the Marketing API — previews are client-side diffs.
@@ -250,6 +250,7 @@ export class TikTokAdsProvider implements AdProvider {
       case 'tiktok_delete_catalog_feed':
       case 'tiktok_rename_product_set':
       case 'tiktok_create_product_set':
+      case 'tiktok_upload_product_set':
       case 'tiktok_update_product_set_conditions':
       case 'tiktok_delete_product_sets':
       case 'tiktok_update_catalog':

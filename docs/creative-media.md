@@ -4,7 +4,9 @@ Advertising writes use the same tool registry and two-step policy gate in the CL
 
 ## Project media library
 
-Agents can upload, download, inspect, rename and delete private project media through MCP or the tool REST API without opening a dashboard. Images, video, audio and PDF sources are supported. The same project authorization and two-step policy gate apply to media mutations. A hosted server cannot read a file on the agent's computer or in its container; the agent transfers the bytes instead.
+Agents can upload, download, inspect, rename and delete private project media through MCP or the tool REST API without opening a dashboard. Images, video, audio, PDF and UTF-8 CSV sources are supported. The same project authorization and two-step policy gate apply to media mutations. A hosted server cannot read a file on the agent's computer or in its container; the agent transfers the bytes instead.
+
+CSV uploads use `text/csv` and require a `.csv` name or an explicitly declared CSV type. Adport checks complete UTF-8/quoting/column consistency, with limits of 100,000 rows, 256 columns and 256 KiB per field, while preserving original bytes. CSVs appear under Documents and download as attachments; they are not rendered as active web content. Renaming a stored CSV without its extension preserves its type. The same agent, widget and dashboard upload paths support them. `tiktok_upload_product_set` consumes a ready CSV with the native `sku_id` template; it is a specialist catalog tool and records its provider upload in the file’s distribution history.
 
 ### Central organization and channel distribution
 

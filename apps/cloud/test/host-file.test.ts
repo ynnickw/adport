@@ -9,6 +9,15 @@ const source = { file_id: 'file_fixture', download_url: 'https://files.oaiuserco
 afterEach(() => vi.unstubAllGlobals());
 
 describe('host-provided attachment byte transport', () => {
+  it('validates CSV host attachments by name or declared type without exposing the download capability', async () => {
+    const csv = Buffer.from('sku_id\n00001\n');
+    const fetcher = vi.fn(async () => new Response(csv));
+    for (const file of [{ file_name: 'products.csv', mime_type: 'application/octet-stream' }, { file_name: 'Products', mime_type: 'text/csv' }]) {
+      const result = await readHostFile({ ...source, ...file }, fetcher);
+      expect(result).toMatchObject({ contentType: 'text/csv', sha256: createHash('sha256').update(csv).digest('hex') });
+      expect(Buffer.from(result.bytes)).toEqual(csv);
+    }
+  });
   it('downloads original bytes without credentials, redirects or caching and derives actual MIME/hash', async () => {
     const fetcher = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => new Response(bytes, { headers: { 'content-type': 'application/octet-stream', 'content-length': String(bytes.length) } }));
     const file = await readHostFile({ ...source, file_name: '../folder\\attachment.pdf', mime_type: 'text/html' }, fetcher);

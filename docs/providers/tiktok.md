@@ -243,7 +243,25 @@ It reports native status, counts and timestamps; `SUCCESS` does not establish
 catalog ad eligibility. SDK/widget tests use synthetic responses and do not
 prove real provider or Claude/ChatGPT host success.
 
-Catalog creation/deletion, CSV-file-defined product sets, product imports/edits,
+### CSV product sets
+
+`tiktok_upload_product_set` creates an E-commerce product set from the official
+single-column `sku_id` CSV template. Upload the document to Adport through an
+agent, the widget or the dashboard, then provide its `media_id` and SHA-256.
+Local CLI/stdio can use `file_path` instead. A writable catalog grant, fresh
+catalog configuration hash, unique name of at most 28 characters and explicit
+shared-effects acknowledgement are required. Adport accepts 1–5,000 nonempty,
+distinct SKU rows and preserves text IDs, leading zeros and exact file bytes.
+
+Preview validates the complete file and sends no mutation. Apply rechecks scope,
+catalog, unique name and bytes, then sends native multipart `file` with the MD5
+`file_signature` of those exact bytes. The receipt and independent scoped read
+confirm the new set ID/name. They do not prove full SKU membership or ingestion.
+Unknown outcomes retain known IDs and must be reconciled before another upload.
+No ad is activated; the shared policy, audit and central-library distribution
+tracking apply. Native provider and Claude/ChatGPT host verification remain pending.
+
+Catalog creation/deletion, product imports/edits,
 catalog videos, event-source bindings and migration from advertiser-owned
 catalogs remain separate work.
 Read/rename and permission controls are contract, policy, SDK/widget and
@@ -256,6 +274,8 @@ Contracts inspected 2026-11-05: [Get catalogs](https://business-api.tiktok.com/p
 [Get products in a set](https://business-api.tiktok.com/portal/docs?id=1740571478441986),
 [Update product set](https://business-api.tiktok.com/portal/docs?id=1740572974725122),
 [Create product set](https://business-api.tiktok.com/portal/docs?id=1740572891104257),
+[Create product set from CSV](https://business-api.tiktok.com/portal/docs?id=1846770644217858),
+[Official SKU CSV template](https://bytedance.sg.larkoffice.com/sheets/GlkOsKz7RhRhfLtN0gblmYcjgjd),
 [Delete product sets](https://business-api.tiktok.com/portal/docs?id=1740573143966722),
 [Product set operators and fields](https://business-api.tiktok.com/portal/docs?id=1740673108747265),
 [Get feeds](https://business-api.tiktok.com/portal/docs?id=1740665183073281),

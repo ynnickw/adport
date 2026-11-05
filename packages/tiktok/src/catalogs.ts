@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { AdportError, type WriteOperation, type WritePreview } from '@adport/core';
+import { AdportError, type MediaResolver, type WriteOperation, type WritePreview } from '@adport/core';
 import { z } from 'zod';
 import { catalogAccessChange, catalogInput, catalogRename } from './catalog-tools.js';
 import { catalogScopeKey, requireCatalogAccess, type TikTokCatalogAccessStore, type TikTokCatalogScope } from './catalog-access.js';
@@ -25,13 +25,13 @@ const nativeError = (error: unknown) => {
 export class TikTokCatalogService {
   readonly productSets: TikTokCatalogProductSets;
   readonly feeds: TikTokCatalogFeeds;
-  constructor(private readonly client: Pick<TikTokClient, 'get' | 'post'>, private readonly store?: TikTokCatalogAccessStore) {
+  constructor(private readonly client: Pick<TikTokClient, 'get' | 'post'> & Partial<Pick<TikTokClient, 'postMultipart'>>, private readonly store?: TikTokCatalogAccessStore, media?: MediaResolver) {
     const authorizeParent = async (input: z.infer<typeof catalogInput>, write?: boolean) => {
       await requireCatalogAccess(this.store, scopeOf(input), write);
       const catalog = await this.native(input);
       return { ...catalog, configuration_hash: configurationHash(input.account_id, catalog) };
     };
-    this.productSets = new TikTokCatalogProductSets(client, authorizeParent);
+    this.productSets = new TikTokCatalogProductSets(client, authorizeParent, media);
     this.feeds = new TikTokCatalogFeeds(client, authorizeParent);
   }
   private manager() {
@@ -62,7 +62,7 @@ export class TikTokCatalogService {
   }
   async plan(op: WriteOperation): Promise<Plan> {
     if (['tiktok_create_catalog_feed', 'tiktok_update_catalog_feed', 'tiktok_set_catalog_feed_schedule_status', 'tiktok_delete_catalog_feed'].includes(op.tool)) return this.feeds.plan(op);
-    if (['tiktok_create_product_set', 'tiktok_update_product_set_conditions', 'tiktok_delete_product_sets', 'tiktok_rename_product_set'].includes(op.tool)) return this.productSets.plan(op);
+    if (['tiktok_create_product_set', 'tiktok_upload_product_set', 'tiktok_update_product_set_conditions', 'tiktok_delete_product_sets', 'tiktok_rename_product_set'].includes(op.tool)) return this.productSets.plan(op);
     if (op.provider !== 'tiktok' || op.kind !== 'update') throw new AdportError('INVALID_INPUT', 'TikTok catalog provider/operation kind mismatch.');
     const account = id.parse(op.accountId);
     if (op.tool === 'tiktok_set_catalog_access') {

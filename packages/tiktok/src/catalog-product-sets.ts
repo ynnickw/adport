@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { AdportError, type WriteOperation, type WritePreview } from '@adport/core';
+import { AdportError, csvRows, MAX_PROJECT_MEDIA_BYTES, mediaSourceFields, verifyMedia, type MediaResolver, type WriteOperation, type WritePreview } from '@adport/core';
 import { z } from 'zod';
 import type { TikTokClient } from './client.js';
 import { catalogId, catalogInput } from './catalog-schema.js';
@@ -28,6 +28,10 @@ export const productSetCreate = catalogInput.omit({ account_id: true }).extend({
   product_set_name: z.string().trim().min(1).max(128), conditions: productSetConditions,
   expected_catalog_hash: z.string().regex(/^[a-f0-9]{64}$/), acknowledge_shared_effects: z.literal(true),
 }).strict();
+export const productSetUpload = catalogInput.omit({ account_id: true }).extend({
+  ...mediaSourceFields, product_set_name: z.string().trim().min(1).max(28),
+  expected_catalog_hash: z.string().regex(/^[a-f0-9]{64}$/), acknowledge_shared_effects: z.literal(true),
+}).strict().refine(value => Number(!!value.media_id) + Number(!!value.file_path) === 1, 'Choose one project media_id or local file_path');
 export const productSetUpdateConditions = selected.omit({ account_id: true }).extend({
   conditions: productSetConditions, expected_configuration_hash: z.string().regex(/^[a-f0-9]{64}$/), acknowledge_shared_effects: z.literal(true),
 }).strict();
@@ -56,8 +60,9 @@ const invalid = () => new AdportError('PROVIDER_ERROR', 'TikTok product-set data
 /** Native set lists are unpaged; Adport pages a bounded, snapshot-bound result. */
 export class TikTokCatalogProductSets {
   constructor(
-    private readonly client: Pick<TikTokClient, 'get' | 'post'>,
-    private readonly authorizeParent: (input: CatalogSelection, write?: boolean) => Promise<{ configuration_hash: string }>,
+    private readonly client: Pick<TikTokClient, 'get' | 'post'> & Partial<Pick<TikTokClient, 'postMultipart'>>,
+    private readonly authorizeParent: (input: CatalogSelection, write?: boolean) => Promise<{ configuration_hash: string; catalog_type?: string }>,
+    private readonly media?: MediaResolver,
   ) {}
 
   private async request(path: string, params: Record<string, unknown>): Promise<unknown> {
@@ -124,6 +129,7 @@ export class TikTokCatalogProductSets {
 
   async plan(op: WriteOperation): Promise<Plan> {
     if (op.provider !== 'tiktok') throw new AdportError('INVALID_INPUT', 'TikTok product-set provider mismatch.');
+    if (op.tool === 'tiktok_upload_product_set' && op.kind === 'create') return this.uploadPlan(op);
     if (op.tool === 'tiktok_create_product_set' && op.kind === 'create') return this.createPlan(op);
     if (op.tool === 'tiktok_update_product_set_conditions' && op.kind === 'update') return this.conditionsPlan(op);
     if (op.tool === 'tiktok_delete_product_sets' && op.kind === 'remove') return this.deletePlan(op);
@@ -147,6 +153,54 @@ export class TikTokCatalogProductSets {
           return [input.product_set_id];
         } catch {
           throw new AdportError('PROVIDER_ERROR', 'TikTok product-set rename outcome is unconfirmed. Read the known set before another write; do not replay automatically.', { resource_ids: [input.product_set_id] });
+        }
+      },
+    };
+  }
+
+  private async uploadPlan(op: WriteOperation): Promise<Plan> {
+    const input = productSetUpload.parse(op.payload), scope = catalogInput.parse({ account_id: op.accountId, bc_id: input.bc_id, catalog_id: input.catalog_id });
+    const media = this.media, multipart = this.client.postMultipart?.bind(this.client);
+    if (!media || !multipart) throw new AdportError('NOT_CONNECTED', 'This runtime does not support checksum-bound catalog file uploads.');
+    const prepare = async () => {
+      const parent = await this.authorizeParent(scope, true);
+      if (parent.configuration_hash !== input.expected_catalog_hash) throw new AdportError('INVALID_INPUT', 'Catalog configuration changed. Read and preview creation again.');
+      if (parent.catalog_type !== 'ECOM') throw new AdportError('INVALID_INPUT', 'CSV product-set creation requires an E-commerce (ECOM) catalog.');
+      if ((await this.native(scope)).some(row => row.product_set_name === input.product_set_name)) throw new AdportError('INVALID_INPUT', 'This catalog already has a product set with that name. Choose a unique name.');
+      const source = await media.read(input, { maxBytes: MAX_PROJECT_MEDIA_BYTES, contentTypes: ['text/csv'] });
+      const file = verifyMedia(source.bytes, source.name, input.expected_sha256, { maxBytes: MAX_PROJECT_MEDIA_BYTES, contentTypes: ['text/csv'] });
+      const rows = csvRows(file.bytes, { maxRows: 5001, maxColumns: 1 }), header = rows.next().value;
+      if (header?.[0] !== 'sku_id') throw new AdportError('INVALID_INPUT', 'Use TikTok’s CSV template: one column named sku_id and 1–5,000 distinct SKU IDs.');
+      const skus = new Set<string>();
+      for (const row of rows) {
+        const sku = row[0]!;
+        if (!sku.trim() || skus.has(sku)) throw new AdportError('INVALID_INPUT', 'The sku_id column must contain 1–5,000 nonempty, distinct IDs. Values are preserved as text.');
+        skus.add(sku);
+      }
+      if (!skus.size) throw new AdportError('INVALID_INPUT', 'The sku_id column needs at least one SKU ID.');
+      return { file, count: skus.size };
+    };
+    const prepared = await prepare();
+    const notes = ['Creates an E-commerce set from the exact approved CSV; no ads are activated or budgets changed.', 'Adport caps the template at 5,000 SKU rows. TikTok checks SKU eligibility and membership on apply; independent readback confirms the set ID/name, not full membership or ingestion.', 'No automatic retry. Reconcile an uncertain creation by its known ID or unique name before another upload.'];
+    return {
+      summary: `Create TikTok product set ${input.product_set_name} from CSV`, changes: [`+ Product set ${JSON.stringify(input.product_set_name)} from ${prepared.count} SKU rows`, `+ File ${JSON.stringify(prepared.file.name)}; ${prepared.file.bytes.byteLength} bytes; SHA-256 ${prepared.file.sha256}`], coercions: [], budgetDeltas: [], notes,
+      review: { provider: 'tiktok', accountId: scope.account_id, kind: 'create', title: 'Upload product set', subject: input.product_set_name, fields: [{ label: 'Catalog', after: input.catalog_id }, { label: 'File', after: prepared.file.name }, { label: 'SKU rows', after: String(prepared.count) }, { label: 'SHA-256', after: prepared.file.sha256 }], notices: notes },
+      execute: async () => {
+        const { file } = await prepare();
+        const form = new FormData();
+        form.set('bc_id', input.bc_id); form.set('catalog_id', input.catalog_id); form.set('product_set_name', input.product_set_name);
+        form.set('file', new Blob([file.bytes], { type: 'text/csv' }), 'product-set.csv');
+        form.set('file_signature', createHash('md5').update(file.bytes).digest('hex'));
+        let createdId: string | undefined;
+        try {
+          const receipt = z.looseObject({ product_set_id: nativeId }).parse(await multipart('catalog/set/upload', form));
+          createdId = receipt.product_set_id;
+          if (receipt.product_set_name !== input.product_set_name) throw new Error('Receipt name differs');
+          const actual = (await this.native(scope, createdId))[0]!;
+          if (actual.product_set_name !== input.product_set_name) throw new Error('Readback name differs');
+          return [createdId];
+        } catch {
+          throw new AdportError('PROVIDER_ERROR', 'TikTok CSV product-set creation outcome is unconfirmed. Inspect catalog sets by the approved unique name or known ID before another write; do not replay automatically.', createdId ? { resource_ids: [createdId] } : undefined);
         }
       },
     };
