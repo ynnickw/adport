@@ -8,7 +8,8 @@ import { linkedinPageState } from './paging.js';
 
 type Plan = Omit<WritePreview, 'serverValidated'> & { execute(): Promise<WriteResult> };
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
-const formId = id.max(19).refine(value => BigInt(value) <= 9223372036854775807n, 'Use an exact signed Long form ID');
+export const leadFormId = id.max(19).refine(value => /^[1-9]\d{0,18}$/.test(value) && BigInt(value) <= 9223372036854775807n, 'Use an exact signed Long form ID');
+const formId = leadFormId;
 const nativeId = z.union([formId, z.number().int().positive().safe()]).transform(String);
 const locale = z.object({ country: z.string().regex(/^[A-Z]{2}$/), language: z.string().regex(/^[a-z]{2}$/), variant: z.string().regex(/^[A-Za-z0-9]+$/).max(32).optional() }).strict();
 const text = z.object({ localized: z.record(z.string().regex(/^[a-z]{2}(?:_[A-Z]{2})?(?:_[A-Za-z0-9]+)?$/), z.string().min(1).max(8192)).refine(value => Object.keys(value).length > 0 && Object.keys(value).length <= 100) }).strict();
