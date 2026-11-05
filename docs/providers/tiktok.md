@@ -329,8 +329,12 @@ and checksum-bound reuse of central Adport media.
 See [catalog videos](tiktok-catalog-videos.md) for CSV uploads, SKU verification,
 async status, native previews and guarded removal.
 
-Catalog creation/deletion, event-source bindings and migration from
-advertiser-owned catalogs remain separate work.
+See [catalog event sources](tiktok-catalog-event-sources.md) for advertiser
+app/Pixel discovery, context snapshots, binding and unbinding with preservation
+readback.
+
+Catalog creation/deletion and migration from advertiser-owned catalogs remain
+separate work.
 Read/rename and permission controls are contract, policy, SDK/widget and
 disposable-Postgres tested; positive native provider and Claude/ChatGPT host
 verification remain pending.

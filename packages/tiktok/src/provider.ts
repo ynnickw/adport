@@ -256,6 +256,8 @@ export class TikTokAdsProvider implements AdProvider {
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
     const payload = op.payload as never;
     switch (op.tool) {
+      case 'tiktok_bind_catalog_event_sources':
+      case 'tiktok_unbind_catalog_event_sources':
       case 'tiktok_upload_catalog_videos':
       case 'tiktok_delete_catalog_video':
       case 'tiktok_upsert_catalog_products':
