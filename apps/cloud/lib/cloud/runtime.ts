@@ -34,6 +34,7 @@ import { HttpError } from '@/lib/http';
 import { ProjectMediaLibrary } from './media';
 import { instrumentCloudTools } from './analytics-tools';
 import { PostgresResourceSecretStore } from './resource-credentials';
+import { PostgresRedditCatalogAccessStore } from './reddit-catalog-access';
 import { PostgresTikTokCatalogAccessStore } from './tiktok-catalog-access';
 
 export interface TenantRuntimeOptions {
@@ -144,7 +145,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
         await updateProviderCredential(principal.organizationId, 'reddit', rotated);
       },
     });
-    const provider = new RedditAdsProvider(client, media);
+    const provider = new RedditAdsProvider(client, media, new PostgresRedditCatalogAccessStore(principal, enabledAccountIds.reddit ?? new Set()));
     modules.push({ provider: scopeProvider(provider), tools: redditTools(provider) });
   }
   const engine = new PolicyEngine(policy, new PostgresPendingStore(principal), new PostgresAuditStore(principal));

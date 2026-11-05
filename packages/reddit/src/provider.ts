@@ -18,6 +18,8 @@ import {
 import { RedditAdsClient, type RedditEnvelope } from './client.js';
 import { createCampaign, redditId, setCampaignBudget, setCampaignStatus } from './schemas.js';
 import { RedditCreativeService } from './creatives.js';
+import { RedditCatalogService } from './catalogs.js';
+import type { RedditCatalogAccessStore } from './catalog-access.js';
 import { RedditManagementService } from './management.js';
 
 /** Reddit budget, bid, spend, CPC, and CPM fields are integer micros. */
@@ -45,13 +47,7 @@ export interface RedditCampaign {
   is_campaign_budget_optimization?: boolean;
 }
 
-interface WritePlan {
-  summary: string;
-  changes: string[];
-  coercions: string[];
-  budgetDeltas: WritePreview['budgetDeltas'];
-  execute: () => Promise<string[] | WriteResult>;
-}
+type WritePlan = Omit<WritePreview, 'serverValidated'> & { execute(): Promise<string[] | WriteResult> };
 
 // Reddit v3 request enums are uppercase even though response object keys are lowercase.
 const BREAKDOWN = { account: undefined, campaign: 'CAMPAIGN_ID', ad_group: 'AD_GROUP_ID', ad: 'AD_ID' } as const;
@@ -60,7 +56,8 @@ export class RedditAdsProvider implements AdProvider {
   readonly id = 'reddit';
   readonly creatives: RedditCreativeService;
   readonly management: RedditManagementService;
-  constructor(private readonly client: RedditAdsClient, media?: MediaResolver) { this.creatives = new RedditCreativeService(client, media); this.management = new RedditManagementService(client, this.creatives); }
+  readonly catalogs: RedditCatalogService;
+  constructor(private readonly client: RedditAdsClient, media?: MediaResolver, catalogAccess?: RedditCatalogAccessStore) { this.creatives = new RedditCreativeService(client, media); this.management = new RedditManagementService(client, this.creatives);this.catalogs = new RedditCatalogService(client, catalogAccess); }
 
   capabilities(): ProviderCapabilities {
     return { serverDryRun: false };
@@ -187,13 +184,8 @@ export class RedditAdsProvider implements AdProvider {
 
   async previewWrite(op: WriteOperation, guard: WriteGuard): Promise<WritePreview> {
     const plan = await this.plan(op, guard);
-    return {
-      summary: plan.summary,
-      changes: plan.changes,
-      coercions: plan.coercions,
-      budgetDeltas: plan.budgetDeltas,
-      serverValidated: false,
-    };
+    const { execute: _execute, ...preview } = plan;
+    return { ...preview, serverValidated: false };
   }
 
   async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> {
@@ -248,6 +240,7 @@ export class RedditAdsProvider implements AdProvider {
   }
 
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
+    if (['reddit_set_catalog_access', 'reddit_create_catalog', 'reddit_rename_catalog', 'reddit_set_catalog_event_sources', 'reddit_delete_catalog'].includes(op.tool)) return this.catalogs.plan(op);
     if (/^reddit_(?:create_(?:customer_audience|pixel_audience|engagement_audience|saved_audience)|update_(?:audience_users|saved_audience)|delete_(?:audience|saved_audience)|send_conversion_events)$/.test(op.tool)) return this.management.plan(op, guard);
     if (/^reddit_(?:create_(?:ad_group|ad|post|text_asset)|upload_asset|import_asset_url|stage_post_copy|update_(?:ad_group|ad|targeting)|set_(?:ad_group_budget|ad_group_bidding|ad_group_status|ad_status)|archive_entity|rename_asset|delete_asset)$/.test(op.tool)) return this.creatives.plan(op, guard);
     redditId.parse(op.accountId);

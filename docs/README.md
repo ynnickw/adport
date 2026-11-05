@@ -10,6 +10,7 @@
 - [Apple campaign setup](apple-campaign-setup.md)
 - [TikTok campaign and creative setup](tiktok-campaign-setup.md)
 - [TikTok automated-rule inspection and native limits](providers/tiktok.md)
+- [Reddit Business catalog access and configuration](providers/reddit-catalogs.md)
 - [Spotify campaign drafts and media](spotify-campaign-setup.md)
 - [Pinterest campaign hierarchy and previews](pinterest-campaign-setup.md)
 - [Agent plugin](../plugins/adport/README.md)

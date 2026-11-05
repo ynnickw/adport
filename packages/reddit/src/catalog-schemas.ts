@@ -1,0 +1,16 @@
+import { z } from 'zod';
+import { redditCatalogId, redditBusinessId } from './catalog-access.js';
+export const hash = z.string().regex(/^[a-f0-9]{64}$/);
+export const catalogInput = z.object({ account_id: redditCatalogId, business_id: redditBusinessId, catalog_id: redditCatalogId }).strict();
+export const creationInput = catalogInput.omit({ catalog_id: true });
+export const sourceIds = z.array(redditCatalogId.max(50)).max(100).refine(ids => new Set(ids).size === ids.length, 'Pixel IDs must be unique');
+export const sourceContext = catalogInput.extend({ event_sources: sourceIds }).strict();
+export const creationContext = creationInput.extend({ event_sources: sourceIds.default([]) }).strict();
+export const catalogCreate = z.object({ business_id: redditBusinessId, name: z.string().min(1).max(200), default_language: z.enum(['en', 'de', 'es', 'fr', 'it', 'pt']), default_currency: z.enum(['USD', 'GBP', 'CAD', 'EUR', 'AUD', 'JPY', 'CHF', 'NZD', 'SEK', 'NOK', 'BRL']), event_sources: sourceIds.default([]), expected_creation_access_hash: hash, expected_event_sources_hash: hash, acknowledge_new_catalog_management: z.literal(true) }).strict();
+export const catalogRename = catalogInput.omit({ account_id: true }).extend({ name: z.string().min(1).max(200), expected_configuration_hash: hash, acknowledge_shared_effects: z.literal(true) }).strict();
+export const catalogSources = catalogInput.omit({ account_id: true }).extend({ event_sources: sourceIds, expected_configuration_hash: hash, expected_event_sources_hash: hash, acknowledge_shared_effects: z.literal(true), acknowledge_measurement_effects: z.literal(true) }).strict();
+export const catalogDelete = catalogInput.omit({ account_id: true }).extend({ expected_configuration_hash: hash, confirm_catalog_name: z.string().min(1).max(200), acknowledge_shared_effects: z.literal(true), acknowledge_delete_contents: z.literal(true) }).strict();
+export const permissionSelection = z.object({ account_id: redditCatalogId, business_id: redditBusinessId, catalog_id: redditCatalogId.optional(), resource_kind: z.enum(['catalog', 'catalog_creation']).optional() }).strict();
+export const validPermission = (input: { catalog_id?: string; resource_kind?: string; mode?: string }) => input.resource_kind === 'catalog_creation' ? !input.catalog_id && (!input.mode || ['none', 'create'].includes(input.mode)) : !!input.catalog_id && input.mode !== 'create';
+export const permissionSnapshot = permissionSelection.refine(validPermission, 'Choose an exact catalog or creation delegation without a catalog ID');
+export const permissionChange = permissionSelection.omit({ account_id: true }).extend({ mode: z.enum(['none', 'read', 'write', 'create']), expected_access_hash: hash }).strict().refine(validPermission, 'Choose catalog read/write/none or new-catalog create/none access');

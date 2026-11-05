@@ -10,7 +10,7 @@ const project = '203c14b1-c908-4632-9aa7-1be5de4ae9b0', args = { organizationId:
 const request = (body: unknown, origin: string | null = 'https://app.adport.test') => new Request('https://app.adport.test/api/catalog-access', { method: 'POST', headers: { 'content-type': 'application/json', ...(origin ? { origin } : {}) }, body: JSON.stringify(body) });
 beforeEach(() => {
   vi.resetAllMocks();mocks.session.mockResolvedValue({ organizationId: project, userId: 'owner', role: 'owner', scopes: ['tools:read', 'connections:manage'] });mocks.rate.mockResolvedValue(true);mocks.runtime.mockResolvedValue({ registry: { call: mocks.call }, ctx: {} });
-  mocks.call.mockImplementation(async (name: string) => name === 'tiktok_catalog_access_snapshot' ? { grant: { hash } } : name === 'tiktok_catalog_access' ? { grants: [] } : { pending_operation_id: 'pending-access', preview: { review: { fields: [] } } });
+  mocks.call.mockImplementation(async (name: string) => name.endsWith('_catalog_access_snapshot') ? { grant: { hash } } : ['tiktok_catalog_access', 'reddit_catalog_access'].includes(name) ? { grants: [] } : { pending_operation_id: 'pending-access', preview: { review: { fields: [] } } });
 });
 describe('owner-only project catalog access route', () => {
   it('previews through the shared registry, binds current hash and returns exact arguments without applying', async () => {
@@ -24,6 +24,15 @@ describe('owner-only project catalog access route', () => {
     mocks.call.mockClear();expect((await POST(request({ ...creation, expected_access_hash: hash, pending_operation_id: 'approved' }))).status).toBe(200);expect(mocks.call).toHaveBeenCalledTimes(1);expect(mocks.call.mock.calls[0]![1]).not.toHaveProperty('catalog_id');
   });
   it.each([{ resource_kind: 'catalog_creation', mode: 'write' }, { resource_kind: 'catalog_creation', mode: 'create' }, { mode: 'create' }])('rejects contradictory catalog/creation selection %j', async patch => {
+    expect((await POST(request({ ...args, ...patch }))).status).toBe(400);expect(mocks.runtime).not.toHaveBeenCalled();
+  });
+  it('routes Reddit Business/catalog grants explicitly and leaves legacy TikTok routing unchanged', async () => {
+    const business = '1e200a0b-4e98-32cc-dd47-3006e4c85bb2', selected = { organizationId: project, account_id: 'a2_qa', provider: 'reddit', business_id: business, catalog_id: 'catalog_qa', mode: 'write' };
+    const response = await POST(request(selected));expect(response.status).toBe(200);expect(await response.json()).toMatchObject({ arguments: { ...selected, expected_access_hash: hash } });expect(mocks.runtime).toHaveBeenCalledWith(expect.objectContaining({ organizationId: project }), 'a2_qa', 'reddit');expect(mocks.call).toHaveBeenLastCalledWith('reddit_set_catalog_access', { account_id: 'a2_qa', business_id: business, catalog_id: 'catalog_qa', mode: 'write', expected_access_hash: hash }, {});
+    mocks.call.mockClear();const listing = await GET(new Request(`https://app.adport.test/api/catalog-access?organizationId=${project}&account_id=a2_qa&provider=reddit`));expect(await listing.json()).toMatchObject({ provider: 'reddit', account_id: 'a2_qa' });expect(mocks.call).toHaveBeenCalledWith('reddit_catalog_access', { account_id: 'a2_qa' }, {});
+    mocks.call.mockClear();const creation = { ...selected, resource_kind: 'catalog_creation', catalog_id: undefined, mode: 'create', expected_access_hash: hash, pending_operation_id: 'approved' };expect((await POST(request(creation))).status).toBe(200);expect(mocks.call).toHaveBeenCalledTimes(1);expect(mocks.call.mock.calls[0]![0]).toBe('reddit_set_catalog_access');expect(mocks.call.mock.calls[0]![1]).not.toHaveProperty('bc_id');
+  });
+  it.each([{ provider: 'reddit', bc_id: '456' }, { provider: 'reddit', business_id: 'not-a-business' }, { provider: 'x' }, { business_id: '1e200a0b-4e98-32cc-dd47-3006e4c85bb2' }])('rejects mixed or invalid platform authority %j', async patch => {
     expect((await POST(request({ ...args, ...patch }))).status).toBe(400);expect(mocks.runtime).not.toHaveBeenCalled();
   });
   it('applies only an exact supplied pending token/hash and never prepares a replacement silently', async () => {

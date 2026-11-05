@@ -5,11 +5,13 @@ import { PostgresTikTokCatalogAccessStore } from './tiktok-catalog-access';
 import { createAccountScopeAuthorizer } from './account-scope';
 import { hydrateTikTok } from './provider-oauth';
 import { getOrganizationPolicy, listOrganizationAdAccounts, loadEnabledAccountIds, loadProviderCredentials, PostgresAuditStore, PostgresPendingStore } from './repository';
+import { createRedditCatalogAccessRuntime } from './reddit-catalog-access-runtime';
 import type { TenantPrincipal } from './types';
 
 /** Permission administration stays available for revocation without native credentials. */
-export async function createCatalogAccessRuntime(principal: TenantPrincipal, accountId: string) {
+export async function createCatalogAccessRuntime(principal: TenantPrincipal, accountId: string, platform: 'tiktok' | 'reddit' = 'tiktok') {
   if (!principal.userId || principal.clientId || principal.apiKeyId || principal.oauthTokenId || !['owner', 'admin'].includes(principal.role ?? '') || !principal.scopes.includes('connections:manage')) throw new AdportError('POLICY_VIOLATION', 'A signed-in project owner or admin is required to manage catalog access.');
+  if (platform === 'reddit') return createRedditCatalogAccessRuntime(principal, accountId);
   const [policy, inventory] = await Promise.all([getOrganizationPolicy(principal.organizationId), listOrganizationAdAccounts(principal.organizationId)]);
   const known = new Set(inventory.filter(value => value.provider === 'tiktok').map(value => value.accountId));
   const store = new PostgresTikTokCatalogAccessStore(principal, known, true);

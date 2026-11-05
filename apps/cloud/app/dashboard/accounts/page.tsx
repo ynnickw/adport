@@ -68,8 +68,8 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
           providerFilter={providerFilter}
         />
       )}
-      {canManage && (!providerFilter || providerFilter === 'tiktok') ? <CatalogAccessManager key={tenant.organizationId} organizationId={tenant.organizationId} projectName={tenant.organizationName}
-        accounts={inventory.filter(account => account.provider === 'tiktok').map(account => ({ accountId: account.accountId, name: account.name, ready: account.enabled && connections.some(connection => connection.provider === 'tiktok' && connection.status === 'connected' && !connection.accountSelectionId) }))} /> : null}
+      {(['tiktok', 'reddit'] as const).map(provider => canManage && (!providerFilter || providerFilter === provider) ? <CatalogAccessManager key={tenant.organizationId + ':' + provider} provider={provider} organizationId={tenant.organizationId} projectName={tenant.organizationName}
+        accounts={inventory.filter(account => account.provider === provider).map(account => ({ accountId: account.accountId, name: account.name, ready: account.enabled && connections.some(connection => connection.provider === provider && connection.status === 'connected' && !connection.accountSelectionId) }))} /> : null)}
     </main>
   );
 }
