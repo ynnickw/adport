@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { LiveData } from '@/app/dashboard/live-data';
 import { ToolCatalogEditor } from '@/components/tool-catalog-editor';
+import { ApiKeyManager } from '@/app/dashboard/agents/api-key-manager';
 
 const requests: Array<{ url: string; resolve: (value: Response) => void }> = [];
 beforeEach(() => {
@@ -70,4 +71,14 @@ it('opens the linked connection’s settings and saves only after an explicit us
   await waitFor(() => expect(requests).toHaveLength(1));
   await act(async () => requests[0]!.resolve(Response.json({ selection: { profile: 'full', providers: ['meta'] } })));
   expect(await screen.findByRole('status')).toHaveProperty('textContent', expect.stringContaining('Refresh tools'));
+});
+
+it('reveals API key settings through the surrounding Advanced disclosure when following a capability link', async () => {
+  window.history.replaceState(null, '', '/dashboard/agents?connection=fixture&kind=key');
+  render(<ApiKeyManager organizationId="fixture-project" currentUserId="fixture-user" canManage baseUrl="https://app.adport.test" initialGrants={[]} initialCheckedAt={Date.now()} setup={null} />);
+  await waitFor(() => expect(requests).toHaveLength(1));
+  await act(async () => requests[0]!.resolve(Response.json({ oauthGrants: [], keys: [{ id: 'fixture', name: 'Fixture key', keyPrefix: 'fixture', createdAt: new Date().toISOString(), lastUsedAt: null, toolSelection: { profile: 'standard', providers: ['meta'] } }] })));
+  const row = (await screen.findByText('Fixture key')).closest('.row-item') as HTMLElement;
+  expect(within(row).getByRole('combobox', { name: 'Tool access: Standard' })).toBeTruthy();
+  expect(requests).toHaveLength(1);
 });

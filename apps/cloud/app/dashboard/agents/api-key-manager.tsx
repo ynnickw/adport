@@ -2,7 +2,7 @@
 
 import { Button, Disclosure, Input } from '@/components/controls';
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { formatDate, formatRelative } from '@/components/ui';
 import { InfoTooltip } from '@/components/info-tooltip';
 import { useConfirm } from '@/components/use-confirm';
@@ -54,6 +54,10 @@ export function ApiKeyManager({ organizationId, currentUserId, suggestedProvider
   const [copied, setCopied] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [confirm, confirmationDialog] = useConfirm();
+  const advanced = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('kind') === 'key' && advanced.current) advanced.current.open = true;
+  }, []);
 
   const load = useCallback(async () => {
     setChecking(true); setConnectionError(undefined);
@@ -144,7 +148,7 @@ export function ApiKeyManager({ organizationId, currentUserId, suggestedProvider
     {initialGrants.some(grant => grant.status === 'active') ? connectionPanel : null}
     {setup}
     {!initialGrants.some(grant => grant.status === 'active') ? connectionPanel : null}
-    {canManage ? <Disclosure label="Advanced: API keys & custom integrations" className="assistant-advanced">
+    {canManage ? <Disclosure ref={advanced} label="Advanced: API keys & custom integrations" className="assistant-advanced">
       <p>For scripts or clients that cannot sign in with OAuth. ChatGPT, Codex, Claude, and Cursor use the setup above.</p>
       {error ? <div className="error-callout" role="alert">{error}</div> : null}
       {createdKey ? <div className="stack">

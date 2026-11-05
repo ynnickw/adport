@@ -55,7 +55,7 @@ export function capabilityTools(): AnyToolDefinition[] {
         }
         if (!toolInSelection(tool, { ...selection, providers: null }, catalog?.includeRawTools)) {
           blockers.push('profile_disabled');
-          next_steps.push(`Choose ${metadata.exposure === 'standard' ? 'Standard or Full' : 'Full'} under Tool access for this connection.`);
+          next_steps.push(`Choose ${tool.annotations.readOnly ? 'Reporting (read-only) or Full' : metadata.exposure === 'standard' ? 'Standard or Full' : 'Full'} under Tool access for this connection.`);
         }
         if (!tool.annotations.readOnly && catalog?.canWrite === false) {
           blockers.push('write_permission_required'); next_steps.push('Ask a project owner to review this connection’s write permissions, your role and plan. Changing the tool profile alone does not grant write access.');
