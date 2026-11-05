@@ -28,7 +28,7 @@ import {
 
 export const PROVIDER_IDS = ['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const;
 export { ADPORT_UI_RESOURCE_DOMAINS };
-export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v18.html', 'ui://adport/insight-card-v17.html', 'ui://adport/insight-card-v16.html', 'ui://adport/insight-card-v15.html', 'ui://adport/insight-card-v14.html', 'ui://adport/insight-card-v13.html', 'ui://adport/insight-card-v12.html', 'ui://adport/insight-card-v11.html', 'ui://adport/insight-card-v10.html', 'ui://adport/insight-card-v9.html', 'ui://adport/insight-card-v8.html', 'ui://adport/insight-card-v7.html', 'ui://adport/insight-card-v6.html', 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html'];
+export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v19.html', 'ui://adport/insight-card-v18.html', 'ui://adport/insight-card-v17.html', 'ui://adport/insight-card-v16.html', 'ui://adport/insight-card-v15.html', 'ui://adport/insight-card-v14.html', 'ui://adport/insight-card-v13.html', 'ui://adport/insight-card-v12.html', 'ui://adport/insight-card-v11.html', 'ui://adport/insight-card-v10.html', 'ui://adport/insight-card-v9.html', 'ui://adport/insight-card-v8.html', 'ui://adport/insight-card-v7.html', 'ui://adport/insight-card-v6.html', 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html'];
 
 const DEFAULT_MCP_ICONS = [{
   src: 'https://app.adport.dev/icon.svg?brand=orange-dot-v2',
@@ -212,10 +212,10 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
         const approval = view === 'operation' && typeof pending === 'string' && !args.pending_operation_id
           ? { arguments: { ...args } }
           : undefined;
-        const nextArgs = view === 'creatives' ? nextPageArguments(tool, args, rawObject) : undefined;
+        const nextArgs = view === 'creatives' || view === 'records' ? nextPageArguments(tool, args, rawObject) : undefined;
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-          ...(view ? { structuredContent: structuredResult(tool.name, view, structured, approval, typeof args.project_id === 'string' ? { project_id: args.project_id } : undefined, { can_write: !scopes || scopes.includes('tools:write') }, view === 'creatives' && tool.annotations.readOnly ? { arguments: Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'pending_operation_id')) } : undefined, nextArgs ? { arguments: nextArgs } : undefined, descriptor) }
+          ...(view ? { structuredContent: structuredResult(tool.name, view, structured, approval, typeof args.project_id === 'string' ? { project_id: args.project_id } : undefined, { can_write: !scopes || scopes.includes('tools:write') }, (view === 'creatives' || view === 'records') && tool.annotations.readOnly ? { arguments: Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'pending_operation_id')) } : undefined, nextArgs ? { arguments: nextArgs } : undefined, descriptor) }
             : tool.output ? { structuredContent: structured as Record<string, unknown> } : {}),
         };
       } catch (err) {

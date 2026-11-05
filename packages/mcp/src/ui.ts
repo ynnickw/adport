@@ -9,7 +9,7 @@ import { PROVIDER_GALLERY_UI, PROVIDER_GALLERY_STYLES } from './provider-gallery
 import { PROVIDER_LOGOS } from './provider-logos.js';
 import { OPERATION_UI_SCRIPT } from './operation-ui.js';
 
-export const ADPORT_UI_URI = 'ui://adport/insight-card-v19.html';
+export const ADPORT_UI_URI = 'ui://adport/insight-card-v20.html';
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
 export const ADPORT_UI_RESOURCE_DOMAINS = [ADPORT_UI_DOMAIN, 'https://*.fbcdn.net', 'https://*.fbsbx.com', 'https://*.googleusercontent.com', 'https://tpc.googlesyndication.com', 'https://www.bing.com', 'https://*.scdn.co', 'https://*.spotifycdn.com', 'https://storage.googleapis.com', 'https://*.pinimg.com', 'https://*.redd.it', 'https://*.redditmedia.com', 'https://*.redditstatic.com', 'https://*.licdn.com', 'https://*.licdn-ei.com', 'https://pbs.twimg.com', 'https://video.twimg.com', 'https://ton.twimg.com'];
 
@@ -344,6 +344,7 @@ ${PROVIDER_GALLERY_UI}
       let data=resultData(result);
       if (!object(data)) data={value:data};
       const meta = data._adport || {};
+      recordPages=null;
       if(providerGallery && meta.view!=='creatives' && (!providerGallery.review || meta.view!=='operation' || meta.tool!==providerGallery.review.tool || meta.accountId!==providerGallery.meta.accountId || meta.context?.project_id!==providerGallery.meta.context?.project_id)) providerGallery=null;
       syntheticResult = data.data_source === 'synthetic';
       if (data.cancelled) {
@@ -367,7 +368,7 @@ ${PROVIDER_GALLERY_UI}
     function acceptResult(result,local=false) {
       if (!result || typeof result !== 'object') return;
       const incoming=resultData(result);
-      if(!local && (providerGalleryIgnoreEcho(incoming) || mediaLibraryIgnoreEcho(incoming))) return;
+      if(!local && (providerGalleryIgnoreEcho(incoming) || mediaLibraryIgnoreEcho(incoming) || recordPagesIgnoreEcho(incoming))) return;
       if(!local && (app.querySelector('[data-media-gallery]') && uploads.items.length>0 && ['media_prepare_upload','media_finalize_upload','media_get'].includes(incoming?._adport?.tool || result._meta?.adport?.tool) || mediaLibrary?.loading && incoming?._adport?.tool==='media_list' && mediaLibraryProject(incoming,incoming._adport)===mediaLibrary.project)) return;
       const fingerprint=JSON.stringify(incoming);
       // Host state updates can echo an old tool result after a local edit/apply.
