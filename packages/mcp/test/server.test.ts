@@ -2,11 +2,12 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { AdportError, createContext, FindingsStore } from '@adport/core';
+import { AdportError, createContext, FindingsStore, type ManagedMediaLibrary } from '@adport/core';
+import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createMcpServer, createMcpUiServer } from '../src/index.js';
-import { ADPORT_UI_DOMAIN, ADPORT_UI_URI, ADPORT_UI_RESOURCE_DOMAINS } from '../src/ui.js';
+import { ADPORT_UI_DOMAIN, ADPORT_UI_HTML, ADPORT_UI_URI, ADPORT_UI_RESOURCE_DOMAINS } from '../src/ui.js';
 
 let home: string;
 let client: Client;
@@ -136,6 +137,26 @@ describe('adport MCP server', () => {
       const result = await host.callTool({ name: 'media_list', arguments: { limit: 10 } }); expect(result.isError).not.toBe(true); expect(result.structuredContent).toMatchObject({ assets: [{ sha256: 'a'.repeat(64), status: 'READY' }], creatives: [{ status: 'READY', descriptions: ['17 KB · 640 × 640'] }], _adport: { capabilities: { can_write: false }, refresh: { arguments: { limit: 10 } }, next: { arguments: { limit: 10, cursor: '22222222-2222-4222-8222-222222222222' } } } });
       expect(result.structuredContent).not.toHaveProperty('_adport.approval');
     } finally { await host.close(); await server.close(); }
+  });
+
+  it('renders a single media_get source through the real SDK result without adding upload or write controls', async () => {
+    const asset = { id: '11111111-1111-4111-8111-111111111111', name: 'QA single.png', content_type: 'image/png', byte_length: 172, sha256: 'a'.repeat(64), status: 'READY' as const, width: 1200, height: 628, preview_url: 'https://storage.example/qa.png', metadata_version: 1 };
+    const media: ManagedMediaLibrary = { scopeId: 'project-a', get: async () => asset, list: async () => { throw new Error('No list expected'); }, read: async () => { throw new Error('No byte read expected'); }, previewWrite: async () => { throw new Error('No write expected'); }, applyWrite: async () => { throw new Error('No write expected'); } };
+    const runtime = await createContext({ providerModules: [], media });
+    const server = createMcpServer({ runtime, scopes: ['tools:read'] }), host = new Client({ name: 'single-media-read-host', version: '1' }), [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport); await host.connect(clientTransport);
+    const dom = new JSDOM(ADPORT_UI_HTML, { runScripts: 'dangerously', url: 'https://widget.example' });
+    try {
+      const result = await host.callTool({ name: 'media_get', arguments: { media_id: asset.id } });
+      expect(result.isError).not.toBe(true);
+      expect(result.structuredContent).toMatchObject({ asset, truncated: false, _adport: { tool: 'media_get', view: 'creatives', capabilities: { can_write: false } } });
+      dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window.parent, data: { jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: result } }));
+      expect(dom.window.document.querySelector('img')?.getAttribute('src')).toBe(asset.preview_url);
+      expect(dom.window.document.querySelector('.creative-name')?.textContent).toBe(asset.name);
+      expect(dom.window.document.querySelector('main')?.textContent).toContain('172 bytes · 1200 × 628');
+      expect(dom.window.document.querySelector('[data-upload-files], [data-library-more], .creative-action')).toBeNull();
+      expect(dom.window.document.querySelector('main')?.textContent).not.toContain(asset.sha256);
+    } finally { dom.window.close(); await host.close(); await server.close(); }
   });
 
   it('advertises meaningful shared output schemas for every common submission tool', async () => {

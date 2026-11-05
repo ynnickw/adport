@@ -161,10 +161,10 @@ describeDatabase('project media signed-upload boundary', () => {
     expect(Buffer.from((await owner.read({ media_id, expected_sha256: checksum }, { contentTypes: ['application/pdf'] })).bytes).equals(pdf)).toBe(true);
     const gallery = await call(rt, 'media_list', { limit: 100 });
     const preview = gallery.creatives.find((v: any) => v.id === media_id).media;
-    expect(preview).toHaveLength(1);
-    expect(preview[0].type).toBe('image');
-    expect(new URL(preview[0].url).pathname).toBe('/api/media/cover');
-    const original = new URL(preview[0].open_url);
+    // Local HTTP Storage grants are usable headlessly, but not in an HTTPS widget.
+    expect(preview).toEqual([]);
+    expect(new URL(found.asset.preview_cover_url).pathname).toBe('/api/media/cover');
+    const original = new URL(found.asset.preview_url);
     expect(original.origin).toBe(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).origin);
     expect(original.pathname).toBe(`/storage/v1/object/sign/creative-media/${projects[0]}/${media_id}`);
     expect(original.searchParams.has('token')).toBe(true);

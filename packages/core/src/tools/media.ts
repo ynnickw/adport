@@ -1,13 +1,24 @@
 import { z } from 'zod';
-import { creativesOutput } from '../creatives.js';
+import { creativeSchema, creativesOutput, type Creative } from '../creatives.js';
 import { AdportError } from '../errors.js';
-import { hostFileSchema, mediaAssetSchema, mediaUploadMetadataSchema, mediaWidgetUploadSchema, mediaWriteSchemas, mediaListSchema, type ManagedMediaLibrary } from '../media.js';
+import { hostFileSchema, mediaAssetSchema, mediaUploadMetadataSchema, mediaWidgetUploadSchema, mediaWriteSchemas, mediaListSchema, type ManagedMediaLibrary, type MediaAsset } from '../media.js';
 import type { AdProvider } from '../provider.js';
 import { defineTool, type AnyToolDefinition, type ToolContext } from './registry.js';
 import { guardedWriteTool } from './write.js';
 import { mediaDistributionTools } from './media-distribution.js';
 
 const sizeLabel = (bytes: number) => bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : bytes >= 1024 ? `${Math.round(bytes / 1024)} KB` : `${bytes} bytes`;
+
+function mediaCreative(asset: MediaAsset): Creative {
+  const ready = asset.status === undefined || asset.status === 'READY';
+  const preview = creativeSchema.shape.media.safeParse(ready && asset.preview_cover_url && asset.preview_url ? [{ type: 'image', url: asset.preview_cover_url, open_url: asset.preview_url, alt: asset.name + ' — first page' }] : ready && asset.preview_url && /^(image|video|audio)\//.test(asset.content_type) ? [{ type: asset.content_type.startsWith('image/') ? 'image' : asset.content_type.startsWith('video/') ? 'video' : 'audio', url: asset.preview_url, alt: asset.name }] : []);
+  return {
+    id: asset.id, name: asset.name, provider: 'media', account_id: '', type: asset.content_type, ...(asset.status ? { status: asset.status } : {}),
+    headlines: [], descriptions: [`${sizeLabel(asset.byte_length)}${asset.width && asset.height ? ` · ${asset.width} × ${asset.height}` : ''}`, ...(asset.tags?.length ? [`Tags: ${asset.tags.join(', ')}`] : []), ...(asset.platforms?.length ? [`Platforms: ${asset.platforms.join(', ')}`] : [])], landing_urls: [], actions: [],
+    // Local HTTP Storage downloads remain available to headless clients in asset.
+    media: preview.success ? preview.data : [],
+  };
+}
 
 function managed(ctx: ToolContext): ManagedMediaLibrary {
   const media = ctx.media as ManagedMediaLibrary | undefined;
@@ -30,15 +41,10 @@ export function mediaTools(): AnyToolDefinition[] {
     async handler(input, ctx) {
       if (!ctx.media) throw new AdportError('NOT_CONNECTED', 'A hosted project media library is required. Local uploads accept file_path and expected_sha256.');
       const result = await ctx.media.list(input);
-      return { ...result, creatives: result.assets.map(asset => ({
-        id: asset.id, name: asset.name, provider: 'media', account_id: '', type: asset.content_type, ...(asset.status ? { status: asset.status } : {}),
-        headlines: [], descriptions: [`${sizeLabel(asset.byte_length)}${asset.width && asset.height ? ` · ${asset.width} × ${asset.height}` : ''}`, ...(asset.tags?.length ? [`Tags: ${asset.tags.join(', ')}`] : []), ...(asset.platforms?.length ? [`Platforms: ${asset.platforms.join(', ')}`] : [])], landing_urls: [],
-        actions: [],
-        media: asset.preview_cover_url && asset.preview_url ? [{ type: 'image', url: asset.preview_cover_url, open_url: asset.preview_url, alt: asset.name + ' — first page' }] : asset.preview_url && /^(image|video|audio)\//.test(asset.content_type) ? [{ type: asset.content_type.startsWith('image/') ? 'image' : asset.content_type.startsWith('video/') ? 'video' : 'audio', url: asset.preview_url, alt: asset.name }] : [],
-      })) };
+      return { ...result, creatives: result.assets.map(mediaCreative) };
     },
   }),
-  defineTool({ name: 'media_get', namespace: 'core', description: 'Get project media metadata, processing/deletion status and a temporary download URL for ready files. Pending uploads include part size/count and received part indexes for reconciliation. Download asset.preview_url with HTTP GET; preserve its SHA-256.', input: z.object({ media_id: z.string().uuid() }), output: z.object({ asset: mediaAssetSchema }), annotations: { readOnly: true, openWorld: false }, handler: async (input, ctx) => ({ asset: await managed(ctx).get(input.media_id) }) }),
+  defineTool({ name: 'media_get', namespace: 'core', description: 'Get a project file with its creative preview, metadata, processing/deletion status and temporary download URL when ready. Pending uploads include part size/count and received part indexes for reconciliation. Download asset.preview_url with HTTP GET; preserve its SHA-256.', input: z.object({ media_id: z.string().uuid() }), output: creativesOutput.extend({ asset: mediaAssetSchema }), presentation: 'creatives', annotations: { readOnly: true, openWorld: false }, async handler(input, ctx) { const asset = await managed(ctx).get(input.media_id); return { asset, creatives: [mediaCreative(asset)], truncated: false }; } }),
   ...mediaDistributionTools(),
   defineTool({ name: 'media_inspect_file', namespace: 'core', description: 'Inspect a host-provided ChatGPT attachment without storing it: download exact bytes from the allowed OpenAI file origin, detect MIME, verify size, decode images and compute SHA-256. No base64 or dashboard. Use returned metadata with media_import_file to preview a private project import. Other hosts need a supported file transport.', input: z.object({ file: hostFileSchema }), output: z.object({ file_id: z.string(), metadata: mediaUploadMetadataSchema, width: z.number().int().positive().optional(), height: z.number().int().positive().optional() }), fileInputs: ['file'], annotations: { readOnly: true, openWorld: true }, handler: async ({ file }, ctx) => { const library = managed(ctx); if (!library.inspectFile) throw new AdportError('NOT_CONNECTED', 'This runtime does not support host file imports.'); return library.inspectFile(file); } }),
   ...([

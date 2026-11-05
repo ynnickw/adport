@@ -189,7 +189,7 @@
   {"name":"media_distribution_plan","view":"data","guarded":false},
   {"name":"media_distributions","view":"data","guarded":false},
   {"name":"media_finalize_upload","view":"operation","guarded":true},
-  {"name":"media_get","view":"data","guarded":false},
+  {"name":"media_get","view":"creatives","guarded":false},
   {"name":"media_import_file","view":"operation","guarded":true},
   {"name":"media_inspect_file","view":"data","guarded":false},
   {"name":"media_list","view":"creatives","guarded":false},
