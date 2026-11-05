@@ -63,7 +63,7 @@ Contracts: [Reporting](https://learn.microsoft.com/en-us/linkedin/marketing/inte
 
 Full schema/name/locale/hidden-field edits require a form whose native state is `DRAFT`. For `PUBLISHED`, only headline/description, privacy URL/disclaimer and thank-you edits are exposed; LinkedIn still enforces linked-ad eligibility. Unassociated published forms can have broader native pre-publication edit eligibility, but this workflow does not assume their association state. Published forms linked to InMail or Conversation Ads may reject edits.
 
-`linkedin_archive_lead_form` exposes the documented `PUBLISHED` → `ARCHIVED` transition with a snapshot-bound preview. Archiving can stop the form and linked creatives serving. No publish, delete or undocumented restore transition is invented. Form creation/editing alone does not complete a lead-generation ad: creative/form association remains a separate workflow.
+`linkedin_archive_lead_form` exposes the documented `PUBLISHED` → `ARCHIVED` transition with a snapshot-bound preview. Archiving can stop the form and linked creatives serving. No publish, delete or undocumented restore transition is invented. Form creation/editing alone does not create an ad. Use the lead-ad workflow below to bind it to a creative.
 
 All writes use the shared preview/apply gate and independent native readback. Unexpected outcomes retain available resource IDs and are never retried automatically. Native validation occurs on apply; local form size/collection bounds do not replace provider eligibility checks. Read-only widgets render configuration as inert text and do not load URLs or collect responses.
 
@@ -216,3 +216,59 @@ Core contracts reviewed 2026-08-31; sponsored content and descriptive metadata r
 Rejected API requests expose only allowlisted machine diagnostics: HTTP/native/service codes, validation field paths, numeric limits and a provider correlation ID when returned. Free-form messages, descriptions and submitted values are omitted, credential echoes are excluded, and error bodies are bounded. Native failures are not retried automatically. See [LinkedIn's error schema](https://learn.microsoft.com/en-us/linkedin/marketing/error-responses?view=li-lms-2026-08).
 
 Tests use synthetic fixtures shaped by these references and assert outgoing URLs, headers, bodies, response contracts and policy behavior. On 2026-11-03, an existing scoped hosted grant uploaded a private QA image through Claude's native approval widget; the account-library finder confirmed ownership and AVAILABLE status, and the gallery supported a verified library rename. The individual-image endpoint returned403. On 2026-11-04, headless PDF source staging and a native document upload/readback reached AVAILABLE. A separate paused campaign creation preview passed locally, but its native apply returned422 without an ID; the older client did not retain the validation details. This does not establish campaign or sponsored-post creation support for that live grant. Native metadata202610, sponsored formats, shared post edits and other management operations still require live verification. A local LinkedIn credential is unavailable.
+
+
+## Lead-ad creation and form association
+
+`linkedin_lead_ad_context` reads an advertiser-owned form and, optionally, a
+supported lead-generation campaign and source creative. It returns exact form,
+campaign and source hashes for the existing `linkedin_create_sponsored_ad` and
+`linkedin_create_reference_ad` tools. Supply their optional `lead_form` object
+with `form_id`, `expected_form_hash`, `expected_campaign_hash` and `label`.
+Reference reuse additionally requires `expected_source_hash`.
+
+Native format matching is explicit:
+
+| Content | Lead campaign format |
+| --- | --- |
+| Text/image/article | `LEAD_GENERATION_FORM_SPONSORED_CONTENT` |
+| Video | `VIDEO_LEAD_GENERATION_FORM_SPONSORED_CONTENT` |
+| Carousel | `LEAD_GENERATION_FORM_CAROUSEL_SPONSORED_CONTENT` |
+| Document | `SPONSORED_UPDATE_NATIVE_DOCUMENT` |
+
+Creating a new lead ad also requires `lead_form.confirm_public_post: true`.
+The native dark post has `PUBLISHED`/`PUBLIC` visibility and is accessible by URL,
+with organic feed distribution and resharing disabled. Ordinary lead ads use
+the existing native inline-creative API. Explicit gated-document preview settings
+use the documented Posts-then-Creatives sequence, requiring native Page write
+permission in addition to Ads access. If that second write fails, the post ID
+is returned for reconciliation; the approval cannot be replayed. Successful
+receipts retain both created IDs. `DRAFT` creatives stay DRAFT and editable;
+policy coerces requested `ACTIVE` to `PAUSED`. Campaign activation remains separate.
+No form responses, tracking events or submitted leads are read or generated.
+
+Lead document ads cannot reuse a post or document already referenced by another
+creative. Upload a fresh document, then use sponsored-ad creation. A complete
+selected-account creative/reference scan checks current use before creation;
+unreadable posts, repeated/foreign pages or a scan exceeding 5,000 creatives leave
+uniqueness unconfirmed and stop the write. Post reads are deduplicated and use
+at most four concurrent requests. Native LinkedIn still enforces concurrent
+uniqueness. Optional `lead_form.gated_preview_page_count` is sent only as the
+native document creative's `gatedLeadgenPreviewPageCount`.
+
+`linkedin_creative_lead_form` shows the current association, CTA and hashes in a
+compact native creative widget. Agents use `linkedin_set_creative_lead_form` to
+prepare an exact before/after approval card. A form destination can change only
+while the creative is DRAFT. Outside DRAFT, the existing form must remain the
+same and only its CTA label may change. Content, name and delivery status are
+verified unchanged on readback. Label changes can affect serving ads. Archived
+forms cannot be selected as new targets. Stale creative, campaign or form hashes
+reject before mutation; native writes are never automatically retried.
+
+These contracts were checked against LinkedIn's [Creatives API](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads/account-structure/create-and-manage-creatives?view=li-lms-2026-08),
+[campaign objectives](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads/account-structure/campaign-objectives?view=li-lms-2026-08)
+and [Document Ads API](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads/advertising-targeting/version/document-ads?view=li-lms-2026-08)
+on 2026-11-05. Wire tests and MCP/DOM tests verify schemas and reviews; they do not
+establish live Page permission, successful publication or a live form association.
+Message, Conversation and Event ad creation use their own native content models
+and are not supplied by the sponsored-content form workflow.

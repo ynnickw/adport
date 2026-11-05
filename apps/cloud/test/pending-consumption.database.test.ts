@@ -38,7 +38,8 @@ describeDatabase('atomic project approval consumption', () => {
     expect(await store().consume(value.id, 'different-hash')).toBe(false); expect(await store().get(value.id)).toBeDefined();
     const results = await Promise.all(Array.from({ length: 8 }, () => store().consume(value.id, value.opHash)));
     expect(results.filter(Boolean)).toHaveLength(1); expect(await store().get(value.id)).toBeUndefined();
-    const expired = pending(new Date(Date.now() - 1).toISOString()); await store().put(expired);
+    const expired = pending(); await store().put(expired);
+    await db()`update public.pending_operations set expires_at = clock_timestamp() - interval '1 second' where id = ${expired.id}`;
     expect(await store().consume(expired.id, expired.opHash)).toBe(false);
   });
 

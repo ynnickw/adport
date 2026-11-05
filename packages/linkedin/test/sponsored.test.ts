@@ -133,7 +133,7 @@ describe('LinkedIn sponsored content and native creative metadata', () => {
     const f = fixture(), result = await f.provider.sponsored.preview(A, U);
     expect(creativesOutput.safeParse(result).success).toBe(true);
     expect(result.creatives[0]).toMatchObject({ id: U, headlines: ['Native title'], descriptions: ['Native introduction'], landing_urls: ['https://example.test/destination'], media: [{ type: 'video', url: 'https://media.licdn.com/native.mp4' }] });
-    expect(f.calls[0]!.url.searchParams.get('fields')).toBe('id,account,campaign,name,intendedStatus,content,metadata');
+    expect(f.calls[0]!.url.searchParams.get('fields')).toBe('id,account,campaign,name,intendedStatus,content,leadgenCallToAction,metadata');
     expect(f.calls[0]!.init.headers).toMatchObject({ 'Linkedin-Version': LINKEDIN_CREATIVE_METADATA_VERSION });
     expect(f.calls[1]!.init.headers).toMatchObject({ 'Linkedin-Version': LINKEDIN_API_VERSION });
     for (const action of result.creatives[0]!.actions) expect(action.arguments).toMatchObject({ account_id: A, creative_id: U });

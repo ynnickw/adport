@@ -99,10 +99,17 @@ export class LinkedInAdsClient {
     if (response.status !== 201 || !id || !/^urn:li:sponsoredCreative:[1-9]\d*$/.test(id)) throw new AdportError('PROVIDER_ERROR', 'linkedin: creative create did not return 201 and a valid sponsoredCreative URN; inspect the account before retrying');
     return id;
   }
+  async createPost(body: unknown): Promise<string> {
+    const response = await this.request('posts', 'POST', {}, body), raw = response.headers.get('x-restli-id');
+    let id: string | undefined;
+    try { id = raw ? decodeURIComponent(raw) : undefined; } catch { /* Invalid receipt is unconfirmed. */ }
+    if (response.status !== 201 || !id || !/^urn:li:(?:share|ugcPost):[1-9]\d*$/.test(id)) throw new AdportError('PROVIDER_ERROR', 'linkedin: post create did not return 201 and an exact post URN; reconcile before retrying');
+    return id;
+  }
   async creativeMetadata<T>(path: string, schema: z.ZodType<T>): Promise<T> {
     // Metadata exists only on single-creative GETs from 202610. Do not project it
     // on the older finder schema or change unrelated mutation API versions.
-    const response = await this.request(path, 'GET', { fields: 'id,account,campaign,name,intendedStatus,content,metadata' }, undefined, false, true, LINKEDIN_CREATIVE_METADATA_VERSION);
+    const response = await this.request(path, 'GET', { fields: 'id,account,campaign,name,intendedStatus,content,leadgenCallToAction,metadata' }, undefined, false, true, LINKEDIN_CREATIVE_METADATA_VERSION);
     const parsed = schema.safeParse(await response.json());
     if (!parsed.success) throw new AdportError('PROVIDER_ERROR', 'linkedin: malformed creative metadata response');
     return parsed.data;
