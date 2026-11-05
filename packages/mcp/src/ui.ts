@@ -9,7 +9,7 @@ import { PROVIDER_GALLERY_UI, PROVIDER_GALLERY_STYLES } from './provider-gallery
 import { PROVIDER_LOGOS } from './provider-logos.js';
 import { OPERATION_UI_SCRIPT } from './operation-ui.js';
 
-export const ADPORT_UI_URI = 'ui://adport/insight-card-v20.html';
+export const ADPORT_UI_URI = 'ui://adport/insight-card-v21.html';
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
 export const ADPORT_UI_RESOURCE_DOMAINS = [ADPORT_UI_DOMAIN, 'https://*.fbcdn.net', 'https://*.fbsbx.com', 'https://*.googleusercontent.com', 'https://tpc.googlesyndication.com', 'https://www.bing.com', 'https://*.scdn.co', 'https://*.spotifycdn.com', 'https://storage.googleapis.com', 'https://*.pinimg.com', 'https://*.redd.it', 'https://*.redditmedia.com', 'https://*.redditstatic.com', 'https://*.licdn.com', 'https://*.licdn-ei.com', 'https://pbs.twimg.com', 'https://video.twimg.com', 'https://ton.twimg.com'];
 

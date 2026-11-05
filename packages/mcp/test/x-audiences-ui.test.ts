@@ -7,7 +7,7 @@ import { AuditLog, createContext, DEFAULT_POLICY, PendingStore, PolicyEngine, wi
 import { XAdsClient, XAdsProvider, xTools } from '@adport/provider-x';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createMcpServer } from '../src/index.js';
-import { ADPORT_UI_HTML } from '../src/ui.js';
+import { ADPORT_UI_HTML, ADPORT_UI_URI } from '../src/ui.js';
 
 // Provider-owned v12 audience reference4e8f626, inspected2026-11-05. No native requests.
 describe('X custom-audience SDK and widget contract', () => {
@@ -28,6 +28,9 @@ describe('X custom-audience SDK and widget contract', () => {
     await server.connect(st);await host.connect(ct);const doms: JSDOM[] = [];
     try {
       const tools = (await host.listTools()).tools;expect(tools.find(tool => tool.name === 'x_custom_audiences')?.outputSchema).toMatchObject({ type: 'object', properties: { records: { type: 'array' } } });
+      expect(tools.find(tool => tool.name === 'x_custom_audiences')?._meta?.['openai/outputTemplate']).toBe(ADPORT_UI_URI);
+      expect(ADPORT_UI_URI).not.toBe('ui://adport/insight-card-v20.html');
+      for (const uri of [ADPORT_UI_URI, 'ui://adport/insight-card-v20.html']) expect((await host.readResource({ uri })).contents[0]).toMatchObject({ text: expect.stringContaining('Array.isArray(data.records)') });
       const args = { project_id: project, account_id: account, count: 1, q: 'QA', permission_scope: 'OWNER', with_deleted: false, with_total_count: true }, initial = await host.callTool({ name: 'x_custom_audiences', arguments: args });expect(initial.isError).not.toBe(true);
       expect(initial.structuredContent).toMatchObject({ _adport: { context: { project_id: project }, next: { arguments: { ...args, cursor: 'native-next' } } } });
       const callTool = vi.fn(async (name: string, input: Record<string, unknown>) => host.callTool({ name, arguments: input }));
