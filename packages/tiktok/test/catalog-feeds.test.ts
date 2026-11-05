@@ -62,6 +62,7 @@ describe('TikTok project-scoped catalog feed reads', () => {
     const f = await fixture('read', call => call.url.pathname.endsWith('/catalog/feed/get/') ? { feed_list: [{ feed_id: F, feed_name: 'QA', feed_type: 'DATA_FEED', status: 'OFF', last_update_param: { ...flatten(scheduled), update_mode: 'INCREMENTAL' }, access_token: 'PRIVATE-extension', unsafe_html: '<script>bad()</script>' }] } : undefined);
     const data = await f.service.list(input), text = JSON.stringify(data);for (const value of [uri, 'SECRET', '/private/products.csv', 'src-user', 'src-password', 'PRIVATE-extension', '<script>']) expect(text).not.toContain(value);
     expect(data.feeds[0]).toMatchObject({ source_origin: 'https://feed.example.test', source_configured: true, source_fingerprint: expect.stringMatching(/^[a-f0-9]{64}$/), configuration_hash: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    expect(data.records[0]).toMatchObject({ type: 'DATA_FEED', update_mode: 'INCREMENTAL', source: 'https://feed.example.test', frequency: 'Every 1 day · Europe/Berlin · 00:00' });expect(data.records[0]).not.toHaveProperty('feed_name');expect(data.records[0]).not.toHaveProperty('source_fingerprint');
     expect(Object.fromEntries(f.calls.at(-1)!.url.searchParams)).toEqual({ bc_id: B, catalog_id: C });expect(f.calls.at(-1)!.url.pathname).toBe('/open_api/v1.3/catalog/feed/get/');expect(posts(f.calls)).toHaveLength(0);
   });
   it('snapshot-pages the unpaged native list and invalidates config changes while ignoring product counts', async () => {
@@ -78,7 +79,7 @@ describe('TikTok project-scoped catalog feed reads', () => {
     });await expect(f.service.list({ ...input, feed_id: F })).rejects.toMatchObject({ code: 'PROVIDER_ERROR' });
   });
   it('verifies log membership and clearly bounds history to the latest10 operations', async () => {
-    const f = await fixture('read'), data = await f.service.log({ ...input, feed_id: F });expect(data).toMatchObject({ history_scope: 'latest_10_operations_only', more_history_available: null, logs: [{ process_status: 'SUCCESS', remove_count: 3, warn_count: 1 }] });expect(data.notes[0]).toContain('not full history');expect(f.calls.at(-2)!.url.searchParams.get('feed_id')).toBe(F);expect(Object.fromEntries(f.calls.at(-1)!.url.searchParams)).toEqual({ bc_id: B, catalog_id: C, feed_id: F });
+    const f = await fixture('read'), data = await f.service.log({ ...input, feed_id: F });expect(data).toMatchObject({ history_scope: 'latest_10_operations_only', more_history_available: null, logs: [{ process_status: 'SUCCESS', remove_count: 3, warn_count: 1 }], records: [{ name: '2026-11-05 12:00:00', status: 'SUCCESS', removed: 3, warnings: 1 }] });expect(data.notes[0]).toContain('not full history');expect(f.calls.at(-2)!.url.searchParams.get('feed_id')).toBe(F);expect(Object.fromEntries(f.calls.at(-1)!.url.searchParams)).toEqual({ bc_id: B, catalog_id: C, feed_id: F });
   });
   it('accepts current log field names but rejects conflicting aliases or secret-bearing timestamps', async () => {
     let fault: '' | 'alias' | 'timestamp' = '';const data = { add_count: 1, update_count: 2, error_count: 0, remove_count: 0, warn_count: 0, process_status: 'PROCESSING' };

@@ -75,6 +75,14 @@ function publicFeed(scope: Selection, value: Feed) {
     number_of_products: value.number_of_products, next_update_time: value.next_update_time || null, configuration_hash: configurationHash(scope, value),
   };
 }
+function frequency(value: ReturnType<typeof publicFeed>): string {
+  const s = value.schedule;
+  if (!s.interval_type) return 'Not configured';
+  const unit = { HOURLY: 'hour', DAILY: 'day', MONTHLY: 'month' }[s.interval_type];
+  const every = s.interval_count === null ? `${s.interval_type.toLowerCase()} interval not reported` : `Every ${s.interval_count} ${unit}${s.interval_count === 1 ? '' : 's'}`;
+  const time = s.hour === null || s.minute === null ? '' : `${String(s.hour).padStart(2, '0')}:${String(s.minute).padStart(2, '0')}`;
+  return [every, s.interval_type === 'MONTHLY' && s.day_of_month !== null ? `day ${s.day_of_month}` : '', s.timezone, time].filter(Boolean).join(' · ');
+}
 const commonNotes = ['The catalog and its feeds may be reused by other ads or accounts. No campaign status or budget is changed.', 'Stored configuration is not proof of authenticated source access or successful product ingestion. Read the native processing log.', 'Native reads do not confirm authentication values; a configuration hash cannot detect password-only changes.', 'No automatic retry. Reconcile the known feed after an uncertain result.'];
 
 /** Business Center catalog feeds. Native lists are unpaged and locally bounded. */
@@ -102,7 +110,7 @@ export class TikTokCatalogFeeds {
       if (cursor.snapshot !== snapshot || cursor.offset === 0 || cursor.offset >= rows.length || cursor.offset % input.page_size !== 0) throw new AdportError('INVALID_INPUT', 'Feed configuration or selection changed. Refresh the first page.');offset = cursor.offset;
     }
     const feeds = rows.slice(offset, offset + input.page_size).map(row => publicFeed(scope, row)), more = offset + feeds.length < rows.length;
-    return { feeds, records: feeds.map(row => ({ id: row.feed_id, name: row.feed_name, ...row })), complete: !more, truncated: more, ...(more ? { next_cursor: Buffer.from(JSON.stringify({ offset: offset + feeds.length, snapshot })).toString('base64url') } : {}), notes: ['TikTok returns all catalog feeds; Adport bounds the list to 5,000 and pages a snapshot locally. Source paths, query values and authentication are hidden.', ...commonNotes.slice(1, 3)] };
+    return { feeds, records: feeds.map(row => ({ id: row.feed_id, name: row.feed_name, status: row.status, type: row.feed_type, frequency: frequency(row), update_mode: row.update_mode, source: row.source_origin })), complete: !more, truncated: more, ...(more ? { next_cursor: Buffer.from(JSON.stringify({ offset: offset + feeds.length, snapshot })).toString('base64url') } : {}), notes: ['TikTok returns all catalog feeds; Adport bounds the list to 5,000 and pages a snapshot locally. Source paths, query values and authentication are hidden.', ...commonNotes.slice(1, 3)] };
   }
   async log(value: unknown) {
     const input = catalogFeedLog.parse(value), scope = catalogInput.parse({ account_id: input.account_id, bc_id: input.bc_id, catalog_id: input.catalog_id });await this.authorizeParent(scope);await this.native(scope, input.feed_id);
@@ -112,7 +120,7 @@ export class TikTokCatalogFeeds {
     const parsed = z.object({ feed_logs: z.array(entry).max(10), feed_id: nativeId.optional(), bc_id: nativeId.optional(), catalog_id: nativeId.optional() }).safeParse(await this.read('catalog/feed/log', { bc_id: input.bc_id, catalog_id: input.catalog_id, feed_id: input.feed_id }));
     if (!parsed.success || parsed.data.feed_id !== undefined && parsed.data.feed_id !== input.feed_id || parsed.data.bc_id !== undefined && parsed.data.bc_id !== input.bc_id || parsed.data.catalog_id !== undefined && parsed.data.catalog_id !== input.catalog_id) throw invalid();
     const logs = parsed.data.feed_logs.map(row => ({ ...(row.update_status ?? row.last_update_status!), ...(row.update_time ?? row.last_update_time!) }));
-    return { feed_id: input.feed_id, logs, records: logs.map((row, index) => ({ id: `${input.feed_id}:${index}:${digest(row)}`, ...row })), complete: true, truncated: false, history_scope: 'latest_10_operations_only', more_history_available: null, notes: ['This endpoint returns up to the latest 10 feed operations, not full history. Native SUCCESS and product counts do not establish ad delivery eligibility.'] };
+    return { feed_id: input.feed_id, logs, records: logs.map((row, index) => ({ id: `${input.feed_id}:${index}:${digest(row)}`, name: row.start_time || `Feed operation ${index + 1}`, status: row.process_status, added: row.add_count, updated: row.update_count, removed: row.remove_count, errors: row.error_count, warnings: row.warn_count, completed_at: row.end_time })), complete: true, truncated: false, history_scope: 'latest_10_operations_only', more_history_available: null, notes: ['This endpoint returns up to the latest 10 feed operations, not full history. Native SUCCESS and product counts do not establish ad delivery eligibility.'] };
   }
   async plan(op: WriteOperation): Promise<Plan> {
     const kinds: Record<string, string> = { tiktok_create_catalog_feed: 'create', tiktok_update_catalog_feed: 'update', tiktok_set_catalog_feed_schedule_status: 'update', tiktok_delete_catalog_feed: 'remove' };

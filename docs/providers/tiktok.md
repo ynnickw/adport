@@ -203,6 +203,8 @@ excluding volatile product counts and next-run timestamps. Source origins and
 fingerprints are visible; source paths, query values, authentication values and
 unknown native extensions stay hidden. Native reads cannot confirm stored
 passwords, so these hashes cannot detect password-only changes made elsewhere.
+Widget cards show status, feed type, frequency, mode and source origin; full
+safe metadata remains in Details instead of repeating IDs and hashes on cards.
 
 Feed creation requires `expected_catalog_hash`; other feed mutations require
 `expected_configuration_hash`. All require shared-effects acknowledgement.
