@@ -108,7 +108,7 @@ describe('LinkedIn professional demographic reporting',()=>{
     const f=fixture(call=>call.url.pathname==='/rest/adTargetingEntities'?{elements:[]}:undefined);
     expect((await f.provider.reporting.resolveEntities({account_id:A,urns:[U]})).unresolved_urns).toEqual([U]);
     for(const elements of [[{urn:'urn:li:industry:5',name:'Other'}],[{urn:U,name:'First'},{urn:U,name:'Duplicate'}]]){
-      const bad=fixture(call=>call.url.pathname==='/rest/adTargetingEntities'?{elements}:undefined);await expect(bad.provider.reporting.resolveEntities({account_id:A,urns:[U]})).rejects.toThrow('unrequested or duplicate');
+      const bad=fixture(call=>call.url.pathname==='/rest/adTargetingEntities'?{elements}:undefined);await expect(bad.provider.reporting.resolveEntities({account_id:A,urns:[U]})).rejects.toMatchObject({code:'PROVIDER_ERROR',message:expect.stringContaining('unrequested or duplicate'),details:{requested_urns:[U],returned_count:elements.length,unrequested_urns:elements.length===1?['urn:li:industry:5']:[],duplicate_urns:elements.length===2?[U]:[]}});
     }
     expect(resolveEntitiesInput.safeParse({account_id:A,urns:[U,U]}).success).toBe(false);expect(resolveEntitiesInput.safeParse({account_id:A,urns:['urn:li:person:123']}).success).toBe(false);
   });

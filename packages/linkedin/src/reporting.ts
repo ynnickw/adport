@@ -55,7 +55,8 @@ export class LinkedInReportingService {
     const result = await this.client.get('adTargetingEntities', z.object({ elements: z.array(entitySchema).max(100), paging: paging.optional() }), {
       q: 'urns', queryVersion: 'QUERY_USES_URNS', fetchType: 'SINGLE_NODE', urns, ...(selectedLocale ? { locale: selectedLocale } : {}),
     });
-    if (result.elements.some(entity => !urns.includes(entity.urn)) || !unique(result.elements.map(entity => entity.urn))) throw new AdportError('PROVIDER_ERROR', 'linkedin: URN resolution returned an unrequested or duplicate entity');
+    const returned = result.elements.map(entity => entity.urn), unrequested = [...new Set(returned.filter(urn => !urns.includes(urn)))], duplicates = [...new Set(returned.filter((urn, index) => returned.indexOf(urn) !== index))];
+    if (unrequested.length || duplicates.length) throw new AdportError('PROVIDER_ERROR', 'linkedin: URN resolution returned an unrequested or duplicate entity', { requested_urns: urns, returned_count: result.elements.length, unrequested_urns: unrequested, duplicate_urns: duplicates, duplicate_variants: result.elements.filter(entity => duplicates.includes(entity.urn)) });
     return { ...result, unresolved_urns: urns.filter(urn => !result.elements.some(entity => entity.urn === urn)) };
   }
   async resolveEntities(raw: z.input<typeof resolveEntitiesInput>) {
