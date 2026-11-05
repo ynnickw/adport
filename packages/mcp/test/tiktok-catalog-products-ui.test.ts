@@ -19,7 +19,7 @@ describe('TikTok catalog product SDK/widget contracts', () => {
     const privateUrl = 'https://store.example/private.csv?token=PRIVATE-CAPABILITY';
     const store = new FileTikTokCatalogAccessStore(join(dir, 'grants')), scope = { accountId: account, businessId: bc, resourceId: catalog, kind: 'catalog' as const };
     await store.compareAndSet(scope, catalogGrant(scope).hash, 'write');
-    let writes = 0;
+    let writes = 0, importMode = 'INCREASE';
     const media: MediaLibrary = { list: async () => ({ assets: [], truncated: false }), read: async (source, options) => verifyMedia(bytes, 'catalog.csv', source.expected_sha256, options), providerUrl: async () => ({ url: privateUrl, sha256, expires_at: new Date(Date.now() + 3600_000).toISOString() }) };
     const provider = new TikTokAdsProvider(new TikTokClient({ accessToken: 'inert' }, async (raw, init = {}) => {
       const url = new URL(String(raw));
@@ -29,8 +29,8 @@ describe('TikTok catalog product SDK/widget contracts', () => {
         const page = Number(url.searchParams.get('page'));
         return Response.json({ code: 0, data: { list: [{ product_id: String(page), sku_id: 'sku-' + page, title: page === 1 ? 'First <script>globalThis.executed=true</script>' : 'Second product', video_url: 'https://v16-tiktokcdn-com.akamaized.net/product-' + page + '.mp4' }], page_info: { page, page_size: 1, total_number: 2, total_page: 2 } } });
       }
-      if (url.pathname.endsWith('/catalog/product/file/')) { writes++;return Response.json({ code: 0, data: { feed_log_id: job } }); }
-      if (url.pathname.endsWith('/catalog/product/log/')) return Response.json({ code: 0, data: { product_feed_log: { catalog_id: catalog, feed_id: feed, process_status: 'PROCESSING', update_mode: 'INCREASE', add_count: 1, error_count: 0 } } });
+      if (url.pathname.endsWith('/catalog/product/file/')) { writes++;importMode = JSON.parse(String(init.body)).update_mode === 'OVERWRITE' ? 'REPLACE' : 'INCREASE';return Response.json({ code: 0, data: { feed_log_id: job } }); }
+      if (url.pathname.endsWith('/catalog/product/log/')) return Response.json({ code: 0, data: { product_feed_log: { catalog_id: catalog, feed_id: feed, process_status: 'PROCESSING', update_mode: importMode, add_count: 1, error_count: 0 } } });
       throw new Error('Unexpected fixture endpoint');
     }), { appId: 'inert', secret: 'inert' }, media, store);
     const base = await createContext({ media, engine: new PolicyEngine(DEFAULT_POLICY, new PendingStore(join(dir, 'pending')), new AuditLog(join(dir, 'audit'))), providerModules: [{ provider, tools: tiktokTools(provider) }] });

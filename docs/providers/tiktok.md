@@ -300,7 +300,10 @@ separately. Read fresh feed state before changing automation.
 Preview verifies source bytes and snapshots without minting a provider URL or
 submitting a native mutation. Apply rechecks them, issues the private source
 capability and submits native `catalog/product/file`. The returned `feed_log_id`
-is independently read back against the selected catalog/feed. The apply receipt
+is independently read back against the selected catalog/feed. Adport rejects a
+reported processing mode that differs from the approved mode. Unmapped native
+numeric modes remain available in the log but cannot verify an approved import;
+their codes are never guessed. A confirmed submission
 reports `ACCEPTED_FOR_PROCESSING` with `processed: false`, plus the next status tool/arguments.
 It does not claim completed ingestion. Temporary URLs, provider error bodies,
 and native diagnostic download capabilities stay out of results and audit logs.

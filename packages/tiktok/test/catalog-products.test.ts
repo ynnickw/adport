@@ -127,6 +127,8 @@ describe('TikTok product import status', () => {
     f.state.job.feed_log_data = { error_affected_products: [{ field: capability, affected_product_count: 1 }] };
     const unknownField = await f.provider.catalogs.products.log({ ...selection, feed_id: F, feed_log_id: J });
     expect(unknownField.log.error_fields).toEqual([{ field: 'Unrecognized field', affected_product_count: 1 }]);expect(JSON.stringify(unknownField)).not.toContain('PRIVATE-CAPABILITY');
+    f.state.job.update_mode = 1;
+    expect((await f.provider.catalogs.products.log({ ...selection, feed_id: F, feed_log_id: J })).log).toMatchObject({ update_mode: 1, update_mode_recognized: false });
   });
 });
 
@@ -168,10 +170,12 @@ describe('guarded CSV catalog imports', () => {
     if (fault === 'credentials') f.state.grant.url = 'https://user:secret@store.example/private.csv';
     await expect(f.provider.applyWrite(f.op(args), guard)).rejects.toThrow('download grant');expect(f.writes()).toHaveLength(0);
   });
-  it.each(['transport', 'native', 'readback', 'wrong-feed', 'failed-job', 'item-errors'])('never replays %s and retains known task IDs', async fault => {
+  it.each(['transport', 'native', 'readback', 'wrong-feed', 'wrong-mode', 'numeric-mode', 'failed-job', 'item-errors'])('never replays %s and retains known task IDs', async fault => {
     const f = await fixture(), args = await f.args();
     if (['transport', 'native', 'readback'].includes(fault)) f.state.failure = fault;
     if (fault === 'wrong-feed') f.state.job.feed_id = '999';
+    if (fault === 'wrong-mode') f.state.job.update_mode = 'REPLACE';
+    if (fault === 'numeric-mode') f.state.job.update_mode = 1;
     if (fault === 'failed-job') f.state.job.process_status = 'FAILED';
     if (fault === 'item-errors') { f.state.job.process_status = 'SUCCESS';f.state.job.error_count = 2; }
     const error = await f.provider.applyWrite(f.op(args), guard).catch(error => error);

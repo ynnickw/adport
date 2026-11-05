@@ -88,7 +88,7 @@ export class TikTokCatalogProducts {
     const issue = z.object({ field: z.string().max(256 * 1024).nullable().optional(), affected_product_count: count });
     const result = z.object({ product_feed_log: z.object({
       catalog_id: nativeId.optional(), bc_id: nativeId.optional(), feed_id: nativeId.optional(), feeds_id: nativeId.optional(), feed_log_id: nativeId.optional(),
-      process_status: z.enum(['WAITING', 'PROCESSING', 'SUCCESS', 'FAILED']), update_mode: z.enum(['INCREASE', 'REPLACE', 'INCREMENTAL', 'OVERWRITE']).optional(),
+      process_status: z.enum(['WAITING', 'PROCESSING', 'SUCCESS', 'FAILED']), update_mode: z.union([z.enum(['INCREASE', 'REPLACE', 'INCREMENTAL', 'OVERWRITE']), count]).optional(),
       add_count: count.optional(), update_count: count.optional(), delete_count: count.optional(), error_count: count.optional(), warn_count: count.optional(),
       start_time: z.string().max(40).regex(/^[0-9TZ :.+-]*$/).nullable().optional(), end_time: z.string().max(40).regex(/^[0-9TZ :.+-]*$/).nullable().optional(),
       feed_log_data: z.object({ error_affected_products: z.array(issue).max(1000).nullable().optional(), warn_affected_products: z.array(issue).max(1000).nullable().optional() }).nullable().optional(),
@@ -99,12 +99,13 @@ export class TikTokCatalogProducts {
     const { feed_log_data: issues, feeds_id: _legacy, ...fields } = row;
     const publicIssues = (rows: Array<z.infer<typeof issue>>) => rows.slice(0, 50).map(row => ({ field: typeof row.field === 'string' && row.field.length <= 128 && /^[a-zA-Z0-9_.\[\]-]+$/.test(row.field) ? row.field : 'Unrecognized field', affected_product_count: row.affected_product_count }));
     const log = { ...fields, feed_id: input.feed_id, feed_log_id: input.feed_log_id,
+      ...(row.update_mode !== undefined ? { update_mode_recognized: typeof row.update_mode === 'string' } : {}),
       ...(issues?.error_affected_products ? { error_fields: publicIssues(issues.error_affected_products) } : {}), ...(issues?.warn_affected_products ? { warning_fields: publicIssues(issues.warn_affected_products) } : {}),
       diagnostic_fields_truncated: (issues?.error_affected_products?.length ?? 0) > 50 || (issues?.warn_affected_products?.length ?? 0) > 50,
     };
     return { log, records: [{ id: input.feed_log_id, name: 'Product import', status: row.process_status === 'SUCCESS' && (row.error_count ?? 0) > 0 ? 'Completed with item errors' : row.process_status, added: row.add_count, updated: row.update_count, removed: row.delete_count, errors: row.error_count, warnings: row.warn_count }],
       processing_complete: ['SUCCESS', 'FAILED'].includes(row.process_status), complete: true, truncated: false,
-      notes: ['Counts and processing state are native; missing counts remain unavailable. SUCCESS does not establish ad eligibility or delivery.', 'Diagnostic field/count groups are bounded to 50 per severity. Native download links, free-form error text and product samples are omitted to keep file capabilities private.'],
+      notes: ['Counts and processing state are native; missing counts remain unavailable. SUCCESS does not establish ad eligibility or delivery.', 'The native reference labels update_mode as numeric but documents string enum values. Numeric codes are retained without an invented mapping and cannot verify the approved import mode.', 'Diagnostic field/count groups are bounded to 50 per severity. Native download links, free-form error text and product samples are omitted to keep file capabilities private.'],
     };
   }
   async plan(op: WriteOperation): Promise<Plan> {
@@ -138,6 +139,8 @@ export class TikTokCatalogProducts {
         try {
           const receipt = z.object({ feed_log_id: nativeId }).parse(await this.client.post('catalog/product/file', { bc_id: input.bc_id, catalog_id: input.catalog_id, feed_id: input.feed_id, file_url: grant.url, update_mode: input.update_mode }));jobId = receipt.feed_log_id;
           const actual = await this.log({ ...scope, feed_id: input.feed_id, feed_log_id: jobId });
+          const expectedModes = input.update_mode === 'INCREMENTAL' ? ['INCREMENTAL', 'INCREASE'] : ['OVERWRITE', 'REPLACE'];
+          if (actual.log.update_mode !== undefined && (typeof actual.log.update_mode !== 'string' || !expectedModes.includes(actual.log.update_mode))) throw new Error('Native processing mode is unrecognized or differs from approval');
           if (actual.log.process_status === 'FAILED' || actual.log.process_status === 'SUCCESS' && (actual.log.error_count ?? 0) > 0) throw new Error('Native processing reports failure or item errors');
           return [jobId];
         } catch {
