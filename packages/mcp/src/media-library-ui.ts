@@ -39,7 +39,7 @@ export const MEDIA_LIBRARY_UI = String.raw`
     }
     function mediaUploadMarkup(context) {
       if(!context) return '';
-      return '<label class="media-button primary media-file-label">Upload files<input type="file" multiple data-upload-files aria-label="Upload files" accept="'+esc(context.config.content_types.join(','))+'"></label>';
+      return '<label class="media-button primary media-file-label" title="Choose, drop or paste files">Upload files<input type="file" multiple data-upload-files aria-label="Upload files" accept="'+esc(context.config.content_types.join(','))+'"></label>';
     }
     function renderMediaLibrary(data,meta) {
       const project=mediaLibraryProject(data,meta),key=libraryFilterKey(meta);
