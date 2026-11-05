@@ -27,10 +27,11 @@ export class XCreativeService {
     await this.entities.getAccount(account);
     return (await this.entities.client.request('GET', `accounts/${xId.parse(account)}/authenticated_user_access`, z.object({ data: z.object({ user_id: snowflake, permissions: z.array(z.string()) }) }))).data;
   }
-  private async composer(account: string, user: string) {
+  async verifyComposer(account: string, user: string) {
     if (!(await this.users(account)).some(v => v.user_id === user && v.promotable_user_type === 'FULL' && !v.deleted)) throw new AdportError('INVALID_INPUT', 'x: author must be a current FULL promotable user on the selected account');
     const access = await this.access(account);
     if (access.user_id !== user && !access.permissions.includes('TWEET_COMPOSER')) throw new AdportError('INVALID_INPUT', 'x: authenticated actor needs TWEET_COMPOSER to author for another user');
+    return access;
   }
   async draft(account: string, resource: string) {
     await this.entities.getAccount(account);
@@ -52,11 +53,13 @@ export class XCreativeService {
     if (data.some(v => !wanted.includes(v.card_uri) || (!withDeleted && v.deleted)) || new Set(data.map(v => v.card_uri)).size !== data.length) throw new AdportError('PROVIDER_ERROR', 'x: card association/filter mismatch');
     return { items: data, missing: wanted.filter(value => !data.some(v => v.card_uri === value)) };
   }
-  private async attachments(account: string, keys: string[], card?: string | null) {
+  async verifyAttachments(account: string, keys: string[], card?: string | null) {
     const media = await Promise.all(keys.map(key => this.media(account, key)));
     if (media.some(value => value.deleted || value.media_status !== 'TRANSCODE_COMPLETED')) throw new AdportError('INVALID_INPUT', 'x: every media attachment must be ready and present in the selected account library');
     if (media.length > 4 || (media.some(value => value.media_type !== 'IMAGE') && media.length > 1)) throw new AdportError('INVALID_INPUT', 'x: use up to four images, one GIF or one video');
-    if (card && (await this.cards(account, [card])).missing.length) throw new AdportError('INVALID_INPUT', 'x: card is not available in the selected account');
+    const cards = card ? await this.cards(account, [card]) : { items: [], missing: [] };
+    if (cards.missing.length) throw new AdportError('INVALID_INPUT', 'x: card is not available in the selected account');
+    return { media, cards: cards.items };
   }
   private page(ids: string[], next: string | null | undefined, previous?: string) {
     if (new Set(ids).size !== ids.length || (next && next === previous)) throw new AdportError('PROVIDER_ERROR', 'x: creative pagination repeated an entity or cursor');
@@ -113,10 +116,10 @@ export class XCreativeService {
       return [data.id];
     });
     const input = create ? createDraft.parse(op.payload) : updateDraft.parse(op.payload), user = create ? createDraft.parse(input).as_user_id : current!.user_id;
-    await this.composer(account, user);
+    await this.verifyComposer(account, user);
     const expected = { text: input.text ?? current?.text ?? '', name: input.name ?? current?.name ?? null, media_keys: input.media_keys ?? current?.media_keys ?? [], card_uri: input.card_uri !== undefined ? input.card_uri : current?.card_uri ?? null, nullcast: create ? true : current!.nullcast, user_id: user };
     if (!expected.text.trim() && !expected.media_keys.length) throw new AdportError('INVALID_INPUT', 'x: final draft needs text or media');
-    await this.attachments(account, input.media_keys ?? [], input.card_uri);
+    await this.verifyAttachments(account, input.media_keys ?? [], input.card_uri);
     const fields: XParams = { ...(create ? { as_user_id: user, nullcast: true } : {}), ...(input.text !== undefined ? { text: input.text } : {}), ...(input.name !== undefined ? { name: input.name } : {}), ...(input.media_keys !== undefined ? { media_keys: input.media_keys.join(',') } : {}), ...(input.card_uri !== undefined ? { card_uri: input.card_uri ?? '' } : {}) };
     return plan(`${create ? 'Create' : 'Edit'} X native draft`, [`Author ${user}; native draft only, no publication or ad association. ${JSON.stringify(expected)}`, 'Native weighted text length and content eligibility are checked by X only on apply; this local preview is not server validation.'], async () => {
       let data: Draft;

@@ -15,6 +15,7 @@
 - [Reddit feed management and private source handling](providers/reddit-catalog-feeds.md)
 - [Spotify campaign drafts and media](spotify-campaign-setup.md)
 - [Pinterest campaign hierarchy and previews](pinterest-campaign-setup.md)
+- [X published creatives and ad associations](providers/x-posts.md)
 - [Agent plugin](../plugins/adport/README.md)
 - [Support](../SUPPORT.md) and [security reports](../SECURITY.md)
 
