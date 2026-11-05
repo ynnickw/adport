@@ -333,8 +333,11 @@ See [catalog event sources](tiktok-catalog-event-sources.md) for advertiser
 app/Pixel discovery, context snapshots, binding and unbinding with preservation
 readback.
 
-Catalog creation/deletion and migration from advertiser-owned catalogs remain
-separate work.
+See [catalog creation and deletion](tiktok-catalog-lifecycle.md) for owner
+delegation, immutable creation, exact new-resource adoption and permanent
+whole-catalog deletion.
+
+Migration from advertiser-owned catalogs remains separate work.
 Read/rename and permission controls are contract, policy, SDK/widget and
 disposable-Postgres tested; positive native provider and Claude/ChatGPT host
 verification remain pending.

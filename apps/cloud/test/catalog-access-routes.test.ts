@@ -18,6 +18,14 @@ describe('owner-only project catalog access route', () => {
     expect(mocks.runtime).toHaveBeenCalledWith(expect.objectContaining({ organizationId: project }), '123');expect(mocks.call).toHaveBeenLastCalledWith('tiktok_set_catalog_access', { account_id: '123', bc_id: '456', catalog_id: '789', mode: 'read', expected_access_hash: hash }, {});expect(mocks.call.mock.calls.some(call => call[1].pending_operation_id)).toBe(false);
     expect(mocks.scope).toHaveBeenCalledWith(expect.anything(), 'connections:manage');
   });
+  it('routes creation delegation through the same owner-only preview/apply path without an invented catalog ID', async () => {
+    const creation = { organizationId: project, account_id: '123', bc_id: '456', resource_kind: 'catalog_creation', mode: 'create' };
+    const response = await POST(request(creation));expect(response.status).toBe(200);expect(await response.json()).toMatchObject({ arguments: { ...creation, expected_access_hash: hash } });expect(mocks.call).toHaveBeenCalledWith('tiktok_catalog_access_snapshot', { account_id: '123', bc_id: '456', resource_kind: 'catalog_creation' }, {});expect(mocks.call).toHaveBeenLastCalledWith('tiktok_set_catalog_access', { account_id: '123', bc_id: '456', resource_kind: 'catalog_creation', mode: 'create', expected_access_hash: hash }, {});
+    mocks.call.mockClear();expect((await POST(request({ ...creation, expected_access_hash: hash, pending_operation_id: 'approved' }))).status).toBe(200);expect(mocks.call).toHaveBeenCalledTimes(1);expect(mocks.call.mock.calls[0]![1]).not.toHaveProperty('catalog_id');
+  });
+  it.each([{ resource_kind: 'catalog_creation', mode: 'write' }, { resource_kind: 'catalog_creation', mode: 'create' }, { mode: 'create' }])('rejects contradictory catalog/creation selection %j', async patch => {
+    expect((await POST(request({ ...args, ...patch }))).status).toBe(400);expect(mocks.runtime).not.toHaveBeenCalled();
+  });
   it('applies only an exact supplied pending token/hash and never prepares a replacement silently', async () => {
     const response = await POST(request({ ...args, expected_access_hash: hash, pending_operation_id: 'approved' }));expect(response.status).toBe(200);expect(mocks.call).toHaveBeenCalledTimes(1);expect(mocks.call).toHaveBeenCalledWith('tiktok_set_catalog_access', { account_id: '123', bc_id: '456', catalog_id: '789', mode: 'read', expected_access_hash: hash, pending_operation_id: 'approved' }, {});
     mocks.call.mockClear();expect((await POST(request({ ...args, pending_operation_id: 'unbound' }))).status).toBe(400);expect(mocks.call).not.toHaveBeenCalled();

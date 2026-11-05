@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import postgres from 'postgres';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { catalogGrant, requireCatalogAccess } from '@adport/provider-tiktok';
+import { catalogGrant, creationScope, requireCatalogAccess } from '@adport/provider-tiktok';
 import { PostgresTikTokCatalogAccessStore } from '@/lib/cloud/tiktok-catalog-access';
 
 const mocks = vi.hoisted(() => ({ backend: undefined as unknown }));
@@ -72,6 +72,29 @@ describeDatabase('disposable Postgres catalog authorization', () => {
     await expect(admin.begin(sql => sql.unsafe('set local role authenticated; select * from private.tiktok_catalog_access'))).rejects.toMatchObject({ code: '42501' });
     await expect(admin`insert into private.tiktok_catalog_access(organization_id, account_id, business_id, resource_kind, resource_id, access_mode) values(${projects[0]!}, ${scope.accountId}, '111', 'catalog', '999', 'create')`).rejects.toMatchObject({ code: '23514' });
     await expect(admin`insert into private.tiktok_catalog_access(organization_id, account_id, business_id, resource_kind, resource_id, access_mode) values(${projects[0]!}, '999', '111', 'catalog', '999', 'read')`).rejects.toMatchObject({ code: '23503' });
+  });
+  const agent = (scopes = ['tools:read', 'tools:write']) => new PostgresTikTokCatalogAccessStore({ organizationId: projects[0]!, apiKeyId: randomUUID(), role: 'member', scopes }, new Set([scope.accountId]));
+  it('adopts an exact new catalog under creation delegation without granting the agent permission administration', async () => {
+    const parent = creationScope(scope.accountId, '301'), current = await owner.get(parent), delegated = await owner.compareAndSet(parent, current.hash, 'create'), target = { ...scope, businessId: '301', resourceId: '302' };
+    expect(agent().canManage).toBe(false);const result = await agent().adoptCreated(target, delegated.hash);expect(result).toMatchObject({ mode: 'write', revision: 1 });expect(await owner.get(target)).toEqual(result);expect((await other.get(target)).mode).toBe('none');
+    await expect(agent().compareAndSet(parent, delegated.hash, 'none')).rejects.toThrow('signed-in');await expect(agent().adoptCreated(target, delegated.hash)).rejects.toThrow('owner decision');await owner.compareAndSet(parent, delegated.hash, 'none');expect((await agent().get(target)).mode).toBe('write');
+  });
+  it('refuses stale, foreign, readonly and disabled creation adoption and preserves child owner decisions', async () => {
+    const parent = creationScope(scope.accountId, '310'), delegated = await owner.compareAndSet(parent, (await owner.get(parent)).hash, 'create'), target = { ...scope, businessId: '310', resourceId: '311' };
+    await expect(agent(['tools:read']).adoptCreated(target, delegated.hash)).rejects.toThrow('writable');await expect(agent().adoptCreated({ ...target, businessId: '999' }, delegated.hash)).rejects.toThrow('delegation changed');
+    const child = await owner.compareAndSet(target, (await owner.get(target)).hash, 'none');await expect(agent().adoptCreated(target, delegated.hash)).rejects.toThrow('owner decision');expect(await owner.get(target)).toEqual(child);
+    await admin`update public.organization_ad_accounts set enabled = false where organization_id = ${projects[0]!}`;await expect(agent().adoptCreated({ ...target, resourceId: '312' }, delegated.hash)).rejects.toThrow('disabled, disconnected');
+  });
+  it('serializes revocation ahead of a waiting adoption and rechecks the delegation inside its transaction', async () => {
+    const parent = creationScope(scope.accountId, '320'), delegated = await owner.compareAndSet(parent, (await owner.get(parent)).hash, 'create'), target = { ...scope, businessId: '320', resourceId: '321' };let revocation!: Promise<unknown>, adoption!: Promise<unknown>;
+    await admin.begin(async sql => {
+      await sql`select account_id from public.organization_ad_accounts where organization_id = ${projects[0]!} for update`;
+      revocation = owner.compareAndSet(parent, delegated.hash, 'none');
+      await vi.waitFor(async () => { const rows = await admin`select pid from pg_stat_activity where usename = 'postgres' and application_name = 'postgres.js' and wait_event_type = 'Lock'`;expect(rows.length).toBeGreaterThan(0); });
+      adoption = agent().adoptCreated(target, delegated.hash);void adoption.catch(() => {});
+      await vi.waitFor(async () => { const rows = await admin`select pid from pg_stat_activity where application_name = 'postgres.js' and wait_event_type = 'Lock'`;expect(rows.length).toBeGreaterThan(1); });
+    });
+    await revocation;await expect(adoption).rejects.toThrow('delegation changed');expect((await owner.get(target)).mode).toBe('none');
   });
   it('removes catalog grants when their imported advertiser is removed', async () => {
     const target = { ...scope, resourceId: '225' }, current = await other.get(target);await other.compareAndSet(target, current.hash, 'read');await admin`delete from public.organization_ad_accounts where organization_id = ${projects[1]!}`;

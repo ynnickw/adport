@@ -238,6 +238,8 @@ export class TikTokAdsProvider implements AdProvider {
   async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> {
     const plan = await this.plan(op, guard);
     const resourceIds = await plan.execute();
+    if (op.tool === 'tiktok_create_catalog') return { applied: true, resourceIds, details: { configuration_readback: 'VERIFIED', project_catalog_access: 'write', products_created: false, ads_created: false } };
+    if (op.tool === 'tiktok_delete_catalog') return { applied: true, resourceIds, details: { deletion_readback: 'ABSENT_FROM_FILTERED_CATALOG_VIEW', resource_grant_retained: true } };
     if (op.tool === 'tiktok_upload_catalog_videos') {
       const payload = op.payload as { bc_id: string; catalog_id: string; media_id: string; expected_sha256: string; sync_to_selected_account?: boolean };
       return { applied: true, resourceIds, details: { status: 'ACCEPTED_FOR_PROCESSING', processed: false, feed_log_id: resourceIds[0], source_media_id: payload.media_id, source_sha256: payload.expected_sha256, advertiser_sync_requested: payload.sync_to_selected_account === true, advertiser_sync_confirmed: false, next_tool: 'tiktok_catalog_video_log', next_arguments: { account_id: op.accountId, bc_id: payload.bc_id, catalog_id: payload.catalog_id, feed_log_id: resourceIds[0] } } };
@@ -256,6 +258,8 @@ export class TikTokAdsProvider implements AdProvider {
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
     const payload = op.payload as never;
     switch (op.tool) {
+      case 'tiktok_create_catalog':
+      case 'tiktok_delete_catalog':
       case 'tiktok_bind_catalog_event_sources':
       case 'tiktok_unbind_catalog_event_sources':
       case 'tiktok_upload_catalog_videos':

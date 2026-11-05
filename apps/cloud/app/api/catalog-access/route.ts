@@ -7,7 +7,7 @@ import { env } from '@/lib/env';
 
 const numericId = z.string().regex(/^\d{1,30}$/);
 const base = z.object({ organizationId: z.string().uuid(), account_id: numericId }).strict();
-const update = base.extend({ bc_id: numericId, catalog_id: numericId, mode: z.enum(['none', 'read', 'write']), expected_access_hash: z.string().regex(/^[a-f0-9]{64}$/).optional(), pending_operation_id: z.string().min(1).max(512).optional() }).strict();
+const update = base.extend({ bc_id: numericId, catalog_id: numericId.optional(), resource_kind: z.enum(['catalog', 'catalog_creation']).optional(), mode: z.enum(['none', 'read', 'write', 'create']), expected_access_hash: z.string().regex(/^[a-f0-9]{64}$/).optional(), pending_operation_id: z.string().min(1).max(512).optional() }).strict().refine(input => input.resource_kind === 'catalog_creation' ? !input.catalog_id && ['none', 'create'].includes(input.mode) : !!input.catalog_id && input.mode !== 'create', 'Choose an exact catalog grant or a creation delegation');
 async function owner(projectId: string) {
   const principal = await sessionPrincipal(projectId);
   if (principal.organizationId !== projectId) throw new HttpError('Project access could not be verified.', 403);
@@ -30,7 +30,7 @@ async function boundedBody(request: Request) {
   try {
     while (true) { const { done, value } = await reader.read();if (done) break;size += value.byteLength;if (size > 4096) { await reader.cancel();throw new HttpError('Catalog access metadata is too large.', 413); }chunks.push(value); }
   } finally { reader.releaseLock(); }
-  try { return update.parse(JSON.parse(Buffer.concat(chunks).toString('utf8'))); } catch { throw new HttpError('Choose valid Business Center and catalog IDs.', 400); }
+  try { return update.parse(JSON.parse(Buffer.concat(chunks).toString('utf8'))); } catch { throw new HttpError('Choose valid Business Center/catalog IDs or a creation delegation.', 400); }
 }
 export async function POST(request: Request) {
   try {
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     const { organizationId: _project, pending_operation_id, ...args } = input;
     if (pending_operation_id && !input.expected_access_hash) throw new HttpError('Review the exact access change first.', 400);
     if (!args.expected_access_hash) {
-      const snapshot = await runtime.registry.call('tiktok_catalog_access_snapshot', { account_id: args.account_id, bc_id: args.bc_id, catalog_id: args.catalog_id }, runtime.ctx) as { grant: { hash: string } };
+      const snapshot = await runtime.registry.call('tiktok_catalog_access_snapshot', { account_id: args.account_id, bc_id: args.bc_id, ...(args.catalog_id ? { catalog_id: args.catalog_id } : {}), ...(args.resource_kind ? { resource_kind: args.resource_kind } : {}) }, runtime.ctx) as { grant: { hash: string } };
       args.expected_access_hash = snapshot.grant.hash;
     }
     const result = await runtime.registry.call('tiktok_set_catalog_access', { ...args, ...(pending_operation_id ? { pending_operation_id } : {}) }, runtime.ctx);

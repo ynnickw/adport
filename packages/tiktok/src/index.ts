@@ -10,7 +10,7 @@ export { TikTokAdsProvider, UNITS_TO_MICROS } from './provider.js';
 export { tiktokTools } from './tools.js';
 export { TikTokCatalogService } from './catalogs.js';
 export { tiktokCatalogTools } from './catalog-tools.js';
-export { FileTikTokCatalogAccessStore, catalogGrant, catalogScope, catalogScopeKey, requireCatalogAccess, type TikTokCatalogAccessMode, type TikTokCatalogAccessStore, type TikTokCatalogGrant, type TikTokCatalogScope } from './catalog-access.js';
+export { FileTikTokCatalogAccessStore, catalogGrant, catalogScope, catalogScopeKey, creationScope, requireCatalogCreationAccess, requireCatalogAccess, type TikTokCatalogAccessMode, type TikTokCatalogAccessStore, type TikTokCatalogGrant, type TikTokCatalogScope } from './catalog-access.js';
 
 export async function resolveTikTokCredentials(
   store: CredentialStore,

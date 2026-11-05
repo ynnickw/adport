@@ -18,6 +18,8 @@ export interface TikTokCatalogAccessStore {
   list(accountId: string): Promise<TikTokCatalogGrant[]>;
   /** Only the local owner or authenticated dashboard owner/admin may change access. */
   compareAndSet(scope: TikTokCatalogScope, expectedHash: string, mode: TikTokCatalogAccessMode): Promise<TikTokCatalogGrant>;
+  /** Internal creation receipt: adopt only a freshly created, independently verified native catalog. */
+  adoptCreated?(scope: TikTokCatalogScope, expectedCreationHash: string): Promise<TikTokCatalogGrant>;
 }
 export function catalogGrant(scope: TikTokCatalogScope, mode: TikTokCatalogAccessMode = 'none', revision = 0): TikTokCatalogGrant {
   const parsed = catalogScope.parse(scope);catalogAccessMode.parse(mode);
@@ -31,6 +33,14 @@ export async function requireCatalogAccess(store: TikTokCatalogAccessStore | und
   const grant = await store.authorize(scope, write);
   if (catalogScopeKey(grant.scope) !== catalogScopeKey(scope)) throw new AdportError('POLICY_VIOLATION', 'Catalog grant scope does not match the requested resource.');
   if (!(write ? grant.mode === 'write' : grant.mode === 'read' || grant.mode === 'write')) throw new AdportError('POLICY_VIOLATION', `This project does not have ${write ? 'write' : 'read'} access to the selected TikTok catalog. Ask an owner or admin to review catalog access in Accounts.`);
+  return grant;
+}
+
+export const creationScope = (accountId: string, businessId: string): TikTokCatalogScope => catalogScope.parse({ accountId, businessId, resourceId: businessId, kind: 'catalog_creation' });
+export async function requireCatalogCreationAccess(store: TikTokCatalogAccessStore | undefined, scope: TikTokCatalogScope, write = false) {
+  if (!store || scope.kind !== 'catalog_creation' || scope.resourceId !== scope.businessId || write && !store.canWrite) throw new AdportError('POLICY_VIOLATION', 'Catalog creation requires owner-delegated creation access and a writable connection.');
+  const grant = await store.authorize(scope, write);
+  if (catalogScopeKey(grant.scope) !== catalogScopeKey(scope) || grant.mode !== 'create') throw new AdportError('POLICY_VIOLATION', 'An owner must delegate catalog creation for this exact advertiser and Business Center. Existing catalog grants do not grant creation access.');
   return grant;
 }
 
@@ -76,6 +86,16 @@ export class FileTikTokCatalogAccessStore implements TikTokCatalogAccessStore {
       finally { await handle?.close(); }
     }
     return rows;
+  }
+  async adoptCreated(value: TikTokCatalogScope, expectedCreationHash: string) {
+    const scope = catalogScope.parse(value);if (scope.kind !== 'catalog') throw new AdportError('POLICY_VIOLATION', 'Only a new exact catalog can be adopted.');
+    const parent = creationScope(scope.accountId, scope.businessId);await fs.mkdir(this.dir, { recursive: true, mode: 0o700 });await fs.chmod(this.dir, 0o700);
+    const lock = path.join(this.dir, catalogScopeKey(parent) + '.lock');
+    try { await fs.mkdir(lock, { mode: 0o700 }); } catch { throw new AdportError('POLICY_VIOLATION', 'Catalog creation access is changing. Reconcile the known catalog before retrying.'); }
+    try {
+      const grant = await requireCatalogCreationAccess(this, parent, true);if (grant.hash !== expectedCreationHash) throw new AdportError('POLICY_VIOLATION', 'Creation delegation changed. The created catalog was not adopted.');
+      return await this.compareAndSet(scope, catalogGrant(scope).hash, 'write');
+    } finally { await fs.rmdir(lock); }
   }
   async compareAndSet(scope: TikTokCatalogScope, expectedHash: string, mode: TikTokCatalogAccessMode) {
     catalogGrant(scope, mode);if (!/^[a-f0-9]{64}$/.test(expectedHash)) throw new AdportError('INVALID_INPUT', 'Read the current catalog access hash first.');

@@ -2,12 +2,14 @@ import { createHash } from 'node:crypto';
 import { AdportError, type MediaResolver, type WriteOperation, type WritePreview } from '@adport/core';
 import { z } from 'zod';
 import { catalogAccessChange, catalogInput, catalogRename } from './catalog-tools.js';
-import { catalogScopeKey, requireCatalogAccess, type TikTokCatalogAccessStore, type TikTokCatalogScope } from './catalog-access.js';
+import { creationScope, catalogScopeKey, requireCatalogAccess, type TikTokCatalogAccessStore, type TikTokCatalogScope } from './catalog-access.js';
 import type { TikTokClient } from './client.js';
 import { TikTokCatalogProductSets } from './catalog-product-sets.js';
 import { TikTokCatalogFeeds } from './catalog-feeds.js';
 import { TikTokCatalogProducts } from './catalog-products.js';
 import { TikTokCatalogProductAuthoring } from './catalog-product-authoring.js';
+import { catalogPermissionSnapshot } from './catalog-schema.js';
+import { TikTokCatalogLifecycle } from './catalog-lifecycle.js';
 import { TikTokCatalogVideos } from './catalog-videos.js';
 import { TikTokCatalogEventSources } from './catalog-event-sources.js';
 
@@ -33,6 +35,7 @@ export class TikTokCatalogService {
   readonly productAuthoring: TikTokCatalogProductAuthoring;
   readonly videos: TikTokCatalogVideos;
   readonly eventSources: TikTokCatalogEventSources;
+  readonly lifecycle: TikTokCatalogLifecycle;
   constructor(private readonly client: Pick<TikTokClient, 'get' | 'post'> & Partial<Pick<TikTokClient, 'postMultipart'>>, private readonly store?: TikTokCatalogAccessStore, media?: MediaResolver) {
     const authorizeParent = async (input: z.infer<typeof catalogInput>, write?: boolean) => {
       const grant = await requireCatalogAccess(this.store, scopeOf(input), write);
@@ -45,16 +48,19 @@ export class TikTokCatalogService {
     this.productAuthoring = new TikTokCatalogProductAuthoring(client, authorizeParent, this.feeds, this.products, media);
     this.videos = new TikTokCatalogVideos(client, authorizeParent, media);
     this.eventSources = new TikTokCatalogEventSources(client, authorizeParent);
+    this.lifecycle = new TikTokCatalogLifecycle(client, store, authorizeParent, input => this.native(input, true));
   }
   private manager() {
     if (!this.store?.canManage) throw new AdportError('POLICY_VIOLATION', 'Only the local owner or a signed-in project owner/admin in Accounts can change catalog access.');
     return this.store;
   }
-  private async native(input: z.infer<typeof catalogInput>): Promise<Catalog> {
+  private async native(input: z.infer<typeof catalogInput>): Promise<Catalog>;
+  private async native(input: z.infer<typeof catalogInput>, allowAbsent: true): Promise<Catalog | undefined>;
+  private async native(input: z.infer<typeof catalogInput>, allowAbsent = false): Promise<Catalog | undefined> {
     let data: unknown;
     try { data = await this.client.get('catalog/get', { bc_id: input.bc_id, catalog_id: input.catalog_id, page: 1, page_size: 1000 }); } catch (error) { if (error instanceof AdportError && ['POLICY_VIOLATION', 'NOT_CONNECTED'].includes(error.code)) throw error;throw nativeError(error); }
-    const result = z.looseObject({ list: z.array(nativeCatalog).length(1), page_info: z.looseObject({ page: z.number().int().positive(), total_page: z.number().int().nonnegative() }).optional() }).safeParse(data);
-    if (!result.success || result.data.list[0]!.catalog_id !== input.catalog_id || result.data.list[0]!.bc_info.bc_id !== input.bc_id || result.data.page_info && (result.data.page_info.page !== 1 || result.data.page_info.total_page > 1)) throw new AdportError('PROVIDER_ERROR', 'TikTok returned an unexpected catalog/Business Center scope or incomplete exact-ID response.');
+    const result = z.looseObject({ list: allowAbsent ? z.array(nativeCatalog).max(1) : z.array(nativeCatalog).length(1), page_info: z.looseObject({ page: z.number().int().positive(), total_page: z.number().int().nonnegative() }).optional() }).safeParse(data);
+    if (!result.success || result.data.list.some(row => row.catalog_id !== input.catalog_id || row.bc_info.bc_id !== input.bc_id) || result.data.page_info && (result.data.page_info.page !== 1 || result.data.page_info.total_page > 1 || !result.data.list.length && typeof result.data.page_info.total_number === 'number' && result.data.page_info.total_number !== 0)) throw new AdportError('PROVIDER_ERROR', 'TikTok returned an unexpected catalog/Business Center scope or incomplete exact-ID response.');
     return result.data.list[0]!;
   }
   async access(accountId: string) {
@@ -64,8 +70,8 @@ export class TikTokCatalogService {
     return { grants, records: grants.map(value => ({ id: value.scope.resourceId, name: value.scope.kind === 'catalog' ? 'Catalog ' + value.scope.resourceId : 'Catalog creation', business_center_id: value.scope.businessId, access: value.mode })), notes: ['Only explicit project grants are returned. An advertiser account does not implicitly authorize other Business Center assets.'] };
   }
   async accessSnapshot(value: unknown) {
-    const input = catalogInput.parse(value), grant = await this.manager().get(scopeOf(input));
-    return { grant, records: [{ id: input.catalog_id, name: 'Catalog access', business_center_id: input.bc_id, access: grant.mode }] };
+    const input = catalogPermissionSnapshot.parse(value), scope = input.resource_kind === 'catalog_creation' ? creationScope(input.account_id, input.bc_id) : scopeOf({ ...input, catalog_id: input.catalog_id! }), grant = await this.manager().get(scope);
+    return { grant, records: [{ id: scope.resourceId, name: scope.kind === 'catalog_creation' ? 'Creation delegation' : 'Catalog access', business_center_id: input.bc_id, access: grant.mode }] };
   }
   async get(value: unknown) {
     const input = catalogInput.parse(value);await requireCatalogAccess(this.store, scopeOf(input));
@@ -73,6 +79,7 @@ export class TikTokCatalogService {
     return { catalog: data, records: [{ id: catalog.catalog_id, name: catalog.catalog_name, native_ad_eligibility: catalog.ad_creation_eligible ?? 'Not reported', type: catalog.catalog_type, business_center: catalog.bc_info.bc_name ?? input.bc_id, currency: catalog.catalog_conf.currency ?? 'Not reported', country: catalog.catalog_conf.country ?? 'Not reported' }] };
   }
   async plan(op: WriteOperation): Promise<Plan> {
+    if (['tiktok_create_catalog', 'tiktok_delete_catalog'].includes(op.tool)) return this.lifecycle.plan(op);
     if (['tiktok_bind_catalog_event_sources', 'tiktok_unbind_catalog_event_sources'].includes(op.tool)) return this.eventSources.plan(op);
     if (['tiktok_upload_catalog_videos', 'tiktok_delete_catalog_video'].includes(op.tool)) return this.videos.plan(op);
     if (this.productAuthoring.supports(op.tool)) return this.productAuthoring.plan(op);
@@ -82,14 +89,16 @@ export class TikTokCatalogService {
     if (op.provider !== 'tiktok' || op.kind !== 'update') throw new AdportError('INVALID_INPUT', 'TikTok catalog provider/operation kind mismatch.');
     const account = id.parse(op.accountId);
     if (op.tool === 'tiktok_set_catalog_access') {
-      const store = this.manager(), input = catalogAccessChange.parse(op.payload), scope = scopeOf({ ...input, account_id: account }), current = await store.get(scope);
+      const store = this.manager(), input = catalogAccessChange.parse(op.payload), scope = input.resource_kind === 'catalog_creation' ? creationScope(account, input.bc_id) : scopeOf({ ...input, account_id: account, catalog_id: input.catalog_id! }), current = await store.get(scope);
       if (current.hash !== input.expected_access_hash) throw new AdportError('POLICY_VIOLATION', 'Catalog access changed. Read and review it again.');
       // Revocation must remain possible after token/catalog access has been lost.
-      const catalog = input.mode === 'none' ? undefined : await this.native({ account_id: account, bc_id: input.bc_id, catalog_id: input.catalog_id });
-      const title = input.mode === 'none' ? 'Revoke catalog access' : 'Grant catalog access', notes = ['This changes Adport project access, not TikTok’s native user permissions.', 'Write access covers this Business Center catalog wherever it is reused. Agents cannot expand their own hosted access.'];
-      return { summary: `${title} · ${catalog?.catalog_name ?? input.catalog_id}`, changes: [`~ Project access ${current.mode} → ${input.mode} for Business Center ${input.bc_id}, catalog ${input.catalog_id}`], coercions: [], budgetDeltas: [], notes,
-        review: { provider: 'tiktok', accountId: account, kind: 'update', title, subject: catalog?.catalog_name ?? input.catalog_id, fields: [{ label: 'Business Center', after: catalog?.bc_info.bc_name ?? input.bc_id }, { label: 'Catalog', after: input.catalog_id }, { label: 'Project access', before: current.mode, after: input.mode }], notices: notes },
-        execute: async () => { const result = await store.compareAndSet(scope, input.expected_access_hash, input.mode), actual = await store.get(scope);if (catalogScopeKey(result.scope) !== catalogScopeKey(scope) || result.mode !== input.mode || actual.hash !== result.hash) throw new AdportError('POLICY_VIOLATION', 'Catalog access receipt is unconfirmed. Inspect access before retrying.');return [input.catalog_id]; } };
+      const creation = scope.kind === 'catalog_creation';
+      if (creation && input.mode !== 'none') await this.lifecycle.availableCountries(input.bc_id);
+      const catalog = creation || input.mode === 'none' ? undefined : await this.native({ account_id: account, bc_id: input.bc_id, catalog_id: input.catalog_id! });
+      const title = input.mode === 'none' ? 'Revoke catalog access' : creation ? 'Delegate catalog creation' : 'Grant catalog access', notes = ['This changes Adport project access, not TikTok’s native user permissions.', 'Write access covers this Business Center catalog wherever it is reused. Agents cannot expand their own hosted access.', ...(creation ? ['Delegates creation in this exact Business Center and read/write management of verified new catalog IDs only. Existing catalogs are excluded.', 'Revoking creation delegation does not revoke independent grants already issued for new catalogs. Native eligibility remains authoritative.'] : [])];
+      return { summary: `${title} · ${catalog?.catalog_name ?? (creation ? 'Business Center ' + input.bc_id : input.catalog_id!)}`, changes: [`~ Project access ${current.mode} → ${input.mode} for Business Center ${input.bc_id}, ${creation ? 'new catalogs only' : 'catalog ' + input.catalog_id}`], coercions: [], budgetDeltas: [], notes,
+        review: { provider: 'tiktok', accountId: account, kind: 'update', title, subject: catalog?.catalog_name ?? (creation ? 'Business Center ' + input.bc_id : input.catalog_id!), fields: [{ label: 'Business Center', after: catalog?.bc_info.bc_name ?? input.bc_id }, { label: creation ? 'Resource' : 'Catalog', after: creation ? 'New catalogs created through this project' : input.catalog_id }, { label: 'Project access', before: current.mode, after: input.mode === 'create' ? 'Create and manage verified new catalogs' : input.mode }], notices: notes },
+        execute: async () => { const result = await store.compareAndSet(scope, input.expected_access_hash, input.mode), actual = await store.get(scope);if (catalogScopeKey(result.scope) !== catalogScopeKey(scope) || result.mode !== input.mode || actual.hash !== result.hash) throw new AdportError('POLICY_VIOLATION', 'Catalog access receipt is unconfirmed. Inspect access before retrying.');return [scope.resourceId]; } };
     }
     if (op.tool !== 'tiktok_update_catalog') throw new AdportError('INVALID_INPUT', 'Unsupported TikTok catalog mutation.');
     const input = catalogRename.parse(op.payload), source = { account_id: account, bc_id: input.bc_id, catalog_id: input.catalog_id }, scope = scopeOf(source);

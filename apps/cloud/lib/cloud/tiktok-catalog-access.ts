@@ -1,6 +1,6 @@
 import 'server-only';
 import { AdportError } from '@adport/core';
-import { catalogGrant, catalogScope, type TikTokCatalogAccessMode, type TikTokCatalogAccessStore, type TikTokCatalogGrant, type TikTokCatalogScope } from '@adport/provider-tiktok';
+import { catalogGrant, catalogScope, creationScope, type TikTokCatalogAccessMode, type TikTokCatalogAccessStore, type TikTokCatalogGrant, type TikTokCatalogScope } from '@adport/provider-tiktok';
 import { db } from '@/lib/db';
 import type { TenantPrincipal } from './types';
 
@@ -45,6 +45,36 @@ export class PostgresTikTokCatalogAccessStore implements TikTokCatalogAccessStor
       order by business_id, resource_kind, resource_id limit 5001`;
     if (rows.length > 5000) throw new AdportError('POLICY_VIOLATION', 'Catalog access inventory exceeds its verification bound.');
     return rows.map(grant);
+  }
+  async adoptCreated(value: TikTokCatalogScope, expectedCreationHash: string) {
+    const scope = catalogScope.parse(value);if (scope.kind !== 'catalog' || !this.canWrite) throw new AdportError('POLICY_VIOLATION', 'Only a writable connection can adopt a verified new catalog.');
+    await this.available(scope.accountId, true);const parent = creationScope(scope.accountId, scope.businessId);
+    // Same lock order as owner grant changes. Native creation and exact readback precede this receipt.
+    return db().begin(async sql => {
+      const project = await sql`select id from public.organizations where id = ${this.principal.organizationId} for key share`;
+      const connections = await sql`select connection.id from public.connections connection
+        join public.organization_ad_accounts account on account.connection_id = connection.id
+        where account.organization_id = ${this.principal.organizationId} and account.provider = 'tiktok' and account.account_id = ${scope.accountId}
+          and connection.status = 'connected' and connection.account_selection_id is null for update of connection`;
+      const accounts = await sql`select account_id from public.organization_ad_accounts
+        where organization_id = ${this.principal.organizationId} and provider = 'tiktok' and account_id = ${scope.accountId} and enabled = true for update`;
+      if (project.length !== 1 || connections.length !== 1 || accounts.length !== 1) throw new AdportError('POLICY_VIOLATION', 'The project or advertiser is no longer enabled and connected.');
+      const delegated = await sql<Stored[]>`select account_id, business_id, resource_kind, resource_id, access_mode, revision from private.tiktok_catalog_access
+        where organization_id = ${this.principal.organizationId} and provider = 'tiktok' and account_id = ${parent.accountId}
+          and business_id = ${parent.businessId} and resource_kind = 'catalog_creation' and resource_id = ${parent.resourceId} for update`;
+      const current = delegated[0] ? grant(delegated[0]) : catalogGrant(parent);
+      if (current.mode !== 'create' || current.hash !== expectedCreationHash) throw new AdportError('POLICY_VIOLATION', 'Creation delegation changed. The known catalog was not adopted.');
+      const existing = await sql<Stored[]>`select account_id, business_id, resource_kind, resource_id, access_mode, revision from private.tiktok_catalog_access
+        where organization_id = ${this.principal.organizationId} and provider = 'tiktok' and account_id = ${scope.accountId}
+          and business_id = ${scope.businessId} and resource_kind = 'catalog' and resource_id = ${scope.resourceId} for update`;
+      if (existing.length) throw new AdportError('POLICY_VIOLATION', 'Catalog access already has an owner decision or creation receipt. It was not overwritten.');
+      const rows = await sql<Stored[]>`insert into private.tiktok_catalog_access
+        (organization_id, provider, account_id, business_id, resource_kind, resource_id, access_mode, revision)
+        values (${this.principal.organizationId}, 'tiktok', ${scope.accountId}, ${scope.businessId}, 'catalog', ${scope.resourceId}, 'write', 1)
+        on conflict (organization_id, provider, account_id, business_id, resource_kind, resource_id) do nothing
+        returning account_id, business_id, resource_kind, resource_id, access_mode, revision`;
+      if (rows.length !== 1) throw new AdportError('POLICY_VIOLATION', 'New catalog adoption could not be confirmed. Inspect the known catalog before another create.');return grant(rows[0]!);
+    });
   }
   async compareAndSet(value: TikTokCatalogScope, expectedHash: string, mode: TikTokCatalogAccessMode) {
     const scope = catalogScope.parse(value);catalogGrant(scope, mode);this.check(scope.accountId, true);await this.available(scope.accountId, mode !== 'none');
