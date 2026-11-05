@@ -156,7 +156,11 @@ export class LinkedInMeasurementService {
       if (!current || current.snapshot_hash !== input.expected_snapshot_hash) throw new AdportError('INVALID_INPUT', 'linkedin: Insight Tag identity or snapshot changed');
       if (current.sponsoredAccounts.length !== 1) throw new AdportError('INVALID_INPUT', 'linkedin: a shared Insight Tag needs multi-account authorization before changing its global tracking flag');
       if (current.firstPartyTrackingEnabled === input.first_party_tracking_enabled) throw new AdportError('INVALID_INPUT', 'linkedin: Insight Tag setting already matches');
-      return { ...base, summary: 'Update LinkedIn Insight Tag first-party tracking', changes: [`~ firstPartyTrackingEnabled ${current.firstPartyTrackingEnabled} → ${input.first_party_tracking_enabled}. An installed tag uses this setting; no site code is installed here.`], execute: async () => {
+      return { ...base, summary: 'Update LinkedIn Insight Tag first-party tracking', changes: [`~ firstPartyTrackingEnabled ${current.firstPartyTrackingEnabled} → ${input.first_party_tracking_enabled}. An installed tag uses this setting; no site code is installed here.`], review: {
+        provider: 'linkedin', accountId: op.accountId, kind: 'update', title: 'Update Insight Tag', subject: `Tag ${input.insight_tag_id}`,
+        fields: [{ label: 'First-party tracking', before: current.firstPartyTrackingEnabled, after: input.first_party_tracking_enabled }],
+        notices: ['An installed tag uses this setting. No website code is installed here.'],
+      }, execute: async () => {
         await this.client.update(`insightTags/${input.insight_tag_id}`, { firstPartyTrackingEnabled: input.first_party_tracking_enabled });
         await this.verified(input.insight_tag_id, async () => (await this.tags(op.accountId)).some(value => value.id === input.insight_tag_id && value.firstPartyTrackingEnabled === input.first_party_tracking_enabled));
         return { applied: true, resourceIds: [input.insight_tag_id] };
@@ -165,8 +169,13 @@ export class LinkedInMeasurementService {
     if (op.tool === 'linkedin_set_campaign_conversion') {
       const input = setAssociationInput.parse(op.payload), current = await this.ownedConversion(op.accountId, input.conversion_id), associations = await this.completeAssociations(op.accountId, input.campaign_id);
       if (current.snapshot_hash !== input.expected_conversion_hash || digest(associations) !== input.expected_associations_hash) throw new AdportError('INVALID_INPUT', 'linkedin: conversion or campaign associations changed; read both again');
-      if (associations.some(value => value.conversion === `urn:lla:llaPartnerConversion:${input.conversion_id}`) === input.associated) throw new AdportError('INVALID_INPUT', 'linkedin: campaign-conversion association already matches');
-      return { ...base, summary: `${input.associated ? 'Associate' : 'Detach'} LinkedIn conversion "${current.name}"`, changes: [`${input.associated ? '+' : '-'} Campaign ${input.campaign_id} ↔ conversion ${input.conversion_id}. Changes campaign measurement/optimization eligibility; campaign status and budget are preserved.`], execute: async () => {
+      const associatedBefore = associations.some(value => value.conversion === `urn:lla:llaPartnerConversion:${input.conversion_id}`);
+      if (associatedBefore === input.associated) throw new AdportError('INVALID_INPUT', 'linkedin: campaign-conversion association already matches');
+      return { ...base, summary: `${input.associated ? 'Associate' : 'Detach'} LinkedIn conversion "${current.name}"`, changes: [`${input.associated ? '+' : '-'} Campaign ${input.campaign_id} ↔ conversion ${input.conversion_id}. Changes campaign measurement/optimization eligibility; campaign status and budget are preserved.`], review: {
+        provider: 'linkedin', accountId: op.accountId, kind: 'update', title: input.associated ? 'Associate conversion' : 'Detach conversion', subject: current.name,
+        fields: [{ label: 'Campaign', after: input.campaign_id }, { label: 'Conversion', after: input.conversion_id }, { label: 'Associated', before: associatedBefore, after: input.associated }],
+        notices: ['Changes campaign measurement and optimization eligibility. Campaign status and budget are preserved.'],
+      }, execute: async () => {
         await this.client.setCampaignConversion(input.campaign_id, input.conversion_id, input.associated);
         await this.verified(input.conversion_id, async () => (await this.completeAssociations(op.accountId, input.campaign_id)).some(value => value.conversion === `urn:lla:llaPartnerConversion:${input.conversion_id}`) === input.associated);
         return { applied: true, resourceIds: [input.conversion_id], details: { campaign_id: input.campaign_id, associated: input.associated } };
@@ -182,7 +191,14 @@ export class LinkedInMeasurementService {
     for (const [key, native] of Object.entries({ name: 'name', type: 'type', enabled: 'enabled', attribution_type: 'attributionType', post_click_window_days: 'postClickAttributionWindowSize', view_through_window_days: 'viewThroughAttributionWindowSize', value: 'value', value_type: 'valueType', url_match_rule_expression: 'urlMatchRuleExpression' })) { const value = input[key as keyof typeof input]; if (value !== undefined) fields[native] = value; }
     if (create) { fields.account = selectedAccount(op.accountId); if (source === 'CONVERSIONS_API') fields.conversionMethod = source; }
     if (current && matches(current, fields)) throw new AdportError('INVALID_INPUT', 'linkedin: conversion fields already match');
-    return { ...base, summary: `${create ? 'Create' : 'Update'} LinkedIn conversion "${input.name ?? current!.name}"`, changes: [`${create ? '+' : '~'} ${JSON.stringify(fields)}`, ...(create ? ['No autoAssociationType is sent; native default creates no campaign associations.'] : ['Only supplied fields change. URL expressions replace the complete expression; omitted settings and campaign associations remain unchanged.']), ...(source === 'CONVERSIONS_API' ? ['Conversions API access additionally requires native rw_conversions permission; no OAuth scopes are changed here.'] : [])], execute: async () => {
+    const labels: Record<string, string> = { name: 'Name', type: 'Type', enabled: 'Enabled', attributionType: 'Attribution type', postClickAttributionWindowSize: 'Post-click window (days)', viewThroughAttributionWindowSize: 'View-through window (days)', value: 'Value', valueType: 'Value type', urlMatchRuleExpression: 'URL match rules' };
+    const observed = current as Record<string, unknown> | undefined;
+    const reviewFields = Object.entries(fields).filter(([key]) => Object.hasOwn(labels, key) && !(create && key === 'name')).map(([key, value]) => ({ label: labels[key]!, ...(observed && Object.hasOwn(observed, key) && observed[key] !== undefined ? { before: observed[key] } : {}), after: value }));
+    const scopeNotice = create ? `No campaign associations are created. ${source === 'INSIGHT_TAG' ? 'LinkedIn selects the native Insight Tag method from the URL rules. ' : ''}Omitted value settings use native defaults reported by readback.` : 'Only supplied settings change. Campaign associations are preserved; supplied URL rules replace the complete expression.';
+    return { ...base, summary: `${create ? 'Create' : 'Update'} LinkedIn conversion "${input.name ?? current!.name}"`, changes: [`${create ? '+' : '~'} ${JSON.stringify(fields)}`, ...(create ? ['No autoAssociationType is sent; native default creates no campaign associations.'] : ['Only supplied fields change. URL expressions replace the complete expression; omitted settings and campaign associations remain unchanged.']), ...(source === 'CONVERSIONS_API' ? ['Conversions API access additionally requires native rw_conversions permission; no OAuth scopes are changed here.'] : [])], review: {
+      provider: 'linkedin', accountId: op.accountId, kind: create ? 'create' : 'update', title: create ? 'Create conversion' : 'Update conversion', subject: current?.name ?? input.name,
+      fields: [...(create ? [{ label: 'Source family', after: source }] : []), ...reviewFields], notices: [scopeNotice],
+    }, execute: async () => {
       const resource = create ? await this.client.create('conversions', fields) : current!.id;
       if (!create) await this.client.partialUpdate(`conversions/${resource}`, { $set: fields }, { account: selectedAccount(op.accountId) });
       await this.verified(resource, async () => matches(await this.ownedConversion(op.accountId, resource), fields));

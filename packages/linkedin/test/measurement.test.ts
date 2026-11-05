@@ -137,7 +137,9 @@ describe('LinkedIn measurement guarded configuration', () => {
   it('partial-updates only supplied fields, preserving unknown configuration and associations', async () => {
     const f = fixture(); f.state.rule = { ...f.state.rule, vendorField: 'preserve', value: { amount: '10.00', currencyCode: 'EUR' }, urlMatchRuleExpression: [[{ matchType: 'EXACT', matchValue: 'example.test/thanks' }]] };
     const input = { ...await reference(f.provider), name: 'Renamed' }, operation = op('linkedin_update_conversion', input);
-    await f.provider.previewWrite(operation, guard); expect(mutations(f.calls)).toEqual([]); await f.provider.applyWrite(operation, guard);
+    const preview = await f.provider.previewWrite(operation, guard);
+    expect(preview.review).toMatchObject({ subject: native.name, fields: [{ label: 'Name', before: native.name, after: 'Renamed' }] });
+    expect(mutations(f.calls)).toEqual([]); await f.provider.applyWrite(operation, guard);
     const write = mutations(f.calls)[0]!;
     expect(write.init.method).toBe('POST'); expect(write.url.searchParams.get('account')).toBe(urn); expect(write.init.headers).toMatchObject({ 'X-RestLi-Method': 'PARTIAL_UPDATE' }); expect(body(write)).toEqual({ patch: { $set: { name: 'Renamed' } } });
     expect(f.state.rule).toMatchObject({ vendorField: 'preserve', enabled: false, value: { amount: '10.00' }, urlMatchRuleExpression: [[{ matchValue: 'example.test/thanks' }]] });
@@ -191,7 +193,9 @@ describe('LinkedIn Insight Tag and campaign association contracts', () => {
     await f.provider.previewWrite(create, guard); expect(mutations(f.calls)).toEqual([]); await f.provider.applyWrite(create, guard);
     expect(body(mutations(f.calls)[0]!)).toEqual({ sponsoredAccounts: [urn] });
     const tag = (await f.provider.measurement.insightTags(A)).elements[0]!;
-    await f.provider.applyWrite(op('linkedin_update_insight_tag', { insight_tag_id: T, expected_snapshot_hash: tag.snapshot_hash, first_party_tracking_enabled: false }), guard);
+    const update = op('linkedin_update_insight_tag', { insight_tag_id: T, expected_snapshot_hash: tag.snapshot_hash, first_party_tracking_enabled: false });
+    expect((await f.provider.previewWrite(update, guard)).review?.fields).toEqual([{ label: 'First-party tracking', before: true, after: false }]);
+    await f.provider.applyWrite(update, guard);
     expect(body(mutations(f.calls)[1]!)).toEqual({ patch: { $set: { firstPartyTrackingEnabled: false } } });
   });
   it('rejects foreign, duplicate or shared-write tag membership and an existing tag create', async () => {
@@ -211,7 +215,9 @@ describe('LinkedIn Insight Tag and campaign association contracts', () => {
     const f = fixture(); if (!associated) f.state.associations = [{ campaign: cu, conversion: vu, associatedAt: 1700000000000 }];
     const rule = await reference(f.provider), membership = await f.provider.measurement.campaignConversions({ account_id: A, campaign_id: C, complete_snapshot: true });
     const operation = op('linkedin_set_campaign_conversion', { campaign_id: C, conversion_id: V, associated, expected_conversion_hash: rule.expected_snapshot_hash, expected_associations_hash: membership.associations_snapshot_hash });
-    await f.provider.previewWrite(operation, guard); expect(mutations(f.calls)).toEqual([]); await f.provider.applyWrite(operation, guard);
+    const preview = await f.provider.previewWrite(operation, guard);
+    expect(preview.review?.fields).toContainEqual({ label: 'Associated', before: !associated, after: associated });
+    expect(mutations(f.calls)).toEqual([]); await f.provider.applyWrite(operation, guard);
     const write = mutations(f.calls)[0]!;
     expect(write.url.href).toBe(`https://api.linkedin.com/rest/campaignConversions/(campaign:urn%3Ali%3AsponsoredCampaign%3A${C},conversion:urn%3Alla%3AllaPartnerConversion%3A${V})`);
     expect(write.init.method).toBe(associated ? 'PUT' : 'DELETE'); expect(write.init.body).toBe(associated ? JSON.stringify({ campaign: cu, conversion: vu }) : undefined);

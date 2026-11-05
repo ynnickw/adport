@@ -48,6 +48,37 @@ describe('LinkedIn measurement record widgets', () => {
       expect(requests.every(method => method === 'GET')).toBe(true);
     } finally { dom?.window.close(); await host.close(); await server.close(); await rm(dir, { recursive: true, force: true }); }
   });
+  it('keeps a name-only edit review actionable and shows the observed old name', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'adport-rule-review-')), account = '551000001', conversion = '1001';
+    const requests: string[] = [];
+    const provider = new LinkedInAdsProvider(new LinkedInAdsClient({ accessToken: 'synthetic-only' }, async (url, init) => {
+      requests.push(init?.method ?? 'GET');
+      if (init?.method && init.method !== 'GET') throw new Error('Preview must not mutate LinkedIn');
+      return new URL(String(url)).pathname === `/rest/adAccounts/${account}`
+        ? Response.json({ id: Number(account), name: 'QA', currency: 'EUR', status: 'DRAFT' })
+        : Response.json({ id: Number(conversion), account: `urn:li:sponsoredAccount:${account}`, name: 'Original QA rule', type: 'LEAD', enabled: false });
+    }));
+    const runtime = await createContext({ engine: new PolicyEngine(DEFAULT_POLICY, new PendingStore(path.join(dir, 'pending')), new AuditLog(path.join(dir, 'audit'))), providerModules: [{ provider, tools: linkedinTools(provider) }] });
+    const server = createMcpServer({ runtime, scopes: ['tools:read', 'tools:write'] }), host = new Client({ name: 'rule-review-test', version: '1' }), [ct, st] = InMemoryTransport.createLinkedPair();
+    await server.connect(st); await host.connect(ct);
+    let dom: JSDOM | undefined;
+    try {
+      const baseline = await provider.measurement.getConversion(account, conversion);
+      const result = await host.callTool({ name: 'linkedin_update_conversion', arguments: { account_id: account, conversion_id: conversion, expected_snapshot_hash: baseline.conversion.snapshot_hash, name: 'Renamed QA rule' } });
+      expect(result.isError).not.toBe(true);
+      expect(result.structuredContent).toMatchObject({ status: 'pending_validation', applied: false, preview: { review: {
+        subject: 'Original QA rule', fields: [{ label: 'Name', before: 'Original QA rule', after: 'Renamed QA rule' }],
+      } } });
+      const callTool = vi.fn();
+      dom = new JSDOM(ADPORT_UI_HTML, { runScripts: 'dangerously', url: 'https://widget.example', beforeParse(window) { Object.defineProperty(window, 'openai', { value: { callTool } }); } });
+      dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window.parent, data: { jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: result } }));
+      const main = dom.window.document.querySelector('main')!;
+      expect(main.querySelector('.review-before')?.textContent).toBe('Original QA rule');
+      expect(main.querySelector('.review-after')?.textContent).toBe('Renamed QA rule');
+      expect(main.querySelector('[data-approve]')?.textContent).toBe('Hold to apply');
+      expect(callTool).not.toHaveBeenCalled(); expect(requests.every(method => method === 'GET')).toBe(true);
+    } finally { dom?.window.close(); await host.close(); await server.close(); await rm(dir, { recursive: true, force: true }); }
+  });
   it('renders real configuration data without fetching a native tracking pixel or executing tag code', async () => {
     const account = '551000001', conversion = '1001', calls: string[] = [];
     const provider = new LinkedInAdsProvider(new LinkedInAdsClient({ accessToken: 'synthetic-only' }, async url => {
