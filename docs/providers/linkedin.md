@@ -53,6 +53,22 @@ With `resolve_names`, one bounded `adTargetingEntities` lookup resolves up to th
 
 Contracts: [Reporting](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads-reporting/ads-reporting?view=li-lms-2026-08), [metric and pivot schema](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads-reporting/ads-reporting-schema?view=li-lms-2026-08), [targeting URN resolution](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads/advertising-targeting/ads-targeting?view=li-lms-2026-08). These use Marketing API `202608`; the newer DMA pivot is not exposed by this versioned workflow.
 
+## Lead form configuration
+
+`linkedin_lead_forms` lists forms owned by the selected advertiser with native offset paging, compact widget records, account and form snapshot hashes. `linkedin_get_lead_form` verifies one exact form ID and advertiser owner. IDs are decimal **strings**, including native 64-bit JSON integer IDs; decoding preserves their original digits. These tools read configuration, never submitted leads. The existing `rw_ads` permission supports form management; reading lead responses requires the separate Lead Sync permission/program and is not added automatically.
+
+`linkedin_create_lead_form_draft` uses `expected_account_hash` from the finder and always creates `DRAFT`. Supply `creation_locale`, a name and `content` containing a localized headline, at least one question and legal information. Optional content includes a description, consent checkboxes and a thank-you message/action. Questions support documented predefined fields, custom text, multiple-choice options and work-email criteria. Localized fields must include the preferred creation locale; optional `hidden_fields` supports up to 20 entries. No creative is linked or published by these tools.
+
+`linkedin_update_lead_form` binds `form_id` and `expected_snapshot_hash`. Name-only edits and content edits use native partial updates; supplied localized maps and question/consent/hidden-field arrays replace their prior values, while omitted configuration and unknown native fields are preserved. Optional `clear_fields` explicitly removes a description, legal disclaimer or thank-you section. Reviews show observed previous and requested values. Question/schema edits can require remapping fields in connected CRM systems.
+
+Full schema/name/locale/hidden-field edits require a form whose native state is `DRAFT`. For `PUBLISHED`, only headline/description, privacy URL/disclaimer and thank-you edits are exposed; LinkedIn still enforces linked-ad eligibility. Unassociated published forms can have broader native pre-publication edit eligibility, but this workflow does not assume their association state. Published forms linked to InMail or Conversation Ads may reject edits.
+
+`linkedin_archive_lead_form` exposes the documented `PUBLISHED` → `ARCHIVED` transition with a snapshot-bound preview. Archiving can stop the form and linked creatives serving. No publish, delete or undocumented restore transition is invented. Form creation/editing alone does not complete a lead-generation ad: creative/form association remains a separate workflow.
+
+All writes use the shared preview/apply gate and independent native readback. Unexpected outcomes retain available resource IDs and are never retried automatically. Native validation occurs on apply; local form size/collection bounds do not replace provider eligibility checks. Read-only widgets render configuration as inert text and do not load URLs or collect responses.
+
+Contracts: [Lead Forms](https://learn.microsoft.com/en-us/linkedin/marketing/lead-sync/leadsync?view=li-lms-2026-08), [Lead Form Schema](https://learn.microsoft.com/en-us/linkedin/marketing/lead-sync/lead-sync-schema?view=li-lms-2026-08), [Rest.li partial updates](https://linkedin.github.io/rest.li/spec/protocol#partial-update).
+
 ## Conversion configuration and Insight Tags
 
 `linkedin_insight_tags` reads the advertiser's single native Insight Tag, its associated accounts and first-party tracking flag. `linkedin_insight_tag_domains` reads account-scoped domain/callback diagnostics. Tag and pixel snippets remain inert structured text: widgets do not embed them, install site code, fetch pixels or send conversion events. An empty tag finder is a verified absence under LinkedIn's one-tag-per-account contract.

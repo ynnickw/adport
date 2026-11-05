@@ -49,6 +49,16 @@ export function restli(value: RestliValue): string {
   return encodeURIComponent(String(value)).replace(/[!'()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
+/** Native Long identifiers must survive JSON decoding without IEEE-754 rounding. */
+function exactJson(text: string): unknown {
+  return JSON.parse(text, (_key, value: unknown, context?: { source?: string }) => {
+    if (typeof value === 'number' && !Number.isFinite(value)) throw new AdportError('PROVIDER_ERROR', 'linkedin: native number cannot be decoded exactly');
+    if (typeof value !== 'number' || !Number.isInteger(value) || Number.isSafeInteger(value)) return value;
+    if (!context?.source || !/^-?\d+$/.test(context.source)) throw new AdportError('PROVIDER_ERROR', 'linkedin: native integer cannot be decoded exactly');
+    return context.source;
+  });
+}
+
 export class LinkedInAdsClient {
   private tokens: Partial<LinkedInTokens>;
   private refreshing?: Promise<string>;
@@ -57,7 +67,7 @@ export class LinkedInAdsClient {
   }
   async get<T>(path: string, schema: z.ZodType<T>, params: Record<string, RestliValue> = {}): Promise<T> {
     const response = await this.request(path, 'GET', params);
-    const raw: unknown = await response.json(), parsed = schema.safeParse(raw);
+    const raw = exactJson(await response.text()), parsed = schema.safeParse(raw);
     if (!parsed.success) {
       const issues = parsed.error.issues.slice(0, 12).flatMap(issue => {
         if (!issue.path.every(part => typeof part === 'number' && Number.isSafeInteger(part) && part >= 0 || typeof part === 'string' && /^[A-Za-z_][A-Za-z0-9_]{0,80}$/.test(part))) return [];
