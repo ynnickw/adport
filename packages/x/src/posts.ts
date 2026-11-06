@@ -90,7 +90,7 @@ export class XPostService {
     const context = { account_id: account, request: input, actor, sources: { media: sources.media.map(sourceConfig), cards: sources.cards.map(sourceConfig) } };
     return { ...context, context_hash: hash(context), notes: ['Creates a distinct promoted-only published post, not an unpublished draft. Existing drafts are retained. It is not placed on the public timeline or served to followers by the nullcast endpoint, but remains published content usable by ads.', notice] };
   }
-  private async parents(account: string, lineId: string) {
+  async parents(account: string, lineId: string) {
     await this.entities.getAccount(account);
     const line = await this.entities.getLineItem(account, lineId), campaign = await this.entities.getCampaign(account, line.campaign_id);
     const lineConfig = Object.fromEntries(Object.entries(line).filter(([key]) => !['created_at', 'updated_at', 'approval_status', 'reasons_not_servable', 'servable'].includes(key)));

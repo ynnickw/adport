@@ -22,7 +22,7 @@ The result is a distinct published post, available for advertising. It does not
 appear in the public timeline or serve to followers through that nullcast
 workflow. It is not an unpublished draft. Existing draft IDs remain unchanged;
 no native draft-to-published transition is invented. Organic publication and
-scheduled posts are separate workflows.
+scheduled posts use the separate [scheduled-post workflow](x-scheduled-posts.md).
 
 Image/GIF/video inputs refer to existing ready account-library media, which can
 be uploaded from Adport project files using `x_upload_media` and
