@@ -1,7 +1,7 @@
 import { PageHeader } from '@/components/ui';
 import { canAdminister, requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { oauthAvailability } from '@/lib/cloud/provider-oauth';
-import { providerLabel } from '@/lib/cloud/providers';
+import { providerLabel, usesAdAccountSlot } from '@/lib/cloud/providers';
 import { listConnections } from '@/lib/cloud/repository';
 import { OAUTH_PROVIDERS } from '@/lib/cloud/types';
 import { ProviderConnections, type OAuthProviderView } from './provider-connections';
@@ -17,12 +17,12 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   if (isSyntheticReviewer(tenant.organizationId)) return <SyntheticReviewer tenant={tenant} />;
   const [connections, params] = await Promise.all([listConnections(tenant.organizationId, tenant.userId), searchParams]);
   const availability = oauthAvailability(tenant.organizationId);
-  const oauthProviders: OAuthProviderView[] = OAUTH_PROVIDERS.map((id) => ({ id, available: availability[id] }));
+  const oauthProviders: OAuthProviderView[] = OAUTH_PROVIDERS.filter(usesAdAccountSlot).map((id) => ({ id, available: availability[id] }));
   return (
     <main className="page">
       <PageHeader
-        title="Platforms"
-        description="Connect your ad platforms and tracking tools, then manage account access."
+        title="Ad platforms"
+        description="Connect your advertising platforms, then manage ad-account access."
       />
       <div className="stack" style={{ marginBottom: '0.9rem' }}>
         {params.connected ? <div className="callout success" role="status">{providerLabel(params.connected)} is connected and its accessible ad accounts were verified.</div> : null}
@@ -31,7 +31,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
       <ProviderConnections
         organizationId={tenant.organizationId}
         canManage={canAdminister(tenant)}
-        connections={connections.map((connection) => ({
+        connections={connections.filter(connection => usesAdAccountSlot(connection.provider)).map((connection) => ({
           provider: connection.provider,
           status: connection.status,
           accountSelectionId: connection.accountSelectionId,

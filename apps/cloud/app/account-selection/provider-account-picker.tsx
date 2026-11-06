@@ -12,6 +12,7 @@ import { UpgradeButton } from '@/components/upgrade-button';
 import { PlanLimitModal } from '@/components/plan-limit-modal';
 import { planLimitFromResponse, type PlanLimitDetails } from '@/lib/cloud/plan-limit';
 import { useUpgradeContext } from '@/components/upgrade-context';
+import { usesAdAccountSlot } from '@/lib/cloud/providers';
 
 export interface ProviderAccountSelection {
   id: string;
@@ -50,7 +51,8 @@ export function ProviderAccountPicker({ organizationId, selectionId, provider, a
   const visible = accounts.filter(account => `${account.name} ${account.id}`.toLowerCase().includes(query.trim().toLowerCase()));
   const chosenIds = singleAccount ? accounts.map(account => account.id) : [...selected];
   const enabledElsewhere = organizationActiveCount - initialEnabledIds.length;
-  const exceedsLimit = maxActiveAccounts !== null && enabledElsewhere + chosenIds.length > maxActiveAccounts;
+  const billable = usesAdAccountSlot(provider);
+  const exceedsLimit = billable && maxActiveAccounts !== null && enabledElsewhere + chosenIds.length > maxActiveAccounts;
 
   function save(enableAccess: boolean) {
     const accountIds = chosenIds;
@@ -107,8 +109,8 @@ export function ProviderAccountPicker({ organizationId, selectionId, provider, a
       {!selectedPages.size ? <p className="inline-note" style={{ padding: '0 1.5rem' }}>No Pages selected. Page tools will have no access; ad-account access is managed separately.</p> : null}
     </section> : null}
     <div className="account-picker-footer">
-      <p className="account-picker-help">{chosenIds.length ? `Enable ${chosenIds.length === 1 ? 'this account' : 'these accounts'} for Adport and your assistant.` : 'Choose the accounts this project can use.'} <InfoTooltip label="About enabling accounts">Enabled accounts count toward your plan across all projects. Enabling Adport access does not start or change campaigns. Importing without enabling keeps new accounts disabled and preserves access for accounts already enabled.</InfoTooltip></p>
-      {maxActiveAccounts !== null ? <p className={exceedsLimit ? 'error-text' : 'inline-note'} role={exceedsLimit ? 'status' : undefined}>{exceedsLimit ? `Choose fewer accounts or import without enabling. Your plan allows ${maxActiveAccounts} enabled accounts across projects.` : `You can enable up to ${Math.max(0, maxActiveAccounts - enabledElsewhere)} accounts here.`}</p> : null}
+      <p className="account-picker-help">{chosenIds.length ? `Enable ${chosenIds.length === 1 ? 'this account' : 'these accounts'} for Adport and your assistant.` : 'Choose the accounts this project can use.'} <InfoTooltip label="About enabling accounts">{billable ? 'Enabled ad accounts count toward your plan across all projects. Enabling Adport access does not start or change campaigns.' : 'Analytics and tracking accounts do not use ad-account slots.'} Importing without enabling keeps new accounts disabled and preserves access for accounts already enabled.</InfoTooltip></p>
+      {billable && maxActiveAccounts !== null ? <p className={exceedsLimit ? 'error-text' : 'inline-note'} role={exceedsLimit ? 'status' : undefined}>{exceedsLimit ? `Choose fewer accounts or import without enabling. Your plan allows ${maxActiveAccounts} enabled accounts across projects.` : `You can enable up to ${Math.max(0, maxActiveAccounts - enabledElsewhere)} accounts here.`}</p> : !billable ? <p className="inline-note">Analytics and tracking accounts do not use ad-account slots.</p> : null}
       {exceedsLimit ? <div className="account-picker-upgrade"><UpgradeButton kind="active_accounts" required={enabledElsewhere + chosenIds.length} message={`You need room for ${enabledElsewhere + chosenIds.length} enabled ad accounts across your organization to enable this selection.`} label={canManageBilling ? 'Upgrade to enable these accounts' : 'View plans to enable these accounts'} className="button secondary small" /><span>You can also import them without enabling access.</span></div> : null}
       {!singleAccount && !selected.size && initialSelectedIds.length ? <p className="inline-note">Saving with nothing selected removes this provider’s accounts from Adport, without changing them at the provider.</p> : null}
       <div className="account-picker-actions"><Link className="button secondary" href={backHref} aria-disabled={pending} onClick={event => { if (pending) event.preventDefault(); }}>Back</Link><div className="account-picker-submit">{chosenIds.length ? <Button type="button" className="link-button" disabled={pending} onClick={() => save(false)}>Import without enabling</Button> : null}<Button type="button" className="button" disabled={pending || exceedsLimit} onClick={() => save(chosenIds.length > 0)}>{pending ? 'Saving…' : chosenIds.length ? `Add and enable ${chosenIds.length} account${chosenIds.length === 1 ? '' : 's'}` : selectedPages.size ? 'Save Pages and continue' : 'Continue without accounts'}</Button></div></div>

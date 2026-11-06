@@ -26,7 +26,7 @@ const icon = {
 const PRIMARY_ITEMS: NavItem[] = [
   { label: 'Overview', href: '/dashboard', icon: icon.overview, exact: true },
   { label: 'AI assistants', href: '/dashboard/agents', icon: icon.agents },
-  { label: 'Accounts', href: '/dashboard/accounts', icon: icon.accounts, paths: ['/dashboard/accounts', '/dashboard/connections'] },
+  { label: 'Accounts', href: '/dashboard/accounts', icon: icon.accounts, paths: ['/dashboard/accounts', '/dashboard/connections', '/dashboard/analytics'] },
   { label: 'Creative library', href: '/dashboard/assets', icon: icon.reports },
   { label: 'Approvals', href: '/dashboard/approvals', icon: icon.approvals, paths: ['/dashboard/approvals', '/dashboard/audit'] },
 ];
@@ -90,8 +90,8 @@ export function ContextNav() {
     return () => observer.disconnect();
   }, [pathname]);
   const tabs = SETTINGS_ITEMS.some(item => isActive(item, pathname)) ? SETTINGS_ITEMS
-    : ['/dashboard/accounts', '/dashboard/connections'].includes(pathname)
-      ? [{ label: 'Ad accounts', href: '/dashboard/accounts' }, { label: 'Platforms', href: '/dashboard/connections' }]
+    : ['/dashboard/accounts', '/dashboard/connections', '/dashboard/analytics'].includes(pathname)
+      ? [{ label: 'Ad accounts', href: '/dashboard/accounts' }, { label: 'Ad platforms', href: '/dashboard/connections' }, { label: 'Analytics & tracking', href: '/dashboard/analytics' }]
       : ['/dashboard/approvals', '/dashboard/audit'].includes(pathname)
         ? [{ label: 'Pending changes', href: '/dashboard/approvals' }, { label: 'History', href: '/dashboard/audit' }] : [];
   if (!tabs.length) return null;

@@ -1,5 +1,24 @@
 import type { CloudProvider } from './types';
 
+export type ProviderCategory = 'advertising' | 'analytics';
+const ANALYTICS_PROVIDERS: readonly string[] = ['gtm'];
+
+export function providerCategory(provider: string): ProviderCategory {
+  return ANALYTICS_PROVIDERS.includes(provider) ? 'analytics' : 'advertising';
+}
+
+export function usesAdAccountSlot(provider: string): boolean {
+  return providerCategory(provider) === 'advertising';
+}
+
+export function providerAccountsPath(provider: string): string {
+  return `${usesAdAccountSlot(provider) ? '/dashboard/accounts' : '/dashboard/analytics'}?select_provider=${encodeURIComponent(provider)}`;
+}
+
+export function providerConnectionsPath(provider: string): string {
+  return `${usesAdAccountSlot(provider) ? '/dashboard/connections' : '/dashboard/analytics'}#platform-${encodeURIComponent(provider)}`;
+}
+
 export const PROVIDER_LABELS: Record<CloudProvider, string> = {
   gtm: 'Google Tag Manager',
   google: 'Google Ads',
