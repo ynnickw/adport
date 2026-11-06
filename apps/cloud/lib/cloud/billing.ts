@@ -169,6 +169,7 @@ export async function applyOrganizationPlanLimits(sql: BillingSql, organizationI
       join public.organizations project on project.id = account.organization_id
       join public.organization_groups company on company.id = project.organization_group_id
       where company.default_project_id = ${organizationId} and project.archived_at is null and account.enabled = true
+        and private.provider_uses_ad_account_slot(account.provider)
       order by account.discovered_at, account.provider, account.account_id, account.organization_id for update of account
     `;
     for (const account of accounts.slice(maxActiveAccounts)) await sql`

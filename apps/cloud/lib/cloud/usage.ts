@@ -16,7 +16,8 @@ export const getOrganizationUsage = cache(async (projectId: string): Promise<Org
       (select count(*)::int from public.organization_ad_accounts account
         join public.organizations project on project.id = account.organization_id
         where project.organization_group_id = company.id
-          and project.archived_at is null and account.enabled) as enabled_accounts,
+          and project.archived_at is null and account.enabled
+          and private.provider_uses_ad_account_slot(account.provider)) as enabled_accounts,
       private.organization_editing_member_count(company.id)::int as editing_members,
       (select count(*)::int from public.organizations project
         where project.organization_group_id = company.id and project.archived_at is null) as projects,

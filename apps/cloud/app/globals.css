@@ -330,6 +330,8 @@ th.numeric { font: 650 0.875rem/1.4 var(--font-sans); text-align: right; }
 .connection-list-heading, .connection-row { display: grid; grid-template-columns: minmax(12rem, 1.4fr) minmax(7.5rem, 0.8fr) minmax(7rem, 1fr) auto; align-items: center; gap: 1rem; padding: 1rem 1.25rem; }
 .connection-list-heading { color: var(--faint); font: 650 0.875rem/1.4 var(--font-sans); text-transform: none; border-bottom: 1px solid var(--line); }
 .connection-list-heading > :last-child { width: 13.5rem; text-align: right; }
+.connection-category-heading { grid-column: 1 / -1; padding: 1rem 1.25rem .5rem; color: var(--muted); }
+.connection-category-heading h3 { margin: 0; font-size: .875rem; }
 .connection-rows { list-style: none; margin: 0; padding: 0; }
 .connection-row + .connection-row { border-top: 1px solid var(--line-soft); }
 .connection-row > * { min-width: 0; }

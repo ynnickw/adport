@@ -38,8 +38,8 @@ and these scopes: `tagmanager.edit.containers`, `tagmanager.edit.containerversio
 container deletion or user-management scopes are requested. `GTM_OAUTH_ENABLED`
 defaults false until the application's GTM configuration is ready for external users.
 `GTM_TEST_ORGANIZATION_IDS` permits explicitly named internal review projects only.
-Users select which GTM accounts their project can access; enabling a GTM account
-uses the existing account quota. GTM containers within an enabled account share
+Users select which GTM accounts their project can access in Analytics & tracking.
+GTM accounts do not use advertising account slots. Containers within an enabled account share
 that account's access boundary.
 
 Disconnecting GTM deletes Adport's stored grant. Google app-wide revocation is
