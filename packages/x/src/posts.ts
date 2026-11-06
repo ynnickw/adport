@@ -5,7 +5,7 @@ import type { XParams } from './client.js';
 import type { XCreativeService } from './creatives.js';
 import { snowflake } from './creative-tools.js';
 import type { XAdsEntities } from './entities.js';
-import { createPost, createPromotions, deletePromotion, nativePost, postFields, postList, promotionList, promotionSelection, renamePost, type NativePost } from './post-schemas.js';
+import { createPost, createPromotions, createRepostPromotions, deletePromotion, nativePost, postFields, postList, promotionList, promotionSelection, renamePost, type NativePost } from './post-schemas.js';
 import { promotedTweetSchema, xId } from './schemas.js';
 
 interface Plan extends Omit<WritePreview, 'serverValidated'> { execute(): Promise<string[] | WriteResult> }
@@ -134,6 +134,20 @@ export class XPostService {
     const context = { account_id: account, request: input, parent: parents.snapshot, posts, existing };
     return { ...context, context_hash: hash(context), notes: ['New native associations are ACTIVE; there is no PUT status. Under paused_creation the ad group itself must be PAUSED. The native API has no atomic compare-and-set, so snapshots do not lock concurrent account changes.', 'RETWEETS_ONLY copy promotion and scheduled associations are separate workflows.', notice] };
   }
+  private async repostState(account: string, input: z.infer<typeof promotionSelection>) {
+    const users = await this.creatives.users(account), sources = users.filter(row => row.user_id === input.user_id && !row.deleted), receiving = users.filter(row => row.promotable_user_type === 'FULL' && !row.deleted);
+    if (sources.length !== 1 || sources[0]!.promotable_user_type !== 'RETWEETS_ONLY' || receiving.length !== 1 || receiving[0]!.user_id === input.user_id) throw new AdportError('INVALID_INPUT', 'x: repost promotion needs one current RETWEETS_ONLY source author and one unambiguous FULL receiving author; use ordinary promotion for FULL sources');
+    const parent = await this.parents(account, input.line_item_id);
+    if (parent.line.deleted || parent.campaign.deleted || !['ACTIVE', 'PAUSED'].includes(parent.line.entity_status) || !['ACTIVE', 'PAUSED'].includes(parent.campaign.entity_status) || !['PROMOTED_TWEETS', 'PROMOTED_ACCOUNT'].includes(parent.line.product_type)) throw new AdportError('INVALID_INPUT', 'x: repost promotion requires supported existing non-draft parents');
+    const posts = await this.exactPosts(account, input.user_id, input.tweet_ids);
+    if (posts.some(post => post.truncated)) throw new AdportError('INVALID_INPUT', 'x: repost source copy is truncated; read complete content before promotion');
+    const existing = (await this.existing(account, input.line_item_id)).sort((a, b) => a.id.localeCompare(b.id));
+    return { account_id: account, request: input, source_author: sourceConfig(sources[0]!), receiving_author: sourceConfig(receiving[0]!), parent: parent.snapshot, posts, existing };
+  }
+  async repostContext(account: string, raw: z.input<typeof promotionSelection>) {
+    const input = promotionSelection.parse(raw), context = await this.repostState(xId.parse(account), input);
+    return { ...context, context_hash: hash(context), creatives: context.posts.map(post => this.creative(account, post, false)), truncated: false, notes: ['Each selected original produces a new PUBLISHED nullcast repost plus a native ACTIVE association. This is not an unpublished draft or organic timeline publication.', 'Existing reposts have different post IDs. Source-ID deduplication is not established by the native association inventory; approval explicitly permits new copies, including additional copies of previously promoted sources.', 'The tool correlates one approved source with one native POST receipt. Batches use at most four concurrent requests and can stop partially; no native write is retried. Independently observed copy metadata does not certify source-content or attachment rendering equivalence.', 'paused_creation requires a currently PAUSED ad group. No parent status or budget is changed; snapshots do not lock native concurrent changes.', notice] };
+  }
   async promotions(raw: z.input<typeof promotionList>) {
     const input = promotionList.parse(raw), parents = await this.parents(input.account_id, input.line_item_id);
     if (input.user_id) await this.author(input.account_id, input.user_id);
@@ -157,9 +171,60 @@ export class XPostService {
     throw new AdportError('PROVIDER_ERROR', 'x: post/promotion outcome was not confirmed. Reconcile known IDs and current inventory before another mutation; no write was retried.', { resource_ids: [...new Set([...known, ...previous])] });
   }
   async plan(op: WriteOperation, guard: WriteGuard): Promise<Plan> {
-    const account = xId.parse(op.accountId), create = ['x_create_promoted_only_post', 'x_create_promoted_posts'].includes(op.tool), remove = op.tool === 'x_delete_promoted_post';
+    const account = xId.parse(op.accountId), create = ['x_create_promoted_only_post', 'x_create_promoted_posts', 'x_create_repost_promotions'].includes(op.tool), remove = op.tool === 'x_delete_promoted_post';
     if (op.provider !== 'x' || op.kind !== (create ? 'create' : remove ? 'remove' : 'update')) throw new AdportError('INVALID_INPUT', 'x: post operation provider/kind mismatch');
     const review = (title: string, fields: ReviewField[], notices: string[]): Omit<Plan, 'execute'> => ({ summary: title, changes: fields.map(field => `${field.label}: ${JSON.stringify(field.after)}`), coercions: [], budgetDeltas: [], notes: notices, review: { provider: 'x', accountId: account, kind: op.kind, title, fields, notices } });
+    if (op.tool === 'x_create_repost_promotions') {
+      const { expected_context_hash, acknowledge_active_associations: _active, acknowledge_new_published_copies: _copies, ...input } = createRepostPromotions.parse(op.payload), context = await this.repostContext(account, input);
+      if (context.context_hash !== expected_context_hash) throw new AdportError('PENDING_MISMATCH', 'x: repost source/author/parent/association context changed; read and preview again');
+      if (guard.forcePausedCreation && context.parent.line.entity_status !== 'PAUSED') throw new AdportError('POLICY_VIOLATION', 'x: native repost associations are ACTIVE; paused_creation requires a currently PAUSED ad group');
+      const receivingUser = snowflake.parse(context.receiving_author.user_id), baselineIds = new Set(context.existing.map(row => row.id)), baselineTweets = new Set(context.existing.map(row => row.tweet_id));
+      const budgetDeltas = [context.parent.line, context.parent.campaign].flatMap(entity => ['daily_budget_amount_local_micro', 'total_budget_amount_local_micro'].flatMap(key => { const value = entity[key as keyof typeof entity];return typeof value === 'number' ? [{ target: `${entity.id} ${key} existing pool`, currency: context.parent.campaign.currency, fromMicros: value, toMicros: value }] : []; }));
+      const fields: ReviewField[] = [{ label: 'Source author', after: input.user_id }, { label: 'Receiving author', after: receivingUser }, { label: 'Ad group', after: input.line_item_id }, { label: 'Ad-group status', after: context.parent.line.entity_status }, { label: 'Campaign status', after: context.parent.campaign.entity_status }, { label: 'New publication', after: `${input.tweet_ids.length} promoted-only repost(s)` }, { label: 'Association state', after: 'ACTIVE' }, ...context.posts.map(post => ({ label: `Source post ${post.id_str}`, after: post.full_text }))];
+      return { ...review('Create promoted repost copies', fields, context.notes), budgetDeltas, execute: async () => {
+        type Mapping = { source_tweet_id: string; copied_tweet_id: string; promoted_tweet_id: string };
+        const mappings = new Map<string, Mapping>(), knownIds = new Set<string>(), knownCopies = new Set<string>(), attempted = new Set<string>(), ambiguous = new Set<string>(), failures: string[] = [];
+        const receiptSources = new Map<string, Set<string>>();
+        let next = 0, stopped = false;
+        const record = (kind: 'association' | 'post', id: string, source: string) => {
+          const key = `${kind}:${id}`, sources = receiptSources.get(key) ?? new Set<string>();sources.add(source);receiptSources.set(key, sources);
+          if (sources.size > 1) { stopped = true;for (const value of sources) { ambiguous.add(value);mappings.delete(value); } }
+        };
+        const worker = async () => {
+          while (!stopped && next < input.tweet_ids.length) {
+            const source = input.tweet_ids[next++]!;
+            try {
+              const parent = await this.parents(account, input.line_item_id), author = await this.author(account, input.user_id), recipient = await this.author(account, receivingUser, true), observedSource = (await this.exactPosts(account, input.user_id, [source]))[0]!;
+              if (!equal(parent.snapshot, context.parent) || !equal(sourceConfig(author), context.source_author) || !equal(sourceConfig(recipient), context.receiving_author) || !equal(observedSource, context.posts.find(row => row.id_str === source))) throw new AdportError('PENDING_MISMATCH', 'x: repost preflight changed before the next native request');
+              if (stopped) break;
+              attempted.add(source);
+              // One original per native request gives an explicit request/receipt mapping.
+              const body = await this.entities.client.request('POST', `${this.base(account)}/promoted_tweets`, z.object({ data: z.unknown() }), { line_item_id: input.line_item_id, tweet_ids: source });
+              const raw = Array.isArray(body.data) ? body.data : [body.data];
+              for (const item of raw) if (item && typeof item === 'object') {
+                const row = item as Record<string, unknown>, id = xId.safeParse(row.id), copy = snowflake.safeParse(row.tweet_id);if (id.success) { knownIds.add(id.data);record('association', id.data, source); }if (copy.success) { knownCopies.add(copy.data);record('post', copy.data, source); }
+              }
+              const rows = z.array(nativePromotion.extend({ tweet_id: snowflake })).length(1).parse(body.data), row = rows[0]!;
+              if (ambiguous.has(source) || row.line_item_id !== input.line_item_id || row.deleted || row.entity_status !== 'ACTIVE' || row.account_id !== undefined && row.account_id !== account || input.tweet_ids.includes(row.tweet_id) || baselineIds.has(row.id) || baselineTweets.has(row.tweet_id)) throw new Error('repost receipt scope/state/mapping mismatch');
+              const association = await this.getPromotion(account, row.id);
+              if (!equal(nativePromotion.parse(association), row) || !equal(association.parent, context.parent)) throw new Error('repost association readback mismatch');
+              const copy = (await this.exactPosts(account, receivingUser, [row.tweet_id]))[0]!;
+              if (!copy.nullcast || copy.truncated) throw new Error('copied publication metadata mismatch');
+              // Check uniqueness again after awaits, before accepting this concurrent result.
+              if (ambiguous.has(source)) throw new Error('duplicate repost mapping');
+              mappings.set(source, { source_tweet_id: source, copied_tweet_id: row.tweet_id, promoted_tweet_id: row.id });
+            } catch (error) {
+              stopped = true;failures.push(source);
+              if (error instanceof AdportError && error.details && typeof error.details === 'object' && 'resource_ids' in error.details && Array.isArray(error.details.resource_ids)) for (const id of error.details.resource_ids) if (typeof id === 'string' && xId.safeParse(id).success) { knownIds.add(id);record('association', id, source); }
+            }
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(4, input.tweet_ids.length) }, worker));
+        const confirmed = input.tweet_ids.flatMap(id => mappings.has(id) ? [mappings.get(id)!] : []);
+        if (failures.length || confirmed.length !== input.tweet_ids.length) throw new AdportError('PROVIDER_ERROR', 'x: repost promotion was not fully confirmed. Reconcile the confirmed mappings and reported IDs before another preview; no request was retried and no rollback was attempted.', { resource_ids: [...knownIds], reported_tweet_ids: [...knownCopies], confirmed_source_copy_mappings: confirmed, ambiguous_source_ids: input.tweet_ids.filter(id => ambiguous.has(id)), source_outcomes: input.tweet_ids.filter(id => !mappings.has(id)).map(id => ({ source_tweet_id: id, state: attempted.has(id) ? 'UNCONFIRMED' : 'NOT_STARTED' })), unattempted_source_ids: input.tweet_ids.filter(id => !attempted.has(id)) });
+        return { applied: true, resourceIds: confirmed.map(row => row.promoted_tweet_id), details: { source_copy_mappings: confirmed, mapping_basis: 'ONE_SOURCE_PER_NATIVE_REQUEST', copied_post_metadata_verified: true, source_copy_content_equivalence_verified: false, parent_status_or_budget_changed: false, next_tool: 'x_promoted_posts', next_arguments: { account_id: account, line_item_id: input.line_item_id, user_id: receivingUser } }, warnings: ['Mapping follows the documented native copy-promotion request and independently observed association/copy metadata. Source-content and attachment rendering equivalence was not certified; inspect the copied posts before delivery.'] };
+      } };
+    }
     if (op.tool === 'x_create_promoted_only_post') {
       const { expected_context_hash, confirm_publication: _confirm, ...input } = createPost.parse(op.payload), context = await this.creationContext(account, input);
       if (context.context_hash !== expected_context_hash) throw new AdportError('INVALID_INPUT', 'x: publication source context changed; read and preview it again');
@@ -177,7 +242,7 @@ export class XPostService {
       } };
     }
     if (op.tool === 'x_rename_published_post') {
-      const input = renamePost.parse(op.payload);await this.creatives.verifyComposer(account, input.user_id);
+      const input = renamePost.parse(op.payload);await this.author(account, input.user_id, true);
       const current = (await this.exactPosts(account, input.user_id, [input.tweet_id]))[0]!;
       if (postSnapshot(account, current) !== input.expected_snapshot_hash) throw new AdportError('INVALID_INPUT', 'x: published post snapshot changed; read and preview it again');
       const expected = { ...current, name: input.name };

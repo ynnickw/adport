@@ -113,6 +113,10 @@ describe('native X publication and promotion contracts', () => {
     title = 'Changed';await expect(f.provider.previewWrite(op('x_create_promoted_only_post', payload), guard)).rejects.toThrow(/changed/);expect(writes(f)).toEqual([]);
     title = 'First';const result = await f.provider.applyWrite(op('x_create_promoted_only_post', payload), guard);expect(result).toMatchObject({ details: { requested_text_exactly_observed: false, attachment_readback_verified: false }, warnings: [expect.stringContaining('equivalence'), expect.stringContaining('attachment')] });
   });
+  it('edits an account-owned published label without requiring post-publication composer authority', async () => {
+    const f = fixture({ actor: '123', permissions: [] }), current = await f.provider.posts.get(A, U, P), operation = op('x_rename_published_post', { user_id: U, tweet_id: P, expected_snapshot_hash: current.snapshot_hash, name: 'Advertiser label' });
+    await f.provider.previewWrite(operation, guard);expect(writes(f)).toEqual([]);expect(await f.provider.applyWrite(operation, guard)).toMatchObject({ resourceIds: [P] });expect(f.posts[0]!.name).toBe('Advertiser label');expect(f.posts[0]!.full_text).toBe(post.full_text);expect(f.calls.some(call => call.url.pathname.endsWith('/authenticated_user_access'))).toBe(false);
+  });
   it.each(['malformed', 'wrong-author', 'readback', 'transport', 'partial-error'] as const)('retains publication IDs/unknown outcomes without retry: %s', async mode => {
     const f = fixture({ handler: call => {
       if (call.init.method === 'POST') {

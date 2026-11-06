@@ -81,7 +81,7 @@ the native references visible with a warning. Association removal is available
 through the existing menu, preview and approval flow. Native parent settings
 and ACTIVE association state do not prove actual delivery.
 
-RETWEETS_ONLY promotion creates a different native nullcast post ID, so its
+The [RETWEETS_ONLY workflow](x-reposts.md) creates a different native nullcast post ID, so its
 source-to-receipt workflow remains separate. The tools do not silently assume
 those returned IDs equal the original post IDs. Scheduled associations and
 promoted-account/media-creative authoring are also separate native families.
