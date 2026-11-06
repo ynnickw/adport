@@ -23,6 +23,7 @@ export const postList = z.object({ account_id: xId, user_id: snowflake, timeline
 export const postReference = z.object({ account_id: xId, user_id: snowflake, tweet_id: snowflake }).strict();
 export const promotionSelection = z.object({ line_item_id: xId, user_id: snowflake, tweet_ids: z.array(snowflake).min(1).max(50).refine(unique, 'Use unique post IDs') }).strict();
 export const createPromotions = promotionSelection.safeExtend({ expected_context_hash: postHash, acknowledge_active_associations: z.literal(true) });
+export const createRepostPromotions = promotionSelection.safeExtend({ expected_context_hash: postHash, acknowledge_active_associations: z.literal(true), acknowledge_new_published_copies: z.literal(true) });
 export const deletePromotion = z.object({ promoted_tweet_id: xId, expected_context_hash: postHash }).strict();
 export const promotionList = z.object({ account_id: xId, line_item_id: xId, user_id: snowflake.optional(), count: z.number().int().min(1).max(200).default(20), cursor: z.string().min(1).max(4096).optional(), with_deleted: z.boolean().default(false) }).strict();
 
@@ -36,4 +37,4 @@ export const nativePost = z.object({
   extended_entities: z.object({ media: z.array(mediaEntity).max(100) }).optional(),
 });
 export type NativePost = z.infer<typeof nativePost>;
-export const postWrites = new Set(['x_create_promoted_only_post', 'x_rename_published_post', 'x_create_promoted_posts', 'x_delete_promoted_post']);
+export const postWrites = new Set(['x_create_promoted_only_post', 'x_rename_published_post', 'x_create_promoted_posts', 'x_create_repost_promotions', 'x_delete_promoted_post']);

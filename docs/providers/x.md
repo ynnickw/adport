@@ -299,3 +299,5 @@ Verification: synthetic wire-contract, reporting, download-security, write-plan
 and shared policy-gate tests pass, as do local CLI onboarding tests. All package
 builds/tests/typechecks and the public-tree check pass. No live API request, ad
 mutation, provider application submission or npm release is implied by these tests.
+
+[RETWEETS_ONLY repost promotion](x-reposts.md) now has a context-bound1–50source workflow with explicit original/copy/association receipts, bounded concurrency and partial-outcome reconciliation. Native positive writes and actual web-host execution remain unverified.
