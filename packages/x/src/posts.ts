@@ -28,8 +28,8 @@ const notice = 'Native previews are local plans, not X validation. No write is r
 export class XPostService {
   constructor(private readonly entities: XAdsEntities, private readonly creatives: XCreativeService) {}
   private base(account: string) { return `accounts/${xId.parse(account)}`; }
-  private async author(account: string, user: string, full = false, requireComplete = false) {
-    const matches = (await this.creatives.users(account, requireComplete)).filter(row => row.user_id === user && !row.deleted);
+  private async author(account: string, user: string, full = false) {
+    const matches = (await this.creatives.users(account)).filter(row => row.user_id === user && !row.deleted);
     if (matches.length !== 1 || !['FULL', 'RETWEETS_ONLY'].includes(matches[0]!.promotable_user_type) || full && matches[0]!.promotable_user_type !== 'FULL') throw new AdportError('INVALID_INPUT', full ? 'x: this workflow requires a current FULL promotable author; RETWEETS_ONLY creates a different native post and needs its own receipt workflow' : 'x: post author is not an unambiguous current promotable user in this account');
     return matches[0]!;
   }
@@ -134,15 +134,19 @@ export class XPostService {
     const context = { account_id: account, request: input, parent: parents.snapshot, posts, existing };
     return { ...context, context_hash: hash(context), notes: ['New native associations are ACTIVE; there is no PUT status. Under paused_creation the ad group itself must be PAUSED. The native API has no atomic compare-and-set, so snapshots do not lock concurrent account changes.', 'RETWEETS_ONLY copy promotion and scheduled associations are separate workflows.', notice] };
   }
+  private async repostAuthors(account: string, source: string) {
+    const users = await this.creatives.users(account, true), sources = users.filter(row => row.user_id === source && !row.deleted), receiving = users.filter(row => row.promotable_user_type === 'FULL' && !row.deleted);
+    if (sources.length !== 1 || sources[0]!.promotable_user_type !== 'RETWEETS_ONLY' || receiving.length !== 1 || receiving[0]!.user_id === source) throw new AdportError('INVALID_INPUT', 'x: repost promotion needs one current RETWEETS_ONLY source author and one unambiguous FULL receiving author; use ordinary promotion for FULL sources');
+    return { source_author: sourceConfig(sources[0]!), receiving_author: sourceConfig(receiving[0]!) };
+  }
   private async repostState(account: string, input: z.infer<typeof promotionSelection>) {
-    const users = await this.creatives.users(account, true), sources = users.filter(row => row.user_id === input.user_id && !row.deleted), receiving = users.filter(row => row.promotable_user_type === 'FULL' && !row.deleted);
-    if (sources.length !== 1 || sources[0]!.promotable_user_type !== 'RETWEETS_ONLY' || receiving.length !== 1 || receiving[0]!.user_id === input.user_id) throw new AdportError('INVALID_INPUT', 'x: repost promotion needs one current RETWEETS_ONLY source author and one unambiguous FULL receiving author; use ordinary promotion for FULL sources');
+    const authors = await this.repostAuthors(account, input.user_id);
     const parent = await this.parents(account, input.line_item_id);
     if (parent.line.deleted || parent.campaign.deleted || !['ACTIVE', 'PAUSED'].includes(parent.line.entity_status) || !['ACTIVE', 'PAUSED'].includes(parent.campaign.entity_status) || !['PROMOTED_TWEETS', 'PROMOTED_ACCOUNT'].includes(parent.line.product_type)) throw new AdportError('INVALID_INPUT', 'x: repost promotion requires supported existing non-draft parents');
     const posts = await this.exactPosts(account, input.user_id, input.tweet_ids);
     if (posts.some(post => post.truncated)) throw new AdportError('INVALID_INPUT', 'x: repost source copy is truncated; read complete content before promotion');
     const existing = (await this.existing(account, input.line_item_id)).sort((a, b) => a.id.localeCompare(b.id));
-    return { account_id: account, request: input, source_author: sourceConfig(sources[0]!), receiving_author: sourceConfig(receiving[0]!), parent: parent.snapshot, posts, existing };
+    return { account_id: account, request: input, ...authors, parent: parent.snapshot, posts, existing };
   }
   async repostContext(account: string, raw: z.input<typeof promotionSelection>) {
     const input = promotionSelection.parse(raw), context = await this.repostState(xId.parse(account), input);
@@ -194,8 +198,8 @@ export class XPostService {
           while (!stopped && next < input.tweet_ids.length) {
             const source = input.tweet_ids[next++]!;
             try {
-              const parent = await this.parents(account, input.line_item_id), author = await this.author(account, input.user_id, false, true), recipient = await this.author(account, receivingUser, true, true), observedSource = (await this.exactPosts(account, input.user_id, [source]))[0]!;
-              if (!equal(parent.snapshot, context.parent) || !equal(sourceConfig(author), context.source_author) || !equal(sourceConfig(recipient), context.receiving_author) || !equal(observedSource, context.posts.find(row => row.id_str === source))) throw new AdportError('PENDING_MISMATCH', 'x: repost preflight changed before the next native request');
+              const parent = await this.parents(account, input.line_item_id), authors = await this.repostAuthors(account, input.user_id), observedSource = (await this.exactPosts(account, input.user_id, [source]))[0]!;
+              if (!equal(parent.snapshot, context.parent) || !equal(authors.source_author, context.source_author) || !equal(authors.receiving_author, context.receiving_author) || !equal(observedSource, context.posts.find(row => row.id_str === source))) throw new AdportError('PENDING_MISMATCH', 'x: repost preflight changed before the next native request');
               if (stopped) break;
               attempted.add(source);
               // One original per native request gives an explicit request/receipt mapping.
