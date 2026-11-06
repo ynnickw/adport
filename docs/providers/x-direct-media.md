@@ -42,7 +42,8 @@ lock, so context snapshots do not prevent concurrent native changes.
 
 `WEBSITE_CLICKS` requires an explicit `landing_url`. Preroll ignores this field,
 so Adport rejects it for preroll instead of silently discarding it. Preroll CTA
-settings are a separate native line-item resource and are not changed here.
+settings have [separate guarded tools](x-preroll-ctas.md) and are not changed by
+media association creation.
 Other display objectives may use native defaults when a URL is omitted.
 
 Context binds the exact source configuration, requested destination, parent

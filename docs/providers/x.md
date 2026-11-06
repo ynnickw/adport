@@ -308,3 +308,9 @@ Account Media IDs remain distinct from media-library keys. Default policy
 requires a paused ad group because native association creation is ACTIVE.
 Existing QA reads returned empty inventories; positive native writes and actual
 host checks remain pending. VAST authoring and other native formats are separate.
+
+[Preroll CTA tools](x-preroll-ctas.md) browse account-wide or scoped settings and
+support guarded creation, partial button/destination edits and removal. Approval
+identifies the whole ad group’s preroll scope; native receipts and independent
+reads verify the CTA, parent and remaining settings. Native mutations and actual
+host execution remain separately unverified.

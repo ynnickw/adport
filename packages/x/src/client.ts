@@ -130,7 +130,7 @@ function mutationReceipt(method: XMethod, path: string, body: unknown) {
 }
 
 function mutationIds(method: XMethod, path: string, body: unknown): string[] {
-  const data = method !== 'GET' && /^(?:accounts\/[a-z0-9]+\/(?:(?:cards|draft_tweets|scheduled_tweets|scheduled_promoted_tweets|media_library|media_creatives|line_items|campaigns|tracking_tags|promoted_tweets)(?:\/[a-z0-9_]+)?|tweet|tweets\/[1-9]\d{0,24}\/name)|media\/upload(?:\/[a-z0-9]+){1,2})$/.test(path) && body && typeof body === 'object' && 'data' in body ? body.data : undefined;
+  const data = method !== 'GET' && /^(?:accounts\/[a-z0-9]+\/(?:(?:cards|draft_tweets|scheduled_tweets|scheduled_promoted_tweets|media_library|media_creatives|preroll_call_to_actions|line_items|campaigns|tracking_tags|promoted_tweets)(?:\/[a-z0-9_]+)?|tweet|tweets\/[1-9]\d{0,24}\/name)|media\/upload(?:\/[a-z0-9]+){1,2})$/.test(path) && body && typeof body === 'object' && 'data' in body ? body.data : undefined;
   const rows = Array.isArray(data) ? data : data && typeof data === 'object' ? [data] : [];
   return [...new Set(rows.flatMap(row => row && typeof row === 'object' ? ['id_str', 'id', 'media_key'].flatMap(key => { const value = (row as Record<string, unknown>)[key];return typeof value === 'string' && /^(?:[a-z0-9]{1,32}|\d{1,3}_[1-9]\d{0,24})$/.test(value) ? [value] : []; }) : []))].slice(0, 500);
 }
