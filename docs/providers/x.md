@@ -301,3 +301,10 @@ builds/tests/typechecks and the public-tree check pass. No live API request, ad
 mutation, provider application submission or npm release is implied by these tests.
 
 [RETWEETS_ONLY repost promotion](x-reposts.md) now has a context-bound1–50source workflow with explicit original/copy/association receipts, bounded concurrency and partial-outcome reconciliation. Native positive writes and actual web-host execution remain unverified.
+
+[Direct-media workflows](x-direct-media.md) now provide Account Media galleries
+and guarded creation/removal of PREROLL and TAP image ad associations. Native
+Account Media IDs remain distinct from media-library keys. Default policy
+requires a paused ad group because native association creation is ACTIVE.
+Existing QA reads returned empty inventories; positive native writes and actual
+host checks remain pending. VAST authoring and other native formats are separate.
