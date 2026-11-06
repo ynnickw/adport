@@ -16,11 +16,14 @@ export async function rejectUnavailableGtm(principal: TenantPrincipal, write: bo
   const kind = connection?.selectionPending ? 'account_selection'
     : connection?.status === 'connected' ? 'connection_changed' : 'reconnect';
   const project = connection?.projectName ? ` in ${connection.projectName}` : ' in this project';
+  const dashboardProject = connection?.projectName
+    ? ` In the dashboard, switch to ${connection.projectName} before opening Analytics & tracking.`
+    : ' In the dashboard, select the project shown on this review before opening Analytics & tracking.';
   const message = kind === 'account_selection'
-    ? `Google Tag Manager is waiting for account selection${project}. Finish selecting accounts in Analytics & tracking, then refresh the preview.`
+    ? `Google Tag Manager is waiting for account selection${project}.${dashboardProject} Finish selecting accounts, then refresh the preview.`
     : kind === 'connection_changed'
       ? `The Google Tag Manager connection changed while this request was starting${project}. Refresh the preview to check the current connection.`
-      : `Reconnect Google Tag Manager${project} in Analytics & tracking, finish account selection, then request a fresh preview.`;
+      : `Reconnect Google Tag Manager${project}.${dashboardProject} Finish account selection, then request a fresh preview.`;
   throw new AdportError('NOT_CONNECTED', message + (write ? ' No write was started.' : ''), {
     ...(write ? { apply_state: 'NOT_STARTED' } : {}),
     connection_recovery: {

@@ -15,6 +15,9 @@ describe('GTM connection recovery before provider execution', () => {
       details: { apply_state: 'NOT_STARTED', connection_recovery: { kind: 'account_selection', project_id: 'qa-project', dashboard_url: 'https://app.adport.dev/dashboard/analytics' } },
     });
     const [parts, project] = query.mock.calls[0]!;
+    await expect(rejectUnavailableGtm({ organizationId: 'qa-project', scopes: [] }, true)).rejects.toMatchObject({
+      message: expect.stringContaining('switch to QA project before opening Analytics & tracking'),
+    });
     expect(parts.join('')).toMatch(/^\s*select /); expect(project).toBe('qa-project');
     expect(parts.join('')).not.toMatch(/ciphertext|insert|update|delete/i);
   });
