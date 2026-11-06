@@ -37,6 +37,7 @@ import { instrumentCloudTools } from './analytics-tools';
 import { PostgresResourceSecretStore } from './resource-credentials';
 import { PostgresRedditCatalogAccessStore } from './reddit-catalog-access';
 import { PostgresTikTokCatalogAccessStore } from './tiktok-catalog-access';
+import { rejectUnavailableGtm } from './gtm-connection-recovery';
 
 export interface TenantRuntimeOptions {
   /** Used only immediately after OAuth exchange to discover provider accounts. */
@@ -165,6 +166,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     engine,
     authorizeToolCall: enforceAccountScope ? (tool, input) => {
       if (tool.namespace !== 'core' && tool.namespace !== 'audit' && !connected.has(tool.namespace)) {
+        if (tool.namespace === 'gtm') return rejectUnavailableGtm(principal, !tool.annotations.readOnly);
         throw new AdportError('NOT_CONNECTED', 'This platform is not connected in the selected project.');
       }
       authorizeAccounts(tool, input);
