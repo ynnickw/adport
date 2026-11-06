@@ -100,3 +100,10 @@ Contracts inspected 2026-11-06 against the [Pinterest-owned OpenAPI
 and [budget semantics](https://help.pinterest.com/en-gb/business/article/set-up-campaign-budgets).
 Wire, policy and simulated host tests remain separate from native API and actual
 Claude/ChatGPT verification.
+
+A bounded live check on one EUR QA account verified average creation at €5,
+an amount edit to €6, fixed/average mode changes and archive cleanup. The campaign
+stayed paused with no ads. Native per-item code `4042` rejected a smaller €0.50
+increment inside HTTP 200; this is retained as a native restriction rather than
+inventing a minimum for every account/currency. Actual Claude/ChatGPT checks and
+full Performance+ setup remain unverified.
