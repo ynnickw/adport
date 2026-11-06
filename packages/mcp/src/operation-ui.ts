@@ -64,6 +64,37 @@ export const OPERATION_UI_SCRIPT = String.raw`
     function operationHeader(title,subject,provider) {
       return '<div class="operation-heading">'+(provider?logo(provider):'')+'<div><h2>'+esc(title)+'</h2>'+(subject?'<p>'+esc(subject)+'</p>':'')+'</div></div>';
     }
+    function samePreviewArguments(left,right) {
+      const stable=value=>Array.isArray(value)?value.map(stable):object(value)?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value;
+      return JSON.stringify(stable(left))===JSON.stringify(stable(right));
+    }
+    function connectionRecovery(data,args,meta) {
+      const recovery=data.details?.connection_recovery,project=args.project_id || meta.context?.project_id;
+      if(data.error!=='NOT_CONNECTED' || data.details?.apply_state!=='NOT_STARTED' || !object(recovery)
+        || !['account_selection','connection_changed','reconnect'].includes(recovery.kind)
+        || typeof project!=='string' || recovery.project_id!==project
+        || recovery.dashboard_url!=='https://app.adport.dev/dashboard/analytics') return null;
+      return {kind:recovery.kind,project_id:project,dashboard_url:recovery.dashboard_url};
+    }
+    async function refreshConnectionPreview(tool,args,pending) {
+      const attempt=attempts.get(pending);
+      if(!attempt?.recovery || attempt.refreshing || pendingOf(state.result)!==pending) return;
+      const previewArgs={...args};delete previewArgs.pending_operation_id;
+      attempt.refreshing=true;render(state.result);
+      try {
+        const result=await callTool(tool,previewArgs),value=resultData(result),meta=value._adport;
+        if(result?.isError || value.error) throw new Error(value.message || 'The connection is not ready. Finish account selection before refreshing again.');
+        if(value.applied!==false || value.status!=='pending_validation' || typeof value.pending_operation_id!=='string'
+          || value.pending_operation_id===pending || meta?.tool!==tool || meta.context?.project_id!==attempt.recovery.project_id
+          || !samePreviewArguments(meta.approval?.arguments,previewArgs)) throw new Error('The fresh preview could not be matched to this operation. Ask your assistant for a new preview.');
+        if(pendingOf(state.result)===pending) acceptResult(result,true);
+      } catch(error) {
+        attempt.message=error?.message || 'The preview could not be refreshed. No apply was requested.';
+      } finally {
+        attempt.refreshing=false;
+        if(pendingOf(state.result)===pending) render(state.result);
+      }
+    }
     function renderOperation(raw,meta) {
       clearTimeout(expiryTimer);
       let data=operationOf(raw,meta), pending=data.pending_operation_id;
@@ -90,8 +121,10 @@ export const OPERATION_UI_SCRIPT = String.raw`
       const details='<details><summary>Details</summary><div class="operation-details"><p>'+esc(validation)+'</p>'+(!applied && data.expires_at?'<p>Expires '+esc(data.expires_at)+'</p>':'')+'<p>'+esc(preview.summary || 'No change details returned.')+'</p>'+fieldsHTML(fields)+arr(preview.changes).map(v=>'<p>'+esc(v)+'</p>').join('')+(data.result?'<pre>'+esc(JSON.stringify(data.result,null,2))+'</pre>':'')+(attempt?.reconciliation?'<p>Reconciliation</p><pre>'+esc(JSON.stringify(attempt.reconciliation,null,2))+'</pre>':'')+'<p>'+esc(meta.tool || '')+'</p></div></details>';
       const notes=[...arr(review.notices),...arr(preview.notes),...arr(preview.changes).filter(v=>/^!/.test(String(v))).map(v=>String(v).replace(/^!\s*/,'')),...arr(preview.coercions),...warnings];
       const message=attempt?.message || (accepted?'Accepted for processing. Processing is not confirmed.':expired?'Request a fresh preview before applying.':partial?'Check each result before retrying.':pending && !canApprove && !applied && !attempt?'Review the tool response in chat before applying.':review.kind==='update' && fields.length && fields.every(field=>!Object.hasOwn(field,'before'))?'Previous values unavailable':'');
-      const body=operationHeader(title,subject,provider)+(fields.length?fieldsHTML(fields.slice(0,6),true):'<p class="operation-note">No change details were returned.</p>')+(fields.length>6?'<p class="operation-note">'+(fields.length-6)+' more changes in Details</p>':'')+[...new Set(notes)].map(v=>'<p class="adjustment"'+(warnings.includes(v)?' role="alert"':'')+'>'+esc(v)+'</p>').join('')+receiptMarkup(data,false)+(message?'<p class="operation-note" role="status">'+esc(message)+'</p>':'')+'<div class="operation-footer">'+details+'<div class="operation-action">'+action+'</div></div>';
+      const recovery=attempt?.recovery?'<p class="operation-note"><a href="'+esc(attempt.recovery.dashboard_url)+'" target="_blank" rel="noopener noreferrer">Open analytics connections ↗</a></p><p class="operation-note">After finishing account selection, refresh this preview. Refreshing never applies or publishes.</p><button data-refresh-preview="true" '+(attempt.refreshing?'disabled':'')+'>'+(attempt.refreshing?'Refreshing preview…':'Refresh preview')+'</button>':'';
+      const body=operationHeader(title,subject,provider)+(fields.length?fieldsHTML(fields.slice(0,6),true):'<p class="operation-note">No change details were returned.</p>')+(fields.length>6?'<p class="operation-note">'+(fields.length-6)+' more changes in Details</p>':'')+[...new Set(notes)].map(v=>'<p class="adjustment"'+(warnings.includes(v)?' role="alert"':'')+'>'+esc(v)+'</p>').join('')+receiptMarkup(data,false)+(message?'<p class="operation-note" role="status">'+esc(message)+'</p>':'')+recovery+'<div class="operation-footer">'+details+'<div class="operation-action">'+action+'</div></div>';
       app.innerHTML=chrome(body,'');
+      app.querySelectorAll('[data-refresh-preview]').forEach(button=>button.addEventListener('click',()=>refreshConnectionPreview(meta.tool,approval.arguments,pending)));
       if (canApprove) {
         const source=state.result;
         app.querySelectorAll('[data-approve]').forEach(button=>{cancelHold=bindHold(button,()=>{if(state.result===source) approve(meta.tool,approval.arguments,pending,expires);});});
@@ -136,7 +169,8 @@ export const OPERATION_UI_SCRIPT = String.raw`
         const result=await callHostTool(tool,{...args,pending_operation_id:pending}),value=resultData(result),outcome=operationOf(value,{tool});
         if(!result || result.isError || value.error) {
           const phase=errorPhase(value),message=value.message || 'Adport could not confirm the change.';
-          attempts.set(pending,{phase,message:phase==='unconfirmed' && !/before retrying/i.test(message)?message+' Check its status before retrying.':message,reconciliation:reconciliationOf(value,tool,args)});
+          const recovery=connectionRecovery(value,args,original._adport);
+          attempts.set(pending,{phase,message:phase==='unconfirmed' && !/before retrying/i.test(message)?message+' Check its status before retrying.':message,reconciliation:reconciliationOf(value,tool,args),...(recovery?{recovery}:{})});
         }
         else if(outcome.applied===true && outcome.status==='applied') {
           const preview={...originalOperation.preview,...outcome.preview};

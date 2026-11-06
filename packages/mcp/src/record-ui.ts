@@ -124,7 +124,7 @@ export const RECORD_UI_SCRIPT = String.raw`
     function renderRecords(data,meta) {
       if(meta.tool==='projects_list')return renderProjects(data,meta);
       if(meta.tool==='apple_report')return renderAppleReport(data,meta);
-      if(nativeReportTools.has(meta.tool))return renderNativeReport(data,meta);
+      if(nativeReportTools.has(meta.tool)&&(meta.tool!=='google_gaql'||arr(recordPayload(data)?.rows).some(row=>object(row?.metrics)&&Object.keys(row.metrics).length)))return renderNativeReport(data,meta);
       const payload=recordPayload(data),entries=recordEntries(payload),rows=entries ?? [payload];
       const title=human(String(meta.tool||'Results').replace(/^(?:google|meta|tiktok|apple|microsoft|reddit|snapchat|spotify|pinterest|linkedin|x)_/,'').replace(/^(?:list|get)_/,'').replace(/_(?:list|get)$/,'').replaceAll('_',' '));
       const parent=object(data.parent)?Object.entries(data.parent).filter(([key])=>/_id$/.test(key)).map(([key,value])=>human(key.replace(/_id$/,''))+' '+value).join(' · '):'';

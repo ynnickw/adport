@@ -358,7 +358,8 @@ describe('adport MCP server', () => {
     expect(content.text).toContain('ui/notifications/tool-result');
     expect(content.text).toContain('<b>adport<span class="wordmark-dot" aria-hidden="true">.</span></b>');
     expect(content.text).not.toContain('evidence before action');
-    expect(content.text).not.toMatch(/https?:\/\//);
+    // The sole external URL is a validated dashboard navigation link, never a network dependency.
+    expect(content.text?.replaceAll('https://app.adport.dev/dashboard/analytics', '')).not.toMatch(/https?:\/\//);
     const script = content.text?.match(/<script>([\s\S]+)<\/script>/)?.[1];
     expect(script).toBeTruthy();
     expect(() => new Function(script!)).not.toThrow();

@@ -39,6 +39,7 @@ describe('native report renderers', () => {
     for (const data of [{ ...(tool === 'reddit_report' ? { metrics: [] } : { rows: [] }) }, { unexpected: true }]) {
       const { dom, document } = mount(tool, data);
       try {
+        if(tool==='google_gaql') { expect(document.querySelector('[data-report-chart]')).toBeNull(); continue; }
         expect(document.querySelector('[data-native-report]')?.textContent).toMatch(/No report rows returned|Report rows unavailable/);
         expect(document.querySelector('dd')).toBeNull();
       } finally { dom.window.close(); }
