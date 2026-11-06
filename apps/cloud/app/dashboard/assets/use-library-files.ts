@@ -9,7 +9,7 @@ type Filters = { query: string; kind: string; tag: string };
 type Page = { assets: MediaAsset[]; truncated: boolean; next_cursor?: string };
 const filterKey = (filters: Filters) => JSON.stringify(filters);
 const matches = (asset: MediaAsset, filters: Filters) => (!filters.query || asset.name.toLowerCase().includes(filters.query.toLowerCase()))
-  && (!filters.kind || (filters.kind === 'document' ? asset.content_type === 'application/pdf' : asset.content_type.startsWith(`${filters.kind}/`)))
+  && (!filters.kind || (filters.kind === 'document' ? ['application/pdf', 'text/csv'].includes(asset.content_type) : asset.content_type.startsWith(`${filters.kind}/`)))
   && (!filters.tag || asset.tags?.includes(filters.tag));
 
 export function useLibraryFiles(projectId: string, initial: Page, filters: Filters) {

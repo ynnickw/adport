@@ -98,6 +98,39 @@ describe('simple agent-first creative library', () => {
     expect(fetch).toHaveBeenCalledTimes(3); expect(screen.getAllByRole('article')).toHaveLength(103);
   });
 
+  it('keeps CSV and PDF documents visible through pagination, label changes and cached filters', async () => {
+    const csv = source(2, { name: 'Audience IDs', content_type: 'text/csv' }), pdf = source(3, { name: 'Brief.pdf', content_type: 'application/pdf' }), next = source(4, { name: 'Products.csv', content_type: 'text/csv' });
+    vi.mocked(fetch).mockResolvedValueOnce(Response.json({ assets: [csv, pdf], truncated: true, next_cursor: pdf.id })).mockResolvedValueOnce(Response.json({ assets: [next], truncated: false }));
+    mocks.change.mockResolvedValue({ status: 'applied', result: { details: { asset: { ...csv, tags: ['audience'], metadata_version: 4 } } } });
+    render(<AssetLibrary {...props} />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'File type' }), { target: { value: 'document' } });
+    await screen.findByRole('button', { name: 'Preview Audience IDs' });
+    expect(screen.getByRole('button', { name: 'Preview Brief.pdf' })).toBeTruthy();
+    expect(new URL(String(vi.mocked(fetch).mock.calls[0]![0]), 'https://app.test').searchParams.get('kind')).toBe('document');
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' })); await screen.findByRole('button', { name: 'Preview Products.csv' });
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Audience IDs' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Tags' }), { target: { value: 'audience' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save tags' })); await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByRole('button', { name: 'Preview Audience IDs' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'audience' })).toBeTruthy();
+    fireEvent.change(screen.getByRole('combobox', { name: 'File type' }), { target: { value: '' } }); await screen.findByRole('button', { name: 'Preview Launch.png' });
+    fireEvent.change(screen.getByRole('combobox', { name: 'File type' }), { target: { value: 'document' } }); await screen.findByText('3 files');
+    expect(screen.getAllByRole('article')).toHaveLength(3); expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('inserts an uploaded CSV into Documents without a list reload and retains it in All files', async () => {
+    const csv = source(2, { name: 'Product IDs', content_type: 'text/csv' });
+    vi.mocked(fetch).mockResolvedValueOnce(Response.json({ assets: [], truncated: false }));
+    mocks.upload.mockImplementation(async input => { input.ready(csv); return csv.id; });
+    render(<AssetLibrary {...props} acceptedTypes={['image/png', 'text/csv']} />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'File type' }), { target: { value: 'document' } }); await screen.findByText('No matching files');
+    fireEvent.drop(screen.getByRole('region', { name: 'Creative files' }), { dataTransfer: { types: ['Files'], files: [new File(['sku_id\n00012\n'], 'Products.csv', { type: 'text/csv' })] } });
+    await screen.findByRole('button', { name: 'Preview Product IDs' });
+    expect(screen.getAllByRole('article')).toHaveLength(1); expect(fetch).toHaveBeenCalledTimes(1);
+    fireEvent.change(screen.getByRole('combobox', { name: 'File type' }), { target: { value: '' } }); await screen.findByText('2 files');
+    expect(screen.getByRole('button', { name: 'Preview Product IDs' })).toBeTruthy(); expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('ignores late filter responses while keeping the existing grid visible during requests', async () => {
     const pending: Array<(response: Response) => void> = [];
     vi.mocked(fetch).mockImplementation(() => new Promise(resolve => { pending.push(resolve); }));
