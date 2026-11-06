@@ -100,3 +100,13 @@ internal test projects, including start/callback, availability and runtime check
 This supports Google's hidden-test-route review workflow without exposing
 unverified consent to public users. GTM account selection uses the existing tenant inventory. Analytics and tracking
 connections have their own dashboard tab and do not use advertising account slots. See [provider details](../../packages/gtm/README.md).
+
+## Google Analytics 4 and Search Console
+
+These read-only connections use independent `ga4` and `gsc` grants and exact
+callbacks at `/api/oauth/ga4/callback` and `/api/oauth/gsc/callback`. Configure
+the dedicated server-owned analytics OAuth client and the three required APIs
+as described in [the analytics setup guide](google-analytics.md). Public rollout
+flags default to false; only explicit internal projects may authorize them
+during verification. Both sources use selected-property access and do not
+consume advertising account capacity.
