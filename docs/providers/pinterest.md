@@ -65,6 +65,8 @@ eligibility, attribution, matching or successful live-event processing.
 See [product groups](pinterest-product-groups.md) for agent-managed retail,
 hotel and Creative Assets selections, native product views, filters and guarded
 create/update/delete workflows. Existing source items and grants are reused.
+See [catalog items](pinterest-catalog-items.md) for vertical item batches, central
+media references, native processing receipts and guarded inline copy edits.
 
 Catalog access is a separate opt-in: `adport connect pinterest --catalog-management`
 requests `catalogs:read` and `catalogs:write`. Combine it with `--secret-pins` or
@@ -109,7 +111,7 @@ to a source; processing results must establish that separately.
 
 Contracts and wire fixtures were checked against the [Pinterest-owned OpenAPI
 5.28.0, commit 2503147](https://github.com/pinterest/api-description/blob/2503147fd9f86f26230891b8534b678c31cc849a/v5/openapi.json)
-on 2026-11-05. Catalog item batches, reports and local inventory
+on 2026-11-05. Reports and local inventory
 are separate API families and are not provided by these feed tools. Contract tests
 do not establish live catalog access or successful feed ingestion.
 

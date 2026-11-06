@@ -93,8 +93,9 @@ IDs and are never automatically replayed.
 
 Configuration readback does not prove final matched inventory, item readiness,
 Pin publication or ad serving. There is no atomic native compare-and-set. Item
-batch authoring, bulk group operations, local inventory and flexible campaign
-budgeting remain separate gaps.
+batch authoring is covered by [catalog items](pinterest-catalog-items.md). Bulk
+group operations, local inventory and flexible campaign budgeting remain
+separate gaps.
 
 Wire, shared-policy and synthetic MCP SDK/widget tests cover these flows.
 Positive native product-group mutations and actual Claude/ChatGPT host checks
