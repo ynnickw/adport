@@ -101,4 +101,16 @@ describe('chart-first provider reports', () => {
       expect(document.querySelector('.report-bar-zero')?.getAttribute('style')).toContain('25.00000%');
     } finally { dom.window.close(); }
   });
+
+  it('does not let a queued resize from an older result redraw a newer account chart', () => {
+    const callbacks: Array<() => void> = [];
+    const dom = new JSDOM(ADPORT_UI_HTML, { runScripts: 'dangerously', beforeParse(window) { Object.defineProperty(window, 'ResizeObserver', { value: class { constructor(callback: () => void) { callbacks.push(callback); } observe() {} disconnect() {} } }); } });
+    const send = (name: string) => dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window.parent, data: { jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('google_gaql', 'data', { rows: [1, 2].map(day => ({ campaign: { name }, segments: { date: '2026-11-0' + day }, metrics: { clicks: day } })) }) } } }));
+    try {
+      send('Old account'); const oldResize = callbacks.at(-1)!;
+      send('New account'); oldResize();
+      expect(dom.window.document.querySelector('[data-native-line]')?.textContent).toContain('New account');
+      expect(dom.window.document.querySelector('[data-native-line]')?.textContent).not.toContain('Old account');
+    } finally { dom.window.close(); }
+  });
 });

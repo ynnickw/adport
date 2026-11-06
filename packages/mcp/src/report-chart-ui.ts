@@ -73,7 +73,9 @@ export const REPORT_CHART_SCRIPT = String.raw`
         return '<section class="report-chart" data-report-chart><div class="report-chart-head"><b>'+esc(title)+'</b>'+(unit?'<span>'+esc(unit)+'</span>':'')+'</div>'+body+(!trend&&model.returned>shown.length?'<p class="report-chart-foot">'+shown.length+' of '+model.returned+' returned rows · all rows in Details</p>':trend&&model.returned>points.length?'<p class="report-chart-foot">'+points.length+' of '+model.returned+' dated observations · all data in Details</p>':'')+'</section>';
       }).join('')+(groups.size>4?'<p class="report-chart-foot">Showing four units. All returned values are in Details.</p>':'');
       return {html,mount:()=>{
-        const draw=()=>app.querySelectorAll('[data-native-line]').forEach(element=>{
+        const elements=[...app.querySelectorAll('[data-native-line]')];
+        const draw=()=>elements.forEach(element=>{
+          if(element.isConnected===false)return;
           const model=models[Number(element.dataset.nativeLine)];if(!model)return;
           const series=new Map();for(const point of model.points){const name=point.series||point.name;if(!series.has(name))series.set(name,[]);series.get(name).push(point);}
           const chosen=[...series.entries()].slice(0,3),valid=chosen.flatMap(([,points])=>points).filter(point=>available(point.value));
@@ -93,7 +95,7 @@ export const REPORT_CHART_SCRIPT = String.raw`
           const axis=value=>new Intl.NumberFormat(state.host.locale||'en',{notation:Math.abs(value)>=1000?'compact':'standard',maximumFractionDigits:3}).format(value);
           element.innerHTML='<svg viewBox="0 0 '+width+' '+height+'" role="img" aria-label="'+esc(model.label+' over reported dates')+'"><line class="chart-grid" x1="'+left+'" x2="'+(width-right)+'" y1="'+(height-bottom)+'" y2="'+(height-bottom)+'"/><text x="'+(left-8)+'" y="'+(top+4)+'" text-anchor="end">'+esc(axis(max))+'</text><text x="'+(left-8)+'" y="'+(height-bottom)+'" text-anchor="end">'+esc(axis(min))+'</text>'+paths+labels+'</svg>'+(chosen.length>1?'<div class="report-legend">'+chosen.map(([name],index)=>'<span><i style="border-color:'+colors[index]+';border-top-style:'+(index?'dashed':'solid')+'"></i>'+esc(pretty(name))+'</span>').join('')+'</div>':'')+(series.size>3?'<p class="report-chart-foot">3 of '+series.size+' series · all series in Details</p>':'');
         });
-        draw();if(typeof ResizeObserver!=='undefined'&&models.some(model=>model.trend)){trendResize=new ResizeObserver(draw);app.querySelectorAll('[data-native-line]').forEach(element=>trendResize.observe(element));}
+        draw();if(typeof ResizeObserver!=='undefined'&&models.some(model=>model.trend)){trendResize=new ResizeObserver(draw);elements.forEach(element=>trendResize.observe(element));}
       }};
     }
 `;
