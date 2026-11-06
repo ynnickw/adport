@@ -5,6 +5,7 @@ import { microsoftChildTools } from './child-tools.js';
 import { microsoftImageTools } from './images.js';
 import { microsoftExtensionTools } from './extensions.js';
 import { microsoftTargetingTools } from './targeting.js';
+import { microsoftGeneralTargetingTools } from './general-targeting.js';
 import { microsoftNegativeKeywordTools } from './negative-keywords.js';
 import { microsoftBudgetTools } from './budgets.js';
 import { microsoftPlanningTools } from './planning.js';
@@ -23,6 +24,7 @@ export function microsoftTools(provider: MicrosoftAdsProvider): AnyToolDefinitio
     ...microsoftImageTools(provider),
     ...microsoftExtensionTools(provider),
     ...microsoftTargetingTools(provider),
+    ...microsoftGeneralTargetingTools(provider),
     ...microsoftNegativeKeywordTools(provider),
     ...microsoftBudgetTools(provider),
     ...microsoftPlanningTools(provider),

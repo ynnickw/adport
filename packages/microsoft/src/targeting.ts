@@ -3,38 +3,8 @@ import { z } from 'zod';
 import { MicrosoftNativeService, microsoftId as id, microsoftNativeId as nativeId, microsoftRow as row, microsoftRows as rows, type MicrosoftPlan, type MicrosoftRow as Row } from './native.js';
 import type { MicrosoftAdsProvider } from './provider.js';
 
-const criterionType = z.enum(['Age', 'Gender', 'Device', 'DayTime', 'Location', 'LocationIntent', 'Radius']);
-const bidType = criterionType.exclude(['LocationIntent']);
-const adjustment = z.number().int().min(-90).max(900);
-const deviceAdjustment = z.number().int().min(-100).max(900);
-const minute = z.enum(['Zero', 'Fifteen', 'Thirty', 'FortyFive']);
-const intent = z.enum(['PeopleIn', 'PeopleInOrSearchingForOrViewingPages']);
-const target = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('Age'), age_range: z.enum(['EighteenToTwentyFour', 'TwentyFiveToThirtyFour', 'ThirtyFiveToFourtyNine', 'FiftyToSixtyFour', 'SixtyFiveAndAbove', 'ThirtyFiveToFiftyFour', 'FiftyFiveAndAbove', 'Unknown']), bid_adjustment_percent: adjustment.default(0) }),
-  z.object({ type: z.literal('Gender'), gender: z.enum(['Male', 'Female']), bid_adjustment_percent: adjustment.default(0) }),
-  z.object({ type: z.literal('Device'), device_name: z.enum(['Computers', 'Smartphones', 'Tablets']), bid_adjustment_percent: deviceAdjustment.default(0) }),
-  z.object({ type: z.literal('DayTime'), day: z.enum(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']), from_hour: z.number().int().min(0).max(23), from_minute: minute, to_hour: z.number().int().min(0).max(24), to_minute: minute, bid_adjustment_percent: adjustment.default(0) }),
-  z.object({ type: z.literal('Location'), location_id: id, exclude: z.boolean().default(false), bid_adjustment_percent: adjustment.optional() }),
-  z.object({ type: z.literal('LocationIntent'), intent_option: intent }),
-  z.object({ type: z.literal('Radius'), latitude: z.number().min(-85).max(85), longitude: z.number().min(-180).max(180), radius: z.number().int().positive().max(800), radius_unit: z.enum(['Miles', 'Kilometers']), name: z.string().max(50).optional(), bid_adjustment_percent: adjustment.default(0) }),
-]);
-const minutes = { Zero: 0, Fifteen: 15, Thirty: 30, FortyFive: 45 };
-const add = z.object({ campaign_id: id, targets: z.array(target).min(1).max(100) }).superRefine((value, ctx) => {
-  const devices = value.targets.filter(value => value.type === 'Device');
-  if (devices.length && (devices.length !== 3 || new Set(devices.map(value => value.device_name)).size !== 3 || devices.every(value => value.bid_adjustment_percent === -100))) ctx.addIssue({ code: 'custom', message: 'Add all three distinct device types together, leaving at least one device included' });
-  for (const item of value.targets) {
-    if (item.type === 'Location' && item.exclude && item.bid_adjustment_percent !== undefined) ctx.addIssue({ code: 'custom', message: 'Excluded locations cannot have a bid adjustment' });
-    if (item.type === 'Radius' && item.radius_unit === 'Miles' && item.radius > 500) ctx.addIssue({ code: 'custom', message: 'Radius in miles cannot exceed 500' });
-    if (item.type === 'DayTime' && (item.to_hour === 24 && item.to_minute !== 'Zero' || item.from_hour * 60 + minutes[item.from_minute] >= item.to_hour * 60 + minutes[item.to_minute])) ctx.addIssue({ code: 'custom', message: 'DayTime must end after its start within one day; hour 24 requires minute Zero' });
-  }
-});
-const reference = z.object({ campaign_id: id, criterion_id: id, criterion_type: criterionType });
-// Native code2965 forbids deleting LocationIntent; restore its default through the edit tool.
-const remove = z.object({ campaign_id: id, criterion_type: criterionType.exclude(['LocationIntent']), criterion_ids: z.array(id).min(1).max(100).refine(value => new Set(value).size === value.length, 'Criterion IDs must be unique') });
-const bid = reference.extend({ criterion_type: bidType, bid_adjustment_percent: deviceAdjustment, expected_current_percent: z.number() }).superRefine((value, ctx) => {
-  if (value.criterion_type !== 'Device' && value.bid_adjustment_percent < -90) ctx.addIssue({ code: 'custom', message: 'Only devices support a bid adjustment below -90 percent' });
-});
-const intentUpdate = z.object({ campaign_id: id, criterion_id: id, intent_option: intent, expected_current_intent: intent });
+import { criterionType, target, add, reference, remove, bid, intentUpdate, nativeTarget } from './targeting-schemas.js';
+
 export const MICROSOFT_TARGETING_WRITES = new Set(['microsoft_add_campaign_targets', 'microsoft_set_campaign_target_bid', 'microsoft_set_campaign_location_intent', 'microsoft_remove_campaign_targets']);
 
 /** Native REST uses concrete read selectors, Targets mutation selector and percentage bid adjustments. */
@@ -77,25 +47,12 @@ export class MicrosoftTargetingService extends MicrosoftNativeService {
     return z.object({ FileUrl: z.string().url(), FileUrlExpiryTimeUtc: z.string(), LastModifiedTimeUtc: z.string() }).parse(result);
   }
 
-  private nativeTarget(campaign: string, input: z.infer<typeof target>): Row {
-    const criterion: Row = { Type: `${input.type}Criterion` };
-    if (input.type === 'Age') criterion.AgeRange = input.age_range;
-    if (input.type === 'Gender') criterion.GenderType = input.gender;
-    if (input.type === 'Device') criterion.DeviceName = input.device_name;
-    if (input.type === 'DayTime') Object.assign(criterion, { Day: input.day, FromHour: input.from_hour, FromMinute: input.from_minute, ToHour: input.to_hour, ToMinute: input.to_minute });
-    if (input.type === 'Location') criterion.LocationId = input.location_id;
-    if (input.type === 'LocationIntent') criterion.IntentOption = input.intent_option;
-    // REST long values are decimal strings, including Radius (live-verified).
-    if (input.type === 'Radius') Object.assign(criterion, { LatitudeDegrees: input.latitude, LongitudeDegrees: input.longitude, Radius: String(input.radius), RadiusUnit: input.radius_unit, ...(input.name !== undefined ? { Name: input.name } : {}) });
-    const excluded = input.type === 'Location' && input.exclude;
-    return { CampaignId: campaign, Type: excluded ? 'NegativeCampaignCriterion' : 'BiddableCampaignCriterion', Criterion: criterion, ...(!excluded && input.type !== 'LocationIntent' ? { CriterionBid: { Type: 'BidMultiplier', Multiplier: input.bid_adjustment_percent ?? 0 } } : {}) };
-  }
 
   async plan(op: WriteOperation, guard: WriteGuard): Promise<MicrosoftPlan> {
     const expectedKind = op.tool === 'microsoft_add_campaign_targets' ? 'create' : op.tool === 'microsoft_remove_campaign_targets' ? 'remove' : 'update';
     if (op.provider !== 'microsoft' || !MICROSOFT_TARGETING_WRITES.has(op.tool) || op.kind !== expectedKind) throw new AdportError('INVALID_INPUT', 'microsoft: targeting operation kind mismatch');
     if (op.tool === 'microsoft_add_campaign_targets') {
-      const input = add.parse(op.payload), campaign = await this.campaign(op.accountId, input.campaign_id), values = input.targets.map(value => this.nativeTarget(input.campaign_id, value));
+      const input = add.parse(op.payload), campaign = await this.campaign(op.accountId, input.campaign_id), values = input.targets.map(value => nativeTarget({ CampaignId: input.campaign_id }, value));
       if (guard.forcePausedCreation && campaign.Status !== 'Paused') throw new AdportError('POLICY_VIOLATION', 'microsoft: campaign targets are natively Active and cannot be paused; paused_creation requires a paused campaign');
       const seen = new Map<string, Set<string>>();
       for (const [index, value] of values.entries()) {
@@ -105,7 +62,7 @@ export class MicrosoftTargetingService extends MicrosoftNativeService {
         if (seen.get(type)!.has(key)) throw new AdportError('INVALID_INPUT', 'microsoft: this campaign target already exists; use its explicit bid/intent edit or remove it first');
         seen.get(type)!.add(key);
       }
-      return { summary: `Add ${values.length} Microsoft campaign target(s)`, changes: [`+ ${JSON.stringify(values)}`, `Campaign ${input.campaign_id} remains ${campaign.Status}. Targets have native Active status; no parent status changes. Bid adjustments are whole percentages, not multipliers.`, 'Location IDs must be current in the geographical file; Microsoft rejects deprecated targets. DayTime uses the campaign time zone.'], coercions: [], budgetDeltas: [], execute: async () => {
+      return { summary: `Add ${values.length} Microsoft campaign target(s)`, changes: [`+ ${JSON.stringify(values)}`, `Campaign ${input.campaign_id} remains ${campaign.Status}. Targets have native Active status; no parent status changes. Bid adjustments are whole percentages, not multipliers.`, 'Location IDs must be current in the geographical file; Microsoft rejects deprecated targets. Schedule timezone follows the native AdScheduleUseSearcherTimeZone flag: searcher or account time. The deprecated campaign TimeZone is not authoritative.'], coercions: [], budgetDeltas: [], execute: async () => {
         const result = await this.request(op.accountId, 'CampaignCriterions', { CampaignCriterions: values, CriterionType: 'Targets' });
         const created = Array.isArray(result.CampaignCriterionIds) ? result.CampaignCriterionIds.filter(value => value !== null).map(nativeId) : [];
         if (created.length !== values.length || new Set(created).size !== created.length) throw new AdportError('PROVIDER_ERROR', 'microsoft: target creation receipt mismatch; reconcile before retrying', { resourceIds: created });

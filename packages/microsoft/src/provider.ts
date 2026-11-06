@@ -32,6 +32,7 @@ import { MicrosoftAudienceService, MICROSOFT_AUDIENCE_WRITES } from './audiences
 import { MicrosoftAudienceTargetingService, MICROSOFT_AUDIENCE_TARGETING_WRITES } from './audience-targeting.js';
 import { MicrosoftOfflineReportService } from './offline-reports.js';
 import { MicrosoftOfflineConversionService, MICROSOFT_OFFLINE_CONVERSION_WRITES } from './offline-conversions.js';
+import { MicrosoftGeneralTargetingService, MICROSOFT_GENERAL_TARGETING_WRITES } from './general-targeting.js';
 import { MicrosoftExperimentService, MICROSOFT_EXPERIMENT_WRITES } from './experiments.js';
 
 /** DailyBudget is a double in whole account-currency units. */
@@ -67,6 +68,7 @@ export class MicrosoftAdsProvider implements AdProvider {
   readonly images: MicrosoftImageService;
   readonly extensions: MicrosoftExtensionService;
   readonly targeting: MicrosoftTargetingService;
+  readonly generalTargeting: MicrosoftGeneralTargetingService;
   readonly negativeKeywords: MicrosoftNegativeKeywordService;
   readonly budgets: MicrosoftBudgetService;
   readonly planning: MicrosoftPlanningService;
@@ -86,6 +88,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     this.images = new MicrosoftImageService(client, account => this.scopeFor(account), media);
     this.extensions = new MicrosoftExtensionService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign), (account, ids) => this.images.lookupMany(account, ids));
     this.targeting = new MicrosoftTargetingService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign));
+    this.generalTargeting = new MicrosoftGeneralTargetingService(client, (account, refresh) => this.scopeFor(account, refresh), (account, campaign) => this.lookupCampaign(account, campaign));
     this.negativeKeywords = new MicrosoftNegativeKeywordService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign));
     this.budgets = new MicrosoftBudgetService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign), account => this.listCampaigns(account), async account => { await this.scopeFor(account); return this.currencies.get(account); });
     this.planning = new MicrosoftPlanningService(client, account => this.scopeFor(account), (account, campaign) => this.lookupCampaign(account, campaign), account => this.currencies.get(account));
@@ -325,6 +328,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     if (MICROSOFT_IMAGE_WRITES.has(op.tool)) return this.images.plan(op);
     if (MICROSOFT_EXTENSION_WRITES.has(op.tool)) return this.extensions.plan(op, guard);
     if (MICROSOFT_TARGETING_WRITES.has(op.tool)) return this.targeting.plan(op, guard);
+    if (MICROSOFT_GENERAL_TARGETING_WRITES.has(op.tool)) return this.generalTargeting.plan(op, guard);
     if (MICROSOFT_NEGATIVE_KEYWORD_WRITES.has(op.tool)) return this.negativeKeywords.plan(op);
     if (MICROSOFT_BUDGET_WRITES.has(op.tool)) return this.budgets.plan(op);
     if (MICROSOFT_CONVERSION_WRITES.has(op.tool)) return this.conversions.plan(op, guard);
@@ -593,6 +597,10 @@ function requireTypedMutationTool(resource: string, body: unknown): void {
   const hasFieldValue = (value: unknown, key: string, matches: (value: string) => boolean): boolean => Array.isArray(value) ? value.some(child => hasFieldValue(child, key, matches)) : isRecord(value) && Object.entries(value).some(([field, child]) => field.toLowerCase() === key && typeof child === 'string' && matches(child.trim().toLowerCase()) || hasFieldValue(child, key, matches));
   const audienceSelectors = new Set(['audience', 'audiencecriterion', 'custom', 'customaudience', 'inmarket', 'inmarketaudience', 'product', 'productaudience', 'remarketinglist', 'similarremarketinglist', 'combinedlist', 'customerlist', 'impressionbasedremarketinglist', 'customsegment', 'aiprompt']);
   if (['campaigncriterions', 'adgroupcriterions'].includes(collection) && (hasFieldValue(body, 'criteriontype', value => value.split(/[,\s]+/).some(value => audienceSelectors.has(value))) || hasFieldValue(body, 'type', value => ['audience', 'audiencecriterion'].includes(value)))) throw new AdportError('INVALID_INPUT', 'microsoft: audience criteria require typed audience-targeting tools for hierarchy, target-mode and opposite-level checks');
+  const generalSelectors = new Set(['targets', 'age', 'agecriterion', 'gender', 'gendercriterion', 'device', 'devicecriterion', 'daytime', 'daytimecriterion', 'location', 'locationcriterion', 'locationintent', 'locationintentcriterion', 'radius', 'radiuscriterion']);
+  if (['campaigncriterions', 'adgroupcriterions'].includes(collection) && (hasFieldValue(body, 'criteriontype', value => value.split(/[,\s]+/).some(value => generalSelectors.has(value))) || hasFieldValue(body, 'type', value => generalSelectors.has(value)))) throw new AdportError('INVALID_INPUT', 'microsoft: general targets require microsoft_update_targeting for scope, inheritance, schedule-clock and preservation checks');
+  const hasKey = (value: unknown, name: string): boolean => Array.isArray(value) ? value.some(child => hasKey(child, name)) : isRecord(value) && Object.entries(value).some(([key, child]) => key.toLowerCase() === name || hasKey(child, name));
+  if (['campaigns', 'adgroups'].includes(collection) && hasKey(body, 'adscheduleusesearchertimezone')) throw new AdportError('INVALID_INPUT', 'microsoft: schedule clocks require microsoft_update_targeting with native account time-zone and inheritance context');
   if (['campaigns', 'adgroups'].includes(collection) && hasFieldValue(body, 'type', value => ['target', 'targetsetting'].includes(value))) throw new AdportError('INVALID_INPUT', 'microsoft: target-setting changes require microsoft_set_audience_target_mode to preserve other targeting details');
   if (collection === 'audiences') throw new AdportError('INVALID_INPUT', 'microsoft: audience mutations require typed audience tools for Account ownership, replacement-rule semantics and deletion reference checks');
   if (collection === 'experiments') throw new AdportError('INVALID_INPUT', 'microsoft: experiments require typed tools for inherited pause/budget policy, ownership, snapshots and coupled campaign effects; promotion and graduation need separate reviewed workflows');
