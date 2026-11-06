@@ -57,7 +57,7 @@ not an inventory of every historical post.
    `custom_audience_name` and explicit `is_auto_refresh`. Review the source
    selection, inclusion/exclusion rules and refresh behavior, then apply.
 
-Rule sets use native OR semantics, up to 20 clauses each, and one exact
+Rule sets use native OR semantics, bounded locally at 20 clauses each, and one exact
 `EVENT`/`EQ` action filter per clause. Event names are passed unchanged because
 published enum and example aliases differ. Native eligibility remains
 authoritative. Organic/live selections accept up to 10 distinct videos; other
@@ -75,10 +75,55 @@ Missing or ineligible sources stop the write. The context is checked again
 before apply; it binds source metadata, not immutable event history or users.
 Audience enhancement is explicitly disabled.
 
-URL and parameter filters remain unsupported: the official SDK nests them
-inside an action filter, while a published prose example uses conflicting
-nesting. Strict schemas reject these arguments. [Audience sharing](tiktok-audience-sharing.md) has a separate guarded workflow. Advertiser
-to Business Center migration and automated-rule authoring are separate gaps.
+### URL and web-event conditions
+
+Each action filter can include `parameter_filters`. The request schema,
+generated SDK models and published parameter-table hierarchy put this array
+inside `filter_set.filters[0]`. The prose example is malformed JSON; Adport
+follows the formal structure rather than interpreting that example.
+
+```json
+{
+  "field": "EVENT",
+  "operator": "EQ",
+  "value": "PIXEL COMPLETE PAYMENT",
+  "parameter_filters": [
+    { "field": "URL", "operator": "CONTAINS", "values": ["/checkout", "/purchase"] },
+    { "field": "VALUE", "operator": "IS_GREATER_THAN_OR_EQUAL_TO", "values": ["25.00"] }
+  ]
+}
+```
+
+One action supports at most one `URL` condition and ten parameter conditions.
+Parameter fields are `CONTENT_TYPE`, `PRICE`, `VALUE`, `CONTENT_ID` and
+`CONTENT_CATEGORY`. Each condition requires one to ten nonempty string values,
+each at most 100 characters. Values are sent unchanged, including decimal
+strings and URL keywords. No URL is fetched by Adport.
+
+URL operators are `CONTAINS`, `DOES_NOT_CONTAIN`, `EQ` and `NOT_EQUAL`.
+Other parameter fields also accept `IS_LESS_THAN`, `IS_GREATER_THAN`,
+`IS_LESS_THAN_OR_EQUAL_TO` and `IS_GREATER_THAN_OR_EQUAL_TO`. Misspelled aliases
+and singular `value` are rejected. These conditions describe URL/web events;
+native eligibility remains authoritative for each event and source family.
+
+The event and every parameter condition combine with AND. Values within each
+condition combine with OR. Inclusion clauses combine with OR; matching exclusion
+clauses remove users. Previews show this logic and every condition. Context
+hashes and approvals bind the exact selection. Readback comparison tolerates
+condition/value ordering, while the outgoing request keeps the submitted order.
+A missing or changed recognized condition leaves the creation unconfirmed and
+retains its known ID. Legacy native representations remain explicitly
+unverified. Metadata readback does not certify membership or final processing.
+
+The wire contract follows the current provider-owned
+[request schema](https://github.com/tiktok/tiktok-business-api-sdk/blob/f809c396520df2d7b201a9ccc5378d822b728ed3/yml_files/dmp_custom_audience_rule_create.yml),
+[generated action-filter model](https://github.com/tiktok/tiktok-business-api-sdk/blob/f809c396520df2d7b201a9ccc5378d822b728ed3/js_sdk/src/model/DmpcustomAudiencerulecreateRuleSpecInclusionRuleSetFilterSetFilters.js)
+and [v1.3 parameter table](https://business-api.tiktok.com/portal/docs?id=1739940509849601),
+refreshed on 2026-11-06. Positive native filter creation and real Claude/ChatGPT
+execution remain unverified; SDK/DOM tests use synthetic data.
+
+[Audience sharing](tiktok-audience-sharing.md) has a separate guarded workflow.
+Advertiser to Business Center migration and automated-rule authoring are separate gaps.
 
 ## Create and refresh lookalikes
 

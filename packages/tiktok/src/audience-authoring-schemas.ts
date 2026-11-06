@@ -17,9 +17,18 @@ export const audienceSourceList = z.object({ account_id: audienceId, source_type
 export const audienceIdentityList = z.object({ account_id: audienceId, identity_type: z.enum(['TT_USER', 'BC_AUTH_TT', 'CUSTOMIZED_USER', 'AUTH_CODE']), identity_authorized_bc_id: audienceId.optional(), page: z.number().int().positive().safe().default(1), page_size: z.number().int().positive().max(100).default(100) }).strict().superRefine((input, ctx) => {
   if (input.identity_type === 'BC_AUTH_TT' ? !input.identity_authorized_bc_id : input.identity_authorized_bc_id !== undefined) ctx.addIssue({ code: 'custom', message: 'Only BC_AUTH_TT requires identity_authorized_bc_id' });
 });
-// Native event strings are preserved exactly. Published enum/example aliases differ;
-// the API remains authoritative. Parameter-filter nesting also needs clarification.
-const eventFilter = z.object({ field: z.literal('EVENT'), operator: z.literal('EQ'), value: z.string().min(1).max(128).regex(/^[^\x00-\x1f\x7f]+$/) }).strict();
+const parameterValues = z.array(z.string().min(1).max(100).regex(/^[^\x00-\x1f\x7f]+$/)).min(1).max(10);
+export const audienceParameterFilter = z.discriminatedUnion('field', [
+  z.object({ field: z.literal('URL'), operator: z.enum(['CONTAINS', 'DOES_NOT_CONTAIN', 'EQ', 'NOT_EQUAL']), values: parameterValues }).strict(),
+  z.object({ field: z.enum(['CONTENT_TYPE', 'PRICE', 'VALUE', 'CONTENT_ID', 'CONTENT_CATEGORY']), operator: z.enum(['CONTAINS', 'DOES_NOT_CONTAIN', 'EQ', 'NOT_EQUAL', 'IS_LESS_THAN', 'IS_GREATER_THAN', 'IS_LESS_THAN_OR_EQUAL_TO', 'IS_GREATER_THAN_OR_EQUAL_TO']), values: parameterValues }).strict(),
+]);
+const parameterFilters = z.array(audienceParameterFilter).min(1).max(11).superRefine((filters, ctx) => {
+  const urls = filters.filter(filter => filter.field === 'URL').length;
+  if (urls > 1 || filters.length - urls > 10) ctx.addIssue({ code: 'custom', message: 'Use at most one URL condition and ten parameter conditions per event filter' });
+});
+// SDK f809c396 schema, generated models and portal table agree on this nesting.
+// The prose example is malformed JSON; event aliases remain native-authoritative.
+const eventFilter = z.object({ field: z.literal('EVENT'), operator: z.literal('EQ'), value: z.string().min(1).max(128).regex(/^[^\x00-\x1f\x7f]+$/), parameter_filters: parameterFilters.optional() }).strict();
 const rule = z.object({ event_source_ids: sourceIds.optional(), retention_days: z.union([z.literal(7), z.literal(14), z.literal(30), z.literal(60), z.literal(90), z.literal(180)]), filter_set: z.object({ operator: z.literal('OR'), filters: z.array(eventFilter).length(1) }).strict() }).strict();
 const ruleSet = z.object({ operator: z.literal('OR'), rules: z.array(rule).min(1).max(20) }).strict();
 export const audienceRuleSelection = z.object({ audience_type: audienceSourceType, ...audienceIdentityFields, rule_spec: z.object({ inclusion_rule_set: ruleSet, exclusion_rule_set: ruleSet.optional() }).strict(), acknowledge_all_event_sources: z.literal(true).optional() }).strict().superRefine((input, ctx) => {

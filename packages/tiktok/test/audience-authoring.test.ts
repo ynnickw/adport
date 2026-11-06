@@ -74,7 +74,7 @@ describe('TikTok rule audiences', () => {
   it('rejects undocumented nesting/overbroad source requests and enforces documented identity/lookback constraints', () => {
     const input = ruleInput('ENGAGEMENT_ORGANIC_VIDEO');input.rule_spec.inclusion_rule_set.rules[0].retention_days = 90;expect(audienceRuleSelection.safeParse(input).success).toBe(false);input.rule_spec.inclusion_rule_set.rules[0].retention_days = 30;delete input.identity_authorized_bc_id;expect(audienceRuleSelection.safeParse(input).success).toBe(false);
     const lead = ruleInput('LEAD_GENERATION');lead.rule_spec.inclusion_rule_set.rules[0].event_source_ids = ['123'];expect(audienceRuleSelection.safeParse(lead).success).toBe(false);
-    const pixel = ruleInput();pixel.rule_spec.inclusion_rule_set.rules[0].filter_set.filters[0].parameter_filters = [{ field: 'URL', operator: 'CONTAINS', values: ['foo'] }];expect(audienceRuleSelection.safeParse(pixel).success).toBe(false);
+    const pixel = ruleInput();pixel.rule_spec.inclusion_rule_set.rules[0].filter_set.parameter_filters = [{ field: 'URL', operator: 'CONTAINS', values: ['foo'] }];expect(audienceRuleSelection.safeParse(pixel).success).toBe(false);
   });
   it('rechecks source metadata/permissions immediately before apply and refuses stale contexts', async () => {
     const f = audienceAuthoringFixture(), args = await f.createRule();f.sourceState.pixels[0]!.pixel_name = 'Changed';await expect(f.provider.applyWrite(op(ruleTool, args), guard)).rejects.toThrow('changed');expect(f.writes()).toHaveLength(0);

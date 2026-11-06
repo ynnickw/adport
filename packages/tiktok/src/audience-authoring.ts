@@ -25,7 +25,22 @@ function lookalikeEcho(actual: unknown, expected: z.infer<typeof lookalikeAudien
 function ruleEcho(raw: string | null | undefined, expected: z.infer<typeof ruleAudienceCreate>['rule_spec']) {
   let value: unknown;try { value = JSON.parse(raw ?? 'null'); } catch { return false; }
   const parsed = audienceRuleContext.shape.rule_spec.safeParse(value);if (!parsed.success) return false;
-  const set = (value: typeof expected.inclusion_rule_set) => ({ ...value, rules: value.rules.map(row => ({ ...row, event_source_ids: row.event_source_ids ? [...row.event_source_ids].sort() : undefined })).sort((a, b) => canonical(a).localeCompare(canonical(b))) });
+  const set = (value: typeof expected.inclusion_rule_set) => ({
+    ...value,
+    rules: value.rules.map(row => ({
+      ...row,
+      event_source_ids: row.event_source_ids ? [...row.event_source_ids].sort() : undefined,
+      filter_set: {
+        ...row.filter_set,
+        filters: row.filter_set.filters.map(filter => ({
+          ...filter,
+          ...(filter.parameter_filters ? {
+            parameter_filters: filter.parameter_filters.map(condition => ({ ...condition, values: [...condition.values].sort() })).sort((a, b) => canonical(a).localeCompare(canonical(b))),
+          } : {}),
+        })),
+      },
+    })).sort((a, b) => canonical(a).localeCompare(canonical(b))),
+  });
   const normalized = (value: typeof expected) => ({ inclusion_rule_set: set(value.inclusion_rule_set), ...(value.exclusion_rule_set ? { exclusion_rule_set: set(value.exclusion_rule_set) } : {}) });
   if (canonical(normalized(parsed.data)) !== canonical(normalized(expected))) throw invalid();return true;
 }
@@ -55,9 +70,10 @@ export class TikTokAudienceAuthoring {
   private async rulePlan(op: WriteOperation): Promise<Plan> {
     const input = ruleAudienceCreate.parse(op.payload), selection = ruleSelection(input);
     const prepare = async () => { const context = await this.sources.context({ account_id: op.accountId, ...selection });if (context.context_hash !== input.expected_context_hash) throw new AdportError('PENDING_MISMATCH', 'Rule selection, source metadata or source permissions changed; read the context and preview again.');return context; };
-    const before = await prepare(), display = (set: typeof input.rule_spec.inclusion_rule_set) => set.rules.map(row => ({ event: row.filter_set.filters[0]!.value, lookback_days: row.retention_days, sources: row.event_source_ids ?? 'All available advertiser sources' }));
-    return { summary: `Create rule audience · ${input.custom_audience_name}`, changes: ['+ ' + input.audience_type + ' audience; inclusion rules use OR logic' + (input.rule_spec.exclusion_rule_set ? '; matching exclusion rules remove users' : '')], coercions: [], budgetDeltas: [], notes,
-      review: { provider: 'tiktok', accountId: op.accountId, kind: 'create', title: 'Create rule audience', subject: input.custom_audience_name, fields: [{ label: 'Audience type', after: input.audience_type }, { label: 'Verified source selection', after: before.records }, { label: 'Include any', after: display(input.rule_spec.inclusion_rule_set) }, ...(input.rule_spec.exclusion_rule_set ? [{ label: 'Exclude any', after: display(input.rule_spec.exclusion_rule_set) }] : []), { label: 'Refresh automatically', after: input.is_auto_refresh }, { label: 'Audience enhancement', after: 'Disabled' }, { label: 'Audience subtype', after: input.audience_sub_type }, { label: 'Retention requested', after: input.retention_in_days ?? 'Native default; independent of event lookback' }], notices: [...notes, ...before.notes] },
+    const before = await prepare(), display = (set: typeof input.rule_spec.inclusion_rule_set) => set.rules.map(row => { const event = row.filter_set.filters[0]!;return { event: event.value, lookback_days: row.retention_days, sources: row.event_source_ids ?? 'All available advertiser sources', ...(event.parameter_filters ? { all_conditions: event.parameter_filters.map(condition => ({ field: condition.field, operator: condition.operator, any_values: condition.values })) } : {}) }; });
+    const filtered = [...input.rule_spec.inclusion_rule_set.rules, ...(input.rule_spec.exclusion_rule_set?.rules ?? [])].some(row => row.filter_set.filters[0]!.parameter_filters?.length), ruleNotes = [...notes, ...(filtered ? ['Each rule requires its event AND every parameter condition. Values within each condition use OR. Inclusion rules use OR; matching exclusion rules remove users.'] : [])];
+    return { summary: `Create rule audience · ${input.custom_audience_name}`, changes: ['+ ' + input.audience_type + ' audience; inclusion rules use OR logic' + (input.rule_spec.exclusion_rule_set ? '; matching exclusion rules remove users' : '')], coercions: [], budgetDeltas: [], notes: ruleNotes,
+      review: { provider: 'tiktok', accountId: op.accountId, kind: 'create', title: 'Create rule audience', subject: input.custom_audience_name, fields: [{ label: 'Audience type', after: input.audience_type }, { label: 'Verified source selection', after: before.records }, { label: 'Include any', after: display(input.rule_spec.inclusion_rule_set) }, ...(input.rule_spec.exclusion_rule_set ? [{ label: 'Exclude any', after: display(input.rule_spec.exclusion_rule_set) }] : []), { label: 'Refresh automatically', after: input.is_auto_refresh }, { label: 'Audience enhancement', after: 'Disabled' }, { label: 'Audience subtype', after: input.audience_sub_type }, { label: 'Retention requested', after: input.retention_in_days ?? 'Native default; independent of event lookback' }], notices: [...ruleNotes, ...before.notes] },
       execute: async () => { await prepare();let id: string | undefined;try {
         const { acknowledge_all_event_sources: _acknowledgement, ...nativeSelection } = selection;
         id = z.object({ custom_audience_id: audienceNativeId }).parse(await this.client.post('dmp/custom_audience/rule/create', { advertiser_id: op.accountId, ...nativeSelection, custom_audience_name: input.custom_audience_name, is_auto_refresh: input.is_auto_refresh, audience_enhancement: false, audience_sub_type: input.audience_sub_type, ...(input.retention_in_days !== undefined ? { retention_in_days: input.retention_in_days } : {}) })).custom_audience_id;
