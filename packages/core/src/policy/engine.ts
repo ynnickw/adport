@@ -36,6 +36,7 @@ export function hashOperation(op: WriteOperation, policy?: Policy): string {
     tool: op.tool,
     provider: op.provider,
     accountId: op.accountId,
+    ...(op.affectedAccountIds?.length ? { affectedAccountIds: [...new Set(op.affectedAccountIds)].sort() } : {}),
     kind: op.kind,
     payload: op.payload,
     ...(policy ? { policy: { ...policy, protected_accounts: [...new Set(policy.protected_accounts)].sort() } } : {}),
@@ -156,8 +157,10 @@ export class PolicyEngine {
   }
 
   private async checkStaticPolicy(op: WriteOperation): Promise<void> {
-    if (this.policy.protected_accounts.some(id => canonicalAccountId(op.provider, id) === canonicalAccountId(op.provider, op.accountId))) {
-      await this.reject(op, `Account ${op.accountId} is protected by policy`);
+    for (const account of [op.accountId, ...(op.affectedAccountIds ?? [])]) {
+      if (this.policy.protected_accounts.some(id => canonicalAccountId(op.provider, id) === canonicalAccountId(op.provider, account))) {
+        await this.reject(op, `Account ${account} is protected by policy`);
+      }
     }
   }
 

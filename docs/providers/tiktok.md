@@ -379,3 +379,5 @@ Contracts inspected 2026-11-05: [Get catalogs](https://business-api.tiktok.com/p
 [Feed log](https://business-api.tiktok.com/portal/docs?id=1740665225631810),
 and [Feed schedule status](https://business-api.tiktok.com/portal/docs?id=1750349624999937)
 and the [official SDK](https://github.com/tiktok/tiktok-business-api-sdk/tree/f809c396520df2d7b201a9ccc5378d822b728ed3).
+
+Audience access grants and revocation use the separate [audience-sharing workflow](tiktok-audience-sharing.md), with project/protected-account checks for both source and destination accounts.

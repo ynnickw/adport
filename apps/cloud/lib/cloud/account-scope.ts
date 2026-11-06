@@ -1,6 +1,7 @@
 import 'server-only';
 import {
   AdportError,
+  additionalAccountIds,
   type AdProvider,
   type Account,
   type AnyToolDefinition,
@@ -52,6 +53,7 @@ export function createAccountScopeAuthorizer(accountIds: Partial<Record<CloudPro
         ? input.customer_id
         : undefined;
     if (explicit) assertAllowed(tool.namespace, allowed, explicit);
+    for (const id of additionalAccountIds(tool, input)) assertAllowed(tool.namespace, allowed, id);
   };
 }
 
@@ -84,11 +86,13 @@ export class AccountScopedProvider implements AdProvider {
 
   async previewWrite(operation: WriteOperation, guard: WriteGuard) {
     assertAllowed(this.id, this.allowed, operation.accountId);
+    for (const id of operation.affectedAccountIds ?? []) assertAllowed(this.id, this.allowed, id);
     return this.provider.previewWrite(operation, guard);
   }
 
   async applyWrite(operation: WriteOperation, guard: WriteGuard) {
     assertAllowed(this.id, this.allowed, operation.accountId);
+    for (const id of operation.affectedAccountIds ?? []) assertAllowed(this.id, this.allowed, id);
     return this.provider.applyWrite(operation, guard);
   }
 

@@ -56,6 +56,8 @@ export interface AnyToolDefinition {
   fileInputs?: readonly string[];
   /** Dot paths whose presence prevents adapters from echoing arguments into widget approvals. */
   sensitiveInputs?: readonly string[];
+  /** Top-level account ID/string-array inputs subject to project scope and policy. */
+  additionalAccountInputs?: readonly string[];
   handler: (input: never, ctx: ToolContext) => Promise<unknown>;
 }
 
@@ -70,9 +72,13 @@ export function defineTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   pagination?: AnyToolDefinition['pagination'];
   fileInputs?: AnyToolDefinition['fileInputs'];
   sensitiveInputs?: AnyToolDefinition['sensitiveInputs'];
+  additionalAccountInputs?: AnyToolDefinition['additionalAccountInputs'];
   catalog?: ToolCatalogMetadata;
   handler: (input: z.infer<S>, ctx: ToolContext) => Promise<unknown>;
 }): AnyToolDefinition {
+  for (const key of def.additionalAccountInputs ?? []) {
+    if (!/^[a-z][a-z0-9_]*$/.test(key) || !Object.hasOwn(def.input.shape, key)) throw new AdportError('INVALID_INPUT', 'Additional account inputs must name declared top-level fields.');
+  }
   const openWorldByDefault = !['core', 'mock', 'audit'].includes(def.namespace);
   return {
     ...def,
@@ -85,6 +91,19 @@ export function defineTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
       openWorld: def.annotations?.openWorld ?? openWorldByDefault,
     },
   } as AnyToolDefinition;
+}
+
+/** Internal authorization metadata is defined once, alongside the input schema. */
+export function additionalAccountIds(tool: Pick<AnyToolDefinition, 'additionalAccountInputs'>, input: Record<string, unknown>): string[] {
+  const ids = new Set<string>();
+  for (const key of tool.additionalAccountInputs ?? []) {
+    const value = input[key];if (value === undefined) continue;
+    const values = typeof value === 'string' ? [value] : Array.isArray(value) ? value : undefined;
+    if (!values || values.some(id => typeof id !== 'string' || !id.trim() || id.length > 200)) throw new AdportError('INVALID_INPUT', 'Additional account inputs must contain exact account ID strings.');
+    for (const id of values) ids.add(id as string);
+  }
+  if (ids.size > 100) throw new AdportError('INVALID_INPUT', 'Too many additional accounts for one operation.');
+  return [...ids].sort();
 }
 
 /** Derive a validated continuation without changing the original selection. */

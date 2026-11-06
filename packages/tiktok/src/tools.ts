@@ -5,6 +5,7 @@ import { tiktokCreativeTools } from './creative-tools.js';
 import { tiktokAudienceTools } from './audiences.js';
 import { tiktokCustomAudienceTools } from './custom-audience-tools.js';
 import { tiktokAudienceAuthoringTools } from './audience-authoring-tools.js';
+import { tiktokAudienceSharingTools } from './audience-sharing-tools.js';
 import { tiktokMeasurementTools } from './measurement.js';
 import { tiktokAutomatedRuleTools } from './automated-rules.js';
 import { tiktokCatalogTools } from './catalog-tools.js';
@@ -28,6 +29,7 @@ export function tiktokTools(provider: TikTokAdsProvider, options: { catalogAcces
     ...tiktokAudienceTools(provider),
     ...tiktokCustomAudienceTools(provider),
     ...tiktokAudienceAuthoringTools(provider),
+    ...tiktokAudienceSharingTools(provider),
     ...tiktokMeasurementTools(provider),
     ...tiktokAutomatedRuleTools(provider),
     ...tiktokCatalogTools(provider, options.catalogAccessManagement),

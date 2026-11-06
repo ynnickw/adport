@@ -18,6 +18,8 @@ export interface WriteOperation {
   tool: string;
   provider: string;
   accountId: string;
+  /** Additional accounts affected by a cross-account action, derived by its tool. */
+  affectedAccountIds?: string[];
   kind: WriteKind;
   payload: Record<string, unknown>;
 }

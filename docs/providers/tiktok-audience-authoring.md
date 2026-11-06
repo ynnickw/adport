@@ -77,7 +77,7 @@ Audience enhancement is explicitly disabled.
 
 URL and parameter filters remain unsupported: the official SDK nests them
 inside an action filter, while a published prose example uses conflicting
-nesting. Strict schemas reject these arguments. Audience sharing, advertiser
+nesting. Strict schemas reject these arguments. [Audience sharing](tiktok-audience-sharing.md) has a separate guarded workflow. Advertiser
 to Business Center migration and automated-rule authoring are separate gaps.
 
 ## Create and refresh lookalikes

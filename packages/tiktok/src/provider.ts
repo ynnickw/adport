@@ -25,6 +25,8 @@ import { TikTokAudienceAuthoring } from './audience-authoring.js';
 import { TikTokMeasurementService } from './measurement.js';
 import { TikTokAutomatedRulesService } from './automated-rules.js';
 import { TikTokCatalogService } from './catalogs.js';
+import { TikTokAudienceSharing } from './audience-sharing.js';
+import { audienceSharingWrites } from './audience-sharing-schemas.js';
 import type { TikTokCatalogAccessStore } from './catalog-access.js';
 
 /** TikTok budgets are floats in whole account-currency units. */
@@ -64,6 +66,7 @@ export class TikTokAdsProvider implements AdProvider {
   readonly customAudiences: TikTokCustomAudiences;
   readonly audienceSources: TikTokAudienceSources;
   readonly audienceAuthoring: TikTokAudienceAuthoring;
+  readonly audienceSharing: TikTokAudienceSharing;
   readonly measurement: TikTokMeasurementService;
   readonly automatedRules: TikTokAutomatedRulesService;
   readonly catalogs: TikTokCatalogService;
@@ -73,7 +76,21 @@ export class TikTokAdsProvider implements AdProvider {
     private readonly app: { appId: string; secret: string },
     media: MediaResolver = new LocalMediaResolver(),
     catalogAccess?: TikTokCatalogAccessStore,
-  ) { this.creatives = new TikTokCreativeService(client, media); this.audiences = new TikTokAudienceService(client);this.customAudiences = new TikTokCustomAudiences(client, media);this.audienceSources = new TikTokAudienceSources(client, async account => { const authorized = await client.get<{ list?: Array<{ advertiser_id: string }> }>('oauth2/advertiser/get', { app_id: this.appId(), secret: this.secret() });if (!Array.isArray(authorized.list) || !authorized.list.some(row => typeof row.advertiser_id === 'string' && row.advertiser_id === account)) throw new AdportError('POLICY_VIOLATION', 'Selected advertiser is not in the current native authorization.'); });this.audienceAuthoring = new TikTokAudienceAuthoring(client, this.customAudiences, this.audienceSources); this.measurement = new TikTokMeasurementService(client); this.automatedRules = new TikTokAutomatedRulesService(client); this.catalogs = new TikTokCatalogService(client, catalogAccess, media); }
+  ) {
+    const authorizeAccounts = async (ids: string[]) => {
+      const authorized = await client.get<{ list?: Array<{ advertiser_id: string }> }>('oauth2/advertiser/get', { app_id: this.appId(), secret: this.secret() });
+      if (!Array.isArray(authorized.list) || authorized.list.some(row => typeof row.advertiser_id !== 'string') || ids.some(id => !authorized.list!.some(row => row.advertiser_id === id))) throw new AdportError('POLICY_VIOLATION', 'Every selected advertiser must be in the current native authorization.');
+    };
+    this.creatives = new TikTokCreativeService(client, media);
+    this.audiences = new TikTokAudienceService(client);
+    this.customAudiences = new TikTokCustomAudiences(client, media);
+    this.audienceSources = new TikTokAudienceSources(client, account => authorizeAccounts([account]));
+    this.audienceAuthoring = new TikTokAudienceAuthoring(client, this.customAudiences, this.audienceSources);
+    this.audienceSharing = new TikTokAudienceSharing(client, this.customAudiences, authorizeAccounts);
+    this.measurement = new TikTokMeasurementService(client);
+    this.automatedRules = new TikTokAutomatedRulesService(client);
+    this.catalogs = new TikTokCatalogService(client, catalogAccess, media);
+  }
 
   capabilities(): ProviderCapabilities {
     // No server-side dry run in the Marketing API — previews are client-side diffs.
@@ -263,6 +280,7 @@ export class TikTokAdsProvider implements AdProvider {
   }
 
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
+    if (audienceSharingWrites.has(op.tool)) return this.audienceSharing.plan(op);
     if (['tiktok_create_rule_audience', 'tiktok_create_lookalike_audience', 'tiktok_refresh_lookalike_audiences'].includes(op.tool)) return this.audienceAuthoring.plan(op);
     if (['tiktok_upload_audience_file', 'tiktok_create_customer_audience', 'tiktok_update_customer_audience_users', 'tiktok_rename_custom_audience', 'tiktok_delete_custom_audiences'].includes(op.tool)) return this.customAudiences.plan(op);
     const payload = op.payload as never;

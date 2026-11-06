@@ -56,6 +56,7 @@ export {
   ToolRegistry,
   defineTool,
   nextPageArguments,
+  additionalAccountIds,
   type AnyToolDefinition,
   type ToolAnnotations,
   type ToolContext,

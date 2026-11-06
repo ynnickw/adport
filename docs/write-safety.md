@@ -53,3 +53,5 @@ Self-hosted audit files live under `${ADPORT_HOME:-~/.config/adport}/audit/` as 
 `adport audit note` appends a record for a relevant change made outside Adport. `adport audit export` reads the source log and emits JSONL or a JSON array to stdout; it never rewrites the original files.
 
 The local log is append-only by application behavior, not tamper-evident storage. Cloud rows are not exposed for browser mutation and are deleted only by configured retention or tenant deletion. Archive exports in an access-controlled system if regulatory retention, immutability, signatures, or centralized review is required.
+
+Cross-account tools declare their additional account inputs in the shared definition. Destination IDs are included in the policy operation and approval hash, checked against protected accounts, and checked against the selected Cloud project before reads or writes. Hosted encrypted approvals preserve this binding. Currently TikTok audience sharing uses this mechanism.
