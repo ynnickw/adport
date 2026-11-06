@@ -11,6 +11,7 @@ import { PinterestKeywordService } from './keywords.js';
 import { PinterestAudienceService } from './audiences.js';
 import { PinterestMeasurementService } from './measurement.js';
 import { PinterestCatalogService } from './catalogs.js';
+import { PinterestProductGroups } from './product-groups.js';
 import { accountSchema, batchResponseSchema, campaignSchema, createCampaignSchema, entitySchema, entityStatus, pinterestId, setBudgetSchema, setStatusSchema } from './schemas.js';
 
 interface Plan extends Omit<WritePreview, 'serverValidated'> { execute: () => Promise<string[]>; resultDetails?: () => unknown; resultWarnings?: () => string[] }
@@ -34,6 +35,7 @@ export class PinterestAdsProvider implements AdProvider {
   readonly audiences: PinterestAudienceService;
   readonly measurement: PinterestMeasurementService;
   readonly catalogs: PinterestCatalogService;
+  readonly productGroups: PinterestProductGroups;
   constructor(private readonly client: PinterestAdsClient, media: MediaResolver = new LocalMediaResolver()) {
     this.creatives = new PinterestCreativeService(client, (account, id) => this.getCampaign(account, id));
     this.assets = new PinterestAssetService(client, media);
@@ -41,6 +43,7 @@ export class PinterestAdsProvider implements AdProvider {
     this.audiences = new PinterestAudienceService(client, (account, entity, resource) => this.creatives.getEntity(account, entity, resource), (account, resource) => this.assets.getPin(account, resource));
     this.measurement = new PinterestMeasurementService(client);
     this.catalogs = new PinterestCatalogService(client);
+    this.productGroups = new PinterestProductGroups(client, this.catalogs);
   }
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions {
@@ -150,6 +153,7 @@ export class PinterestAdsProvider implements AdProvider {
     if (op.provider !== this.id) throw new AdportError('INVALID_INPUT', 'pinterest: provider mismatch');
     if (this.measurement.supports(op.tool)) return this.measurement.plan(op);
     if (this.catalogs.supports(op.tool)) return this.catalogs.plan(op);
+    if (['pinterest_create_product_group', 'pinterest_update_product_group', 'pinterest_delete_product_group'].includes(op.tool)) return this.productGroups.plan(op);
     if (this.keywords.supports(op.tool)) return this.keywords.plan(op, guard);
     if (this.audiences.supports(op.tool)) return this.audiences.plan(op);
     if (PINTEREST_ASSET_WRITES.has(op.tool)) return this.assets.plan(op);
