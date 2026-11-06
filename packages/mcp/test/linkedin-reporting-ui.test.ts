@@ -31,7 +31,7 @@ describe('LinkedIn demographic read widget',()=>{
       const main=dom.window.document.querySelector('main')!;
       expect(main.textContent).toContain('approximate');expect(main.textContent).toContain('three-event privacy threshold');
       expect(main.querySelectorAll('article')).toHaveLength(empty?0:1);
-      if(empty)expect(main.textContent).toContain('No results returned.');
+      if(empty)expect(main.textContent).toContain('No report rows returned.');
       else {
         expect(main.querySelector('.record-name')?.textContent).toBe('Software <literal>');
         expect(main.querySelector('.record-fields')?.textContent).toContain('1.234567890123 EUR');

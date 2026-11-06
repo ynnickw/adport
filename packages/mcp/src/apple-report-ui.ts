@@ -41,16 +41,36 @@ export const APPLE_REPORT_UI_SCRIPT = String.raw`
       const breakdown=periods.length?'<details class="apple-report-periods"'+(!hasTotals?' open':'')+'><summary>'+periods.length+' reported period'+(periods.length===1?'':'s')+'</summary>'+periods.slice(0,100).map(period=>'<div class="apple-report-period"><strong>'+esc(typeof period?.date==='string'?period.date:'Date unavailable')+'</strong>'+appleReportMetrics(period)+'</div>').join('')+(periods.length>100?'<p class="operation-note">Showing 100 periods. All returned periods are in Details.</p>':'')+'</details>':'';
       return '<article class="record-row"><div class="record-heading"><strong>'+esc(name)+'</strong>'+(status?'<span>'+esc(human(status.toLowerCase()))+'</span>':'')+'</div>'+(dimensions.length?'<p class="apple-report-dimensions">'+dimensions.map(esc).join(' · ')+'</p>':'')+(hasTotals||!periods.length?appleReportMetrics(row?.totalMetrics):'')+breakdown+'</article>';
     }
+    function appleChartRecord(row,index,metrics=row?.totalMetrics) {
+      const metadata=object(row?.metadata)?row.metadata:{},keyword=object(metadata.keyword)?metadata.keyword:{};
+      const name=[metadata.searchTermText,metadata.text,metadata.name,keyword.text].find(value=>typeof value==='string'&&value.trim())??String(metadata.id??'Unnamed result '+(index+1));
+      const context=['countryOrRegion','countryCode','deviceClass','ageRange','gender'].flatMap(key=>typeof metadata[key]==='string'?[metadata[key]]:[]);
+      const fields=[['spend','Spend',metrics?.localSpend?.amount,appleReportMoney(metrics?.localSpend),currencyOf(metrics?.localSpend||{})||'Account units'],['taps','Taps',metrics?.taps,appleReportNumber(metrics?.taps)===null?'—':String(metrics.taps),''],['installs','Installs',metrics?.totalInstalls,appleReportNumber(metrics?.totalInstalls)===null?'—':String(metrics.totalInstalls),'']].map(([key,label,raw,display,unit])=>({key,label,value:appleReportNumber(raw),display,unit}));
+      for(const [key,raw] of Object.entries(metrics||{}))if(!['localSpend','taps','totalInstalls','date'].includes(key)) {
+        const monetary=object(raw),value=key==='totalAvgCPI'&&metrics.totalInstalls===0?null:appleReportNumber(monetary?raw.amount:raw);
+        fields.push({key,label:key==='totalAvgCPI'?'CPI':human(key),value,display:value===null?'—':monetary?appleReportMoney(raw):String(raw),unit:monetary?currencyOf(raw)||'Account units':''});
+      }
+      return {name,context:typeof metrics?.date==='string'&&!reportDate(metrics.date)?[...context,metrics.date]:context,series:[name,...context].join(' · '),date:reportDate(metrics?.date),fields};
+    }
+    function appleReportOverview(metrics) {
+      if(!object(metrics))return '';
+      const taps=appleReportNumber(metrics.taps),installs=appleReportNumber(metrics.totalInstalls);
+      return '<div class="report-overview apple-report-total" aria-label="Report total"><div><small>Total spend</small><strong>'+esc(appleReportMoney(metrics.localSpend))+'</strong></div><dl><div><dt>Taps</dt><dd>'+esc(taps??'—')+'</dd></div><div><dt>Installs</dt><dd>'+esc(installs??'—')+'</dd></div>'+(installs>0&&object(metrics.totalAvgCPI)?'<div><dt>CPI</dt><dd>'+esc(appleReportMoney(metrics.totalAvgCPI))+'</dd></div>':'')+'</dl></div>';
+    }
     function renderAppleReport(data,meta) {
       const payload=recordPayload(data),hasRows=object(payload)&&Array.isArray(payload.rows),rows=hasRows?payload.rows:[];
       const content=hasRows?(rows.length?rows.slice(0,1000).map(appleReportRow).join(''):'<p class="operation-note">No report rows returned.</p>'):'<p class="operation-note">Report rows unavailable. The response is in Details.</p>';
       const grandTotal=payload?.summary?.grandTotal;
       // Use Apple's explicit total, which can cover more rows than this page.
       // Never sum breakdowns, average CPIs, or mix currencies in the widget.
-      const summary=object(grandTotal)?'<div class="apple-report-total"><strong>Report total</strong>'+appleReportMetrics(grandTotal)+'</div>':'';
+      const summary=rows.length?appleReportOverview(grandTotal):'';
       const pagination=data.pagination,offset=pagination?.offset,count=pagination?.totalCount;
-      const page=rows.length&&Number.isSafeInteger(offset)&&offset>=0&&Number.isSafeInteger(count)&&count>=offset+rows.length?'<p class="apple-report-page">Showing '+(offset+1)+'–'+(offset+Math.min(rows.length,1000))+' of '+count+' results</p>':'';
+      const page=rows.length&&Number.isSafeInteger(offset)&&offset>=0&&Number.isSafeInteger(count)&&count>=offset+rows.length&&(offset>0||count>rows.length)?'<p class="apple-report-page">Showing '+(offset+1)+'–'+(offset+Math.min(rows.length,1000))+' of '+count+' results</p>':'';
       const clean={...data};delete clean._adport;
-      app.innerHTML=chrome(operationHeader('Performance','', 'apple')+notices(data)+'<div class="record-list" data-apple-report role="region" aria-label="Apple performance results" tabindex="0">'+content+'</div>'+summary+page+(rows.length>1000?'<p class="operation-note">Showing 1,000 returned rows. The full response is in Details.</p>':'')+'<details><summary>Details</summary><pre>'+esc(JSON.stringify(clean,null,2))+'</pre></details>','Apple Ads');
+      const shown=rows.slice(0,1000),periods=shown.flatMap((row,index)=>arr(row?.granularMetrics).map(metrics=>appleChartRecord(row,index,metrics)));
+      const dimension=rows.some(row=>row.metadata?.searchTermText)?'search term':rows.some(row=>row.metadata?.text)?'keyword':rows.some(row=>row.metadata?.dailyBudget&&!row.metadata?.campaignId)?'campaign':'result';
+      const chart=reportCharts(shown.map((row,index)=>appleChartRecord(row,index)),{dimension,periods});
+      app.innerHTML=chrome(operationHeader('Performance','', 'apple')+notices(data)+'<section data-apple-report>'+summary+(rows.length?chart.html:content)+page+(rows.length>1000?'<p class="operation-note">Showing 1,000 returned rows. The full response is in Details.</p>':'')+'<details class="report-data"><summary>Details</summary>'+(rows.length?'<div class="record-list" role="region" aria-label="Apple performance data" tabindex="0">'+content+'</div>':'')+'<pre>'+esc(JSON.stringify(clean,null,2))+'</pre></details></section>','');
+      chart.mount();
     }
 `;

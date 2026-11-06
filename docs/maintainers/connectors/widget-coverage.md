@@ -67,16 +67,27 @@ remain separate from paginated rows; currencies are retained per amount. Missing
 metrics stay unavailable and zero installs show no CPI. Returned time buckets and
 breakdown dimensions are retained without inventing days or summing repeated totals.
 
-Native Meta, TikTok, Reddit, Spotify, Microsoft keyword/search-term and Apple
-insight reads also use explicit report presentation. Native row identities and
+Metric-bearing Google GAQL, LinkedIn demographics, native Meta, TikTok, Reddit,
+Spotify, Microsoft keyword/search-term and Apple insight reads also use explicit
+report presentation. Native row identities and
 breakdowns precede reported metrics; configuration IDs do not take metric slots.
 Reddit micros and value cents are shifted exactly, including large decimal strings.
 Unreported currencies stay account units and Spotify's privacy sentinel remains
 suppressed. Microsoft offline reports remain upload diagnostics with exact counts,
 ratios, missing summaries and per-goal errors. Native reports never invent totals,
 combine attribution actions, or add edit controls. All source metrics remain in
-Details. The normalized performance report continues to cover all eleven providers;
-LinkedIn demographics retain their existing semantic records and privacy notices.
+Details. Reports lead with comparison bars or dated series, with the complete
+record rows and source response inside one collapsed Details disclosure. Google
+conversion-lag buckets receive readable delay labels; distinct returned rows are
+not summed into invented totals. Non-metric GAQL queries retain the records view.
+Apple shows one provider-reported total and campaign comparisons. Different
+currencies remain separate; absent days break trend lines and suppressed values
+never turn into zero bars. Impression-share bounds remain intervals, not midpoint
+estimates. Charts cap rows and series with explicit notices and preserve all source
+data in Details. These views have no forms, metric configuration, or tool calls.
+The normalized performance report continues to cover all eleven providers;
+LinkedIn demographics retain their exact source records and privacy context;
+the chart flags approximate coverage and never sums segments into an account total.
 
 Recommendations show the native reason and suggested action directly. Processing
 and bulk receipts show only reported counts, statuses and individual outcomes.
@@ -129,7 +140,7 @@ Attempts are keyed to the pending token. A host echo cannot offer a second apply
 and a late response cannot replace a newer preview. Host facts include resource
 receipts and project/account scope, but never a reusable pending token.
 
-The widget resource is `ui://adport/insight-card-v22.html`. Previous v2–v21 URIs are
+The widget resource is `ui://adport/insight-card-v26.html`. Previous v2–v25 URIs are
 retained as aliases. Existing creative resource domains keep their configured CSP; provider logos
 and scripts are embedded.
 

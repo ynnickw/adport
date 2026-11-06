@@ -18,14 +18,14 @@ describe('native Apple report presentation', () => {
   it('shows nested entity names and actual metrics instead of generic metadata records', () => {
     const { dom, document, callTool } = mount({ result: { rows: [campaign(), { ...campaign('US Discovery'), totalMetrics: metrics('1.5017', 6, 0) }, { ...campaign('US Search'), totalMetrics: metrics('5.5572', 14, 2) }], summary: { grandTotal: metrics('9.023', 25, 3) } }, pagination: { offset: 0, pageSize: 3, totalCount: 3 } });
     try {
-      const content = document.querySelector('[data-apple-report]')!;
+      const content = document.querySelector('[data-report-chart]')!;
       expect(content.textContent).toContain('DE Search'); expect(content.textContent).toContain('€1.96');
       expect(content.textContent).toContain('US Discovery'); expect(content.textContent).not.toContain('Record 1');
       expect(content.textContent).not.toContain('Metadata'); expect(content.textContent).not.toContain('APPSTORE_APP');
       expect(document.querySelector('.apple-report-total')?.textContent).toContain('€9.02');
       expect(document.querySelector('.apple-report-total')?.textContent).toContain('25');
       expect(document.querySelector('.apple-report-total')?.textContent).toContain('€3.01');
-      expect(document.querySelectorAll('[data-apple-report] > .record-row')).toHaveLength(3);
+      expect(document.querySelectorAll('[data-apple-report] .record-list > .record-row')).toHaveLength(3);
       expect(document.querySelector('.operation-heading .apple svg')).not.toBeNull();
       expect(document.querySelector('details pre')?.textContent).toContain('dailyBudget');
       expect(document.querySelectorAll('button,input,select,textarea')).toHaveLength(0); expect(callTool).not.toHaveBeenCalled();
@@ -35,7 +35,7 @@ describe('native Apple report presentation', () => {
   it('keeps missing values unavailable, preserves real zeros and does not invent totals or CPI', () => {
     const { dom, document } = mount({ result: { rows: [{ metadata: { name: 'No metrics' } }, { metadata: { name: 'Zero installs' }, totalMetrics: { ...metrics('0', 0, 0), totalAvgCPI: { amount: '0', currency: 'EUR' } } }] } });
     try {
-      const rows = document.querySelectorAll('[data-apple-report] > .record-row');
+      const rows = document.querySelectorAll('[data-apple-report] .record-list > .record-row');
       expect(rows[0]?.querySelectorAll('dd')?.length).toBe(4);
       expect([...rows[0]!.querySelectorAll('dd')].map(el => el.textContent)).toEqual(['—', '—', '—', '—']);
       expect([...rows[1]!.querySelectorAll('dd')].map(el => el.textContent)).toEqual(['€0.00', '0', '0', '—']);
@@ -51,14 +51,14 @@ describe('native Apple report presentation', () => {
       expect(document.querySelectorAll('.apple-report-period')).toHaveLength(2);
       expect(document.querySelector('.apple-report-periods')?.textContent).toContain('2026-11-01');
       expect(document.querySelector('.apple-report-periods')?.textContent).not.toContain('2026-11-02');
-      expect(document.querySelector('[data-apple-report] > .record-row > .record-fields')?.textContent).toContain('€1.96');
+      expect(document.querySelector('[data-apple-report] .record-list > .record-row > .record-fields')?.textContent).toContain('€1.96');
     } finally { dom.window.close(); }
   });
 
   it.each([{ text: 'couple widgets', matchType: 'EXACT' }, { searchTermText: 'shared countdown', keyword: { text: 'couples', matchType: 'BROAD' } }, { name: 'Ad group' }, { name: 'Product page ad' }])('uses native entity identity and escapes content: %j', metadata => {
     const { dom, document } = mount({ result: { rows: [{ metadata, totalMetrics: metrics('2', 4, 1) }, campaign('<img src=x onerror=alert(1)>')] } });
     try {
-      expect(document.querySelector('[data-apple-report] strong')?.textContent).toBe('searchTermText' in metadata ? metadata.searchTermText : 'text' in metadata ? metadata.text : metadata.name);
+      expect(document.querySelector('[data-apple-report] .record-heading strong')?.textContent).toBe('searchTermText' in metadata ? metadata.searchTermText : 'text' in metadata ? metadata.text : metadata.name);
       expect(document.querySelector('[data-apple-report] img')).toBeNull();
       expect(document.querySelector('[data-apple-report]')?.textContent).toContain('<img src=x onerror=alert(1)>');
     } finally { dom.window.close(); }
@@ -69,7 +69,7 @@ describe('native Apple report presentation', () => {
     try {
       expect(document.querySelector('[data-apple-report]')?.textContent).toContain('€1.96');
       expect(document.querySelector('[data-apple-report]')?.textContent).toContain('$3.00');
-      expect(document.querySelector('.apple-report-total')?.textContent).toContain('Report total');
+      expect(document.querySelector('.apple-report-total')?.getAttribute('aria-label')).toBe('Report total');
       expect(document.querySelector('.apple-report-total')?.textContent).toContain('€99.00');
       expect(document.querySelector('.apple-report-page')?.textContent).toBe('Showing 3–4 of 8 results');
     } finally { dom.window.close(); }
