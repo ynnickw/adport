@@ -67,8 +67,9 @@ If either the current or requested mode is average daily, also provide
 `acknowledge_variable_daily_spend: true` and
 `acknowledge_averaging_reset: true`. Status, schedule, objective, bids, targeting,
 CBO ownership and child configuration are not part of this mutation. The native
-PATCH body contains only ID, daily cap and flexible flag. Readback verifies the
-requested values and preservation of omitted campaign settings.
+PATCH body contains ID and only changed budget fields; an unchanged flexible flag
+is not reasserted on an amount-only edit. Readback verifies the requested values
+and preservation of omitted campaign settings.
 
 The generic `pinterest_set_budget` remains the amount-only fixed/lifetime path.
 For average mode it directs the agent to context and the explicit daily tool,
@@ -76,6 +77,9 @@ so an assistant can complete the workflow without Ads Manager. Native eligibilit
 can still reject a mode change. There is no atomic conditional write, and an
 uncertain or failed mutation is never automatically replayed. Known IDs and safe
 native error codes are retained for reconciliation.
+Native HTTP 200 batches can contain per-item failures; these remain failures.
+Success projections may omit fields. Missing values are not treated as matches;
+the independent GET must establish the complete requested configuration.
 
 ## Averaging and review
 
