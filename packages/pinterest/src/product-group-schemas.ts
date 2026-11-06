@@ -3,7 +3,7 @@ import { pinterestId } from './schemas.js';
 import { filterEnums, filterFields } from './product-group-filter-spec.js';
 
 export const catalogType = z.enum(['RETAIL', 'HOTEL', 'CREATIVE_ASSETS']);
-export const groupId = pinterestId, groupHash = z.string().regex(/^[a-f0-9]{64}$/);
+export const groupId = z.string().regex(/^\d{1,30}$/), groupHash = z.string().regex(/^[a-f0-9]{64}$/);
 const text = z.string().min(1).max(1024), negated = z.boolean().optional();
 const strings = z.array(text).min(1).max(100), numericOperator = z.enum(['GREATER_THAN', 'GREATER_THAN_OR_EQUALS', 'LESS_THAN', 'LESS_THAN_OR_EQUALS']);
 const criteria: Record<string, z.ZodType> = {
@@ -50,10 +50,10 @@ export const groupAction = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('update'), product_group_id: groupId, changes: groupChanges }).strict(),
   z.object({ kind: z.literal('delete'), product_group_id: groupId, confirm_name: z.string().min(1).max(1024) }).strict(),
 ]);
-export const groupContext = z.object({ account_id: groupId, ...selection, action: groupAction }).strict();
+export const groupContext = z.object({ account_id: pinterestId, ...selection, action: groupAction }).strict();
 export const groupPaging = { page_size: z.number().int().min(1).max(250).default(25), bookmark: z.string().min(1).max(8192).optional() };
-export const groupList = z.object({ account_id: groupId, ...selection, feed_id: groupId.optional(), product_group_ids: z.array(groupId).min(1).max(100).refine(ids => new Set(ids).size === ids.length).optional(), ...groupPaging }).strict();
-export const groupReference = z.object({ account_id: groupId, ...reference }).strict();
+export const groupList = z.object({ account_id: pinterestId, ...selection, feed_id: groupId.optional(), product_group_ids: z.array(groupId).min(1).max(100).refine(ids => new Set(ids).size === ids.length).optional(), ...groupPaging }).strict();
+export const groupReference = z.object({ account_id: pinterestId, ...reference }).strict();
 export const nativeGroup = z.looseObject({ id: groupId, catalog_id: groupId, catalog_type: catalogType, name: z.string().max(1024).optional(), description: z.string().max(10_000).nullable().optional(), filters: groupFilters, feed_id: groupId.nullable().optional(), type: z.string().optional(), country: z.string().nullable().optional(), locale: z.string().nullable().optional(), created_at: z.number().int().safe().optional(), updated_at: z.number().int().safe().optional() }).superRefine((value, ctx) => {
   if (value.catalog_type === 'RETAIL' && (!Object.hasOwn(value, 'feed_id') || !value.type) || value.catalog_type === 'HOTEL' && !value.type) ctx.addIssue({ code: 'custom', message: 'Missing native product group mode/type' });
 });

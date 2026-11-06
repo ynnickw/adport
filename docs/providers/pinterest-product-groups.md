@@ -26,8 +26,10 @@ ID must match. No tool grants account, catalog or Business Center access.
 
 Reads require `account_id` and `catalog_id`; exact group reads also require
 `product_group_id`. Lists support optional retail `feed_id` and up to 100
-`product_group_ids`. List/product pages accept `page_size` up to 250 and an
-opaque `next_cursor` as `bookmark`. Cursors bind the account, catalog, filters
+`product_group_ids`. This friendly input maps to Pinterest's comma-separated `id`
+query parameter, preserving string IDs without numeric coercion.
+List/product pages accept `page_size` up to 250 and an opaque `next_cursor` as
+`bookmark`. Cursors bind the account, catalog, filters
 and page size. Product cursors also bind the current group configuration.
 The widget appends records without replacing existing cards or resetting scroll.
 Missing native bookmarks leave completeness unknown.

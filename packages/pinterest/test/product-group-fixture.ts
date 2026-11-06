@@ -26,7 +26,7 @@ export function productGroupFixture(type: PGType = 'RETAIL', mode: 'FEED' | 'CAT
     if (path === `/v5/catalogs/feeds/${PG_FEED}`) return Response.json(state.feed);
     if (path === '/v5/catalogs/product_groups') {
       if (init.method === 'POST') { const created = { ...state.groups[0], id: PG_CREATED, name: body!.name, description: body!.description ?? null, filters: body!.filters, ...(type === 'RETAIL' ? { feed_id: body!.feed_id ?? null, country: body!.country ?? null, locale: body!.locale ?? null } : {}) };state.groups.push(created);return Response.json(created, { status: 201 }); }
-      const ids = url.searchParams.get('product_group_ids')?.split(','), rows = state.groups.filter(row => (!ids || ids.includes(row.id)) && (!url.searchParams.has('feed_id') || row.feed_id === url.searchParams.get('feed_id')));return Response.json(page(url, rows));
+      const ids = url.searchParams.get('id')?.split(','), rows = state.groups.filter(row => (!ids || ids.includes(row.id)) && (!url.searchParams.has('feed_id') || row.feed_id === url.searchParams.get('feed_id')));return Response.json(page(url, rows));
     }
     const match = path.match(/^\/v5\/catalogs\/product_groups\/(\d+)(?:\/(product_counts|products))?$/);
     if (match) {

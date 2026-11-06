@@ -3,6 +3,7 @@ import { AdportError, type WriteOperation, type WritePreview } from '@adport/cor
 import { z } from 'zod';
 import type { PinterestAdsClient } from './client.js';
 import type { PinterestCatalogService } from './catalogs.js';
+import { pinterestId } from './schemas.js';
 import { catalogType, groupAction, groupChanges, groupContext, groupCreate, groupDelete, groupId, groupList, groupPaging, groupReference, groupUpdate, nativeGroup, productGroupFilterSchema } from './product-group-schemas.js';
 
 type Group = z.infer<typeof nativeGroup>;
@@ -30,7 +31,7 @@ const product = z.object({ catalog_type: catalogType, metadata: z.record(z.strin
 /** Pinterest-owned OpenAPI 5.28.0 at 51aca009, fetched 2026-11-06. */
 export class PinterestProductGroups {
   constructor(private readonly client: PinterestAdsClient, private readonly catalogs: PinterestCatalogService) {}
-  private params(account: string, extra: Record<string, string> = {}) { return new URLSearchParams({ ad_account_id: groupId.parse(account), ...extra }); }
+  private params(account: string, extra: Record<string, string> = {}) { return new URLSearchParams({ ad_account_id: pinterestId.parse(account), ...extra }); }
   private scope(group: Group, catalog: { id: string; catalog_type: string }, wanted?: string) {
     if (group.catalog_id !== catalog.id || group.catalog_type !== catalog.catalog_type || wanted && group.id !== wanted || group.catalog_type !== 'RETAIL' && group.feed_id != null) throw mismatch();return group;
   }
@@ -47,7 +48,7 @@ export class PinterestProductGroups {
   async list(value: unknown) {
     const input = groupList.parse(value), context = await this.catalogs.getCatalog(input.account_id, input.catalog_id);
     if (input.feed_id) { if (context.catalog.catalog_type !== 'RETAIL') throw new AdportError('INVALID_INPUT', 'Feed-based groups are RETAIL only.');await this.catalogs.getFeed(input.account_id, input.catalog_id, input.feed_id); }
-    const selected = { catalog_id: input.catalog_id, feed_id: input.feed_id, product_group_ids: input.product_group_ids ? [...input.product_group_ids].sort() : undefined }, page = await this.page('catalogs/product_groups', nativeGroup, input.account_id, selected, input, { catalog_id: input.catalog_id, ...(input.feed_id ? { feed_id: input.feed_id } : {}), ...(input.product_group_ids ? { product_group_ids: input.product_group_ids.join(',') } : {}) });
+    const selected = { catalog_id: input.catalog_id, feed_id: input.feed_id, product_group_ids: input.product_group_ids ? [...input.product_group_ids].sort() : undefined }, page = await this.page('catalogs/product_groups', nativeGroup, input.account_id, selected, input, { catalog_id: input.catalog_id, ...(input.feed_id ? { feed_id: input.feed_id } : {}), ...(input.product_group_ids ? { id: input.product_group_ids.join(',') } : {}) });
     if (new Set(page.items.map(row => row.id)).size !== page.items.length || page.items.some(row => input.feed_id && row.feed_id !== input.feed_id || input.product_group_ids && !input.product_group_ids.includes(row.id))) throw mismatch();
     const items = page.items.map(row => ({ ...this.scope(row, context.catalog), snapshot_hash: this.snapshot(input.account_id, row) }));return { ...page, items, records: items, notes };
   }
