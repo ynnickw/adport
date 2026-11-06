@@ -10,7 +10,7 @@ All eight tools are read-only. There are no GA4 configuration changes, sitemap s
 
 ## Hosted OAuth setup
 
-Enable Google Analytics Admin API, Google Analytics Data API and Google Search Console API in the application project. Configure a web OAuth client with exact callbacks:
+Enable Google Analytics Admin API, Google Analytics Data API and Google Search Console API in the application project. Configure a dedicated web OAuth client with **Use this client for an AI-powered agent** enabled for Adport’s agent workflows. Keep human-driven Google API workflows on a separate client, as described in [Google’s client isolation guidance](https://support.google.com/cloud/answer/15549257#agentic-client). Register these exact callbacks:
 
 - `https://app.adport.dev/api/oauth/ga4/callback`
 - `https://app.adport.dev/api/oauth/gsc/callback`
