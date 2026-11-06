@@ -1,8 +1,11 @@
+import { OPERATION_RECONCILIATION_UI } from './operation-reconciliation-ui.js';
+
 /** Runs inside the shared, offline iframe closure. */
 export const OPERATION_UI_SCRIPT = String.raw`
     const attempts = new Map(), pendingRequests = new Map();
     let cancelHold = () => {}, expiryTimer;
     const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+    ${OPERATION_RECONCILIATION_UI}
     const human = value => String(value).replace(/([a-z])([A-Z])/g,'$1 $2').replace(/[_.]/g,' ').replace(/^./,c=>c.toUpperCase());
     function resultData(result) {
       if (result?.structuredContent && typeof result.structuredContent === 'object') return result.structuredContent;
@@ -84,7 +87,7 @@ export const OPERATION_UI_SCRIPT = String.raw`
       let phase=accepted?'Processing pending':applied?(warnings.length?'Applied with warnings':'Applied'):partial?'Partially applied':attempt?.phase==='applying'?'Applying…':attempt?.phase==='expired' || expired?'Expired':attempt?.phase==='blocked'?'Blocked':attempt?'Unconfirmed':canApprove?'':pending?'Review required':'Result';
       const action=canApprove?'<button class="approve" data-approve="true" aria-label="Hold for 0.9 seconds to apply; release to cancel"><span>Hold to apply</span></button>':phase==='Applying…'?'<button class="approve" disabled><span>Applying…</span></button>':'<span class="operation-status" role="status">'+esc(phase)+'</span>';
       const validation=preview.serverValidated===true?'Provider validated':preview.serverValidated===false?'Local preview; provider validation runs on apply':'Validation not reported';
-      const details='<details><summary>Details</summary><div class="operation-details"><p>'+esc(validation)+'</p>'+(!applied && data.expires_at?'<p>Expires '+esc(data.expires_at)+'</p>':'')+'<p>'+esc(preview.summary || 'No change details returned.')+'</p>'+fieldsHTML(fields)+arr(preview.changes).map(v=>'<p>'+esc(v)+'</p>').join('')+(data.result?'<pre>'+esc(JSON.stringify(data.result,null,2))+'</pre>':'')+'<p>'+esc(meta.tool || '')+'</p></div></details>';
+      const details='<details><summary>Details</summary><div class="operation-details"><p>'+esc(validation)+'</p>'+(!applied && data.expires_at?'<p>Expires '+esc(data.expires_at)+'</p>':'')+'<p>'+esc(preview.summary || 'No change details returned.')+'</p>'+fieldsHTML(fields)+arr(preview.changes).map(v=>'<p>'+esc(v)+'</p>').join('')+(data.result?'<pre>'+esc(JSON.stringify(data.result,null,2))+'</pre>':'')+(attempt?.reconciliation?'<p>Reconciliation</p><pre>'+esc(JSON.stringify(attempt.reconciliation,null,2))+'</pre>':'')+'<p>'+esc(meta.tool || '')+'</p></div></details>';
       const notes=[...arr(review.notices),...arr(preview.notes),...arr(preview.changes).filter(v=>/^!/.test(String(v))).map(v=>String(v).replace(/^!\s*/,'')),...arr(preview.coercions),...warnings];
       const message=attempt?.message || (accepted?'Accepted for processing. Processing is not confirmed.':expired?'Request a fresh preview before applying.':partial?'Check each result before retrying.':pending && !canApprove && !applied && !attempt?'Review the tool response in chat before applying.':review.kind==='update' && fields.length && fields.every(field=>!Object.hasOwn(field,'before'))?'Previous values unavailable':'');
       const body=operationHeader(title,subject,provider)+(fields.length?fieldsHTML(fields.slice(0,6),true):'<p class="operation-note">No change details were returned.</p>')+(fields.length>6?'<p class="operation-note">'+(fields.length-6)+' more changes in Details</p>':'')+[...new Set(notes)].map(v=>'<p class="adjustment"'+(warnings.includes(v)?' role="alert"':'')+'>'+esc(v)+'</p>').join('')+receiptMarkup(data,false)+(message?'<p class="operation-note" role="status">'+esc(message)+'</p>':'')+'<div class="operation-footer">'+details+'<div class="operation-action">'+action+'</div></div>';
@@ -133,7 +136,7 @@ export const OPERATION_UI_SCRIPT = String.raw`
         const result=await callHostTool(tool,{...args,pending_operation_id:pending}),value=resultData(result),outcome=operationOf(value,{tool});
         if(!result || result.isError || value.error) {
           const phase=errorPhase(value),message=value.message || 'Adport could not confirm the change.';
-          attempts.set(pending,{phase,message:phase==='unconfirmed' && !/before retrying/i.test(message)?message+' Check its status before retrying.':message});
+          attempts.set(pending,{phase,message:phase==='unconfirmed' && !/before retrying/i.test(message)?message+' Check its status before retrying.':message,reconciliation:reconciliationOf(value,tool,args)});
         }
         else if(outcome.applied===true && outcome.status==='applied') {
           const preview={...originalOperation.preview,...outcome.preview};
@@ -151,7 +154,8 @@ export const OPERATION_UI_SCRIPT = String.raw`
       }
       const details=outcome?.result?.details,resources=arr(outcome?.result?.resourceIds).filter(value=>typeof value==='string'),warnings=arr(outcome?.result?.warnings).filter(value=>typeof value==='string');
       const reportedCounts=receiptInfo(outcome||{}).counts;
-      const facts={tool,status:attempt.phase,...(reportedCounts.length?{counts:Object.fromEntries(reportedCounts.map(item=>[item.label.toLowerCase(),item.value]))}:{}),...(typeof args.project_id==='string'?{project_id:args.project_id}:{}),...(typeof args.account_id==='string'?{account_id:args.account_id}:{}),...(outcome?{resource_ids:resources.slice(0,100),...(resources.length>100?{resource_ids_truncated:true,total_resource_ids:resources.length}:{}),...(details?.status==='ACCEPTED_FOR_PROCESSING' && details?.processed===false?{processing_status:'ACCEPTED_FOR_PROCESSING',processed:false}:{}),...(warnings.length?{warnings:warnings.slice(0,20)}:{}),...(typeof details?.next_tool==='string'?{next_tool:details.next_tool}:{}),...(typeof details?.resource_receipt==='string'?{resource_receipt:details.resource_receipt}:{})}:{message:attempt.message})};
+      const reconciliation=attempt.reconciliation || (tool==='x_create_repost_promotions' && outcome?.applied===true && outcome.status==='applied'?reconciliationOf(outcome.result,tool,args,true):null);
+      const facts={tool,status:attempt.phase,...(reportedCounts.length?{counts:Object.fromEntries(reportedCounts.map(item=>[item.label.toLowerCase(),item.value]))}:{}),...(typeof args.project_id==='string'?{project_id:args.project_id}:{}),...(typeof args.account_id==='string'?{account_id:args.account_id}:{}),...(outcome?{resource_ids:resources.slice(0,100),...(resources.length>100?{resource_ids_truncated:true,total_resource_ids:resources.length}:{}),...(details?.status==='ACCEPTED_FOR_PROCESSING' && details?.processed===false?{processing_status:'ACCEPTED_FOR_PROCESSING',processed:false}:{}),...(warnings.length?{warnings:warnings.slice(0,20)}:{}),...(typeof details?.next_tool==='string'?{next_tool:details.next_tool}:{}),...(typeof details?.resource_receipt==='string'?{resource_receipt:details.resource_receipt}:{})}:{message:attempt.message}),...(reconciliation?{reconciliation,...(reconciliation.resource_ids?{resource_ids:reconciliation.resource_ids}:{}),...(reconciliation.resource_ids_truncated?{resource_ids_truncated:true,total_resource_ids:reconciliation.total_resource_ids}:{})}:{})};
       if(typeof window.openai?.setWidgetState==='function') Promise.resolve().then(()=>window.openai.setWidgetState({lastOperation:facts})).catch(()=>{});
       else send({jsonrpc:'2.0',id:id++,method:'ui/update-model-context',params:{structuredContent:{adport_operation:facts}}});
     }
