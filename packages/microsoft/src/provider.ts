@@ -31,6 +31,7 @@ import { MicrosoftConversionService, MICROSOFT_CONVERSION_WRITES } from './conve
 import { MicrosoftAudienceService, MICROSOFT_AUDIENCE_WRITES } from './audiences.js';
 import { MicrosoftAudienceTargetingService, MICROSOFT_AUDIENCE_TARGETING_WRITES } from './audience-targeting.js';
 import { MicrosoftOfflineReportService } from './offline-reports.js';
+import { MicrosoftOfflineConversionService, MICROSOFT_OFFLINE_CONVERSION_WRITES } from './offline-conversions.js';
 import { MicrosoftExperimentService, MICROSOFT_EXPERIMENT_WRITES } from './experiments.js';
 
 /** DailyBudget is a double in whole account-currency units. */
@@ -53,6 +54,8 @@ interface MicrosoftCampaign {
 
 interface WritePlan extends Omit<WritePreview, 'serverValidated'> {
   execute: () => Promise<string[]>;
+  resultDetails?: () => unknown;
+  resultWarnings?: () => string[];
 }
 
 export class MicrosoftAdsProvider implements AdProvider {
@@ -71,6 +74,7 @@ export class MicrosoftAdsProvider implements AdProvider {
   readonly audiences: MicrosoftAudienceService;
   readonly audienceTargeting: MicrosoftAudienceTargetingService;
   readonly offlineReports: MicrosoftOfflineReportService;
+  readonly offlineConversions: MicrosoftOfflineConversionService;
   readonly experiments: MicrosoftExperimentService;
 
   constructor(
@@ -89,6 +93,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     this.audiences = new MicrosoftAudienceService(client, (account, refresh) => this.scopeFor(account, refresh), (account, campaign) => this.lookupCampaign(account, campaign), account => this.listCampaigns(account));
     this.audienceTargeting = new MicrosoftAudienceTargetingService(client, (account, refresh) => this.scopeFor(account, refresh), (account, campaign) => this.lookupCampaign(account, campaign), (account, audience, type) => this.audiences.get(account, audience, type));
     this.offlineReports = new MicrosoftOfflineReportService(client, (account, refresh) => this.scopeFor(account, refresh), (account, campaign) => this.lookupCampaign(account, campaign));
+    this.offlineConversions = new MicrosoftOfflineConversionService(client, (account, refresh) => this.scopeFor(account, refresh), (account, campaign) => this.lookupCampaign(account, campaign), this.conversions);
     this.experiments = new MicrosoftExperimentService(client, (account, refresh) => this.scopeFor(account, refresh), (account, campaign) => this.lookupCampaign(account, campaign), account => this.listCampaigns(account), async account => { await this.scopeFor(account); return this.currencies.get(account); });
   }
 
@@ -303,6 +308,7 @@ export class MicrosoftAdsProvider implements AdProvider {
       changes: plan.changes,
       ...(plan.fieldChanges ? { fieldChanges: plan.fieldChanges } : {}),
       ...(plan.notes ? { notes: plan.notes } : {}),
+      ...(plan.review ? { review: plan.review } : {}),
       coercions: plan.coercions,
       budgetDeltas: plan.budgetDeltas,
       serverValidated: false,
@@ -312,7 +318,7 @@ export class MicrosoftAdsProvider implements AdProvider {
   async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> {
     const plan = await this.plan(op, guard);
     const resourceIds = await plan.execute();
-    return { applied: true, resourceIds };
+    return { applied: true, resourceIds, ...(plan.resultDetails ? { details: plan.resultDetails() } : {}), ...(plan.resultWarnings ? { warnings: plan.resultWarnings() } : {}) };
   }
 
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
@@ -322,6 +328,7 @@ export class MicrosoftAdsProvider implements AdProvider {
     if (MICROSOFT_NEGATIVE_KEYWORD_WRITES.has(op.tool)) return this.negativeKeywords.plan(op);
     if (MICROSOFT_BUDGET_WRITES.has(op.tool)) return this.budgets.plan(op);
     if (MICROSOFT_CONVERSION_WRITES.has(op.tool)) return this.conversions.plan(op, guard);
+    if (MICROSOFT_OFFLINE_CONVERSION_WRITES.has(op.tool)) return this.offlineConversions.plan(op);
     if (MICROSOFT_AUDIENCE_WRITES.has(op.tool)) return this.audiences.plan(op);
     if (MICROSOFT_AUDIENCE_TARGETING_WRITES.has(op.tool)) return this.audienceTargeting.plan(op, guard);
     if (MICROSOFT_EXPERIMENT_WRITES.has(op.tool)) return this.experiments.plan(op, guard);
@@ -591,6 +598,7 @@ function requireTypedMutationTool(resource: string, body: unknown): void {
   if (collection === 'experiments') throw new AdportError('INVALID_INPUT', 'microsoft: experiments require typed tools for inherited pause/budget policy, ownership, snapshots and coupled campaign effects; promotion and graduation need separate reviewed workflows');
   if (collection === 'uettags') throw new AdportError('INVALID_INPUT', 'microsoft: use microsoft_create_uet_tag for new uninstalled tags; customer-wide tag edits, deletion and sharing are not exposed through single-account generic tools');
   if (collection === 'conversiongoals') throw new AdportError('INVALID_INPUT', 'microsoft: conversion-goal mutations require typed conversion tools for account scope, native auto-tagging side effects and event-criteria preservation');
+  if (['offlineconversions', 'offlineconversionadjustments'].includes(collection)) throw new AdportError('INVALID_INPUT', 'microsoft: offline events require typed upload tools for private previews, goal binding and indexed receipt handling');
   const referencesSharedBudget = (value: unknown): boolean => Array.isArray(value) ? value.some(referencesSharedBudget) : isRecord(value) && Object.entries(value).some(([key, child]) => key.toLowerCase() === 'budgetid' && child !== null && child !== undefined && String(child) !== '0' || referencesSharedBudget(child));
   if (collection === 'budgets' || referencesSharedBudget(body)) throw new AdportError('INVALID_INPUT', 'microsoft: shared-budget changes require the typed microsoft shared-budget tools for membership, snapshot and monetary policy checks');
 }

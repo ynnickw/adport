@@ -12,6 +12,7 @@ import { microsoftConversionTools } from './conversions.js';
 import { microsoftAudienceTools } from './audiences.js';
 import { microsoftAudienceTargetingTools } from './audience-targeting.js';
 import { microsoftOfflineReportTools } from './offline-reports.js';
+import { microsoftOfflineConversionTools } from './offline-conversions.js';
 import { microsoftExperimentTools } from './experiments.js';
 
 const statusSchema = z.enum(['Active', 'Paused']);
@@ -29,6 +30,7 @@ export function microsoftTools(provider: MicrosoftAdsProvider): AnyToolDefinitio
     ...microsoftAudienceTools(provider),
     ...microsoftAudienceTargetingTools(provider),
     ...microsoftOfflineReportTools(provider),
+    ...microsoftOfflineConversionTools(provider),
     ...microsoftExperimentTools(provider),
     ...(['keyword', 'search_term'] as const).map(kind => defineTool({
       name: `microsoft_${kind}_report`, namespace: 'microsoft',
