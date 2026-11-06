@@ -98,5 +98,5 @@ Keep `GTM_OAUTH_ENABLED=false` until Google approves external use. A comma-separ
 `GTM_TEST_ORGANIZATION_IDS` allowlist enables the hidden connection only for named
 internal test projects, including start/callback, availability and runtime checks.
 This supports Google's hidden-test-route review workflow without exposing
-unverified consent to public users. GTM account selection and account quotas use
-the existing tenant inventory. See [provider details](../../packages/gtm/README.md).
+unverified consent to public users. GTM account selection uses the existing tenant inventory. Analytics and tracking
+connections have their own dashboard tab and do not use advertising account slots. See [provider details](../../packages/gtm/README.md).
