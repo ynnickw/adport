@@ -10,6 +10,7 @@ import { pinterestMeasurementTools } from './measurement.js';
 import { pinterestCatalogTools } from './catalogs.js';
 import { pinterestProductGroupTools } from './product-group-tools.js';
 import { pinterestCatalogItemTools } from './catalog-item-tools.js';
+import { pinterestLocalCatalogTools } from './local-catalog-tools.js';
 
 export function pinterestTools(provider: PinterestAdsProvider): AnyToolDefinition[] {
   return [
@@ -20,6 +21,7 @@ export function pinterestTools(provider: PinterestAdsProvider): AnyToolDefinitio
     ...pinterestCatalogTools(provider),
     ...pinterestProductGroupTools(provider),
     ...pinterestCatalogItemTools(provider),
+    ...pinterestLocalCatalogTools(provider),
     ...pinterestCreativeTools(provider),
     defineTool({ name: 'pinterest_list_campaigns', namespace: 'pinterest', description: 'List Pinterest campaigns, including archived and draft entities.', input: z.object({ account_id: pinterestId }), annotations: { readOnly: true }, handler: input => provider.listCampaigns(input.account_id) }),
     guardedWriteTool({ name: 'pinterest_create_campaign', namespace: 'pinterest', provider: 'pinterest', kind: 'create', description: 'Create a Pinterest CBO campaign, paused by policy. Budgets are account-currency micros; lifetime budgets require an end time. Preview is local.', payload: createCampaignSchema }),

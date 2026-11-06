@@ -130,7 +130,7 @@ export class PinterestAdsClient {
     if (!parsed.success) {
       const value = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
       const resourceIds = [value.id, value.media_id].filter((id): id is string => typeof id === 'string' && /^\d{1,30}$/.test(id));
-      if (path === 'catalogs/items/batch' && typeof value.batch_id === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(value.batch_id)) resourceIds.push(value.batch_id);
+      if ((path === 'catalogs/items/batch' || /^catalogs\/\d{1,30}\/local_inventory_items\/batch$/.test(path)) && typeof value.batch_id === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(value.batch_id)) resourceIds.push(value.batch_id);
       throw new AdportError('PROVIDER_ERROR', 'pinterest: malformed API response', { api_path: path, response_issues: parsed.error.issues.map(issue => ({ path: issue.path, code: issue.code })), ...(method !== 'GET' && resourceIds.length ? { resource_ids: [...new Set(resourceIds)] } : {}) });
     }
     return parsed.data;

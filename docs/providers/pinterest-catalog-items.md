@@ -119,8 +119,10 @@ observation. Uncertain native outcomes retain known batch IDs and are never
 automatically retried. There is no native atomic conditional update.
 
 This implements vertical retail/hotel/Creative Assets item batches. Legacy
-oldest-catalog `DELETE_DISCONTINUED`, local inventory, bulk product-group methods
-and flexible campaign budgeting remain separate gaps. Native catalog permission
+oldest-catalog `DELETE_DISCONTINUED`, bulk product-group methods
+and flexible campaign budgeting remain separate gaps. [Local stores and
+inventory](pinterest-local-inventory.md) have their own pair-based workflow.
+Native catalog permission
 and mutation checks, and actual Claude/ChatGPT host tests, remain pending;
 contract, policy and simulated host-bridge tests do not establish them.
 

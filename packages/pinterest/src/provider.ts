@@ -13,6 +13,8 @@ import { PinterestMeasurementService } from './measurement.js';
 import { PinterestCatalogService } from './catalogs.js';
 import { PinterestProductGroups } from './product-groups.js';
 import { PinterestCatalogItems } from './catalog-items.js';
+import { PinterestLocalStores } from './local-stores.js';
+import { PinterestLocalInventory } from './local-inventory.js';
 import { accountSchema, batchResponseSchema, campaignSchema, createCampaignSchema, entitySchema, entityStatus, pinterestId, setBudgetSchema, setStatusSchema } from './schemas.js';
 
 interface Plan extends Omit<WritePreview, 'serverValidated'> { execute: () => Promise<string[]>; resultDetails?: () => unknown; resultWarnings?: () => string[] }
@@ -38,6 +40,8 @@ export class PinterestAdsProvider implements AdProvider {
   readonly catalogs: PinterestCatalogService;
   readonly productGroups: PinterestProductGroups;
   readonly catalogItems: PinterestCatalogItems;
+  readonly localStores: PinterestLocalStores;
+  readonly localInventory: PinterestLocalInventory;
   constructor(private readonly client: PinterestAdsClient, media: MediaResolver = new LocalMediaResolver()) {
     this.creatives = new PinterestCreativeService(client, (account, id) => this.getCampaign(account, id));
     this.assets = new PinterestAssetService(client, media);
@@ -47,6 +51,8 @@ export class PinterestAdsProvider implements AdProvider {
     this.catalogs = new PinterestCatalogService(client);
     this.productGroups = new PinterestProductGroups(client, this.catalogs);
     this.catalogItems = new PinterestCatalogItems(client, this.catalogs, media);
+    this.localStores = new PinterestLocalStores(client, this.catalogs);
+    this.localInventory = new PinterestLocalInventory(client, this.localStores, media);
   }
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions {
@@ -157,6 +163,8 @@ export class PinterestAdsProvider implements AdProvider {
     if (this.measurement.supports(op.tool)) return this.measurement.plan(op);
     if (this.catalogs.supports(op.tool)) return this.catalogs.plan(op);
     if (this.catalogItems.supports(op.tool)) return this.catalogItems.plan(op);
+    if (this.localStores.supports(op.tool)) return this.localStores.plan(op);
+    if (this.localInventory.supports(op.tool)) return this.localInventory.plan(op);
     if (['pinterest_create_product_group', 'pinterest_update_product_group', 'pinterest_delete_product_group'].includes(op.tool)) return this.productGroups.plan(op);
     if (this.keywords.supports(op.tool)) return this.keywords.plan(op, guard);
     if (this.audiences.supports(op.tool)) return this.audiences.plan(op);
