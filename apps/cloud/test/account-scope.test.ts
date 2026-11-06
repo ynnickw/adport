@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AdProvider, AnyToolDefinition, NormalizedQuery } from '@adport/core';
+import { defineTool, type AdProvider, type AnyToolDefinition, type NormalizedQuery } from '@adport/core';
+import { z } from 'zod';
 import { AccountScopedProvider, createAccountScopeAuthorizer } from '@/lib/cloud/account-scope';
 
 function provider(): AdProvider {
@@ -68,7 +69,7 @@ describe('createAccountScopeAuthorizer', () => {
     expect(() => authorize(googleTool, { customer_id: '999-999-9999' })).toThrow(/not active/);
   });
   it('uses shared schema metadata for read/write destination authorization', () => {
-    const authorize = createAccountScopeAuthorizer({ tiktok: new Set(['111', '222']) }), tool = { name: 'tiktok_audience_sharing_context', namespace: 'tiktok', additionalAccountInputs: ['shared_advertiser_ids'] } as AnyToolDefinition;
+    const authorize = createAccountScopeAuthorizer({ tiktok: new Set(['111', '222']) }), tool = defineTool({ name: 'tiktok_audience_sharing_context', namespace: 'tiktok', description: 'Synthetic scope fixture', input: z.object({ account_id: z.string(), shared_advertiser_ids: z.array(z.string()).optional(), shared_advertiser_id: z.string().optional() }), additionalAccountInputs: ['shared_advertiser_ids'], annotations: { readOnly: true }, handler: async () => ({}) });
     expect(() => authorize(tool, { account_id: '111', shared_advertiser_ids: ['222'] })).not.toThrow();expect(() => authorize(tool, { account_id: '111', shared_advertiser_ids: ['333'] })).toThrow(/not active/);
     expect(() => authorize({ ...tool, additionalAccountInputs: ['shared_advertiser_id'] }, { account_id: '111', shared_advertiser_id: '333' })).toThrow(/not active/);
   });
