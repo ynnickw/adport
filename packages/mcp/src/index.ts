@@ -220,10 +220,10 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
         const approval = view === 'operation' && typeof pending === 'string' && !args.pending_operation_id && !privateArguments
           ? { arguments: { ...args } }
           : undefined;
-        const nextArgs = view === 'creatives' || view === 'records' ? nextPageArguments(tool, args, rawObject) : undefined;
+        const nextArgs = !privateArguments && (view === 'creatives' || view === 'records') ? nextPageArguments(tool, args, rawObject) : undefined;
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-          ...(view ? { structuredContent: structuredResult(tool.name, view, structured, approval, typeof args.project_id === 'string' ? { project_id: args.project_id } : undefined, { can_write: !scopes || scopes.includes('tools:write') }, (view === 'creatives' || view === 'records') && tool.annotations.readOnly ? { arguments: Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'pending_operation_id')) } : undefined, nextArgs ? { arguments: nextArgs } : undefined, descriptor) }
+          ...(view ? { structuredContent: structuredResult(tool.name, view, structured, approval, typeof args.project_id === 'string' ? { project_id: args.project_id } : undefined, { can_write: !scopes || scopes.includes('tools:write') }, !privateArguments && (view === 'creatives' || view === 'records') && tool.annotations.readOnly ? { arguments: Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'pending_operation_id')) } : undefined, nextArgs ? { arguments: nextArgs } : undefined, descriptor) }
             : tool.output ? { structuredContent: structured as Record<string, unknown> } : {}),
         };
       } catch (err) {

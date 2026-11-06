@@ -70,6 +70,9 @@ and `acknowledge_catalog_effects: true`, since catalog changes can publish produ
 Pins or affect ads and groups using those items. DELETE additionally requires
 `confirm_permanent_deletion: true`. The normal second call must preserve every
 argument and add only the pending operation token.
+Batch attributes can contain private source links, so batch context and preview
+results do not copy input arguments into widget metadata. The agent performs the
+second call after review; inline copy edits retain widget approval controls.
 
 UPDATE preserves omitted attributes. Retail UPDATE supports explicit
 `clear_fields` from the native update-mask enum; a field cannot be both supplied
