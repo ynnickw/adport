@@ -19,6 +19,7 @@ import {
 import { TikTokClient } from './client.js';
 import { TikTokCreativeService } from './creatives.js';
 import { TikTokAudienceService } from './audiences.js';
+import { TikTokCustomAudiences } from './custom-audiences.js';
 import { TikTokMeasurementService } from './measurement.js';
 import { TikTokAutomatedRulesService } from './automated-rules.js';
 import { TikTokCatalogService } from './catalogs.js';
@@ -52,12 +53,13 @@ interface TikTokCampaign {
   objective_type: string;
 }
 
-type WritePlan = Omit<WritePreview, 'serverValidated'> & { execute: () => Promise<string[]> };
+type WritePlan = Omit<WritePreview, 'serverValidated'> & { execute: () => Promise<string[] | WriteResult> };
 
 export class TikTokAdsProvider implements AdProvider {
   readonly id = 'tiktok';
   readonly creatives: TikTokCreativeService;
   readonly audiences: TikTokAudienceService;
+  readonly customAudiences: TikTokCustomAudiences;
   readonly measurement: TikTokMeasurementService;
   readonly automatedRules: TikTokAutomatedRulesService;
   readonly catalogs: TikTokCatalogService;
@@ -67,7 +69,7 @@ export class TikTokAdsProvider implements AdProvider {
     private readonly app: { appId: string; secret: string },
     media: MediaResolver = new LocalMediaResolver(),
     catalogAccess?: TikTokCatalogAccessStore,
-  ) { this.creatives = new TikTokCreativeService(client, media); this.audiences = new TikTokAudienceService(client); this.measurement = new TikTokMeasurementService(client); this.automatedRules = new TikTokAutomatedRulesService(client); this.catalogs = new TikTokCatalogService(client, catalogAccess, media); }
+  ) { this.creatives = new TikTokCreativeService(client, media); this.audiences = new TikTokAudienceService(client);this.customAudiences = new TikTokCustomAudiences(client, media); this.measurement = new TikTokMeasurementService(client); this.automatedRules = new TikTokAutomatedRulesService(client); this.catalogs = new TikTokCatalogService(client, catalogAccess, media); }
 
   capabilities(): ProviderCapabilities {
     // No server-side dry run in the Marketing API — previews are client-side diffs.
@@ -238,6 +240,7 @@ export class TikTokAdsProvider implements AdProvider {
   async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> {
     const plan = await this.plan(op, guard);
     const resourceIds = await plan.execute();
+    if (!Array.isArray(resourceIds)) return resourceIds;
     if (op.tool === 'tiktok_create_catalog') return { applied: true, resourceIds, details: { configuration_readback: 'VERIFIED', project_catalog_access: 'write', products_created: false, ads_created: false } };
     if (op.tool === 'tiktok_delete_catalog') return { applied: true, resourceIds, details: { deletion_readback: 'ABSENT_FROM_FILTERED_CATALOG_VIEW', resource_grant_retained: true } };
     if (op.tool === 'tiktok_upload_catalog_videos') {
@@ -256,6 +259,7 @@ export class TikTokAdsProvider implements AdProvider {
   }
 
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
+    if (['tiktok_upload_audience_file', 'tiktok_create_customer_audience', 'tiktok_update_customer_audience_users', 'tiktok_rename_custom_audience', 'tiktok_delete_custom_audiences'].includes(op.tool)) return this.customAudiences.plan(op);
     const payload = op.payload as never;
     switch (op.tool) {
       case 'tiktok_create_catalog':

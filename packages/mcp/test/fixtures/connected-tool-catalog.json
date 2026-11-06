@@ -544,7 +544,7 @@
   {"name":"tiktok_create_campaign","view":"operation","guarded":true},
   {"name":"tiktok_create_pixel","view":"operation","guarded":true},
   {"name":"tiktok_create_saved_audience","view":"operation","guarded":true},
-  {"name":"tiktok_custom_audiences","view":"data","guarded":false},
+  {"name":"tiktok_custom_audiences","view":"records","guarded":false},
   {"name":"tiktok_delete_saved_audiences","view":"operation","guarded":true},
   {"name":"tiktok_get_automated_rules","view":"records","guarded":false},
   {"name":"tiktok_get_pixel","view":"records","guarded":false},

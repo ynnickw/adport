@@ -23,8 +23,8 @@ it('maps every registered tool to a branded view and supplies a structured revie
     await Promise.all([server.connect(st), client.connect(ct)]);
     const scanned = (await client.listTools()).tools;
     expect(scanned).toHaveLength(runtime.registry.list().length);
-    // Snapshot of the connected catalog on 2026-11-04. Verify the actual current
-    // directory, including tools newer than main, rather than a sample of names.
+    // Names originate in the 2026-11-04 connected catalog; view expectations
+    // include intentional widget upgrades. Also verify newer registered tools.
     for (const entry of connectedCatalog) {
       const source = runtime.registry.get(entry.name);
       const view = source.presentation ?? viewForTool(source.name, source.annotations.readOnly ?? false);

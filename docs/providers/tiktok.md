@@ -1,5 +1,13 @@
 # TikTok Ads
 
+## Customer-file audiences
+
+Agents can upload private hashed customer files, create audiences, append/remove/
+replace members, rename and delete owned audiences through the shared MCP/CLI/
+REST tools. See [custom audiences](tiktok-custom-audiences.md) for the native
+contracts, signed upload receipts, ownership checks and processing-pending
+widgets. Saved targeting templates are a separate resource.
+
 ## Automated rules
 
 Existing rule configuration and execution history are available through the same

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { TikTokAdsProvider } from './provider.js';
 import { tiktokCreativeTools } from './creative-tools.js';
 import { tiktokAudienceTools } from './audiences.js';
+import { tiktokCustomAudienceTools } from './custom-audience-tools.js';
 import { tiktokMeasurementTools } from './measurement.js';
 import { tiktokAutomatedRuleTools } from './automated-rules.js';
 import { tiktokCatalogTools } from './catalog-tools.js';
@@ -24,6 +25,7 @@ export function tiktokTools(provider: TikTokAdsProvider, options: { catalogAcces
   return [
     ...tiktokCreativeTools(provider),
     ...tiktokAudienceTools(provider),
+    ...tiktokCustomAudienceTools(provider),
     ...tiktokMeasurementTools(provider),
     ...tiktokAutomatedRuleTools(provider),
     ...tiktokCatalogTools(provider, options.catalogAccessManagement),
