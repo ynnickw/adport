@@ -1,4 +1,5 @@
 import 'server-only';
+import { usesAdAccountSlot } from './providers';
 import { randomBytes } from 'node:crypto';
 import type {
   Account,
@@ -622,8 +623,9 @@ export async function syncDiscoveredAccounts(input: {
     const otherRows = await sql<Array<{ count: number }>>`
       select count(*)::int as count from public.organization_ad_accounts
       where organization_id = ${input.organizationId} and provider <> ${input.provider} and enabled = true
+        and private.provider_uses_ad_account_slot(provider)
     `;
-    const available = input.maxActiveAccounts === null
+    const available = !usesAdAccountSlot(input.provider) || input.maxActiveAccounts === null
       ? refreshed.length
       : Math.max(0, input.maxActiveAccounts - (otherRows[0]?.count ?? 0));
     const enabledIds = new Set(refreshed.filter((account) => account.enabled).slice(0, available).map((account) => account.accountId));
@@ -690,12 +692,13 @@ export async function setOrganizationAdAccountEnabled(input: {
     `;
     const account = rows[0];
     if (!account) throw new Error('Ad account was not found in this organization.');
-    if (input.enabled && !account.enabled && input.maxActiveAccounts !== null) {
+    if (input.enabled && !account.enabled && usesAdAccountSlot(input.provider) && input.maxActiveAccounts !== null) {
       const totals = await sql<Array<{ count: number }>>`
         select count(*)::int as count from public.organization_ad_accounts account
         join public.organizations project on project.id = account.organization_id
         where project.organization_group_id = (select organization_group_id from public.organizations where id = ${input.principal.organizationId})
           and project.archived_at is null and account.enabled = true
+          and private.provider_uses_ad_account_slot(account.provider)
       `;
       if ((totals[0]?.count ?? 0) >= input.maxActiveAccounts) {
         throw new PlanLimitError({

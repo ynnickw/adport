@@ -23,6 +23,10 @@ Generic `*_api_*` tools are advanced local access: opt in with `adport --raw-api
 
 The native tools accept provider-shaped payloads, so use the provider's current API reference when composing them. They are still normal Adport tools: every mutation goes through the same preview, pending-operation binding, policy checks, and audit log as the typed convenience tools. Created campaigns are forced paused. Generic budget updates are deliberately rejected; use the provider's typed budget tool so Adport can fetch the current value and enforce the exact before/after delta. Generic deletes use a client-side preview when the provider has no applicable validation endpoint.
 
+## Google Tag Manager
+
+Use `adport connect gtm` with your own Google Desktop OAuth client after enabling Tag Manager API. See the [GTM provider guide](../packages/gtm/README.md) for credentials, native configuration tools, fingerprints, and the separate version/publish workflow. GTM supplies tracking configuration and is excluded from performance reports. Hosted access is separately gated pending Google scope approval.
+
 ## Google Ads
 
 You need a Google Cloud project with Google Ads API access and an OAuth desktop client in that project. Developer tokens were retired in September 2026 and are no longer required or sent by Adport.
@@ -116,6 +120,8 @@ System-user tokens are preferred. Extended user tokens normally expire and requi
 
 See [Meta audiences](providers/meta-audiences.md) for empty containers, metadata editing, usage checks, guarded deletion, website rules and lookalikes. Audience previews are local; native permissions and eligibility still apply.
 
+See [Meta custom conversions](providers/meta-conversions.md) for account-owned website definitions, native stats, partial metadata editing, bounded usage checks and guarded deletion. These previews are local; native default values are preserved without inferred currency conversion.
+
 See [Meta app campaigns](providers/meta-app-campaigns.md) for account-scoped app discovery, campaign-level SKAdNetwork binding and app ad-set targeting with native validation.
 
 ## TikTok Ads
@@ -132,6 +138,10 @@ Keep the environment consistent: sandbox credentials cannot be used against prod
 See [automated-rule inspection and native limits](providers/tiktok.md) for typed
 rule/history reads, pagination and TikTok's direct-advertiser creation restriction.
 Generic mutation dispatch does not bypass scheduled-action policy checks.
+
+See [TikTok JSON catalog products](providers/tiktok-json-products.md) for typed
+schema discovery, scoped authoring/removal, asynchronous processing and reuse of
+central Adport media through agents.
 
 ## Apple Ads
 

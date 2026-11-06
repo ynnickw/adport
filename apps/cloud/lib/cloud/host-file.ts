@@ -36,5 +36,5 @@ export async function readHostFile(input: HostFile, fetchImpl: typeof fetch = fe
   } finally { reader.releaseLock(); }
   if (length !== null && size !== Number(length)) throw new AdportError('PROVIDER_ERROR', 'The host attachment download was incomplete.');
   const bytes = Buffer.concat(chunks, size), name = (file.file_name?.trim() || 'attachment').replace(/[\\/\x00-\x1f\x7f]/g, '_');
-  return verifyMedia(bytes, name, createHash('sha256').update(bytes).digest('hex'), { maxBytes: MAX_PROJECT_MEDIA_BYTES, contentTypes: PROJECT_MEDIA_TYPES });
+  return verifyMedia(bytes, name, createHash('sha256').update(bytes).digest('hex'), { maxBytes: MAX_PROJECT_MEDIA_BYTES, contentTypes: PROJECT_MEDIA_TYPES, contentType: file.mime_type });
 }

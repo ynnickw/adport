@@ -4,7 +4,9 @@ Advertising writes use the same tool registry and two-step policy gate in the CL
 
 ## Project media library
 
-Agents can upload, download, inspect, rename and delete private project media through MCP or the tool REST API without opening a dashboard. Images, video, audio and PDF sources are supported. The same project authorization and two-step policy gate apply to media mutations. A hosted server cannot read a file on the agent's computer or in its container; the agent transfers the bytes instead.
+Agents can upload, download, inspect, rename and delete private project media through MCP or the tool REST API without opening a dashboard. Images, video, audio, PDF and UTF-8 CSV sources are supported. The same project authorization and two-step policy gate apply to media mutations. A hosted server cannot read a file on the agent's computer or in its container; the agent transfers the bytes instead.
+
+CSV uploads use `text/csv` and require a `.csv` name or an explicitly declared CSV type. Adport checks complete UTF-8/quoting/column consistency, with limits of 100,000 rows, 256 columns and 256 KiB per field, while preserving original bytes. CSVs appear under Documents and download as attachments; they are not rendered as active web content. Renaming a stored CSV without its extension preserves its type. The same agent, widget and dashboard upload paths support them. `tiktok_upload_product_set` consumes a ready CSV with the native `sku_id` template; it is a specialist catalog tool and records its provider upload in the file’s distribution history.
 
 ### Central organization and channel distribution
 
@@ -67,6 +69,13 @@ The library supports images, video and audio previews. PDF sources retain their 
 
 ## Creative tools
 
+Google's [campaign targeting tools](providers/google-targeting.md) provide a paged
+configuration view and native validation-backed reviews for existing-campaign
+location/language deltas, schedules, device multipliers and location intent.
+Search languages follow Google's current automatic matching rules; legacy
+criteria are read/removable. These edits preserve campaign/ad statuses and
+monetary budgets and can affect delivery on an enabled campaign.
+
 Google's `google_ads` reads real ad copy and serving status. `google_update_responsive_search_ad` edits supplied fields, preserves positional pinning and leaves serving status unchanged. `google_set_ad_status` changes the ad-level status independently of its parent ad group and campaign.
 
 Meta's `meta_list_ads` and `meta_list_creatives` return creative content and configuration with visual actions. Meta creative content is immutable: create a replacement with `meta_create_link_creative` or `meta_create_creative`, then attach its ID with `meta_update_ad`. Creating a creative does not replace an existing ad. `meta_create_ad` creates an account-owned ad and respects paused creation. Replacing an active ad's creative preserves its serving status and can trigger review; the preview reports that state.
@@ -85,7 +94,7 @@ Reddit's `reddit_ads`, `reddit_posts` and `reddit_assets` render native copy/med
 
 LinkedIn's `linkedin_creatives` displays actual text-ad copy and images, and hydrates sponsored creatives through native descriptive metadata when available. `linkedin_get_sponsored_post` reads source copy and ordered carousel media with the required Page permissions; account-owned dark posts receive shared-copy edit forms. Image, video and PDF uploads, metadata management, paused sponsored-ad creation and existing-post reuse have named guarded tools. New inline dark posts remain URL-accessible despite having no organic feed distribution; previews disclose this before apply. Activation requires explicit advertiser confirmation through the named status tool. Copy edits preserve omitted fields and verify exact resource readback. See [LinkedIn setup](providers/linkedin.md) for format, ownership and permission limits.
 
-X's `x_draft_tweets` and `x_media_library` show native draft copy and image/GIF/video media. Bound copy/name actions request guarded previews; draft edits preserve omitted attachments and never publish a post. Library metadata is separate from ad delivery. SHA-bound native uploads and library registration are separate guarded steps, with account-bound receipts for asynchronous processing. See [X setup](providers/x.md) for author/composer permissions, native draft deletion and the ACTIVE-only promoted-post association constraint.
+X's `x_draft_tweets` and `x_media_library` show native draft copy and image/GIF/video media. Bound copy/name actions request guarded previews; draft edits preserve omitted attachments and never publish a post. `x_published_posts` views separate published content with name-only edits. `x_create_promoted_only_post` and `x_create_promoted_posts` use separate source contexts and approvals; native ACTIVE associations require a paused ad group under paused-creation policy. `x_promoted_posts` offers guarded disassociation while retaining the published source. Library metadata is separate from ad delivery. SHA-bound uploads and library registration have their own guarded steps and asynchronous receipts. See [X post management](providers/x-posts.md) for publication, verification and native status boundaries.
 
 Microsoft exposes named ad-group, keyword and responsive search ad workflows, including status changes and partial copy/bid updates. Ad-group creation asks for an explicit language. Reads request the optional `AdGroupType` field to verify RSA compatibility. RSA updates retain positional pinning and omit read-only text-asset IDs. Batch failures report successful resource IDs so callers can reconcile partially applied requests before retrying.
 

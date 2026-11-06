@@ -5,6 +5,7 @@ import { microsoftChildTools } from './child-tools.js';
 import { microsoftImageTools } from './images.js';
 import { microsoftExtensionTools } from './extensions.js';
 import { microsoftTargetingTools } from './targeting.js';
+import { microsoftGeneralTargetingTools } from './general-targeting.js';
 import { microsoftNegativeKeywordTools } from './negative-keywords.js';
 import { microsoftBudgetTools } from './budgets.js';
 import { microsoftPlanningTools } from './planning.js';
@@ -12,6 +13,7 @@ import { microsoftConversionTools } from './conversions.js';
 import { microsoftAudienceTools } from './audiences.js';
 import { microsoftAudienceTargetingTools } from './audience-targeting.js';
 import { microsoftOfflineReportTools } from './offline-reports.js';
+import { microsoftOfflineConversionTools } from './offline-conversions.js';
 import { microsoftExperimentTools } from './experiments.js';
 
 const statusSchema = z.enum(['Active', 'Paused']);
@@ -22,6 +24,7 @@ export function microsoftTools(provider: MicrosoftAdsProvider): AnyToolDefinitio
     ...microsoftImageTools(provider),
     ...microsoftExtensionTools(provider),
     ...microsoftTargetingTools(provider),
+    ...microsoftGeneralTargetingTools(provider),
     ...microsoftNegativeKeywordTools(provider),
     ...microsoftBudgetTools(provider),
     ...microsoftPlanningTools(provider),
@@ -29,6 +32,7 @@ export function microsoftTools(provider: MicrosoftAdsProvider): AnyToolDefinitio
     ...microsoftAudienceTools(provider),
     ...microsoftAudienceTargetingTools(provider),
     ...microsoftOfflineReportTools(provider),
+    ...microsoftOfflineConversionTools(provider),
     ...microsoftExperimentTools(provider),
     ...(['keyword', 'search_term'] as const).map(kind => defineTool({
       name: `microsoft_${kind}_report`, namespace: 'microsoft',

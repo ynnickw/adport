@@ -3,9 +3,9 @@
 import { Button } from '@/components/controls';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Provider, StatusPill, formatDate } from '@/components/ui';
-import { providerLabel } from '@/lib/cloud/providers';
+import { providerLabel, providerAccountsPath, usesAdAccountSlot } from '@/lib/cloud/providers';
 import type { OAuthProvider } from '@/lib/cloud/types';
 import { OAuthPopupLink } from '@/components/oauth-popup-link';
 import { useConfirm } from '@/components/use-confirm';
@@ -43,14 +43,14 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
   const [confirm, confirmationDialog] = useConfirm();
   const [busy, setBusy] = useState<string>();
   const [notice, setNotice] = useState<Partial<Record<string, { error?: string; success?: string }>>>({});
-  const visibleProviders = oauthProviders.filter(provider => provider.available || find(provider.id)).sort((a, b) => Number(!find(a.id)) - Number(!find(b.id)));
+  const visibleProviders = oauthProviders.filter(provider => provider.available || find(provider.id)).sort((a, b) => Number(!usesAdAccountSlot(a.id)) - Number(!usesAdAccountSlot(b.id)) || Number(!find(a.id)) - Number(!find(b.id)));
 
   function find(provider: string): ConnectionView | undefined {
     return connections.find((connection) => connection.provider === provider);
   }
 
   async function disconnect(provider: string, label: string) {
-    const prompt = `Remove ${label} and its accounts from this project? Adport and connected assistants will lose access. Your campaigns keep running. You can reconnect later.`;
+    const prompt = `Remove ${label} and its accounts from this project? Adport and connected assistants will lose access. ${usesAdAccountSlot(provider) ? 'Your campaigns keep running. ' : ''}You can reconnect later.`;
     if (!await confirm({ title: `Disconnect ${label}?`, description: prompt, confirmLabel: 'Disconnect' })) return;
     setBusy(provider);
     setNotice((current) => ({ ...current, [provider]: {} }));
@@ -81,11 +81,15 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
       <div className="connection-list">
       <div className="connection-list-heading" aria-hidden="true"><span>Platform</span><span>Status</span><span>Accounts</span><span>Actions</span></div>
       <ul className="connection-rows" role="list">
-      {visibleProviders.map((provider) => {
+      {visibleProviders.map((provider, index) => {
         const connection = find(provider.id);
         const message = notice[provider.id];
         const startHref = `/api/oauth/${provider.id}/start?organization_id=${organizationId}${returnTo ? `&return_to=${encodeURIComponent(returnTo)}` : ''}${provider.id === 'google' && connection?.dataManagerEnabled ? '&data_manager=1' : ''}${provider.id === 'pinterest' ? `${connection?.secretPinsEnabled ? '&secret_pins=1' : connection?.pinManagementEnabled ? '&pin_management=1' : ''}${connection?.catalogManagementEnabled ? '&catalog_management=1' : ''}` : ''}`;
         return (
+          <Fragment key={provider.id}>
+          {visibleProviders.some(item => !usesAdAccountSlot(item.id)) && visibleProviders.some(item => usesAdAccountSlot(item.id))
+            && (index === 0 || usesAdAccountSlot(visibleProviders[index - 1]!.id) !== usesAdAccountSlot(provider.id))
+            ? <li className="connection-category-heading"><h3>{usesAdAccountSlot(provider.id) ? 'Ad platforms' : 'Analytics & tracking'}</h3></li> : null}
           <li className="connection-row" data-connected={Boolean(connection)} id={'platform-' + provider.id} key={provider.id} aria-label={providerLabel(provider.id)}>
             <Provider name={provider.id} />
             <div className="connection-status">
@@ -96,7 +100,7 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
               {connection?.accountSelectionId && connection.status === 'connected' ? (
                 canManage && !connection.accountSelectionUnavailable ? <a href={`/account-selection?selection_id=${connection.accountSelectionId}`}>Finish selection</a> : <span>{connection.accountSelectionUnavailable ? 'New authorization needed' : 'Selection pending'}</span>
               ) : connection?.status === 'connected' ? (
-                <a href={`/dashboard/accounts?select_provider=${provider.id}`} aria-label={`View ${providerLabel(provider.id)} accounts`}>
+                <a href={providerAccountsPath(provider.id)} aria-label={`View ${providerLabel(provider.id)} accounts`}>
                   {accountSummary(connection.externalLabel)}
                 </a>
               ) : <span>{connection ? 'Reconnect to verify' : '—'}</span>}
@@ -123,7 +127,7 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
             {connection?.accountSelectionUnavailable && !provider.available ? <div className="error-callout connection-feedback" role="alert">This platform connection needs to be restarted, but new authorization is currently unavailable. Contact support.</div> : null}
             {message?.error ? <div className="error-callout connection-feedback" role="alert">{message.error}</div> : null}
             {message?.success ? <div className="callout success connection-feedback" role="status">{message.success}</div> : null}
-          </li>
+          </li></Fragment>
         );
       })}
       </ul>
@@ -139,5 +143,5 @@ function accountSummary(label: string | null): string {
 }
 
 function shortLabel(provider: string): string {
-  return { google: 'Google Ads', meta: 'Meta', tiktok: 'TikTok', microsoft: 'Microsoft', reddit: 'Reddit', apple: 'Apple Ads', snapchat: 'Snapchat', spotify: 'Spotify', pinterest: 'Pinterest', linkedin: 'LinkedIn', x: 'X Ads' }[provider] ?? provider;
+  return { gtm: 'Google Tag Manager', google: 'Google Ads', meta: 'Meta', tiktok: 'TikTok', microsoft: 'Microsoft', reddit: 'Reddit', apple: 'Apple Ads', snapchat: 'Snapchat', spotify: 'Spotify', pinterest: 'Pinterest', linkedin: 'LinkedIn', x: 'X Ads' }[provider] ?? provider;
 }

@@ -2,6 +2,7 @@ export { AdportError, type AdportErrorCode } from './errors.js';
 export { creativeSchema, creativesOutput, creativeActionSchema, creativeFieldSchema, creativeStatusAction, type Creative, type CreativeAction } from './creatives.js';
 export { LocalMediaResolver, mediaSourceFields, mediaContentType, mediaAssetSchema, verifyMedia, mediaUploadMetadataSchema, mediaWriteSchemas, mediaListSchema, mediaPlatformSchema, MEDIA_PLATFORMS, hostFileSchema, MAX_PROJECT_MEDIA_BYTES, MAX_INLINE_MEDIA_BYTES, MEDIA_UPLOAD_PART_BYTES, PROJECT_MEDIA_TYPES, type HostFile, type ManagedMediaLibrary, type MediaAsset, type MediaListInput, type MediaLibrary, type MediaSource, type MediaResolver, type VerifiedMedia } from './media.js';
 export { MEDIA_UPLOAD_TOOLS, MEDIA_PREPARATION_TOOLS } from './tools/media-distribution.js';
+export { csvRows } from './csv.js';
 export { adportHome } from './paths.js';
 export {
   METRICS,
@@ -55,10 +56,12 @@ export {
   ToolRegistry,
   defineTool,
   nextPageArguments,
+  additionalAccountIds,
   type AnyToolDefinition,
   type ToolAnnotations,
   type ToolContext,
 } from './tools/registry.js';
+export { gtmTools, gtmWriteSchemas, GTM_SCOPES, type GtmReader } from './tools/gtm.js';
 export { guardedWriteTool } from './tools/write.js';
 export { TOOL_PROVIDERS, classifyTool, toolInSelection, type ToolProvider, type ToolProfile, type ToolSelection, type ToolCatalogMetadata } from './tools/catalog.js';
 export { reviewWrite, type ReviewField, type WriteReview } from './tools/review.js';

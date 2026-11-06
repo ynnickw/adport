@@ -6,7 +6,7 @@ import { ADPORT_UI_HTML, structuredResult } from '../src/ui.js';
 const project = '203c14b1-c908-4632-9aa7-1be5de4ae9b0';
 const otherProject = '11111111-1111-4111-8111-111111111111';
 const storage = 'https://private-storage.example';
-const config = { project_id: project, storage_origin: storage, max_bytes: 50 * 1024 * 1024, content_types: ['image/png', 'video/mp4'] };
+const config = { project_id: project, storage_origin: storage, max_bytes: 50 * 1024 * 1024, content_types: ['image/png', 'video/mp4', 'text/csv'] };
 const sha = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 type Args = Record<string, any>;
 
@@ -70,6 +70,19 @@ function fixture(options: { bridge?: 'mcp'; readOnly?: boolean; context?: string
 }
 
 describe('direct widget media upload', () => {
+  it.each([undefined, 'mcp'] as const)('uploads dropped CSV through the %s bridge without navigation or replacing an existing player', async bridge => {
+    const f = fixture({ bridge, existing: true }), bytes = Buffer.from('sku_id\r\n00012\r\n');
+    try {
+      const player = f.dom.window.document.querySelector('video')!;player.currentTime = 7;
+      f.choose(['products.CSV'], bytes, 'text/plain', true);f.click('[data-upload-start]');
+      await vi.waitFor(() => expect(f.dom.window.document.querySelector('main')!.textContent).toContain('1 saved to your library'));
+      expect(f.calls.find(call => call.tool === 'media_prepare_upload')?.args).toEqual({ name: 'products.CSV', content_type: 'text/csv', byte_length: bytes.length, sha256: sha(bytes), project_id: project });
+      expect(f.transfers).toHaveLength(1);expect(Buffer.from(f.transfers[0]!.bytes as ArrayBuffer)).toEqual(bytes);
+      expect(f.transfers[0]!.headers['content-type']).toBe('text/csv');
+      expect(f.dom.window.document.querySelector('video')).toBe(player);expect(player.currentTime).toBe(7);
+      expect(f.dom.window.location.href).toBe('https://widget.example/');
+    } finally { f.dom.window.close(); }
+  });
   it.each([undefined, 'mcp'] as const)('queues pasted files through the %s bridge and uploads only after the upload button', async bridge => {
     const f=fixture({bridge,existing:true}), bytes=Buffer.from('exact clipboard file bytes');
     try {

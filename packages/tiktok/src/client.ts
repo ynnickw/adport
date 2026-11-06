@@ -1,4 +1,5 @@
 import { AdportError } from '@adport/core';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export interface TikTokCredentials {
   /** Long-term access token (does not expire; revoked by the advertiser). */
@@ -37,14 +38,14 @@ export class TikTokClient {
     this.baseUrl = `${credentials.sandbox ? SANDBOX_BASE : PROD_BASE}/${TIKTOK_API_VERSION}`;
   }
 
-  async get<T>(path: string, params: Record<string, unknown> = {}): Promise<T> {
+  async get<T>(path: string, params: Record<string, unknown> = {}, options: { jsonContentType?: boolean } = {}): Promise<T> {
     const search = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
       if (value === undefined) continue;
       search.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
     }
     const query = search.size > 0 ? `?${search}` : '';
-    return this.send<T>(`${path}${query}`, { method: 'GET' });
+    return this.send<T>(`${path}${query}`, { method: 'GET', ...options });
   }
 
   async post<T>(path: string, body: Record<string, unknown>): Promise<T> {
@@ -55,7 +56,21 @@ export class TikTokClient {
     return this.send<T>(path, { method: 'POST', body: form });
   }
 
-  private async send<T>(pathWithQuery: string, init: { method: string; body?: string | FormData }): Promise<T> {
+  /** Account/file bindings are issued only after this credential accepts the native upload. */
+  audienceFileReceipt(value: Record<string, unknown>): string {
+    const payload = Buffer.from(JSON.stringify(value)).toString('base64url');
+    return payload + '.' + this.audienceReceiptMac(payload).toString('base64url');
+  }
+  verifyAudienceFileReceipt(receipt: string): unknown {
+    const invalid = () => new AdportError('INVALID_INPUT', 'Invalid audience upload receipt; use the receipt from this credential’s approved upload.');
+    if (receipt.length > 8192 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/.test(receipt)) throw invalid();
+    const [payload, signature] = receipt.split('.'), actual = Buffer.from(signature!, 'base64url'), expected = this.audienceReceiptMac(payload!);
+    if (actual.toString('base64url') !== signature || actual.length !== expected.length || !timingSafeEqual(actual, expected)) throw invalid();
+    try { return JSON.parse(Buffer.from(payload!, 'base64url').toString('utf8')); } catch { throw invalid(); }
+  }
+  private audienceReceiptMac(payload: string): Buffer { return createHmac('sha256', this.credentials.accessToken).update('adport.tiktok.audience-file.v1.' + this.baseUrl + '.' + payload).digest(); }
+
+  private async send<T>(pathWithQuery: string, init: { method: string; body?: string | FormData; jsonContentType?: boolean }): Promise<T> {
     // Trailing slash is mandatory before the query string.
     const [path, query] = pathWithQuery.split('?');
     const url = `${this.baseUrl}/${path!.replace(/^\/|\/$/g, '')}/${query ? `?${query}` : ''}`;
@@ -63,9 +78,11 @@ export class TikTokClient {
       method: init.method,
       headers: {
         'Access-Token': this.credentials.accessToken,
-        ...(typeof init.body === 'string' ? { 'content-type': 'application/json' } : {}),
+        ...(typeof init.body === 'string' || init.jsonContentType ? { 'content-type': 'application/json' } : {}),
       },
       body: init.body,
+      redirect: 'error',
+      signal: AbortSignal.timeout(30_000),
     });
     const raw = await response.text();
     if (!response.ok) {

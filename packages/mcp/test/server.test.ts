@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { AdportError, createContext, FindingsStore, type ManagedMediaLibrary } from '@adport/core';
+import { AdportError, createContext, defineTool, FindingsStore, type ManagedMediaLibrary } from '@adport/core';
 import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -58,6 +58,14 @@ afterEach(async () => {
 });
 
 describe('adport MCP server', () => {
+  it('keeps sensitive read arguments out of refresh/continuation metadata while preserving ordinary paging', async () => {
+    const runtime = await createContext({ providerModules: [] });runtime.registry.register(defineTool({ name: 'private_records', namespace: 'core', description: 'Synthetic private read', annotations: { readOnly: true }, presentation: 'records', pagination: { cursorInput: 'cursor' }, sensitiveInputs: ['source'], input: z.object({ source: z.string().optional(), cursor: z.string().optional() }), output: z.object({ records: z.array(z.object({ id: z.string() })), next_cursor: z.string() }), handler: async () => ({ records: [{ id: 'safe' }], next_cursor: 'next' }) }));
+    const server = createMcpServer({ runtime }), host = new Client({ name: 'private-read-metadata-test', version: '1' }), [ct, st] = InMemoryTransport.createLinkedPair();await server.connect(st);await host.connect(ct);
+    try {
+      const privateResult = await host.callTool({ name: 'private_records', arguments: { source: 'https://source.example.test/private?secret=PRIVATE' } });expect(privateResult.isError).not.toBe(true);expect(JSON.stringify(privateResult)).not.toContain('PRIVATE');expect(privateResult.structuredContent).toMatchObject({ records: [{ id: 'safe' }] });expect(privateResult.structuredContent).not.toHaveProperty('_adport.refresh');expect(privateResult.structuredContent).not.toHaveProperty('_adport.next');
+      const ordinary = await host.callTool({ name: 'private_records', arguments: {} });expect(ordinary.structuredContent).toMatchObject({ _adport: { refresh: { arguments: {} }, next: { arguments: { cursor: 'next' } } } });
+    } finally { await host.close();await server.close(); }
+  });
   it('exports complete native file parameter schemas on read and guarded write tools', async () => {
     const tools = (await client.listTools()).tools;
     for (const name of ['media_inspect_file', 'media_import_file']) {

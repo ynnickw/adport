@@ -6,6 +6,15 @@ import { inspectMediaBytes, mediaUploadSchema, ProjectMediaLibrary } from '@/lib
 const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 
 describe('private creative media verification', () => {
+  it('validates declared CSV after renaming without an extension, preserving exact source bytes', async () => {
+    const bytes = Buffer.from('sku_id\r\n00012\r\n9007199254740993\r\n');
+    const metadata = { name: 'Product IDs', content_type: 'text/csv' as const, byte_length: bytes.length, sha256: hash(bytes) };
+    expect(mediaUploadSchema.safeParse(metadata).success).toBe(true);
+    expect(await inspectMediaBytes(bytes, metadata)).toMatchObject({ file: { bytes, contentType: 'text/csv', sha256: metadata.sha256 } });
+    const malformed = Buffer.from('sku_id\n"unclosed');
+    await expect(inspectMediaBytes(malformed, { ...metadata, byte_length: malformed.length, sha256: hash(malformed) })).rejects.toThrow('UTF-8 CSV');
+    await expect(inspectMediaBytes(bytes, { ...metadata, content_type: 'application/pdf' })).rejects.toThrow();
+  });
   it.each(['png', 'jpeg', 'webp'] as const)('fully decodes %s and retains the approved bytes/checksum', async format => {
     const bytes = await sharp({ create: { width: 1200, height: 628, channels: 3, background: '#ff6600' } }).toFormat(format).toBuffer();
     const result = await inspectMediaBytes(bytes, { name: 'creative', content_type: format === 'jpeg' ? 'image/jpeg' : `image/${format}`, byte_length: bytes.byteLength, sha256: hash(bytes) });

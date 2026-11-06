@@ -77,7 +77,8 @@ The implementation follows these current official contracts:
   counts, conversion value, CPA and ROAS are not normalized yet: the purchase
   object contract and sale-amount units still need official verification. These
   fields remain absent, never fabricated as zero; requests containing only these
-  unsupported metrics fail with an explicit explanation.
+  unsupported metrics fail with an explicit explanation. Native conversion objects
+  are available separately through `x_conversion_stats`, described below.
 - Missing fields remain unknown across aggregation; explicitly null scalar
   metrics are zero-equivalent per X's documentation. Duplicate/missing entity rows,
   unexpected segmentation or changed report scope are rejected.
@@ -91,11 +92,30 @@ The implementation follows these current official contracts:
 
 `x_create_line_item` creates a PAUSED ad group under an existing non-draft `LINE_ITEM` budget campaign. It requires an explicit objective, product, placements and flight; sibling line items must use the same objective/product. Native requests use signed query parameters and CSV placements. App objectives require an explicit app-store ID, and the preview reports native automatic platform targeting. Publisher-network placement needs an advertiser domain and IAB categories. Placement combinations can be inspected with `x_line_item_placements`.
 
+Creation also accepts a documented native `goal` and `primary_web_event_tag`.
+`WEBSITE_CONVERSIONS` requires a primary event ID and the
+`expected_web_event_tag_hash` from `x_get_web_event_tag`. Any supplied primary
+event requires that hash. Adport reads the exact account-scoped event on preview
+and apply, rejects deleted/foreign or changed configurations, and includes the
+event name/type, goal, native event status, placements, flight and money in the
+review. Native event status alone does not establish measurement accuracy.
+New ad groups still follow paused-creation policy. The snapshot is an Adport
+approval check and is never sent as an X API parameter.
+
+Native creation receipts and independent ad-group readback must match the goal,
+primary event, status and approved configuration. Unconfirmed readback retains
+the created ID and never automatically repeats creation. This path installs no
+pixel and sends no conversion event. Current documentation establishes the
+primary-event parameter on creation; Adport does not infer an existing-group
+rebind/clear route from that. Native goal/account eligibility remains checked by
+X on apply. Event configuration hashes include name, type, retargeting and
+attribution windows; volatile tracking diagnostics are excluded.
+
 Name/schedule edits, status, daily/total caps and bidding have separate named tools. Omitted bounds/settings remain unchanged. Money uses integer micros with current-value lookup and shared policy checks. Native `AUTO` ignores a monetary bid; the tool rejects a purported AUTO cap and removal of an existing bounded bid through AUTO. `MAX`/`TARGET` eligibility follows the documented objective restrictions. Receipt checks bind ID, campaign, currency, status, requested settings and preserved monetary caps. Unexpected native changes retain the returned ID and require reconciliation before retrying.
 
 `x_delete_line_item` requires its relevant promoted-post/account/media children to be removed first, then uses native DELETE and checks the returned deleted flag. Unknown product types are rejected for deletion rather than assuming all child types have been checked. All advertising writes still use the same exact-argument preview/apply gate, audit log, protected-account and budget rules. X does not provide server validation for this workflow.
 
-Published-post authoring, audience management and measurement remain outstanding. Native promoted-post associations are created ACTIVE and cannot be updated through a PUT endpoint; a tool must account for this explicitly instead of promising ad-level PAUSED creation or an unsupported status edit. The current additions are partial API coverage. The current provider-owned [MCP reference](https://github.com/xdevplatform/docs/blob/2f701ee04b362fffcc1dfee042b11b64ab884fda/x-ads-api/mcp/reference.mdx) maps additional tool families to v12 routes; this mapping is an API comparison source, not evidence that Adport implements every route.
+Published promoted-only post creation, name edits, post galleries and promoted-post association/removal now have [typed workflows](x-posts.md). Native associations are ACTIVE and have no PUT status endpoint: paused creation requires a currently PAUSED ad group. The review keeps publication, association and delivery separate. Scheduled promoted-only publication, edits/cancellation and scheduled ad associations also have [typed workflows](x-scheduled-posts.md). Portions of measurement and other native formats remain outstanding; these additions are partial API coverage. The provider-owned [MCP reference](https://github.com/xdevplatform/docs/blob/4e8f626258b26f97826490989f3136fe096a8252/x-ads-api/mcp/reference.mdx) is an API comparison source, not evidence that Adport implements every route.
 
 ## Targeting
 
@@ -115,7 +135,7 @@ Live reads on 2026-11-03 verified placement combinations and language/location/p
 
 `x_update_draft_tweet` sends only supplied fields and preserves omitted copy/name/media/card values, author and nullcast state. An explicit empty media array or null card clears that attachment. `x_delete_draft_tweet` uses native hard deletion and verifies DELETED; a published post remains separate. Native weighted text length/content rules are checked by X on apply: the local preview explicitly is not server validation. No JavaScript string-length approximation is presented as a native post limit.
 
-Media metadata updates preserve omitted settings and verify the returned media key/type and content. Video poster changes require a ready account-owned image. Native library deletion is distinct from an ad pause or underlying byte deletion; existing posts/ads may retain media. Every mutation uses the shared two-step policy and audit path, with returned IDs retained if a receipt cannot be reconciled. Current tools do not publish posts or create ACTIVE promoted-post associations.
+Media metadata updates preserve omitted settings and verify the returned media key/type and content. Video poster changes require a ready account-owned image. Native library deletion is distinct from an ad pause or underlying byte deletion; existing posts/ads may retain media. Every mutation uses the shared two-step policy and audit path, with returned IDs retained if a receipt cannot be reconciled. Draft/library tools do not publish or promote; the separate [published-post workflows](x-posts.md) require their own source context and approval.
 
 Live verification on 2026-11-03 covered account permissions/FULL author discovery, native media-library pagination and real image/video previews, then a named text-only QA draft create → read → copy edit → rename → delete lifecycle. Every write used the shared preview/apply gate; the exact deleted draft returned 404 afterward. Live text-only PUT omitted the unchanged name, so updates accept a partial receipt and require a complete readback to verify preservation. The temporary draft was never published or associated with an ad. Media metadata/deletion and attachment-based draft creation still need live verification.
 
@@ -195,6 +215,59 @@ X account and Claude/ChatGPT validation remain unverified.
 Contracts: [current audience reference](https://docs.x.com/x-ads-api/audiences/reference)
 and [provider-owned Python SDK](https://github.com/xdevplatform/twitter-python-ads-sdk/blob/a3dd5819341e77aa469d0b4b3399f0bcd028c80c/twitter_ads/audience.py),
 inspected 2026-11-05. No SDK retry or cleanup behavior is executed by Adport.
+
+## Measurement and native conversion reports
+
+`x_web_event_tags` / `x_get_web_event_tag` inspect existing website conversion
+tags. Embed code stays inert text; reads never execute it, install a pixel or
+send an event. The current X MCP reference confirms the v12 routes, while the
+provider-owned Ruby SDK supplies the web-tag resource fields. Web-tag authoring
+and deletion still need a current detailed payload/receipt contract and native
+verification; a documented route alone is not sufficient write coverage.
+
+`x_app_event_tags` / `x_get_app_event_tag` expose native app identity, conversion
+type, retargeting settings and post-view/post-engagement attribution windows.
+Lists retain native pages and ID filters. `with_total_count` applies only to the
+initial page; cursor continuation omits it. Missing cursor metadata leaves page
+completeness unknown. App-tag creation/deletion and conversion-event ingestion
+are separate workflows.
+
+`x_tracking_tags` / `x_get_tracking_tag` inspect existing impression and click
+trackers, verifying their line-item/campaign hierarchy in the selected account.
+Reads return a configuration hash. `x_create_tracking_tag` associates a supplied
+HTTPS tracker with an existing non-draft line item; `x_update_tracking_tag`
+changes only its URL. Updates preserve its type, parent and other native
+configuration. `x_delete_tracking_tag` disassociates it and verifies a native
+deleted tombstone. No restore endpoint is claimed. Changes can affect
+measurement immediately on active ads, but these tools send no test events and
+change no delivery status, budget or bid.
+
+All tracking mutations use the shared preview/apply policy and audit gate.
+Updates/deletion require the exact current configuration hash; apply replans
+and checks it again. Timestamps are excluded from that hash. Native query
+parameters are signed as transmitted. An accepted receipt is followed by an
+independent readback. Uncertain or mismatched results retain safe IDs for
+reconciliation and never trigger automatic replay. These checks do not lock
+other clients atomically.
+
+`x_conversion_stats` returns native `WEB_CONVERSION` or separately requested
+`MOBILE_CONVERSION` objects for up to 20 verified campaigns, line items or
+promoted posts and at most 30 inclusive account-local dates. `placement` is
+required: results cover that placement, rather than claiming all-placement
+totals. Native attribution buckets, event types, sale amounts and order
+quantities remain separate, with `normalized: false`. Empty/missing objects
+are not invented as zero. No conversion revenue, currency conversion, CPA or
+ROAS is inferred from unverified object fields. Historical/longer periods use
+the existing bounded async-job download path; native request scope and entity
+IDs are checked before results are returned.
+
+Contracts inspected 2026-11-05: [tracking-tag reference](https://docs.x.com/x-ads-api/campaign-management/reference#tracking-tags),
+[app-event reference](https://docs.x.com/x-ads-api/measurement/mobile-conversions#app-event-tags),
+[analytics](https://docs.x.com/x-ads-api/analytics),
+[current MCP route map](https://docs.x.com/x-ads-api/mcp/reference), and
+[provider-owned web-tag resource](https://github.com/xdevplatform/twitter-ruby-ads-sdk/blob/0b6759a21236617ba5c4f39178e7a73fc1a4ae4e/lib/twitter-ads/measurement/web_event_tag.rb).
+Wire-contract, shared policy and widget tests are separate from live native
+endpoint and Claude/ChatGPT host verification.
 
 ## Access and commercial boundary
 

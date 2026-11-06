@@ -14,6 +14,12 @@ For standard campaigns, provide at least three headlines, one long headline, two
 
 Retail creation supplies an already linked `merchant.merchant_id` and optional `feed_label`, and a SHOPPING `listing_filters` tree. Feed-only groups explicitly supply `assets: []`; final URLs and custom brand assets are optional for that native mode. Groups with custom assets must supply all minimum assets and a final URL matching the Merchant Center website. The workflow does not connect a Merchant Center account, upload a product catalog or accept terms. Google validates existing feed access.
 
+Campaign-level language criteria apply to non-Search channels. Performance Max
+ads on Google Search match languages automatically under Google's current
+rules. Existing campaign location/language changes, schedules and device
+settings use the separate [targeting workflow](google-targeting.md), subject to
+native campaign eligibility.
+
 Campaign and group statuses default to PAUSED. If you request ENABLED while paused creation is enabled, both are coerced and reported. Child associations are enabled within the new group; they cannot serve while that group is paused. After apply, Adport checks the returned identities and reads back the created campaign/group before confirming their approved status and ownership. An unconfirmed readback returns acknowledged IDs for reconciliation and never retries creation automatically.
 
 ## Read, view and edit

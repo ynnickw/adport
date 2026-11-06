@@ -1,5 +1,6 @@
 import { AdportError } from '@adport/core';
 import { z } from 'zod';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export const PINTEREST_API_BASE = 'https://api.pinterest.com/v5/';
 export const PINTEREST_TOKEN_URL = `${PINTEREST_API_BASE}oauth/token`;
@@ -66,6 +67,18 @@ export class PinterestAdsClient {
   constructor(private readonly credentials: PinterestCredentials, private readonly fetchImpl: typeof fetch = fetch) {
     this.refreshToken = credentials.refreshToken;
   }
+  catalogBatchReceipt(value: unknown): string {
+    const encoded = Buffer.from(JSON.stringify(value)).toString('base64url');
+    if (encoded.length > 1_500_000) throw new AdportError('INVALID_INPUT', 'Catalog batch proof exceeds its bound; split this batch before previewing.');
+    return encoded + '.' + createHmac('sha256', this.credentials.clientSecret).update('pinterest_catalog_batch_v1:' + this.credentials.clientId + ':' + encoded).digest('hex');
+  }
+  verifyCatalogBatchReceipt(value: string): unknown {
+    const [encoded, signature, extra] = value.split('.');
+    if (extra !== undefined || !encoded || encoded.length > 1_500_000 || !/^[a-f0-9]{64}$/.test(signature ?? '')) throw new AdportError('INVALID_INPUT', 'Invalid catalog batch receipt.');
+    const expected = createHmac('sha256', this.credentials.clientSecret).update('pinterest_catalog_batch_v1:' + this.credentials.clientId + ':' + encoded).digest();
+    if (!timingSafeEqual(expected, Buffer.from(signature!, 'hex'))) throw new AdportError('INVALID_INPUT', 'Catalog batch receipt belongs to another application or was changed.');
+    try { return JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')); } catch { throw new AdportError('INVALID_INPUT', 'Invalid catalog batch receipt.'); }
+  }
   async get<T>(path: string, schema: z.ZodType<T>, params = new URLSearchParams()): Promise<T> {
     return this.request(path, 'GET', schema, undefined, params);
   }
@@ -117,6 +130,7 @@ export class PinterestAdsClient {
     if (!parsed.success) {
       const value = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
       const resourceIds = [value.id, value.media_id].filter((id): id is string => typeof id === 'string' && /^\d{1,30}$/.test(id));
+      if ((path === 'catalogs/items/batch' || /^catalogs\/\d{1,30}\/local_inventory_items\/batch$/.test(path)) && typeof value.batch_id === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(value.batch_id)) resourceIds.push(value.batch_id);
       throw new AdportError('PROVIDER_ERROR', 'pinterest: malformed API response', { api_path: path, response_issues: parsed.error.issues.map(issue => ({ path: issue.path, code: issue.code })), ...(method !== 'GET' && resourceIds.length ? { resource_ids: [...new Set(resourceIds)] } : {}) });
     }
     return parsed.data;

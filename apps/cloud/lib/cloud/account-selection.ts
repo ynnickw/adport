@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { decryptSecret, encryptSecret } from '@/lib/crypto';
 import { safeReturnPath } from '@/lib/return-path';
 import type { CloudProvider, StoredMetaCredential, TenantPrincipal } from './types';
-import { providerLabel } from './providers';
+import { providerLabel, usesAdAccountSlot } from './providers';
 import { PlanLimitError, recommendUpgradePlan } from './plan-limit';
 import type { PlanId } from './plans';
 
@@ -150,20 +150,22 @@ export async function saveAccountSelection(principal: TenantPrincipal, id: strin
       `;
     }
     if (activation && selected.length) {
-      const [capacity] = await sql<Array<{ used: number; additional: number }>>`
-        select count(*) filter (where account.enabled)::int as used,
-          count(*) filter (where account.organization_id = ${principal.organizationId}
-            and account.provider = ${row.provider} and not account.enabled
-            and account.account_id = any(${accountIds}::text[]))::int as additional
-        from public.organization_ad_accounts account
-        join public.organizations project on project.id = account.organization_id
-        where project.organization_group_id = (select organization_group_id from public.organizations where id = ${principal.organizationId})
-          and project.archived_at is null
-      `;
-      if (!capacity) throw new Error('Could not check account capacity. Try again.');
-      if (activation.maxActiveAccounts !== null && capacity.used + capacity.additional > activation.maxActiveAccounts) {
-        throw new PlanLimitError({ kind: 'active_accounts', currentPlan: activation.currentPlan, recommendedPlan: recommendUpgradePlan(activation.currentPlanId, { activeAccounts: capacity.used + capacity.additional }),
-          message: `Your plan allows ${activation.maxActiveAccounts} enabled accounts across projects. Choose fewer accounts, disable another account, or import without enabling.` });
+      if (usesAdAccountSlot(row.provider)) {
+        const [capacity] = await sql<Array<{ used: number; additional: number }>>`
+          select count(*) filter (where account.enabled)::int as used,
+            count(*) filter (where account.organization_id = ${principal.organizationId}
+              and account.provider = ${row.provider} and not account.enabled
+              and account.account_id = any(${accountIds}::text[]))::int as additional
+          from public.organization_ad_accounts account
+          join public.organizations project on project.id = account.organization_id
+          where project.organization_group_id = (select organization_group_id from public.organizations where id = ${principal.organizationId})
+            and project.archived_at is null and private.provider_uses_ad_account_slot(account.provider)
+        `;
+        if (!capacity) throw new Error('Could not check account capacity. Try again.');
+        if (activation.maxActiveAccounts !== null && capacity.used + capacity.additional > activation.maxActiveAccounts) {
+          throw new PlanLimitError({ kind: 'active_accounts', currentPlan: activation.currentPlan, recommendedPlan: recommendUpgradePlan(activation.currentPlanId, { activeAccounts: capacity.used + capacity.additional }),
+            message: `Your plan allows ${activation.maxActiveAccounts} enabled accounts across projects. Choose fewer accounts, disable another account, or import without enabling.` });
+        }
       }
       await sql`update public.organization_ad_accounts set enabled = true
         where organization_id = ${principal.organizationId} and provider = ${row.provider} and account_id = any(${accountIds}::text[])`;

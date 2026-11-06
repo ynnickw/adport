@@ -24,12 +24,15 @@ describe('catalog runtime boundaries', () => {
     expect(classifyTool('meta_create_ad', 'meta').exposure).toBe('standard');
     expect(classifyTool('meta_advertisable_applications', 'meta').exposure).toBe('standard');
     expect(classifyTool('google_create_experiment', 'google')).toEqual({ category: 'experiments', exposure: 'specialist' });
+    for (const name of ['x_web_event_tags', 'x_get_app_event_tag', 'x_update_tracking_tag', 'x_conversion_stats']) expect(classifyTool(name, 'x')).toEqual({ category: 'measurement', exposure: 'specialist' });
   });
   it('keeps the complete central asset upload and metadata flow in Standard', () => {
-    for (const name of [...MEDIA_UPLOAD_TOOLS, ...MEDIA_PREPARATION_TOOLS,
+    // Catalog SKU imports are tracked file uploads but require the specialist catalog workflow.
+    for (const name of ['tiktok_upload_product_set', 'tiktok_import_catalog_file', 'tiktok_upload_catalog_videos']) expect(classifyTool(name, 'tiktok').exposure).toBe('specialist');
+    for (const name of [...MEDIA_UPLOAD_TOOLS].filter(name => !['tiktok_upload_product_set', 'tiktok_import_catalog_file', 'tiktok_upload_catalog_videos'].includes(name)).concat([...MEDIA_PREPARATION_TOOLS,
       'media_rename', 'media_update_metadata', 'media_delete', 'reddit_asset_upload_status',
       'spotify_get_asset', 'pinterest_get_media_upload', 'pinterest_create_video_pin',
-      'linkedin_get_document', 'x_media_upload_status', 'x_register_uploaded_media']) {
+      'linkedin_get_document', 'x_media_upload_status', 'x_register_uploaded_media'])) {
       const namespace = name.startsWith('media_') ? 'core' : name.split('_')[0]!;
       expect(classifyTool(name, namespace).exposure, name).toBe('standard');
     }

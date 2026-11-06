@@ -26,7 +26,8 @@ export async function DELETE(request: Request, { params }: RouteContext<'/api/co
 
     let revokedAtProvider = false;
     if (isOAuthProvider(provider)) {
-      if (oauthAdapter(provider).configured()) {
+      const sharedGoogleGrant = provider === 'google' && await loadProviderCredential(principal.organizationId, 'gtm');
+      if (oauthAdapter(provider).configured() && !sharedGoogleGrant) {
         // Throws on transient failure and keeps the encrypted credential for a retry.
         revokedAtProvider = await revokeGrant(provider, stored);
       }

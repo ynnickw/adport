@@ -5,20 +5,24 @@ import { XAdsEntities } from './entities.js';
 import { createLine, micros, setLineBid, updateLine } from './management-tools.js';
 import { lineItemSchema, xId as id } from './schemas.js';
 import type { XWritePlan } from './writes.js';
+import type { XMeasurementService } from './measurement.js';
 
 type Line = z.infer<typeof lineItemSchema>;
 export class XManagementService {
-  constructor(private readonly entities: XAdsEntities) {}
+  constructor(private readonly entities: XAdsEntities, private readonly measurement: XMeasurementService) {}
   private bid(objective: string, strategy: string, amount: unknown, create: boolean) {
     if (strategy === 'AUTO' && amount !== undefined) throw new AdportError('INVALID_INPUT', 'x: AUTO ignores bid amounts; do not supply a purported monetary cap');
     if (strategy !== 'AUTO' && !micros.safeParse(amount).success) throw new AdportError('INVALID_INPUT', 'x: MAX/TARGET require a positive safe integer bid in micros');
     if (strategy === 'MAX' && ['REACH', 'FOLLOWERS'].includes(objective)) throw new AdportError('INVALID_INPUT', 'x: MAX is unavailable for REACH/FOLLOWERS');
     if (strategy === 'TARGET' && !(create ? ['REACH', 'FOLLOWERS', 'WEBSITE_CLICKS'] : ['REACH', 'WEBSITE_CLICKS']).includes(objective)) throw new AdportError('INVALID_INPUT', 'x: TARGET is not documented for this objective/operation');
   }
-  private async receipt(method: 'POST' | 'PUT' | 'DELETE', path: string, params: XParams, currency: string, expected: Record<string, unknown>) {
-    const { data } = await this.entities.client.request(method, path, z.object({ data: lineItemSchema }), params);
+  private verify(data: Line, currency: string, expected: Record<string, unknown>) {
     const matches = (key: string, value: unknown) => value === null ? data[key] === null : ['placements', 'categories'].includes(key) ? Array.isArray(data[key]) && [...data[key]].sort().join(',') === String(value).split(',').sort().join(',') : ['start_time', 'end_time'].includes(key) ? Date.parse(String(data[key])) === Date.parse(String(value)) : data[key] === value;
     if (data.currency !== currency || Object.entries(expected).some(([key, value]) => !matches(key, value))) throw new AdportError('PROVIDER_ERROR', 'x: line-item receipt ID/parent/status/money mismatch; reconcile before retrying', { resource_ids: [data.id] });
+  }
+  private async receipt(method: 'POST' | 'PUT' | 'DELETE', path: string, params: XParams, currency: string, expected: Record<string, unknown>) {
+    const { data } = await this.entities.client.request(method, path, z.object({ data: lineItemSchema }), params);
+    this.verify(data, currency, expected);
     return [data.id];
   }
   async plan(op: WriteOperation, guard: WriteGuard): Promise<XWritePlan> {
@@ -36,14 +40,30 @@ export class XManagementService {
       this.bid(input.objective, input.bid_strategy, input.bid_micros, true);
       if (['APP_INSTALLS', 'APP_ENGAGEMENTS'].includes(input.objective) && !input.android_app_store_identifier && !input.ios_app_store_identifier) throw new AdportError('INVALID_INPUT', 'x: app objectives need an explicit app-store identifier; native platform targeting is added automatically');
       if (input.placements.includes('PUBLISHER_NETWORK') && (!input.advertiser_domain || !input.categories?.length)) throw new AdportError('INVALID_INPUT', 'x: publisher placement needs advertiser_domain and IAB categories');
+      if (input.goal === 'SITE_VISITS' && input.objective !== 'WEBSITE_CLICKS' || input.goal === 'APP_PURCHASES' && input.objective !== 'APP_INSTALLS' || ['APP_CLICKS', 'APP_INSTALLS'].includes(input.goal ?? '') && !['APP_INSTALLS', 'APP_ENGAGEMENTS'].includes(input.objective)) throw new AdportError('INVALID_INPUT', 'x: goal is not documented for the selected objective');
+      const primary = input.primary_web_event_tag ? (await this.measurement.getWeb({ account_id: account, web_event_tag_id: input.primary_web_event_tag })).data : undefined;
+      if (primary && primary.configuration_hash !== input.expected_web_event_tag_hash) throw new AdportError('INVALID_INPUT', 'x: primary web event tag configuration changed; read and preview it again');
       const status = guard.forcePausedCreation ? 'PAUSED' : input.status;
       if (status !== input.status) coercions.push('entity_status coerced to PAUSED by policy (paused_creation)');
       params = { campaign_id: input.campaign_id, name: input.name, objective: input.objective, product_type: input.product_type, placements: input.placements.join(','), start_time: input.start_time, end_time: input.end_time, entity_status: status, bid_strategy: input.bid_strategy, standard_delivery: input.standard_delivery };
-      for (const key of ['android_app_store_identifier', 'ios_app_store_identifier', 'advertiser_domain'] as const) if (input[key] !== undefined) params[key] = input[key];
+      for (const key of ['android_app_store_identifier', 'ios_app_store_identifier', 'advertiser_domain', 'goal', 'primary_web_event_tag'] as const) if (input[key] !== undefined) params[key] = input[key];
       if (input.categories) params.categories = input.categories.join(',');
       for (const [source, target] of [['bid_micros', 'bid_amount_local_micro'], ['daily_budget_micros', 'daily_budget_amount_local_micro'], ['total_budget_micros', 'total_budget_amount_local_micro']] as const) if (input[source] !== undefined) { params[target] = input[source]; budgetDeltas.push({ target: `new line item ${target}`, toMicros: input[source] }); }
       expected = { ...params, deleted: false };
-      return { summary: `Create X line item ${input.name}`, changes: [`Native POST ${base}: ${JSON.stringify(params)}; currency ${campaign.currency}. ${input.android_app_store_identifier || input.ios_app_store_identifier ? 'Native app-store parameters add platform targeting.' : ''}`], coercions, budgetDeltas, execute: () => this.receipt('POST', base, params, campaign.currency, expected) };
+      const measurementNotes = ['Native objective/goal/account eligibility is checked by X on apply; this is a local preview.', 'No pixel code is installed and no conversion event is sent. Event status does not prove current measurement accuracy.'];
+      return { summary: `Create X line item ${input.name}`, changes: [`Native POST ${base}: ${JSON.stringify(params)}; currency ${campaign.currency}. ${input.android_app_store_identifier || input.ios_app_store_identifier ? 'Native app-store parameters add platform targeting.' : ''}`], coercions, budgetDeltas,
+        ...(input.goal || primary ? { notes: measurementNotes, review: { provider: 'x', accountId: account, kind: 'create' as const, title: 'Create ad group', subject: input.name, fields: [{ label: 'Campaign', after: campaign.name }, { label: 'Objective', after: input.objective }, { label: 'Goal', after: input.goal ?? 'Native default' }, { label: 'Status', after: status }, { label: 'Placements', after: input.placements.join(', ') }, { label: 'Start', after: input.start_time }, { label: 'End', after: input.end_time }, { label: 'Bid strategy', after: input.bid_strategy }, ...(primary ? [{ label: 'Primary event', after: `${primary.name} · ${primary.id}` }, { label: 'Event type', after: primary.type }, { label: 'Native event status', after: typeof primary.status === 'string' ? primary.status : 'Not reported' }] : []), ...budgetDeltas.map(value => ({ label: value.target.endsWith('bid_amount_local_micro') ? 'Bid' : value.target.endsWith('daily_budget_amount_local_micro') ? 'Daily budget' : 'Total budget', after: value.toMicros, format: 'money' as const, currency: campaign.currency }))], notices: measurementNotes } } : {}),
+        execute: async () => {
+          let created: string | undefined;
+          try {
+            const ids = await this.receipt('POST', base, params, campaign.currency, expected);created = ids[0];
+            if (input.goal || primary) this.verify(await this.entities.getLineItem(account, created!), campaign.currency, { ...expected, id: created });
+            return ids;
+          } catch (error) {
+            if (!created) throw error;
+            throw new AdportError('PROVIDER_ERROR', 'x: created ad-group measurement configuration is unconfirmed; inspect the known ID before another create; do not replay automatically', { resource_ids: [created] });
+          }
+        } };
     }
     current = await this.entities.getLineItem(account, id.parse(op.payload.line_item_id));
     if (current.deleted || current.entity_status === 'DRAFT') throw new AdportError('INVALID_INPUT', 'x: deleted/draft line items are not editable through this workflow');

@@ -40,7 +40,8 @@
     "@adport/provider-x": "workspace:*",
     "@modelcontextprotocol/ext-apps": "^2.0.4",
     "zod": "^4.4.3",
-    "@modelcontextprotocol/server": "^2.4.0"
+    "@modelcontextprotocol/server": "^2.4.0",
+    "@adport/provider-gtm": "workspace:*"
   },
   "devDependencies": {
     "@types/jsdom": "^21.1.7",

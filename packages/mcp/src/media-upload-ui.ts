@@ -25,7 +25,8 @@ export const MEDIA_UPLOAD_UI = String.raw`
       panel.querySelectorAll('[data-upload-verify]').forEach(button=>button.addEventListener('click',()=>verifyWidgetUpload(Number(button.dataset.uploadVerify))));
     }
     function uploadType(file) {
-      const ext={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',heic:'image/heic',gif:'image/gif',mp4:'video/mp4',mov:'video/quicktime',webm:'video/webm',mp3:'audio/mpeg',wav:'audio/wav',ogg:'audio/ogg',pdf:'application/pdf'};
+      const ext={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',heic:'image/heic',gif:'image/gif',mp4:'video/mp4',mov:'video/quicktime',webm:'video/webm',mp3:'audio/mpeg',wav:'audio/wav',ogg:'audio/ogg',pdf:'application/pdf',csv:'text/csv'};
+      if(/\.csv$/i.test(file.name)&&['','application/octet-stream','text/plain','application/vnd.ms-excel','application/csv','text/comma-separated-values'].includes(file.type))return 'text/csv';
       return ['audio/x-wav','audio/vnd.wave','audio/wave'].includes(file.type)?'audio/wav':file.type&&file.type!=='application/octet-stream'?file.type:ext[file.name.split('.').pop().toLowerCase()]||'';
     }
     function queueWidgetFiles(files,context) {

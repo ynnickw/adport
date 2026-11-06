@@ -18,6 +18,8 @@ export interface WriteOperation {
   tool: string;
   provider: string;
   accountId: string;
+  /** Additional accounts affected by a cross-account action, derived by its tool. */
+  affectedAccountIds?: string[];
   kind: WriteKind;
   payload: Record<string, unknown>;
 }
@@ -62,6 +64,8 @@ export interface WriteGuard {
 
 export interface ProviderCapabilities {
   serverDryRun: boolean;
+  /** Configuration-only integrations do not participate in performance reports. */
+  reporting?: boolean;
 }
 
 /** A ready-to-call tool invocation (flows through the normal validate→apply gate). */

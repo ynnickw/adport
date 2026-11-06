@@ -211,14 +211,20 @@ export class GoogleAdsRestClient {
   ): Promise<Array<Record<string, unknown>>> {
     const maxRows = options.maxRows ?? 1000;
     const rows: Array<Record<string, unknown>> = [];
+    const cursors = new Set<string>();
     let pageToken: string | undefined;
     do {
       const data = await this.request<{ results?: Array<Record<string, unknown>>; nextPageToken?: string }>(
         `customers/${normalizeCustomerId(customerId)}/googleAds:search`,
         { method: 'POST', body: { query: options.includeDrafts ? `${query}${/\bPARAMETERS\b/i.test(query) ? ',' : ' PARAMETERS'} include_drafts=true` : query, pageToken }, loginCustomerId: options.loginCustomerId },
       );
+      if (!data || typeof data !== 'object' || Array.isArray(data) || data.results !== undefined && !Array.isArray(data.results) || data.nextPageToken !== undefined && typeof data.nextPageToken !== 'string') throw new AdportError('PROVIDER_ERROR', 'google: GAQL result/pagination envelope could not be verified');
       rows.push(...(data.results ?? []));
       pageToken = data.nextPageToken;
+      if (pageToken) {
+        if (typeof pageToken !== 'string' || pageToken.length > 8192 || cursors.has(pageToken) || cursors.size >= 1000) throw new AdportError('PROVIDER_ERROR', 'google: GAQL pagination repeated a cursor or exceeded its safety bound');
+        cursors.add(pageToken);
+      }
     } while (pageToken && rows.length < maxRows);
     return rows.slice(0, maxRows);
   }

@@ -2,6 +2,7 @@ import 'server-only';
 import { AdportError, createContext, selectRuntimeCatalog, PolicyEngine, type ToolSelection, type AdportRuntime, type AnyToolDefinition, type ProviderModule } from '@adport/core';
 import { toolAccessPath } from '@/lib/tool-access-link';
 import { AppleAdsClient, AppleAdsProvider, appleTools } from '@adport/provider-apple';
+import { GtmClient, GtmProvider, gtmTools } from '@adport/provider-gtm';
 import { GoogleAdsProvider, GoogleAdsRestClient, googleTools } from '@adport/provider-google';
 import { MetaAdsProvider, MetaGraphClient, metaTools } from '@adport/provider-meta';
 import { MicrosoftAdsClient, MicrosoftAdsProvider, microsoftTools } from '@adport/provider-microsoft';
@@ -34,6 +35,8 @@ import { HttpError } from '@/lib/http';
 import { ProjectMediaLibrary } from './media';
 import { instrumentCloudTools } from './analytics-tools';
 import { PostgresResourceSecretStore } from './resource-credentials';
+import { PostgresRedditCatalogAccessStore } from './reddit-catalog-access';
+import { PostgresTikTokCatalogAccessStore } from './tiktok-catalog-access';
 
 export interface TenantRuntimeOptions {
   /** Used only immediately after OAuth exchange to discover provider accounts. */
@@ -99,6 +102,14 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     const provider = new XAdsProvider(new XAdsClient({ consumerKey, consumerSecret, ...credentials.x }), undefined, media);
     modules.push({ provider: scopeProvider(provider), tools: xTools(provider) });
   }
+  if (credentials.gtm && providerAllowedForOrganization('gtm', principal.organizationId)) {
+    const config = googleEnv();
+    const provider = new GtmProvider(new GtmClient({
+      clientId: config.GOOGLE_ADS_CLIENT_ID, clientSecret: config.GOOGLE_ADS_CLIENT_SECRET,
+      refreshToken: credentials.gtm.refreshToken,
+    }));
+    modules.push({ provider: scopeProvider(provider), tools: gtmTools(provider) });
+  }
   if (credentials.google) {
     const config = googleEnv();
     const client = new GoogleAdsRestClient({
@@ -117,7 +128,8 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
   }
   if (credentials.tiktok) {
     const resolved = hydrateTikTok(credentials.tiktok);
-    const provider = new TikTokAdsProvider(new TikTokClient(resolved), { appId: resolved.appId, secret: resolved.secret }, media);
+    const catalogAccess = new PostgresTikTokCatalogAccessStore(principal, enabledAccountIds.tiktok ?? new Set());
+    const provider = new TikTokAdsProvider(new TikTokClient(resolved), { appId: resolved.appId, secret: resolved.secret }, media, catalogAccess);
     modules.push({ provider: scopeProvider(provider), tools: tiktokTools(provider) });
   }
   if (credentials.apple) {
@@ -142,7 +154,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
         await updateProviderCredential(principal.organizationId, 'reddit', rotated);
       },
     });
-    const provider = new RedditAdsProvider(client, media);
+    const provider = new RedditAdsProvider(client, media, new PostgresRedditCatalogAccessStore(principal, enabledAccountIds.reddit ?? new Set()));
     modules.push({ provider: scopeProvider(provider), tools: redditTools(provider) });
   }
   const engine = new PolicyEngine(policy, new PostgresPendingStore(principal), new PostgresAuditStore(principal));
@@ -160,7 +172,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     findings: new PostgresFindingsStore(principal.organizationId),
     media,
   });
-  if (options.surface === 'mcp') completeMcpCatalog(runtime);
+  if (options.surface === 'mcp') completeMcpCatalog(runtime, providerAllowedForOrganization('gtm', principal.organizationId));
   const selected = options.catalog ? selectRuntimeCatalog(runtime, options.catalog, false, {
     canWrite: principal.scopes.includes('tools:write'), excludedTools: ['recommendation_apply'],
     manageAccessUrl: new URL(toolAccessPath(principal.organizationId, principal.apiKeyId ?? principal.clientId ?? '', principal.apiKeyId ? 'key' : 'oauth', principal.oauthOrganizationGroupId), env().ADPORT_CLOUD_BASE_URL).href,
@@ -178,9 +190,10 @@ function unavailableTools<T extends object>(provider: string, factory: (provider
 }
 
 /** A stable catalog lets clients use platforms connected after OAuth consent. */
-function completeMcpCatalog(runtime: AdportRuntime): void {
+function completeMcpCatalog(runtime: AdportRuntime, includeGtm: boolean): void {
   const registered = new Set(runtime.registry.list().map(tool => tool.name));
   const catalog = [
+    ...(includeGtm ? unavailableTools('gtm', gtmTools) : []),
     ...unavailableTools('google', googleTools), ...unavailableTools('meta', metaTools),
     ...unavailableTools('tiktok', tiktokTools), ...unavailableTools('apple', appleTools),
     ...unavailableTools('microsoft', microsoftTools), ...unavailableTools('reddit', redditTools),

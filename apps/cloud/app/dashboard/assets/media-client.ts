@@ -16,8 +16,9 @@ export async function applyLibraryChange(projectId: string, tool: string, args: 
   if (preview.status !== 'pending_validation' || !preview.pending_operation_id) throw new Error('The library change was not prepared. Refresh before trying again.');
   return mediaAction<Preview>(projectId, tool, { ...args, pending_operation_id: preview.pending_operation_id });
 }
-const extensions: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', heic: 'image/heic', gif: 'image/gif', mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', pdf: 'application/pdf' };
+const extensions: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', heic: 'image/heic', gif: 'image/gif', mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', pdf: 'application/pdf', csv: 'text/csv' };
 export function fileContentType(file: Pick<File, 'type' | 'name'>) {
+  if (/\.csv$/i.test(file.name) && ['', 'application/octet-stream', 'text/plain', 'application/vnd.ms-excel', 'application/csv', 'text/comma-separated-values'].includes(file.type)) return 'text/csv';
   if (['audio/x-wav', 'audio/vnd.wave', 'audio/wave'].includes(file.type)) return 'audio/wav';
   return file.type && file.type !== 'application/octet-stream' ? file.type : extensions[file.name.split('.').at(-1)?.toLowerCase() ?? ''] ?? '';
 }

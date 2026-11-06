@@ -6,12 +6,13 @@ import { z } from 'zod';
 import { AdportError } from './errors.js';
 import type { WriteOperation, WritePreview, WriteResult } from './provider.js';
 import { MEDIA_PLATFORMS } from './media-platforms.js';
+import { csvRows } from './csv.js';
 export { MEDIA_PLATFORMS } from './media-platforms.js';
 
 export const MAX_PROJECT_MEDIA_BYTES = 50 * 1024 * 1024;
 export const MAX_INLINE_MEDIA_BYTES = 1024 * 1024;
 export const MEDIA_UPLOAD_PART_BYTES = MAX_INLINE_MEDIA_BYTES;
-export const PROJECT_MEDIA_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/gif', 'video/mp4', 'video/quicktime', 'video/webm', 'audio/mpeg', 'audio/wav', 'audio/ogg', 'application/pdf'] as const;
+export const PROJECT_MEDIA_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/gif', 'video/mp4', 'video/quicktime', 'video/webm', 'audio/mpeg', 'audio/wav', 'audio/ogg', 'application/pdf', 'text/csv'] as const;
 export const mediaUploadMetadataSchema = z.object({
   name: z.string().trim().min(1).max(240), content_type: z.enum(PROJECT_MEDIA_TYPES),
   byte_length: z.number().int().positive().max(MAX_PROJECT_MEDIA_BYTES), sha256: z.string().regex(/^[a-f0-9]{64}$/),
@@ -100,7 +101,7 @@ export function mediaContentType(bytes: Uint8Array): string | undefined {
 
 /** Verify at preview AND apply; a path or mutable object cannot replace approved bytes. */
 export function verifyMedia(bytes: Uint8Array<ArrayBuffer>, name: string, expectedSha256: string,
-  options: { maxBytes?: number; contentTypes?: readonly string[] } = {}): VerifiedMedia {
+  options: { maxBytes?: number; contentTypes?: readonly string[]; contentType?: string } = {}): VerifiedMedia {
   if (!bytes.byteLength || bytes.byteLength > (options.maxBytes ?? 100 * 1024 * 1024)) {
     throw new AdportError('INVALID_INPUT', 'Media is empty or exceeds the upload size limit.');
   }
@@ -108,7 +109,13 @@ export function verifyMedia(bytes: Uint8Array<ArrayBuffer>, name: string, expect
   if (!/^[a-fA-F0-9]{64}$/.test(expectedSha256) || sha256 !== expectedSha256.toLowerCase()) {
     throw new AdportError('INVALID_INPUT', 'Media SHA-256 mismatch. Prepare a new preview for the changed file.');
   }
-  const contentType = mediaContentType(bytes);
+  let contentType = mediaContentType(bytes);
+  // CSV has no magic signature. Require explicit intent, then validate its complete structure.
+  // Stored type preserves this intent if the project file is later renamed without an extension.
+  if (!contentType && (/\.csv$/i.test(name) || options.contentType === 'text/csv' || options.contentTypes?.length === 1 && options.contentTypes[0] === 'text/csv')) {
+    for (const _row of csvRows(bytes)) { /* Validate without retaining the parsed table. */ }
+    contentType = 'text/csv';
+  }
   if (!contentType || (options.contentTypes && !options.contentTypes.includes(contentType))) {
     throw new AdportError('INVALID_INPUT', 'The file contents are not a supported media format.');
   }

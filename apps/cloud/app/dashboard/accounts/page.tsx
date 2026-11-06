@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { getAccountSelection } from '@/lib/cloud/account-selection';
 import { ProviderAccountPicker, AccountConnectionProgress } from '@/app/account-selection/provider-account-picker';
@@ -9,11 +10,12 @@ import { SupportLauncher } from '@/components/support-widget';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { getOrganizationEntitlement } from '@/lib/cloud/plans';
 import { listConnections, listOrganizationAdAccounts } from '@/lib/cloud/repository';
-import { providerLabel } from '@/lib/cloud/providers';
+import { providerLabel, usesAdAccountSlot } from '@/lib/cloud/providers';
 import { isOAuthProvider } from '@/lib/cloud/types';
 import { AccountAccessManager } from './account-access-manager';
 import { isSyntheticReviewer } from '@/lib/cloud/synthetic-reviewer';
 import { SyntheticReviewer } from '@/components/synthetic-reviewer';
+import { CatalogAccessManager } from './catalog-access-manager';
 
 export const metadata = { title: 'Accounts' };
 
@@ -29,10 +31,15 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
   ]);
   const requestedProvider = params.select_provider ?? params.accounts_saved ?? params.connected;
   const providerFilter = requestedProvider && isOAuthProvider(requestedProvider) ? requestedProvider : undefined;
-  const pendingConnections = connections.filter(connection => connection.accountSelectionId && connection.status === 'connected' && (!providerFilter || connection.provider === providerFilter));
+  if (providerFilter && !usesAdAccountSlot(providerFilter)) {
+    redirect('/dashboard/analytics?' + new URLSearchParams(Object.entries(params).filter((entry): entry is [string, string] => typeof entry[1] === 'string')));
+  }
+  const adAccounts = inventory.filter(account => usesAdAccountSlot(account.provider));
+  const pendingConnections = connections.filter(connection => usesAdAccountSlot(connection.provider) && connection.accountSelectionId && connection.status === 'connected' && (!providerFilter || connection.provider === providerFilter));
   const canManage = ['owner', 'admin'].includes(tenant.role);
   const selectionId = z.string().uuid().safeParse(params.selection_id);
   const selection = canManage && selectionId.success ? await getAccountSelection({ ...tenant, scopes: [] }, selectionId.data) : undefined;
+  if (selection && !usesAdAccountSlot(selection.provider)) redirect('/dashboard/analytics?selection_id=' + selection.id);
   if (selection) return <main className="page">
     <div className="selection-back-row"><Link className="selection-back" href="/dashboard/accounts">← Accounts</Link><SupportLauncher className="support-inline" /></div>
     <PageHeader title={`Add ${providerLabel(selection.provider)} accounts`} showDescription description={`Choose the accounts to add to ${tenant.organizationName}. Add and enable them in one step, or import without enabling.`} />
@@ -50,7 +57,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
       {params.accounts_saved ? <div className="callout success" role="status" style={{ marginBottom: '1rem' }}>{params.access_enabled === '1' ? 'Accounts added and enabled for your assistant.' : 'Accounts imported. New accounts remain disabled until you enable access below.'}</div> : null}
       {params.error ? <div className="error-callout" role="alert">{params.error}</div> : null}
       <PendingAccountSelections connections={pendingConnections} canManage={['owner', 'admin'].includes(tenant.role)} />
-      {inventory.length === 0 && pendingConnections.length ? null : inventory.length === 0 && !providerFilter ? <section className="card">
+      {adAccounts.length === 0 && pendingConnections.length ? null : adAccounts.length === 0 && !providerFilter ? <section className="card">
         <Empty
           title="No accounts added yet"
           copy={canManage ? 'Connect a platform, choose the accounts for this project, then enable Adport access.' : 'Ask a project owner or admin to add accounts.'}
@@ -60,13 +67,15 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
       </section> : (
         <AccountAccessManager key={tenant.organizationId}
           organizationId={tenant.organizationId}
-          accounts={inventory.map(account => ({ ...account, connectionStatus: connections.find(connection => connection.provider === account.provider)?.status ?? 'revoked', accountSelectionId: connections.find(connection => connection.provider === account.provider)?.accountSelectionId, accountSelectionUnavailable: connections.find(connection => connection.provider === account.provider)?.accountSelectionUnavailable }))}
+          accounts={adAccounts.map(account => ({ ...account, connectionStatus: connections.find(connection => connection.provider === account.provider)?.status ?? 'revoked', accountSelectionId: connections.find(connection => connection.provider === account.provider)?.accountSelectionId, accountSelectionUnavailable: connections.find(connection => connection.provider === account.provider)?.accountSelectionUnavailable }))}
           canManage={['owner', 'admin'].includes(tenant.role)}
           maxActiveAccounts={entitlement.plan.maxActiveAccounts}
           organizationActiveCount={usage.enabledAccounts}
           providerFilter={providerFilter}
         />
       )}
+      {(['tiktok', 'reddit'] as const).map(provider => canManage && (!providerFilter || providerFilter === provider) ? <CatalogAccessManager key={tenant.organizationId + ':' + provider} provider={provider} organizationId={tenant.organizationId} projectName={tenant.organizationName}
+        accounts={inventory.filter(account => account.provider === provider).map(account => ({ accountId: account.accountId, name: account.name, ready: account.enabled && connections.some(connection => connection.provider === provider && connection.status === 'connected' && !connection.accountSelectionId) }))} /> : null)}
     </main>
   );
 }

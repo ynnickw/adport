@@ -3,8 +3,12 @@ import { z } from 'zod';
 import type { TikTokAdsProvider } from './provider.js';
 import { tiktokCreativeTools } from './creative-tools.js';
 import { tiktokAudienceTools } from './audiences.js';
+import { tiktokCustomAudienceTools } from './custom-audience-tools.js';
+import { tiktokAudienceAuthoringTools } from './audience-authoring-tools.js';
+import { tiktokAudienceSharingTools } from './audience-sharing-tools.js';
 import { tiktokMeasurementTools } from './measurement.js';
 import { tiktokAutomatedRuleTools } from './automated-rules.js';
+import { tiktokCatalogTools } from './catalog-tools.js';
 
 const OBJECTIVES = [
   'REACH',
@@ -19,12 +23,16 @@ const OBJECTIVES = [
 
 const operationStatusSchema = z.enum(['ENABLE', 'DISABLE']);
 
-export function tiktokTools(provider: TikTokAdsProvider): AnyToolDefinition[] {
+export function tiktokTools(provider: TikTokAdsProvider, options: { catalogAccessManagement?: boolean } = {}): AnyToolDefinition[] {
   return [
     ...tiktokCreativeTools(provider),
     ...tiktokAudienceTools(provider),
+    ...tiktokCustomAudienceTools(provider),
+    ...tiktokAudienceAuthoringTools(provider),
+    ...tiktokAudienceSharingTools(provider),
     ...tiktokMeasurementTools(provider),
     ...tiktokAutomatedRuleTools(provider),
+    ...tiktokCatalogTools(provider, options.catalogAccessManagement),
     defineTool({
       name: 'tiktok_api_read',
       namespace: 'tiktok',

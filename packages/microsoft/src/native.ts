@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { MicrosoftAdsClient, type MicrosoftService, type RequestScope } from './client.js';
 
 export type MicrosoftRow = Record<string, unknown>;
-export type MicrosoftPlan = Omit<WritePreview, 'serverValidated'> & { execute: () => Promise<string[]> };
+export type MicrosoftPlan = Omit<WritePreview, 'serverValidated'> & { execute: () => Promise<string[]>; resultDetails?: () => unknown; resultWarnings?: () => string[] };
 export const microsoftId = z.string().regex(/^[1-9]\d*$/);
 export const microsoftRows = (value: unknown): MicrosoftRow[] => z.array(z.record(z.string(), z.unknown())).parse(value ?? []);
 export const microsoftRow = (value: unknown): MicrosoftRow => z.record(z.string(), z.unknown()).parse(value);

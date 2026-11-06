@@ -26,10 +26,16 @@ Run `adport policy` to see the active values and their source. Current controls 
 - `protected_accounts`: accounts on which all writes are rejected;
 - `paused_creation`: coerces supported new campaigns to paused and reports the coercion;
 - `max_budget_delta_pct`: limits relative changes where a current budget is known;
-- `max_daily_budget_micros`: limits the resulting daily budget in shared policy units;
+- `max_daily_budget_micros`: limits the configured budget amount in shared policy units;
 - `pending_ttl_minutes`: limits the approval window.
 
 In the cloud dashboard, optional budget limits have explicit on/off switches. Turning a limit off saves `null`; it does not disable the preview gate. Policies apply to the selected project. New projects start with the built-in defaults, and their current safeguards appear during assistant setup. Local CLI/stdio MCP configuration remains independent of cloud settings.
+
+Configured-budget limits do not guarantee a ceiling on provider delivery spend
+for an individual day. Providers with average or flexible daily amounts must
+identify that mode in the review. For example, [Pinterest average daily
+budgets](providers/pinterest-budgets.md) retain native nominal micros for the
+shared caps and require explicit variable-spend/averaging acknowledgements.
 
 Provider-native validation is used where available, but a provider dry run is not the approval. The Adport pending id remains required.
 
@@ -47,3 +53,5 @@ Self-hosted audit files live under `${ADPORT_HOME:-~/.config/adport}/audit/` as 
 `adport audit note` appends a record for a relevant change made outside Adport. `adport audit export` reads the source log and emits JSONL or a JSON array to stdout; it never rewrites the original files.
 
 The local log is append-only by application behavior, not tamper-evident storage. Cloud rows are not exposed for browser mutation and are deleted only by configured retention or tenant deletion. Archive exports in an access-controlled system if regulatory retention, immutability, signatures, or centralized review is required.
+
+Cross-account tools declare their additional account inputs in the shared definition. Destination IDs are included in the policy operation and approval hash, checked against protected accounts, and checked against the selected Cloud project before reads or writes. Hosted encrypted approvals preserve this binding. Currently TikTok audience sharing uses this mechanism.

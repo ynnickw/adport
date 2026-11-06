@@ -39,7 +39,7 @@ async function removeObjects(paths: string[]) {
 
 export async function inspectMediaBytes(bytes: Uint8Array<ArrayBuffer>, metadata: z.infer<typeof mediaUploadSchema>): Promise<{ file: VerifiedMedia; width?: number; height?: number }> {
   if (bytes.byteLength !== metadata.byte_length) throw new HttpError('The uploaded file size differs from the approved file.', 400);
-  const file = verifyMedia(bytes, metadata.name, metadata.sha256, { maxBytes: MAX_MEDIA_BYTES, contentTypes: MEDIA_TYPES });
+  const file = verifyMedia(bytes, metadata.name, metadata.sha256, { maxBytes: MAX_MEDIA_BYTES, contentTypes: MEDIA_TYPES, contentType: metadata.content_type });
   if (file.contentType !== metadata.content_type) throw new HttpError('The uploaded file contents do not match its media type.', 400);
   if (!file.contentType.startsWith('image/')) return { file };
   try {
@@ -70,7 +70,8 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
     let preview: string | undefined;
     let upload: MediaAsset['upload'];
     if (includeDownload && row.status === 'ready' && !row.deletedAt) {
-      const { data, error } = await createAdminClient().storage.from(BUCKET).createSignedUrl(row.objectPath, 900);
+      const storage = createAdminClient().storage.from(BUCKET);
+      const { data, error } = await (row.contentType === 'text/csv' ? storage.createSignedUrl(row.objectPath, 900, { download: true }) : storage.createSignedUrl(row.objectPath, 900));
       if (error || !data) throw new HttpError('Media previews could not be prepared.', 502);
       preview = data.signedUrl;
     }
@@ -144,7 +145,7 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
     const { data, error } = await createAdminClient().storage.from(BUCKET).download(row.objectPath);
     if (error || !data) throw new HttpError('The media file could not be read. Try again.', 502);
     if (data.size !== Number(row.byteLength)) throw new AdportError('INVALID_INPUT', 'Stored media size changed. Upload the file again.');
-    return verifyMedia(new Uint8Array(await data.arrayBuffer()), row.name, source.expected_sha256, options);
+    return verifyMedia(new Uint8Array(await data.arrayBuffer()), row.name, source.expected_sha256, { ...options, contentType: row.contentType });
   }
 
   /** Called only inside an approved provider mutation; never returned by a read tool. */
@@ -162,7 +163,7 @@ export class ProjectMediaLibrary implements ManagedMediaLibrary {
     const input = mediaListSchema.parse(raw), cursor = input.cursor ? await this.record(input.cursor, true) : undefined;
     const rows = await db()<StoredMedia[]>`select * from private.creative_media where organization_id = ${this.scopeId} and status = 'ready' and deleted_at is null
       and (${!input.query} or position(lower(${input.query ?? ''}) in lower(name)) > 0)
-      and (${!input.kind} or split_part(content_type, '/', 1) = ${input.kind ?? ''} or (${input.kind === 'document'} and content_type = 'application/pdf'))
+      and (${!input.kind} or split_part(content_type, '/', 1) = ${input.kind ?? ''} or (${input.kind === 'document'} and content_type in ('application/pdf', 'text/csv')))
       and (${!input.platform} or ${input.platform ?? ''} = any(platforms))
       and (${!input.tag} or ${input.tag ?? ''} = any(tags))
       and (${!cursor} or (created_at, id) < (${cursor?.createdAt ?? new Date(0)}, ${cursor?.id ?? '00000000-0000-0000-0000-000000000000'}::uuid))

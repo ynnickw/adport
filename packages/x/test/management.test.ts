@@ -19,6 +19,7 @@ type Call = { url: URL; init: RequestInit };
 const writes = (calls: Call[]) => calls.filter(call => call.init.method !== 'GET');
 const op = (tool: string, payload: Record<string, unknown>, kind: WriteOperation['kind'] = 'update'): WriteOperation => ({ provider: 'x', accountId: A, tool, payload, kind });
 const guard = { forcePausedCreation: true };
+const web = { id: 'web1', name: 'QA purchase', type: 'PURCHASE', click_window: 14, view_through_window: 1, retargeting_enabled: false, status: 'UNTRACKED', deleted: false, embed_code: '<script>inert</script>' };
 function fixture(handler?: (call: Call) => unknown) {
   const calls: Call[] = []; let current: Record<string, unknown> = structuredClone(line);
   const client = new XAdsClient({ consumerKey: 'key', consumerSecret: 'secret', accessToken: 'access', accessTokenSecret: 'access-secret' }, async (url, init = {}) => {
@@ -26,7 +27,7 @@ function fixture(handler?: (call: Call) => unknown) {
     const custom = handler?.(call); if (custom !== undefined) return custom instanceof Response ? custom : Response.json(custom);
     const native = call.url.pathname.replace('/12/', '');
     if (init.method === 'GET') {
-      const values: Record<string, unknown> = { [`accounts/${A}`]: account, [`accounts/${A}/campaigns/${C}`]: campaign, [`accounts/${A}/line_items/${L}`]: current, [`accounts/${A}/line_items`]: [], [`accounts/${A}/promoted_tweets`]: [], [`accounts/${A}/media_creatives`]: [], [`accounts/${A}/promoted_accounts`]: [], 'line_items/placements': [{ product_type: 'PROMOTED_TWEETS', placements: [['ALL_ON_TWITTER']] }] };
+      const values: Record<string, unknown> = { [`accounts/${A}`]: account, [`accounts/${A}/web_event_tags/web1`]: web, [`accounts/${A}/line_items/${L}`]: current, [`accounts/${A}/line_items`]: [], [`accounts/${A}/promoted_tweets`]: [], [`accounts/${A}/media_creatives`]: [], [`accounts/${A}/promoted_accounts`]: [], [`accounts/${A}/campaigns/${C}`]: campaign, 'line_items/placements': [{ product_type: 'PROMOTED_TWEETS', placements: [['ALL_ON_TWITTER']] }] };
       if (values[native]) return Response.json({ data: values[native], next_cursor: null });
     }
     if (['POST', 'PUT'].includes(String(init.method)) && native.startsWith(`accounts/${A}/line_items`)) {
@@ -42,6 +43,33 @@ const dirs: string[] = [];
 afterEach(async () => { for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true }); });
 
 describe('X line-item lifecycle and wire format', () => {
+  it('binds a current account-owned primary event and native conversion goal on paused creation', async () => {
+    const f = fixture(), current = (await f.provider.measurement.getWeb({ account_id: A, web_event_tag_id: 'web1' })).data;
+    const payload = { ...create, objective: 'WEBSITE_CLICKS', goal: 'WEBSITE_CONVERSIONS', primary_web_event_tag: 'web1', expected_web_event_tag_hash: current.configuration_hash }, operation = op('x_create_line_item', payload, 'create');
+    const preview = await f.provider.previewWrite(operation, guard);expect(preview.review?.fields).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Primary event', after: 'QA purchase · web1' }), expect.objectContaining({ label: 'Goal', after: 'WEBSITE_CONVERSIONS' }), expect.objectContaining({ label: 'Status', after: 'PAUSED' })]));expect(preview.coercions).toContain('entity_status coerced to PAUSED by policy (paused_creation)');expect(writes(f.calls)).toHaveLength(0);
+    expect(await f.provider.applyWrite(operation, guard)).toMatchObject({ applied: true, resourceIds: [L] });const write = writes(f.calls)[0]!;expect(write.url.searchParams.get('primary_web_event_tag')).toBe('web1');expect(write.url.searchParams.get('goal')).toBe('WEBSITE_CONVERSIONS');expect(write.url.searchParams.get('entity_status')).toBe('PAUSED');expect(write.url.searchParams.has('expected_web_event_tag_hash')).toBe(false);expect(write.init.body).toBeUndefined();expect(f.calls.slice(f.calls.indexOf(write) + 1).some(call => call.url.pathname.endsWith('/line_items/l1'))).toBe(true);
+  });
+  it('rejects missing tag/hash, invalid goal and undocumented objective combinations before mutation', async () => {
+    const f = fixture(), schema = xTools(f.provider).find(value => value.name === 'x_create_line_item')!.input;
+    for (const value of [{ goal: 'WEBSITE_CONVERSIONS' }, { primary_web_event_tag: 'web1' }, { expected_web_event_tag_hash: 'a'.repeat(64) }, { goal: 'INVENTED_GOAL' }]) expect(schema.safeParse({ ...create, account_id: A, ...value }).success).toBe(false);
+    for (const goal of ['SITE_VISITS', 'APP_PURCHASES', 'APP_CLICKS', 'APP_INSTALLS']) await expect(f.provider.previewWrite(op('x_create_line_item', { ...create, goal }, 'create'), guard)).rejects.toThrow('goal is not documented');expect(writes(f.calls)).toHaveLength(0);
+  });
+  it('rejects changed/deleted/foreign primary tags before creation, while volatile diagnostics do not invalidate the snapshot', async () => {
+    let patch: Record<string, unknown> = {}, f = fixture(call => call.url.pathname.endsWith('/web_event_tags/web1') ? { data: { ...web, ...patch } } : undefined);
+    const hash = (await f.provider.measurement.getWeb({ account_id: A, web_event_tag_id: 'web1' })).data.configuration_hash, payload = { ...create, primary_web_event_tag: 'web1', expected_web_event_tag_hash: hash };
+    patch = { status: 'TRACKING', last_tracked_at: '2030-01-01T00:00:00Z', updated_at: '2030-01-01T00:00:00Z' };expect((await f.provider.measurement.getWeb({ account_id: A, web_event_tag_id: 'web1' })).data.configuration_hash).toBe(hash);
+    for (const value of [{ type: 'SIGN_UP' }, { click_window: 30 }, { deleted: true }, { account_id: 'other' }, { id: 'other' }]) { patch = value;await expect(f.provider.applyWrite(op('x_create_line_item', payload, 'create'), guard)).rejects.toThrow('x:'); }expect(writes(f.calls)).toHaveLength(0);
+  });
+  it('retains created IDs and never replays after mismatched measurement readback', async () => {
+    let created = false;const f = fixture(call => { if (call.init.method === 'POST') created = true;if (created && call.init.method === 'GET' && call.url.pathname.endsWith('/line_items/l1')) return { data: { ...line, objective: 'WEBSITE_CLICKS', goal: 'LINK_CLICKS', primary_web_event_tag: 'other' } };return undefined; });
+    const hash = (await f.provider.measurement.getWeb({ account_id: A, web_event_tag_id: 'web1' })).data.configuration_hash;await expect(f.provider.applyWrite(op('x_create_line_item', { ...create, objective: 'WEBSITE_CLICKS', goal: 'WEBSITE_CONVERSIONS', primary_web_event_tag: 'web1', expected_web_event_tag_hash: hash }, 'create'), guard)).rejects.toMatchObject({ code: 'PROVIDER_ERROR', details: { resource_ids: [L] } });expect(writes(f.calls)).toHaveLength(1);
+  });
+  it('rechecks the approved event snapshot through the shared pending-token boundary before any create', async () => {
+    let tagType = 'PURCHASE';const f = fixture(call => call.url.pathname.endsWith('/web_event_tags/web1') ? { data: { ...web, type: tagType } } : undefined), directory = await mkdtemp(path.join(tmpdir(), 'x-conversion-setup-'));dirs.push(directory);
+    const runtime = await createContext({ engine: new PolicyEngine(DEFAULT_POLICY, new PendingStore(path.join(directory, 'pending')), new AuditLog(path.join(directory, 'audit'))), providerModules: [{ provider: f.provider, tools: xTools(f.provider) }] });
+    const hash = (await f.provider.measurement.getWeb({ account_id: A, web_event_tag_id: 'web1' })).data.configuration_hash, args = { account_id: A, ...create, objective: 'WEBSITE_CLICKS', goal: 'WEBSITE_CONVERSIONS', primary_web_event_tag: 'web1', expected_web_event_tag_hash: hash };
+    const preview = await runtime.registry.call('x_create_line_item', args, runtime.ctx) as { pending_operation_id: string };expect(writes(f.calls)).toHaveLength(0);tagType = 'SIGN_UP';await expect(runtime.registry.call('x_create_line_item', { ...args, pending_operation_id: preview.pending_operation_id }, runtime.ctx)).rejects.toThrow('configuration changed');expect(writes(f.calls)).toHaveLength(0);
+  });
   it('builds a unique serializable catalog lazily', () => { const provider = new Proxy({} as XAdsProvider, { get() { throw new Error('Eager provider access'); } }), tools = xTools(provider); expect(new Set(tools.map(tool => tool.name)).size).toBe(tools.length); for (const tool of tools) expect(() => z.toJSONSchema(tool.input)).not.toThrow(); });
   it('creates a paused line item using signed query params, exact micros and native boolean/dates', async () => {
     const { provider, calls } = fixture(), operation = op('x_create_line_item', create, 'create'), preview = await provider.previewWrite(operation, guard); expect(writes(calls)).toEqual([]); expect(preview.coercions[0]).toContain('PAUSED'); expect(preview.budgetDeltas.map(value => value.toMicros)).toEqual([1_000_001, 10_000_001, 40_000_001]);

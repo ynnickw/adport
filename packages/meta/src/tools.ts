@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { MetaAdsProvider } from './provider.js';
 import { metaCreativeTools } from './creative-tools.js';
 import { metaAudienceTools } from './audiences.js';
+import { metaConversionTools } from './conversions.js';
 import { apiReadOutput, campaignOutput, campaignsOutput, insightsOutput, pageEngagementOutput, pagesOutput } from './outputs.js';
 import { adSetAppPromotedObject, appPromotedObject, advertisableApplicationsOutput } from './app-schemas.js';
 
@@ -32,6 +33,7 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
   return [
     ...metaCreativeTools(provider),
     ...metaAudienceTools(provider),
+    ...metaConversionTools(provider),
     defineTool({
       name: 'meta_advertisable_applications',
       namespace: 'meta',

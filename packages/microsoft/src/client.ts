@@ -90,6 +90,7 @@ export class MicrosoftAdsClient {
     path: string,
     body: unknown,
     scope: RequestScope = {},
+    options: { privatePayload?: boolean } = {},
   ): Promise<T> {
     const token = await this.getAccessToken();
     const headers: Record<string, string> = {
@@ -105,8 +106,15 @@ export class MicrosoftAdsClient {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const raw = await response.text();
-    if (!response.ok) {
+    if (!response.ok || options.privatePayload && response.status !== 200) {
+      if (options.privatePayload) throw new AdportError('PROVIDER_ERROR', `microsoft: private request failed (HTTP ${response.status}); native response values omitted`);
       throw new AdportError('PROVIDER_ERROR', formatMicrosoftError(response.status, raw), safeJson(raw));
+    }
+    if (options.privatePayload) {
+      try {
+        if (!raw.trim()) throw new Error('Empty receipt');
+        return JSON.parse(raw) as T;
+      } catch { throw new AdportError('PROVIDER_ERROR', 'microsoft: private request returned an unrecognized JSON receipt; native values omitted'); }
     }
     return (raw ? JSON.parse(raw) : {}) as T;
   }

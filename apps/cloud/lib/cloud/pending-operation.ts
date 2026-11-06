@@ -3,7 +3,7 @@ import type { WriteOperation } from '@adport/core';
 import { z } from 'zod';
 import { decryptSecret, encryptSecret } from '@/lib/crypto';
 
-const operation = z.object({ tool: z.string().min(1), provider: z.string().min(1), accountId: z.string().min(1), kind: z.enum(['create', 'update', 'remove']), payload: z.record(z.string(), z.unknown()) }).strict();
+const operation = z.object({ tool: z.string().min(1), provider: z.string().min(1), accountId: z.string().min(1), affectedAccountIds: z.array(z.string().min(1).max(200)).min(1).max(100).optional(), kind: z.enum(['create', 'update', 'remove']), payload: z.record(z.string(), z.unknown()) }).strict();
 const envelope = z.object({ sealed_operation: z.string().min(1) }).strict();
 const binding = (projectId: string, pendingId: string) => `pending-operation:${projectId}:${pendingId}`;
 

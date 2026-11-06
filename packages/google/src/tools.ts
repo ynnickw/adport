@@ -10,6 +10,7 @@ import { googleConversionTools } from './conversions.js';
 import { googleDataManagerTools } from './data-manager.js';
 import { googleExperimentTools } from './experiments.js';
 import { googlePerformanceMaxTools } from './pmax.js';
+import { googleTargetingTools } from './targeting.js';
 
 const statusSchema = z.enum(['ENABLED', 'PAUSED']);
 const matchTypeSchema = z.enum(['EXACT', 'PHRASE', 'BROAD']);
@@ -25,6 +26,7 @@ export function googleTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
     ...googleDataManagerTools(provider),
     ...googleExperimentTools(provider),
     ...googlePerformanceMaxTools(provider),
+    ...googleTargetingTools(provider),
     defineTool({
       name: 'google_ads', namespace: 'google',
       description: 'Browse Google Ads with their actual text, final URLs, serving status and creative actions. Filter by campaign or ad group. Changes requested from the creative viewer return a preview before approval.',
@@ -80,7 +82,7 @@ export function googleTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
         search_partners: z.boolean().optional().describe('SEARCH only; defaults false'),
         display_expansion: z.boolean().optional().describe('SEARCH only; defaults false'),
         location_ids: z.array(z.string().regex(/^\d+$/)).min(1).max(100).optional().describe('Google geo target constant IDs; omitted means unrestricted locations'),
-        language_ids: z.array(z.string().regex(/^\d+$/)).min(1).max(100).optional().describe('Google language constant IDs; omitted means unrestricted languages'),
+        language_ids: z.array(z.string().regex(/^\d+$/)).min(1).max(100).optional().describe('Eligible non-Search campaigns only. Search language matching is automatic; omit this field for Search.'),
         location_presence_only: z.boolean().optional().describe('Target people in locations rather than people interested in them; defaults true when locations are specified'),
       }),
     }),

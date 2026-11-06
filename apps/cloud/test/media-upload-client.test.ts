@@ -46,5 +46,8 @@ describe('browser private-file transport', () => {
   it('validates empty/oversized files before reservation and recognizes file-picker MIME aliases', async () => {
     await expect(uploadProjectFile({ ...input(), file: { ...file, size: 0 } as File })).rejects.toThrow('supported file'); expect(fetch).not.toHaveBeenCalled();
     expect(fileContentType({ name: 'recording.WAV', type: 'audio/x-wav' })).toBe('audio/wav'); expect(fileContentType({ name: 'clip.MP4', type: '' })).toBe('video/mp4');
+    for (const type of ['', 'text/plain', 'application/vnd.ms-excel', 'application/octet-stream', 'text/csv']) expect(fileContentType({ name: 'Products.CSV', type })).toBe('text/csv');
+    expect(fileContentType({ name: 'products.txt', type: 'text/plain' })).toBe('text/plain');
+    expect(fileContentType({ name: 'products.csv', type: 'video/mp4' })).toBe('video/mp4');
   });
 });

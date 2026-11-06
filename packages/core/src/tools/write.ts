@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { AdProvider, WriteKind, WriteOperation } from '../provider.js';
-import { defineTool, type AnyToolDefinition, type ToolContext } from './registry.js';
+import { additionalAccountIds, defineTool, type AnyToolDefinition, type ToolContext } from './registry.js';
 import { writeOutput } from './outputs.js';
 import { reviewWrite } from './review.js';
 import { MEDIA_UPLOAD_TOOLS } from './media-distribution.js';
@@ -25,6 +25,7 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   openWorld?: boolean;
   fileInputs?: AnyToolDefinition['fileInputs'];
   sensitiveInputs?: AnyToolDefinition['sensitiveInputs'];
+  additionalAccountInputs?: AnyToolDefinition['additionalAccountInputs'];
   catalog?: AnyToolDefinition['catalog'];
   /** Project resources use the same policy gate without inventing an ad account. */
   contextTarget?: (ctx: ToolContext) => { provider: AdProvider; accountId: string };
@@ -46,6 +47,7 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
     ...(def.catalog ? { catalog: def.catalog } : {}),
     ...(def.fileInputs ? { fileInputs: def.fileInputs } : {}),
     ...(def.sensitiveInputs ? { sensitiveInputs: def.sensitiveInputs } : {}),
+    ...(def.additionalAccountInputs ? { additionalAccountInputs: def.additionalAccountInputs } : {}),
     annotations: { readOnly: false, destructive: def.destructive ?? !MEDIA_UPLOAD_TOOLS.has(def.name), ...(def.openWorld === undefined ? {} : { openWorld: def.openWorld }) },
     async handler(raw, ctx) {
       const { account_id, pending_operation_id, ...payload } = raw as Record<string, unknown> & {
@@ -60,10 +62,12 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
         provider = { id: native.id, capabilities: () => native.capabilities(), listAccounts: () => native.listAccounts(), report: query => native.report(query), previewWrite: (op, guard) => native.previewWrite(op, guard),
           applyWrite: (op, guard) => trackUpload({ media_id, expected_sha256, provider: native.id, account_id, tool: def.name }, () => native.applyWrite(op, guard)) };
       }
+      const accounts = additionalAccountIds(def, payload);
       const op: WriteOperation = {
         tool: def.name,
         provider: def.provider,
         accountId: target?.accountId ?? account_id,
+        ...(accounts.length ? { affectedAccountIds: accounts } : {}),
         kind: def.kind,
         payload,
       };
