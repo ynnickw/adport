@@ -90,8 +90,7 @@ export class XAdsClient {
     try { body = await response.json(); } catch { throw new AdportError('PROVIDER_ERROR', 'x: invalid JSON response'); }
     const nonempty = (value: unknown) => Array.isArray(value) ? value.length > 0 : value && typeof value === 'object' ? Object.keys(value).length > 0 : typeof value === 'string' && value.length > 0;
     if (body && typeof body === 'object' && 'errors' in body && nonempty(body.errors)) {
-      const ids = mutationIds(method, path, body);
-      throw new AdportError('PROVIDER_ERROR', 'x: provider returned an error envelope', ids.length ? { resource_ids: ids } : undefined);
+      throw new AdportError('PROVIDER_ERROR', 'x: provider returned an error envelope', mutationReceipt(method, path, body));
     }
     if (body && typeof body === 'object' && 'operation_errors' in body && nonempty(body.operation_errors)) {
       const data = /^batch\/accounts\/[a-z0-9]+\/(?:targeting_criteria|line_items)$/.test(path) && 'data' in body && Array.isArray(body.data) ? body.data : [];
@@ -100,8 +99,7 @@ export class XAdsClient {
     }
     const parsed = schema.safeParse(body);
     if (!parsed.success) {
-      const ids = mutationIds(method, path, body);
-      throw new AdportError('PROVIDER_ERROR', `x: unexpected API response schema${method === 'GET' ? '' : '; write may have succeeded, reconcile before retrying'}`, ids.length ? { resource_ids: ids } : undefined);
+      throw new AdportError('PROVIDER_ERROR', `x: unexpected API response schema${method === 'GET' ? '' : '; write may have succeeded, reconcile before retrying'}`, mutationReceipt(method, path, body));
     }
     return parsed.data;
   }
@@ -121,6 +119,14 @@ export class XAdsClient {
       cursors.add(page.next_cursor); cursor = page.next_cursor;
     }
   }
+}
+
+function mutationReceipt(method: XMethod, path: string, body: unknown) {
+  const ids = mutationIds(method, path, body);
+  const data = method === 'POST' && /^accounts\/[a-z0-9]+\/promoted_tweets$/.test(path) && body && typeof body === 'object' && 'data' in body ? body.data : undefined;
+  const rows = Array.isArray(data) ? data : data && typeof data === 'object' ? [data] : [];
+  const tweets = [...new Set(rows.flatMap(row => row && typeof row === 'object' && typeof row.tweet_id === 'string' && /^[1-9]\d{0,24}$/.test(row.tweet_id) ? [row.tweet_id] : []))].slice(0, 500);
+  return ids.length || tweets.length ? { ...(ids.length ? { resource_ids: ids } : {}), ...(tweets.length ? { reported_tweet_ids: tweets } : {}) } : undefined;
 }
 
 function mutationIds(method: XMethod, path: string, body: unknown): string[] {

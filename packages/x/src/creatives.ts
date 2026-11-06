@@ -19,9 +19,19 @@ type Draft = z.infer<typeof draftSchema>;
 
 export class XCreativeService {
   constructor(private readonly entities: XAdsEntities) {}
-  async users(account: string) {
+  async users(account: string, requireComplete = false) {
     await this.entities.getAccount(account);
-    return this.entities.client.list(`accounts/${xId.parse(account)}/promotable_users`, userSchema);
+    const path = `accounts/${xId.parse(account)}/promotable_users`;
+    if (!requireComplete) return this.entities.client.list(path, userSchema);
+    const rows: z.infer<typeof userSchema>[] = [], ids = new Set<string>(), cursors = new Set<string>();let cursor: string | undefined;
+    for (let page = 0; page < 10; page++) {
+      const result = await this.entities.client.request('GET', path, z.object({ data: z.array(userSchema).max(1000), next_cursor: z.string().nullable().optional() }), { count: 200, ...(cursor ? { cursor } : {}) });
+      for (const row of result.data) { if (ids.has(row.id)) throw new AdportError('PROVIDER_ERROR', 'x: promotable-user inventory repeated an ID');ids.add(row.id);rows.push(row); }
+      if (result.next_cursor === null) return rows;
+      if (!result.next_cursor || cursors.has(result.next_cursor)) break;
+      cursor = result.next_cursor;cursors.add(cursor);
+    }
+    throw new AdportError('PROVIDER_ERROR', 'x: promotable-user inventory is incomplete; receiving-author uniqueness is unconfirmed');
   }
   async access(account: string) {
     await this.entities.getAccount(account);

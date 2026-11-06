@@ -28,8 +28,8 @@ const notice = 'Native previews are local plans, not X validation. No write is r
 export class XPostService {
   constructor(private readonly entities: XAdsEntities, private readonly creatives: XCreativeService) {}
   private base(account: string) { return `accounts/${xId.parse(account)}`; }
-  private async author(account: string, user: string, full = false) {
-    const matches = (await this.creatives.users(account)).filter(row => row.user_id === user && !row.deleted);
+  private async author(account: string, user: string, full = false, requireComplete = false) {
+    const matches = (await this.creatives.users(account, requireComplete)).filter(row => row.user_id === user && !row.deleted);
     if (matches.length !== 1 || !['FULL', 'RETWEETS_ONLY'].includes(matches[0]!.promotable_user_type) || full && matches[0]!.promotable_user_type !== 'FULL') throw new AdportError('INVALID_INPUT', full ? 'x: this workflow requires a current FULL promotable author; RETWEETS_ONLY creates a different native post and needs its own receipt workflow' : 'x: post author is not an unambiguous current promotable user in this account');
     return matches[0]!;
   }
@@ -135,7 +135,7 @@ export class XPostService {
     return { ...context, context_hash: hash(context), notes: ['New native associations are ACTIVE; there is no PUT status. Under paused_creation the ad group itself must be PAUSED. The native API has no atomic compare-and-set, so snapshots do not lock concurrent account changes.', 'RETWEETS_ONLY copy promotion and scheduled associations are separate workflows.', notice] };
   }
   private async repostState(account: string, input: z.infer<typeof promotionSelection>) {
-    const users = await this.creatives.users(account), sources = users.filter(row => row.user_id === input.user_id && !row.deleted), receiving = users.filter(row => row.promotable_user_type === 'FULL' && !row.deleted);
+    const users = await this.creatives.users(account, true), sources = users.filter(row => row.user_id === input.user_id && !row.deleted), receiving = users.filter(row => row.promotable_user_type === 'FULL' && !row.deleted);
     if (sources.length !== 1 || sources[0]!.promotable_user_type !== 'RETWEETS_ONLY' || receiving.length !== 1 || receiving[0]!.user_id === input.user_id) throw new AdportError('INVALID_INPUT', 'x: repost promotion needs one current RETWEETS_ONLY source author and one unambiguous FULL receiving author; use ordinary promotion for FULL sources');
     const parent = await this.parents(account, input.line_item_id);
     if (parent.line.deleted || parent.campaign.deleted || !['ACTIVE', 'PAUSED'].includes(parent.line.entity_status) || !['ACTIVE', 'PAUSED'].includes(parent.campaign.entity_status) || !['PROMOTED_TWEETS', 'PROMOTED_ACCOUNT'].includes(parent.line.product_type)) throw new AdportError('INVALID_INPUT', 'x: repost promotion requires supported existing non-draft parents');
@@ -194,7 +194,7 @@ export class XPostService {
           while (!stopped && next < input.tweet_ids.length) {
             const source = input.tweet_ids[next++]!;
             try {
-              const parent = await this.parents(account, input.line_item_id), author = await this.author(account, input.user_id), recipient = await this.author(account, receivingUser, true), observedSource = (await this.exactPosts(account, input.user_id, [source]))[0]!;
+              const parent = await this.parents(account, input.line_item_id), author = await this.author(account, input.user_id, false, true), recipient = await this.author(account, receivingUser, true, true), observedSource = (await this.exactPosts(account, input.user_id, [source]))[0]!;
               if (!equal(parent.snapshot, context.parent) || !equal(sourceConfig(author), context.source_author) || !equal(sourceConfig(recipient), context.receiving_author) || !equal(observedSource, context.posts.find(row => row.id_str === source))) throw new AdportError('PENDING_MISMATCH', 'x: repost preflight changed before the next native request');
               if (stopped) break;
               attempted.add(source);
@@ -216,6 +216,7 @@ export class XPostService {
             } catch (error) {
               stopped = true;failures.push(source);
               if (error instanceof AdportError && error.details && typeof error.details === 'object' && 'resource_ids' in error.details && Array.isArray(error.details.resource_ids)) for (const id of error.details.resource_ids) if (typeof id === 'string' && xId.safeParse(id).success) { knownIds.add(id);record('association', id, source); }
+              if (error instanceof AdportError && error.details && typeof error.details === 'object' && 'reported_tweet_ids' in error.details && Array.isArray(error.details.reported_tweet_ids)) for (const id of error.details.reported_tweet_ids) if (typeof id === 'string' && snowflake.safeParse(id).success) { knownCopies.add(id);record('post', id, source); }
             }
           }
         };
