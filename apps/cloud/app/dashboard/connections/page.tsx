@@ -22,7 +22,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
     <main className="page">
       <PageHeader
         title="Platforms"
-        description="Connect your ad platforms and manage account access."
+        description="Connect your ad platforms and tracking tools, then manage account access."
       />
       <div className="stack" style={{ marginBottom: '0.9rem' }}>
         {params.connected ? <div className="callout success" role="status">{providerLabel(params.connected)} is connected and its accessible ad accounts were verified.</div> : null}

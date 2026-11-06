@@ -1,6 +1,7 @@
 import type { CloudProvider } from './types';
 
 export const PROVIDER_LABELS: Record<CloudProvider, string> = {
+  gtm: 'Google Tag Manager',
   google: 'Google Ads',
   meta: 'Meta Ads',
   tiktok: 'TikTok Ads',

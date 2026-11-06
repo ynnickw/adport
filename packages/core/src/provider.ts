@@ -62,6 +62,8 @@ export interface WriteGuard {
 
 export interface ProviderCapabilities {
   serverDryRun: boolean;
+  /** Configuration-only integrations do not participate in performance reports. */
+  reporting?: boolean;
 }
 
 /** A ready-to-call tool invocation (flows through the normal validate→apply gate). */

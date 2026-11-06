@@ -32,6 +32,7 @@ export async function setAnalyticsPreference(userId: string, enabled: boolean): 
 /** Consent and membership are checked again at delivery, including hosted-agent calls. */
 export async function deliverProductEvent(principal: Pick<TenantPrincipal, 'userId' | 'organizationId'>, input: ProductEvent, timestamp = new Date().toISOString(), insertId?: string): Promise<void> {
   try {
+    if ('provider' in input && input.provider === 'gtm') return;
     const config = analyticsConfig();
     const parsed = productEventSchema.safeParse(input);
     if (!config || !principal.userId || !parsed.success) return;
@@ -74,6 +75,7 @@ export async function deliverProductEvent(principal: Pick<TenantPrincipal, 'user
 }
 
 export function captureProductEvent(principal: Pick<TenantPrincipal, 'userId' | 'organizationId'>, event: ProductEvent, insertId?: string): void {
+  if ('provider' in event && event.provider === 'gtm') return;
   if (!analyticsConfig() || !principal.userId) return;
   const timestamp = new Date().toISOString();
   try { after(() => deliverProductEvent(principal, event, timestamp, insertId)); } catch { /* Non-request callers and analytics failures must not affect product work. */ }
