@@ -11,6 +11,7 @@ import { pinterestCatalogTools } from './catalogs.js';
 import { pinterestProductGroupTools } from './product-group-tools.js';
 import { pinterestCatalogItemTools } from './catalog-item-tools.js';
 import { pinterestLocalCatalogTools } from './local-catalog-tools.js';
+import { pinterestCampaignBudgetTools } from './campaign-budgets.js';
 
 export function pinterestTools(provider: PinterestAdsProvider): AnyToolDefinition[] {
   return [
@@ -22,9 +23,10 @@ export function pinterestTools(provider: PinterestAdsProvider): AnyToolDefinitio
     ...pinterestProductGroupTools(provider),
     ...pinterestCatalogItemTools(provider),
     ...pinterestLocalCatalogTools(provider),
+    ...pinterestCampaignBudgetTools(provider),
     ...pinterestCreativeTools(provider),
     defineTool({ name: 'pinterest_list_campaigns', namespace: 'pinterest', description: 'List Pinterest campaigns, including archived and draft entities.', input: z.object({ account_id: pinterestId }), annotations: { readOnly: true }, handler: input => provider.listCampaigns(input.account_id) }),
-    guardedWriteTool({ name: 'pinterest_create_campaign', namespace: 'pinterest', provider: 'pinterest', kind: 'create', description: 'Create a Pinterest CBO campaign, paused by policy. Budgets are account-currency micros; lifetime budgets require an end time. Preview is local.', payload: createCampaignSchema }),
+    guardedWriteTool({ name: 'pinterest_create_campaign', namespace: 'pinterest', provider: 'pinterest', kind: 'create', description: 'Create a CBO campaign, paused by policy. Integer account-currency micros; lifetime needs end_time. Daily mode defaults FIXED; AVERAGE requires acknowledge_variable_daily_spend and is a configured average, not a delivery ceiling or full Performance+ setup.', payload: createCampaignSchema }),
     guardedWriteTool({ name: 'pinterest_set_campaign_status', namespace: 'pinterest', provider: 'pinterest', kind: 'update', description: 'Pause or activate an existing Pinterest campaign.', payload: setStatusSchema }),
     guardedWriteTool({ name: 'pinterest_set_budget', namespace: 'pinterest', provider: 'pinterest', kind: 'update', description: 'Change an existing Pinterest CBO campaign budget in micros, preserving its daily/lifetime type.', payload: setBudgetSchema }),
   ];

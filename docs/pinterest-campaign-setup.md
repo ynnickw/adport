@@ -6,6 +6,10 @@ Pinterest tools use the same registry and preview/apply policy in the CLI, local
 
 `pinterest_create_campaign` creates a campaign with Campaign Budget Optimization (CBO). Its daily/lifetime cap is an integer amount in account-currency micros. `pinterest_create_ad_group` verifies the parent campaign and keeps CBO budgets at campaign level. An existing non-CBO campaign instead requires a child budget.
 
+See [fixed and average daily budgets](providers/pinterest-budgets.md) for explicit
+flexible budgeting, context-bound mode/amount edits and averaging acknowledgements.
+Policy caps constrain the configured amount, not actual individual-day delivery.
+
 Ad-group creation asks for the billable event, bid strategy and geographical targeting. Automatic targeting defaults to false and appears explicitly in the preview. MAX_BID requires a bid. CBO supports STANDARD pacing only. Some CBO scheduling features require Pinterest beta access.
 
 `pinterest_get_entity` reads one verified campaign/ad group/ad by its native ID. `pinterest_ad_groups` and `pinterest_ads` provide paged configuration reads. Native array query parameters use **comma-separated values**: the live endpoint silently treated repeated status parameters as only their final value, causing historical/archived entities to disappear. Reporting and configuration reads share the corrected encoding.

@@ -15,6 +15,7 @@ import { PinterestProductGroups } from './product-groups.js';
 import { PinterestCatalogItems } from './catalog-items.js';
 import { PinterestLocalStores } from './local-stores.js';
 import { PinterestLocalInventory } from './local-inventory.js';
+import { PinterestCampaignBudgets } from './campaign-budgets.js';
 import { accountSchema, batchResponseSchema, campaignSchema, createCampaignSchema, entitySchema, entityStatus, pinterestId, setBudgetSchema, setStatusSchema } from './schemas.js';
 
 interface Plan extends Omit<WritePreview, 'serverValidated'> { execute: () => Promise<string[]>; resultDetails?: () => unknown; resultWarnings?: () => string[] }
@@ -42,6 +43,7 @@ export class PinterestAdsProvider implements AdProvider {
   readonly catalogItems: PinterestCatalogItems;
   readonly localStores: PinterestLocalStores;
   readonly localInventory: PinterestLocalInventory;
+  readonly campaignBudgets: PinterestCampaignBudgets;
   constructor(private readonly client: PinterestAdsClient, media: MediaResolver = new LocalMediaResolver()) {
     this.creatives = new PinterestCreativeService(client, (account, id) => this.getCampaign(account, id));
     this.assets = new PinterestAssetService(client, media);
@@ -53,6 +55,7 @@ export class PinterestAdsProvider implements AdProvider {
     this.catalogItems = new PinterestCatalogItems(client, this.catalogs, media);
     this.localStores = new PinterestLocalStores(client, this.catalogs);
     this.localInventory = new PinterestLocalInventory(client, this.localStores, media);
+    this.campaignBudgets = new PinterestCampaignBudgets(client, (account, id) => this.getCampaign(account, id), () => { const value = (media as { scopeId?: unknown }).scopeId;return typeof value === 'string' && value ? value : 'local'; });
   }
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions {
@@ -165,13 +168,15 @@ export class PinterestAdsProvider implements AdProvider {
     if (this.catalogItems.supports(op.tool)) return this.catalogItems.plan(op);
     if (this.localStores.supports(op.tool)) return this.localStores.plan(op);
     if (this.localInventory.supports(op.tool)) return this.localInventory.plan(op);
+    if (this.campaignBudgets.supports(op.tool)) return this.campaignBudgets.plan(op);
     if (['pinterest_create_product_group', 'pinterest_update_product_group', 'pinterest_delete_product_group'].includes(op.tool)) return this.productGroups.plan(op);
     if (this.keywords.supports(op.tool)) return this.keywords.plan(op, guard);
     if (this.audiences.supports(op.tool)) return this.audiences.plan(op);
     if (PINTEREST_ASSET_WRITES.has(op.tool)) return this.assets.plan(op);
     if (op.tool === 'pinterest_create_campaign' && op.kind === 'create') {
       const input = createCampaignSchema.parse(op.payload);
-      const { budget_type, budget_micros, ...rest } = input;
+      if (input.daily_budget_mode === 'AVERAGE') return this.campaignBudgets.create(input, op, guard);
+      const { budget_type, budget_micros, daily_budget_mode: _mode, acknowledge_variable_daily_spend: _ack, ...rest } = input;
       const status = guard.forcePausedCreation ? 'PAUSED' : input.status;
       const cap = budget_type === 'DAILY' ? 'daily_spend_cap' : 'lifetime_spend_cap';
       const body = { ...rest, status, [cap]: budget_micros, is_campaign_budget_optimization: true, is_flexible_daily_budgets: false };
@@ -188,7 +193,8 @@ export class PinterestAdsProvider implements AdProvider {
       if ('budget_micros' in input) {
         const daily = current.daily_spend_cap ?? 0, lifetime = current.lifetime_spend_cap ?? 0;
         if (!current.is_campaign_budget_optimization || (daily > 0) === (lifetime > 0)) throw new AdportError('INVALID_INPUT', 'pinterest: campaign budget update requires CBO with exactly one existing daily/lifetime cap');
-        if (current.is_flexible_daily_budgets) throw new AdportError('INVALID_INPUT', 'pinterest: flexible daily budgets may exceed the daily amount; update this campaign in Ads Manager');
+        if (current.is_flexible_daily_budgets) throw new AdportError('INVALID_INPUT', 'pinterest: use pinterest_campaign_budget_context and pinterest_set_campaign_daily_budget with variable-spend/reset acknowledgements for an average daily budget');
+        if (daily > 0 && typeof current.is_flexible_daily_budgets !== 'boolean') throw new AdportError('INVALID_INPUT', 'pinterest: daily budget mode is unconfirmed; read pinterest_campaign_budget_context');
         const cap = daily > 0 ? 'daily_spend_cap' : 'lifetime_spend_cap', from = daily || lifetime;
         return {
           summary: `Change Pinterest campaign "${current.name ?? current.id}" budget`, changes: [`~ ${current.id} ${cap}: ${from} → ${input.budget_micros} micros`], coercions: [],
