@@ -20,6 +20,8 @@ import { TikTokClient } from './client.js';
 import { TikTokCreativeService } from './creatives.js';
 import { TikTokAudienceService } from './audiences.js';
 import { TikTokCustomAudiences } from './custom-audiences.js';
+import { TikTokAudienceSources } from './audience-sources.js';
+import { TikTokAudienceAuthoring } from './audience-authoring.js';
 import { TikTokMeasurementService } from './measurement.js';
 import { TikTokAutomatedRulesService } from './automated-rules.js';
 import { TikTokCatalogService } from './catalogs.js';
@@ -60,6 +62,8 @@ export class TikTokAdsProvider implements AdProvider {
   readonly creatives: TikTokCreativeService;
   readonly audiences: TikTokAudienceService;
   readonly customAudiences: TikTokCustomAudiences;
+  readonly audienceSources: TikTokAudienceSources;
+  readonly audienceAuthoring: TikTokAudienceAuthoring;
   readonly measurement: TikTokMeasurementService;
   readonly automatedRules: TikTokAutomatedRulesService;
   readonly catalogs: TikTokCatalogService;
@@ -69,7 +73,7 @@ export class TikTokAdsProvider implements AdProvider {
     private readonly app: { appId: string; secret: string },
     media: MediaResolver = new LocalMediaResolver(),
     catalogAccess?: TikTokCatalogAccessStore,
-  ) { this.creatives = new TikTokCreativeService(client, media); this.audiences = new TikTokAudienceService(client);this.customAudiences = new TikTokCustomAudiences(client, media); this.measurement = new TikTokMeasurementService(client); this.automatedRules = new TikTokAutomatedRulesService(client); this.catalogs = new TikTokCatalogService(client, catalogAccess, media); }
+  ) { this.creatives = new TikTokCreativeService(client, media); this.audiences = new TikTokAudienceService(client);this.customAudiences = new TikTokCustomAudiences(client, media);this.audienceSources = new TikTokAudienceSources(client, async account => { const authorized = await client.get<{ list?: Array<{ advertiser_id: string }> }>('oauth2/advertiser/get', { app_id: this.appId(), secret: this.secret() });if (!Array.isArray(authorized.list) || !authorized.list.some(row => typeof row.advertiser_id === 'string' && row.advertiser_id === account)) throw new AdportError('POLICY_VIOLATION', 'Selected advertiser is not in the current native authorization.'); });this.audienceAuthoring = new TikTokAudienceAuthoring(client, this.customAudiences, this.audienceSources); this.measurement = new TikTokMeasurementService(client); this.automatedRules = new TikTokAutomatedRulesService(client); this.catalogs = new TikTokCatalogService(client, catalogAccess, media); }
 
   capabilities(): ProviderCapabilities {
     // No server-side dry run in the Marketing API — previews are client-side diffs.
@@ -259,6 +263,7 @@ export class TikTokAdsProvider implements AdProvider {
   }
 
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
+    if (['tiktok_create_rule_audience', 'tiktok_create_lookalike_audience', 'tiktok_refresh_lookalike_audiences'].includes(op.tool)) return this.audienceAuthoring.plan(op);
     if (['tiktok_upload_audience_file', 'tiktok_create_customer_audience', 'tiktok_update_customer_audience_users', 'tiktok_rename_custom_audience', 'tiktok_delete_custom_audiences'].includes(op.tool)) return this.customAudiences.plan(op);
     const payload = op.payload as never;
     switch (op.tool) {

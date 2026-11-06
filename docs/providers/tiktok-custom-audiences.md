@@ -4,6 +4,9 @@ These typed tools share the MCP, CLI and REST registry and the normal
 preview/apply policy. Custom audiences contain matched users. A saved targeting
 template is a separate resource and does not populate an audience.
 
+See [rule and lookalike audiences](tiktok-audience-authoring.md) for source
+discovery, event-based audience creation and owned lookalike refresh.
+
 | Tool | Native v1.3 operation |
 | --- | --- |
 | `tiktok_custom_audiences` | `GET /dmp/custom_audience/list/` |

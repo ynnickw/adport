@@ -4,7 +4,7 @@ import { AdportError, type MediaResolver, type WriteOperation, type WritePreview
 import type { TikTokClient } from './client.js';
 import { nativeListComplete } from './pagination.js';
 import { audienceFileRecords } from './audience-file.js';
-import { audienceId, audienceNativeId, audienceFileProof, audienceFileUpload, customAudienceList, customAudienceGet, customerAudienceCreate, customerAudienceUpdate, customAudienceRename, customAudiencesDelete } from './custom-audience-schemas.js';
+import { audienceId, audienceIds, audienceNativeId, audienceFileProof, audienceFileUpload, customAudienceList, customAudienceGet, customerAudienceCreate, customerAudienceUpdate, customAudienceRename, customAudiencesDelete } from './custom-audience-schemas.js';
 
 type Plan = Omit<WritePreview, 'serverValidated'> & { execute(): Promise<WriteResult> };
 const text = z.string().max(100_000), nativeDetails = z.object({ audience_id: audienceNativeId, owner_id: audienceNativeId.optional(), name: z.string().max(4096), type: z.string().max(128), is_creator: z.boolean().optional(), shared: z.boolean().optional(), is_valid: z.boolean().optional(), is_expiring: z.boolean().optional(), expired_time: z.string().max(100).optional(), create_time: z.string().max(100).optional(), calculate_type: z.string().max(100).nullable().optional(), audience_sub_type: z.string().max(100).optional(), rule: text.nullable().optional(), is_auto_refresh: z.boolean().optional(), lookalike_spec: z.json().optional(), cover_num: z.number().nonnegative().safe().optional(), msg: text.nullable().optional(), error_msg: text.nullable().optional() });
@@ -23,6 +23,8 @@ function failure(error: unknown, ids: string[] = []) {
   return new AdportError('PROVIDER_ERROR', 'TikTok audience operation is unconfirmed. No native upload or mutation was retried. Reconcile known IDs before another preview; provider bodies and customer identifiers stay hidden.', { ...(ids.length ? { resourceIds: ids } : {}), ...(Number.isSafeInteger(details.native_code ?? details.code) ? { native_code: details.native_code ?? details.code } : {}) });
 }
 const notes = ['Custom audiences contain matched users; saved targeting templates are a different resource. No ads, budgets, spend, sharing grants or conversion events are changed by these tools.', 'Audience changes can affect existing ad groups and advertisers receiving a shared audience. Native audience expiry can detach audiences or pause campaigns that have no other targeting.', 'Native file and membership processing can take up to 48 hours. Acceptance, metadata readback and matched-user availability are distinct; individual membership is not readable through this API.', 'Concurrent native operations, quota and minimum matched-audience size remain authoritative. There is no conditional-write or atomic batch guarantee. Never replay an uncertain upload or mutation.'];
+
+export { configuration as customAudienceConfiguration, failure as audienceOperationFailure };
 
 /** Official SDK f809c396 plus public v1.3 docs, refreshed 2026-11-06. */
 export class TikTokCustomAudiences {
@@ -50,6 +52,7 @@ export class TikTokCustomAudiences {
     const input = customAudienceGet.parse(value), row = (await this.details(input.account_id, [input.custom_audience_id]))[0]!;
     return { audience: publicDetails(input.account_id, row), records: [{ id: row.audience_id, name: row.name, type: row.type, available: row.is_valid, matched_users: row.cover_num, shared: row.shared, owner: row.is_creator, expires: row.expired_time, native_error_reported: !!row.error_msg }], notes };
   }
+  async inspect(account: string, ids: string[]) { audienceId.parse(account);audienceIds.parse(ids);return (await this.details(account, ids)).map(row => publicDetails(account, row)); }
   private uploads(account: string, receipts: string[]) {
     const now = Math.floor(Date.now() / 1000), files = receipts.map(receipt => audienceFileProof.parse(this.client.verifyAudienceFileReceipt(receipt)));
     if (files.some(row => row.account_id !== account || row.scope_id !== this.mediaScope() || row.expires_at <= now || row.expires_at > now + 86_400) || new Set(files.map(row => row.file_path)).size !== files.length || new Set(files.map(row => row.calculate_type)).size !== 1) throw new AdportError('INVALID_INPUT', 'Use distinct, unexpired audience upload receipts for this project/advertiser and one matching encryption type.');return files;
@@ -82,7 +85,7 @@ export class TikTokCustomAudiences {
         try {
           z.object({}).strict().parse(await this.client.post('dmp/custom_audience/update', body));const actual = (await this.details(op.accountId, [input.custom_audience_id]))[0]!;this.owned(op.accountId, actual, false);
           const expected = { ...configuration(fresh.row), ...('custom_audience_name' in input ? { name: input.custom_audience_name } : {}) };
-          if (canonical(configuration(actual)) !== canonical(expected)) throw invalid();
+          if (canonical(configuration(actual)) !== canonical(expected) || actual.error_msg) throw invalid();
           return { applied: true, resourceIds: [input.custom_audience_id], details: rename ? { configuration_readback: 'VERIFIED', membership_changed: false } : { status: 'ACCEPTED_FOR_PROCESSING', processed: false, membership_verified: false, action, source_files: fresh.files!.map(file => ({ sha256: file.sha256, record_count: file.record_count })), native_is_valid: actual.is_valid, next_tool: 'tiktok_get_custom_audience', next_arguments: { account_id: op.accountId, custom_audience_id: input.custom_audience_id } }, warnings: rename ? ['Native audience modification can reset its expiry under TikTok’s retention policy.'] : notes.slice(1) };
         } catch (error) { throw failure(error, [input.custom_audience_id]); }
       } };
@@ -114,7 +117,7 @@ export class TikTokCustomAudiences {
         try {
           const result = z.object({ custom_audience_id: audienceNativeId }).parse(await this.client.post('dmp/custom_audience/create', { advertiser_id: op.accountId, custom_audience_name: input.custom_audience_name, calculate_type: fresh[0]!.calculate_type, file_paths: fresh.map(file => file.file_path), audience_enhancement: false, audience_sub_type: input.audience_sub_type, ...(input.retention_in_days ? { retention_in_days: input.retention_in_days } : {}) }));id = result.custom_audience_id;
           const actual = (await this.details(op.accountId, [id]))[0]!;this.owned(op.accountId, actual, false);
-          if (actual.name !== input.custom_audience_name || actual.type !== 'Customer File Audience' || actual.calculate_type !== fresh[0]!.calculate_type || actual.audience_sub_type !== input.audience_sub_type) throw invalid();
+          if (actual.name !== input.custom_audience_name || actual.type !== 'Customer File Audience' || actual.calculate_type !== fresh[0]!.calculate_type || actual.audience_sub_type !== input.audience_sub_type || actual.error_msg) throw invalid();
           return { applied: true, resourceIds: [id], details: { status: 'ACCEPTED_FOR_PROCESSING', processed: false, metadata_readback: 'VERIFIED', membership_verified: false, native_is_valid: actual.is_valid, retention_requested: input.retention_in_days, native_expired_time: actual.expired_time, next_tool: 'tiktok_get_custom_audience', next_arguments: { account_id: op.accountId, custom_audience_id: id } }, warnings: notes.slice(1) };
         } catch (error) { throw failure(error, id ? [id] : []); }
       } };

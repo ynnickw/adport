@@ -1,5 +1,13 @@
 # TikTok Ads
 
+## Rule and lookalike audiences
+
+Agents can discover event sources for all nine documented audience families,
+create rule audiences from verified source selections, and create or refresh
+lookalikes through the shared MCP/CLI/REST preview and apply tools. See
+[audience authoring](tiktok-audience-authoring.md) for native source windows,
+identity/ownership checks, rule bounds and processing-pending receipts.
+
 ## Customer-file audiences
 
 Agents can upload private hashed customer files, create audiences, append/remove/

@@ -549,7 +549,7 @@
   {"name":"tiktok_get_automated_rules","view":"records","guarded":false},
   {"name":"tiktok_get_pixel","view":"records","guarded":false},
   {"name":"tiktok_get_saved_audience","view":"records","guarded":false},
-  {"name":"tiktok_identities","view":"data","guarded":false},
+  {"name":"tiktok_identities","view":"records","guarded":false},
   {"name":"tiktok_image_info","view":"data","guarded":false},
   {"name":"tiktok_pixel_event_stats","view":"records","guarded":false},
   {"name":"tiktok_pixels","view":"records","guarded":false},
