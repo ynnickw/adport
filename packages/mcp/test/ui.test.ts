@@ -371,6 +371,21 @@ describe('shipped MCP iframe', () => {
     expect(ui.app.innerHTML).toContain('>Applied</span>'); expect(ui.app.innerHTML).toContain('3_123'); expect(ui.app.innerHTML).not.toContain('Hold to apply');
   });
 
+  it('bounds error reconciliation identifiers and omits arbitrary native details', async () => {
+    const ui = widget();
+    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('x_upload_media', 'operation', {
+      status: 'pending_validation', applied: false, expires_at: '2099-01-01T00:00:00Z', pending_operation_id: 'consumed-token', preview: { summary: 'Upload image', changes: ['+ image'] },
+    }, { arguments: { account_id: 'account', project_id: 'project' } }) } });
+    ui.approvals[0]!.click();const request = ui.sent.at(-1) as { id: number };
+    ui.message({ jsonrpc: '2.0', id: request.id, result: { isError: true, structuredContent: { error: 'PROVIDER_ERROR', message: 'Upload unconfirmed', details: { resourceIds: [...Array.from({ length: 105 }, (_, i) => `media_${i}`), 'media_0', 'https://private.example?token=PRIVATE', '<script>PRIVATE</script>'], native_body: 'PRIVATE', next_tool: 'PRIVATE', confirmed_source_copy_mappings: [{ source_tweet_id: '1', copied_tweet_id: '2', promoted_tweet_id: 'private' }] } } } });
+    for (let i = 0; i < 12; i++) await Promise.resolve();
+    const update = ui.sent.at(-1) as any, facts = update.params.structuredContent.adport_operation;
+    expect(facts).toMatchObject({ status: 'unconfirmed', resource_ids: Array.from({ length: 100 }, (_, i) => `media_${i}`), resource_ids_truncated: true, total_resource_ids: 105 });
+    expect(facts.reconciliation).toEqual({ resource_ids: facts.resource_ids, resource_ids_truncated: true, total_resource_ids: 105 });
+    expect(ui.app.innerHTML).toContain('Reconciliation');expect(ui.app.innerHTML).toContain('media_99');expect(ui.app.innerHTML).not.toContain('media_100');expect(ui.app.innerHTML).not.toContain('PRIVATE');expect(JSON.stringify(facts)).not.toMatch(/PRIVATE|consumed-token|confirmed_source_copy_mappings/);
+    expect(ui.app.innerHTML).not.toContain('data-approve');expect(ui.sent.filter((value: any) => value.method === 'tools/call')).toHaveLength(1);
+  });
+
   it.each([false, true])('renders partial-write warnings and shares them through the host context (ChatGPT bridge=%s)', async native => {
     const warnings = ['Only 1 of 2 rows was confirmed; inspect failed rows <script>unsafe</script>'];
     const outcome = { status: 'applied', applied: true, preview: { summary: 'Upload conversion records', changes: ['+ conversion records'] }, result: { resourceIds: ['conversion-action'], details: { status: 'PARTIAL_OR_UNCONFIRMED' }, warnings } };
