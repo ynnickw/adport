@@ -70,7 +70,9 @@ export function builtinTools(): AnyToolDefinition[] {
       annotations: { readOnly: true, openWorld: false },
       async handler(input, ctx) {
         const periods = reportPeriods(input.date_range, input.granularity);
-        const providers = selectConnectedProviders(ctx.providers, input.provider);
+        const providers = selectConnectedProviders(ctx.providers, input.provider)
+          .filter(provider => provider.capabilities().reporting !== false);
+        if (input.provider && !providers.length) throw new AdportError('INVALID_INPUT', 'This integration exposes configuration; use its native read tools.');
         const query: NormalizedQuery = {
           accountIds: input.account_ids,
           level: input.level,

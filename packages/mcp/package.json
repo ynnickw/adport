@@ -1,7 +1,7 @@
 {
   "name": "@adport/mcp",
   "version": "0.7.0",
-  "description": "adport MCP server — the open control plane for paid media",
+  "description": "adport MCP server \u2014 the open control plane for paid media",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -40,7 +40,8 @@
     "@adport/provider-tiktok": "workspace:*",
     "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@adport/provider-gtm": "workspace:*"
   },
   "devDependencies": {
     "@types/jsdom": "21.1.7",

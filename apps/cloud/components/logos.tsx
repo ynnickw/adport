@@ -1,5 +1,5 @@
 import { FaLinkedin } from 'react-icons/fa';
-import { SiPinterest, SiSpotify, SiX } from 'react-icons/si';
+import { SiGoogletagmanager, SiPinterest, SiSpotify, SiX } from 'react-icons/si';
 import { SnapchatLogo } from './snapchat-logo';
 
 export function BrandMark() {
@@ -19,6 +19,8 @@ export { providerLabel } from '@/lib/cloud/providers';
 
 export function ProviderLogo({ name }: { name: string }) {
   switch (name) {
+    case 'gtm':
+      return <SiGoogletagmanager color="#4285f4" aria-hidden="true" />;
     case 'snapchat':
       return <SnapchatLogo />;
     case 'spotify':

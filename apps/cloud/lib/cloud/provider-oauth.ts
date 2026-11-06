@@ -1,4 +1,5 @@
 import 'server-only';
+import { GTM_SCOPES } from '@adport/core';
 import { createClientSecret, type AppleCredentials } from '@adport/provider-apple';
 import { DEFAULT_GRAPH_VERSION } from '@adport/provider-meta';
 import { TIKTOK_API_VERSION } from '@adport/provider-tiktok';
@@ -379,7 +380,28 @@ const reddit: OAuthAdapter<'reddit'> = {
   },
 };
 
-const adapters = { google, meta, tiktok, microsoft, reddit, apple, ...extraOAuthAdapters, x: xOAuthAdapter } satisfies { [P in OAuthProvider]: OAuthAdapter<P> };
+const gtm: OAuthAdapter<'gtm'> = {
+  provider: 'gtm', flowLabel: 'Google Tag Manager OAuth 2.0', scopes: GTM_SCOPES,
+  pkce: true, codeParam: 'code', manualRevocationUrl: 'https://myaccount.google.com/permissions',
+  configured: () => googleConfigured() && (env().GTM_OAUTH_ENABLED === 'true' || Boolean(env().GTM_TEST_ORGANIZATION_IDS?.trim())),
+  authorizationUrl(input) {
+    if (!this.configured()) throw new Error('Google Tag Manager authorization is not enabled.');
+    return buildGoogleAuthorizationUrl(input, { provider: 'gtm', scopes: GTM_SCOPES });
+  },
+  async exchange({ code, verifier }) {
+    if (!this.configured()) throw new Error('Google Tag Manager authorization is not enabled.');
+    const tokens = await exchangeGoogleCode(code, verifier, 'gtm');
+    if (GTM_SCOPES.some(scope => !tokens.scopes.includes(scope))) {
+      throw new Error('Google Tag Manager permissions were incomplete. Reconnect and approve the requested GTM permissions.');
+    }
+    return { refreshToken: tokens.refreshToken };
+  },
+  // Google can revoke every service granted to this OAuth application together.
+  // Remove the local GTM connection; direct users to Google for app-wide revocation.
+  async revoke() { return false; },
+};
+
+const adapters = { gtm, google, meta, tiktok, microsoft, reddit, apple, ...extraOAuthAdapters, x: xOAuthAdapter } satisfies { [P in OAuthProvider]: OAuthAdapter<P> };
 
 export function oauthAdapter<P extends OAuthProvider>(provider: P): OAuthAdapter<P> {
   return adapters[provider] as unknown as OAuthAdapter<P>;
@@ -392,6 +414,7 @@ export function revokeGrant(provider: OAuthProvider, credential: StoredProviderC
 /** Availability of every hosted OAuth application, for the connections UI. */
 export function oauthAvailability(organizationId?: string): Record<OAuthProvider, boolean> {
   const availability: Record<OAuthProvider, boolean> = {
+    gtm: gtm.configured(),
     google: google.configured(),
     meta: meta.configured(),
     tiktok: tiktok.configured(),

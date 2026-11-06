@@ -1,7 +1,7 @@
 {
   "name": "adport",
   "version": "0.7.0",
-  "description": "adport CLI — the open control plane for paid media",
+  "description": "adport CLI \u2014 the open control plane for paid media",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
@@ -32,7 +32,8 @@
     "@adport/provider-tiktok": "workspace:*",
     "commander": "^13.0.0",
     "yaml": "^2.6.0",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@adport/provider-gtm": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",

@@ -35,7 +35,8 @@ export class AuditRunner {
   async run(options: AuditRunOptions = {}): Promise<AuditRunResult> {
     const range = resolveDateRange(options.dateRange ?? 'last_30_days');
     const packs = options.packs ?? [corePerformancePack];
-    const providers = selectConnectedProviders(this.providers, options.provider);
+    const providers = selectConnectedProviders(this.providers, options.provider)
+      .filter(provider => provider.capabilities().reporting !== false);
 
     const findings: AuditFinding[] = [];
     let evaluatedAccounts = 0;
