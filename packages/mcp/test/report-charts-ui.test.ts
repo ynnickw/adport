@@ -11,6 +11,45 @@ function mount(tool: string, data: unknown) {
 const row = (name: string, spend: string, currency = 'EUR') => ({ metadata: { name }, totalMetrics: { localSpend: { amount: spend, currency }, taps: 0, totalInstalls: 0 } });
 
 describe('chart-first provider reports', () => {
+  it('charts native GA4 daily dates as one series while retaining exact currency values', () => {
+    const { dom, document } = mount('ga4_report', { metadata: { currencyCode: 'EUR' }, metric_headers: [{ name: 'totalRevenue', type: 'TYPE_CURRENCY' }],
+      rows: ['20261101', '20261102'].map(date => ({ dimensions: { date, sessionSourceMedium: 'google / cpc' }, metrics: { totalRevenue: '12.3456789' } })) });
+    try {
+      expect(document.querySelector('[data-native-line] svg')?.querySelectorAll('circle')).toHaveLength(2);
+      expect(document.querySelector('[data-native-line]')?.textContent).toContain('google / cpc');
+      expect(document.querySelector('details pre')?.textContent).toContain('12.3456789');
+      expect(document.querySelector('.record-fields')?.textContent).toContain('12.3456789 EUR');
+      expect(document.querySelector('.report-overview')).toBeNull();
+    } finally { dom.window.close(); }
+  });
+
+  it('formats Search Console CTR as a percentage and keeps average position unaggregated', () => {
+    const { dom, document } = mount('gsc_search_analytics', { rows: [{ dimensions: { query: 'adport' }, metrics: { ctr: 0.2, position: 3.5 } }] });
+    try {
+      expect(document.querySelector('.report-bars strong')?.textContent).toBe('20%');
+      expect(document.querySelector('.report-chart-head')?.textContent).toContain('%');
+      expect(document.querySelector('.record-fields')?.textContent).toContain('3.5');
+      expect(document.querySelector('.report-overview')).toBeNull();
+    } finally { dom.window.close(); }
+  });
+
+  it('binds analytics pagination to the selected property and filters', async () => {
+    const callTool = vi.fn().mockResolvedValue({ isError: true });
+    const dom = new JSDOM(ADPORT_UI_HTML, { runScripts: 'dangerously', beforeParse(window) { Object.defineProperty(window, 'openai', { value: { callTool } }); } });
+    const args = { account_id: '123', project_id: 'project', start_date: '2026-11-01', end_date: '2026-11-05', metrics: ['sessions'], offset: 0 };
+    const send = (next: Record<string, unknown>) => dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window.parent, data: { jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: {
+      structuredContent: structuredResult('ga4_report', 'data', { rows: [{ dimensions: {}, metrics: { sessions: '1' } }] }, undefined, { project_id: 'project' }, undefined, { arguments: args }, { arguments: next }, { provider: 'ga4', accountId: '123', pagination: { cursorInput: 'offset' } }),
+    } } }));
+    try {
+      send({ ...args, account_id: 'other', offset: 1 }); expect(dom.window.document.querySelector('[data-report-next]')).toBeNull();
+      send({ ...args, offset: 1 });
+      (dom.window.document.querySelector('[data-report-next]') as HTMLButtonElement).click();
+      await vi.waitFor(() => expect(callTool).toHaveBeenCalled());
+      expect(callTool).toHaveBeenCalledWith('ga4_report', { ...args, offset: 1 });
+      await vi.waitFor(() => expect(dom.window.document.querySelector('[data-report-page-status]')?.textContent).toContain('could not be confirmed'));
+    } finally { dom.window.close(); }
+  });
+
   it('shows the Apple comparison and one summary while keeping repeated row metrics collapsed', () => {
     const data = { result: { rows: [row('DE Search', '0'), row('US Search', '0.6515')], summary: { grandTotal: { localSpend: { amount: '0.6515', currency: 'EUR' }, taps: 2, totalInstalls: 0 } } }, pagination: { offset: 0, totalCount: 2 } };
     const { dom, document, callTool } = mount('apple_report', data);

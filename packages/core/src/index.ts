@@ -77,3 +77,5 @@ export {
   type CreateContextOptions,
   type ProviderModule,
 } from './context.js';
+
+export { ga4Tools, gscTools, ga4ReportSchema, ga4RealtimeSchema, gscReportSchema, searchConsoleSite, GA4_SCOPES, GSC_SCOPES, type Ga4Reader, type GscReader, type Ga4ReportInput, type Ga4RealtimeInput, type GscReportInput } from './tools/analytics.js';

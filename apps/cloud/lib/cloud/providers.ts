@@ -1,7 +1,7 @@
 import type { CloudProvider } from './types';
 
 export type ProviderCategory = 'advertising' | 'analytics';
-const ANALYTICS_PROVIDERS: readonly string[] = ['gtm'];
+const ANALYTICS_PROVIDERS: readonly string[] = ['ga4', 'gsc', 'gtm'];
 
 export function providerCategory(provider: string): ProviderCategory {
   return ANALYTICS_PROVIDERS.includes(provider) ? 'analytics' : 'advertising';
@@ -20,6 +20,8 @@ export function providerConnectionsPath(provider: string): string {
 }
 
 export const PROVIDER_LABELS: Record<CloudProvider, string> = {
+  ga4: 'Google Analytics 4',
+  gsc: 'Google Search Console',
   gtm: 'Google Tag Manager',
   google: 'Google Ads',
   meta: 'Meta Ads',

@@ -9,6 +9,7 @@ import {
   type WriteGuard,
   type WriteOperation,
 } from '@adport/core';
+import { usesAdAccountSlot } from './providers';
 import type { CloudProvider } from './types';
 
 function canonicalAccountId(provider: string, accountId: string): string {
@@ -22,7 +23,7 @@ function assertAllowed(providerId: string, allowed: ReadonlySet<string>, account
   if (![...allowed].some((value) => canonicalAccountId(providerId, value) === normalized)) {
     throw new AdportError(
       'POLICY_VIOLATION',
-      `Account ${accountId} is not active for this Adport Cloud workspace. Enable it in Accounts before using it.`,
+      `Account ${accountId} is not active for this Adport Cloud workspace. Enable it in ${usesAdAccountSlot(providerId) ? 'Accounts' : 'Analytics & tracking'} before using it.`,
       { provider: providerId, accountId },
     );
   }

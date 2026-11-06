@@ -2,6 +2,8 @@ import 'server-only';
 import { AdportError, createContext, selectRuntimeCatalog, PolicyEngine, type ToolSelection, type AdportRuntime, type AnyToolDefinition, type ProviderModule } from '@adport/core';
 import { toolAccessPath } from '@/lib/tool-access-link';
 import { AppleAdsClient, AppleAdsProvider, appleTools } from '@adport/provider-apple';
+import { AnalyticsClient, Ga4Provider, SearchConsoleProvider, ga4Tools, gscTools } from '@adport/provider-analytics';
+import { googleOAuthClient } from './google-oauth';
 import { GtmClient, GtmProvider, gtmTools } from '@adport/provider-gtm';
 import { GoogleAdsProvider, GoogleAdsRestClient, googleTools } from '@adport/provider-google';
 import { MetaAdsProvider, MetaGraphClient, metaTools } from '@adport/provider-meta';
@@ -103,6 +105,12 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     const provider = new XAdsProvider(new XAdsClient({ consumerKey, consumerSecret, ...credentials.x }), undefined, media);
     modules.push({ provider: scopeProvider(provider), tools: xTools(provider) });
   }
+  for (const id of ['ga4', 'gsc'] as const) {
+    if (!credentials[id] || !providerAllowedForOrganization(id, principal.organizationId)) continue;
+    const client = new AnalyticsClient({ ...googleOAuthClient(id), refreshToken: credentials[id]!.refreshToken });
+    if (id === 'ga4') { const provider = new Ga4Provider(client); modules.push({ provider: scopeProvider(provider), tools: ga4Tools(provider) }); }
+    else { const provider = new SearchConsoleProvider(client); modules.push({ provider: scopeProvider(provider), tools: gscTools(provider) }); }
+  }
   if (credentials.gtm && providerAllowedForOrganization('gtm', principal.organizationId)) {
     const config = googleEnv();
     const provider = new GtmProvider(new GtmClient({
@@ -174,7 +182,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     findings: new PostgresFindingsStore(principal.organizationId),
     media,
   });
-  if (options.surface === 'mcp') completeMcpCatalog(runtime, providerAllowedForOrganization('gtm', principal.organizationId));
+  if (options.surface === 'mcp') completeMcpCatalog(runtime, principal.organizationId);
   const selected = options.catalog ? selectRuntimeCatalog(runtime, options.catalog, false, {
     canWrite: principal.scopes.includes('tools:write'), excludedTools: ['recommendation_apply'],
     manageAccessUrl: new URL(toolAccessPath(principal.organizationId, principal.apiKeyId ?? principal.clientId ?? '', principal.apiKeyId ? 'key' : 'oauth', principal.oauthOrganizationGroupId), env().ADPORT_CLOUD_BASE_URL).href,
@@ -192,10 +200,12 @@ function unavailableTools<T extends object>(provider: string, factory: (provider
 }
 
 /** A stable catalog lets clients use platforms connected after OAuth consent. */
-function completeMcpCatalog(runtime: AdportRuntime, includeGtm: boolean): void {
+function completeMcpCatalog(runtime: AdportRuntime, organizationId: string): void {
   const registered = new Set(runtime.registry.list().map(tool => tool.name));
   const catalog = [
-    ...(includeGtm ? unavailableTools('gtm', gtmTools) : []),
+    ...(providerAllowedForOrganization('gtm', organizationId) ? unavailableTools('gtm', gtmTools) : []),
+    ...(providerAllowedForOrganization('ga4', organizationId) ? unavailableTools('ga4', ga4Tools) : []),
+    ...(providerAllowedForOrganization('gsc', organizationId) ? unavailableTools('gsc', gscTools) : []),
     ...unavailableTools('google', googleTools), ...unavailableTools('meta', metaTools),
     ...unavailableTools('tiktok', tiktokTools), ...unavailableTools('apple', appleTools),
     ...unavailableTools('microsoft', microsoftTools), ...unavailableTools('reddit', redditTools),

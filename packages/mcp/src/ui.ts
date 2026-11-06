@@ -12,13 +12,15 @@ import { APPLE_REPORT_UI_SCRIPT, APPLE_REPORT_UI_STYLES } from './apple-report-u
 import { NATIVE_REPORT_UI_SCRIPT, NATIVE_REPORT_UI_STYLES } from './native-report-ui.js';
 import { REPORT_CHART_SCRIPT, REPORT_CHART_STYLES } from './report-chart-ui.js';
 
-export const ADPORT_UI_URI = 'ui://adport/insight-card-v27.html';
+export const ADPORT_UI_URI = 'ui://adport/insight-card-v28.html';
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
 export const ADPORT_UI_RESOURCE_DOMAINS = [ADPORT_UI_DOMAIN, 'https://*.fbcdn.net', 'https://*.fbsbx.com', 'https://*.googleusercontent.com', 'https://tpc.googlesyndication.com', 'https://www.bing.com', 'https://*.scdn.co', 'https://*.spotifycdn.com', 'https://storage.googleapis.com', 'https://*.pinimg.com', 'https://*.redd.it', 'https://*.redditmedia.com', 'https://*.redditstatic.com', 'https://*.licdn.com', 'https://*.licdn-ei.com', 'https://pbs.twimg.com', 'https://video.twimg.com', 'https://ton.twimg.com', 'https://p16-sign-sg.tiktokcdn.com', 'https://v16-tiktokcdn-com.akamaized.net'];
 
 export type AdportView = 'accounts' | 'report' | 'operation' | 'insights' | 'creatives' | 'planning' | 'data' | 'records' | 'receipt';
 
 const providerNames: Record<string, string> = {
+  ga4: 'Google Analytics 4',
+  gsc: 'Google Search Console',
   gtm: 'Google Tag Manager',
   google: 'Google Ads',
   meta: 'Meta Ads',

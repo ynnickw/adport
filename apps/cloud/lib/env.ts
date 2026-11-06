@@ -40,6 +40,12 @@ const schema = z.object({
   // Adport-owned Google Ads OAuth application (verified project).
   GOOGLE_ADS_CLIENT_ID: z.string().min(10).optional(),
   GOOGLE_ADS_CLIENT_SECRET: z.string().min(8).optional(),
+  // Optional independent application keeps analytics review separate from Ads/GTM.
+  GOOGLE_ANALYTICS_CLIENT_ID: z.string().min(10).optional(),
+  GOOGLE_ANALYTICS_CLIENT_SECRET: z.string().min(8).optional(),
+  GA4_OAUTH_ENABLED: z.enum(['true', 'false']).default('false'),
+  GSC_OAUTH_ENABLED: z.enum(['true', 'false']).default('false'),
+  ANALYTICS_TEST_ORGANIZATION_IDS: z.string().optional(),
   // Enable only when the GTM scopes are approved for external users.
   GTM_OAUTH_ENABLED: z.enum(['true', 'false']).default('false'),
   GTM_TEST_ORGANIZATION_IDS: z.string().optional(),

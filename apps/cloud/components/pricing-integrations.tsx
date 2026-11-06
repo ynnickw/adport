@@ -4,7 +4,9 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { ProviderLogo } from './logos';
 import { AgentLogo } from '@/app/dashboard/agents/agent-setup-guide';
 import { OAUTH_PROVIDERS } from '@/lib/cloud/types';
-import { providerLabel } from '@/lib/cloud/providers';
+import { providerLabel, usesAdAccountSlot } from '@/lib/cloud/providers';
+
+const AD_PROVIDERS = OAUTH_PROVIDERS.filter(usesAdAccountSlot);
 
 export function PricingProviderStack({ planName }: { planName?: string }) {
   const id = useId();
@@ -46,9 +48,9 @@ export function PricingProviderStack({ planName }: { planName?: string }) {
     onPointerLeave={() => { if (!pinned.current) closeTimer.current = setTimeout(() => { if (!root.current?.contains(document.activeElement)) close(); }, 120); }}
     onFocus={() => setOpen(true)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) close(); }}
     onKeyDown={event => { if (event.key === 'Escape' && open) { event.preventDefault(); event.stopPropagation(); close(); } }}>
-    <div className="provider-stack-marks" aria-hidden="true">{OAUTH_PROVIDERS.slice(0, 4).map(provider => <span className="pricing-provider-logo" key={provider}><ProviderLogo name={provider} /></span>)}</div>
-    <button className="provider-more" type="button" aria-label={`Show all ${OAUTH_PROVIDERS.length} ad platforms${planName ? ` included with ${planName}` : ''}`} aria-expanded={open} aria-controls={id} aria-describedby={open ? id : undefined} onClick={() => { pinned.current = !pinned.current; setOpen(pinned.current); }}>+{OAUTH_PROVIDERS.length - 4}</button>
-    <div className="provider-tooltip" id={id} role="tooltip" hidden={!open} ref={tooltip} style={planName ? position : undefined}><p>{OAUTH_PROVIDERS.length} ad platform integrations</p><ul>{OAUTH_PROVIDERS.map(provider => <li key={provider}><span className="pricing-provider-logo" aria-hidden="true"><ProviderLogo name={provider} /></span><span>{providerLabel(provider)}</span></li>)}</ul><span className="provider-tooltip-note">Provider access depends on your account and API permissions.</span></div>
+    <div className="provider-stack-marks" aria-hidden="true">{AD_PROVIDERS.slice(0, 4).map(provider => <span className="pricing-provider-logo" key={provider}><ProviderLogo name={provider} /></span>)}</div>
+    <button className="provider-more" type="button" aria-label={`Show all ${AD_PROVIDERS.length} ad platforms${planName ? ` included with ${planName}` : ''}`} aria-expanded={open} aria-controls={id} aria-describedby={open ? id : undefined} onClick={() => { pinned.current = !pinned.current; setOpen(pinned.current); }}>+{AD_PROVIDERS.length - 4}</button>
+    <div className="provider-tooltip" id={id} role="tooltip" hidden={!open} ref={tooltip} style={planName ? position : undefined}><p>{AD_PROVIDERS.length} ad platform integrations</p><ul>{AD_PROVIDERS.map(provider => <li key={provider}><span className="pricing-provider-logo" aria-hidden="true"><ProviderLogo name={provider} /></span><span>{providerLabel(provider)}</span></li>)}</ul><span className="provider-tooltip-note">Provider access depends on your account and API permissions.</span></div>
   </div>;
 }
 
@@ -61,5 +63,5 @@ export function PricingConnectors() {
 }
 
 export function PricingEcosystem() {
-  return <div className="pricing-ecosystem"><div className="pricing-platforms"><PricingProviderStack /><span>{OAUTH_PROVIDERS.length} ad platforms</span></div><div className="pricing-connectors" aria-label="AI integrations"><PricingConnectors /></div></div>;
+  return <div className="pricing-ecosystem"><div className="pricing-platforms"><PricingProviderStack /><span>{AD_PROVIDERS.length} ad platforms</span></div><div className="pricing-connectors" aria-label="AI integrations"><PricingConnectors /></div></div>;
 }

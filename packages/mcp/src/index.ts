@@ -3,6 +3,7 @@ import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod';
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
 import { AdportError, CredentialStore, createContext, selectRuntimeCatalog, nextPageArguments, type ToolSelection, type AdportRuntime, type ProviderModule } from '@adport/core';
+import { createGa4Module, createGscModule } from '@adport/provider-analytics';
 import { createGtmModule } from '@adport/provider-gtm';
 import { createGoogleModule } from '@adport/provider-google';
 import { createMetaModule } from '@adport/provider-meta';
@@ -27,9 +28,9 @@ import {
   viewForTool,
 } from './ui.js';
 
-export const PROVIDER_IDS = ['gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const;
+export const PROVIDER_IDS = ['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const;
 export { ADPORT_UI_RESOURCE_DOMAINS };
-export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v26.html', 'ui://adport/insight-card-v25.html', 'ui://adport/insight-card-v24.html', 'ui://adport/insight-card-v23.html', 'ui://adport/insight-card-v22.html', 'ui://adport/insight-card-v21.html', 'ui://adport/insight-card-v20.html', 'ui://adport/insight-card-v19.html', 'ui://adport/insight-card-v18.html', 'ui://adport/insight-card-v17.html', 'ui://adport/insight-card-v16.html', 'ui://adport/insight-card-v15.html', 'ui://adport/insight-card-v14.html', 'ui://adport/insight-card-v13.html', 'ui://adport/insight-card-v12.html', 'ui://adport/insight-card-v11.html', 'ui://adport/insight-card-v10.html', 'ui://adport/insight-card-v9.html', 'ui://adport/insight-card-v8.html', 'ui://adport/insight-card-v7.html', 'ui://adport/insight-card-v6.html', 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html'];
+export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v27.html', 'ui://adport/insight-card-v26.html', 'ui://adport/insight-card-v25.html', 'ui://adport/insight-card-v24.html', 'ui://adport/insight-card-v23.html', 'ui://adport/insight-card-v22.html', 'ui://adport/insight-card-v21.html', 'ui://adport/insight-card-v20.html', 'ui://adport/insight-card-v19.html', 'ui://adport/insight-card-v18.html', 'ui://adport/insight-card-v17.html', 'ui://adport/insight-card-v16.html', 'ui://adport/insight-card-v15.html', 'ui://adport/insight-card-v14.html', 'ui://adport/insight-card-v13.html', 'ui://adport/insight-card-v12.html', 'ui://adport/insight-card-v11.html', 'ui://adport/insight-card-v10.html', 'ui://adport/insight-card-v9.html', 'ui://adport/insight-card-v8.html', 'ui://adport/insight-card-v7.html', 'ui://adport/insight-card-v6.html', 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html'];
 
 const DEFAULT_MCP_ICONS = [{
   src: 'https://app.adport.dev/icon.svg?brand=orange-dot-v2',
@@ -51,7 +52,7 @@ export async function assembleRuntime(options: AssembleRuntimeOptions = {}): Pro
   const modules: ProviderModule[] = [];
   const includeMock = options.includeMock ?? process.env.ADPORT_DEMO === 'true';
   if (!includeMock) {
-    for (const factory of [createGtmModule, createGoogleModule, createMetaModule, createTikTokModule, createAppleModule, createMicrosoftModule, createRedditModule, createSnapchatModule, createSpotifyModule, createPinterestModule, createLinkedInModule, createXModule]) {
+    for (const factory of [createGa4Module, createGscModule, createGtmModule, createGoogleModule, createMetaModule, createTikTokModule, createAppleModule, createMicrosoftModule, createRedditModule, createSnapchatModule, createSpotifyModule, createPinterestModule, createLinkedInModule, createXModule]) {
       const module = await factory(store);
       if (module) modules.push(module);
     }

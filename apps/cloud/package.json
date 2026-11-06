@@ -40,7 +40,8 @@
     "@modelcontextprotocol/server": "^2.4.0",
     "@napi-rs/canvas": "1.1.0",
     "pdfjs-dist": "6.5.438",
-    "@adport/provider-gtm": "workspace:*"
+    "@adport/provider-gtm": "workspace:*",
+    "@adport/provider-analytics": "workspace:*"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.3",

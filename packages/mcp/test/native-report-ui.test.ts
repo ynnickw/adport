@@ -4,6 +4,7 @@ import { ADPORT_UI_HTML, structuredResult } from '../src/ui.js';
 import { NATIVE_REPORT_TOOLS } from '../src/native-report-ui.js';
 import { PROVIDER_LOGOS } from '../src/provider-logos.js';
 import { providerModules } from './provider-fixtures.js';
+import { AnalyticsClient, Ga4Provider, SearchConsoleProvider, ga4Tools, gscTools } from '@adport/provider-analytics';
 import fixtures from './fixtures/native-report-cases.json';
 
 function mount(tool: string, data: unknown, view: 'data' | 'report' = 'data') {
@@ -17,7 +18,8 @@ function mount(tool: string, data: unknown, view: 'data' | 'report' = 'data') {
 // Spotify v3 insight_reports and TikTok v1.3 reporting contracts (2026-11-05).
 describe('native report renderers', () => {
   it('covers each configured native read using the real tool definitions', () => {
-    const tools = providerModules().flatMap(module => module.tools);
+    const client = new AnalyticsClient({ clientId: 'x', clientSecret: 'x', refreshToken: 'x' });
+    const tools = [...providerModules().flatMap(module => module.tools), ...ga4Tools(new Ga4Provider(client)), ...gscTools(new SearchConsoleProvider(client))];
     expect(new Set(fixtures.map(f => f.tool))).toEqual(new Set(NATIVE_REPORT_TOOLS));
     for (const name of NATIVE_REPORT_TOOLS) expect(tools.find(tool => tool.name === name)?.annotations.readOnly, name).toBe(true);
   });
