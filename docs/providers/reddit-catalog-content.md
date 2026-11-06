@@ -19,6 +19,10 @@ child's catalog relationship.
 | `reddit_catalog_imports` | `GET /product_catalogs/{catalog_id}/catalog_imports` |
 | `reddit_catalog_import_issues` | `GET /catalog_imports/{import_id}/issues` |
 | `reddit_catalog_import_report` | `GET /catalog_imports/{import_id}/report` |
+| `reddit_catalog_product_context` | Exhausted selected-SKU `GET /product_catalogs/{catalog_id}/products` |
+| `reddit_create_catalog_products` | `POST /product_catalogs/{catalog_id}/products/batch_upsert` |
+| `reddit_update_catalog_products` | `POST /product_catalogs/{catalog_id}/products/batch_upsert` |
+| `reddit_delete_catalog_products` | `POST /product_catalogs/{catalog_id}/products/batch_delete` |
 
 ## Browse products and sets
 
@@ -34,7 +38,7 @@ Product views support selected `ids`, `approval_decision` and `search`; set
 product views additionally support `issue_code`. Opaque product SKUs retain
 commas, Unicode and slashes, up to Reddit's 128-character limit. The `ids`
 parameter is repeated for each SKU, as the current OpenAPI requires. Product
-views show the reported price, brand, availability, approval and issues; absent
+views show the reported title, description, price, brand, availability, approval and issues; absent
 fields remain unavailable. They do not claim to expose every product attribute.
 
 Widgets embed native Reddit-hosted product preview images and display landing
@@ -99,20 +103,64 @@ HTTPS native download URL only after membership proof. Adport does not fetch
 that host or forward Reddit credentials. Native 204 is reported as unavailable,
 which is not evidence of a clean import.
 
-## Remaining scope and verification
+## Manual product management
+
+Agents can create, edit and delete catalog products through the same MCP, CLI
+and REST tools. Read `reddit_catalog_product_context` with exact external
+`product_ids` first. It verifies the granted Business/catalog and exhausts
+targeted native pagination before reporting each SKU present or absent. Retain
+its `selection_hash`. This is a selection of at most 100 SKUs, separate from
+the paged creative gallery; it is not a global inventory or usage snapshot.
+
+Preview a named mutation with `expected_selection_hash` and
+`acknowledge_shared_effects: true`, review the exact products, then apply the
+identical arguments with `pending_operation_id`. Creation requires every SKU
+absent and complete title, description, price, landing URL, image URL and
+availability. Prices retain the native string including currency, such as
+`19.99 EUR`; no currency conversion is inferred. Optional fields cover all 45
+documented writable attributes, including custom labels/numbers, variants,
+additional images, platform links, sale prices and expiration.
+
+Updates require existing SKUs. Supply an `id` and the selected fields in each
+`products` entry. Adport merges them with all currently known writable fields
+and sends that complete configuration, excluding Reddit-owned metadata. Unknown
+native fields refuse an update rather than silently dropping configuration.
+Null can clear a nullable optional attribute; required authoring fields must
+remain complete. Native strings and safe integers are bounded, URLs require
+HTTP(S) without embedded credentials, and batches are capped at 100 products
+and 1 MB of serialized UTF-8 data.
+
+Deletion additionally requires `acknowledge_permanent_deletion: true` and
+`product_ids`. These are external merchant SKUs, **not** `reddit.id` UUIDs.
+Opaque commas, Unicode and slashes are preserved. Native deletion receipts
+distinguish `DELETED` from `NOT_FOUND`; the latter is not claimed as a deletion
+by this request. Every mutation rechecks the snapshot immediately before its
+one native POST and independently verifies complete known configuration or
+exhausted absence afterward. Missing optional values and null are equivalent
+for comparison; missing required copy/price/URLs are not accepted.
+
+Reddit has no conditional batch-write or atomicity guarantee. Another writer
+can race preflight, including turning native creation into an update. Such a
+contradictory receipt is not certified as a successful creation. Scheduled
+feeds can overwrite edits or recreate deleted products. The preview explains
+these effects on shared sets/ads. Partial or malformed receipts, native errors
+and failed readbacks retain selected SKUs and safely identified native statuses;
+ID-less invalid entries are not assigned to input rows by response position.
+No batch or failed item is replayed automatically. Re-read each selected SKU
+before preparing another operation.
+
+## Verification and remaining scope
 
 [Feed management](reddit-catalog-feeds.md) uses these same catalog grants.
-Manual product mutations remain outstanding. The current
-v3 OpenAPI's batch-upsert schema omits title and description even though the
-catalog requirements list both. Adport does not invent undocumented write
-fields or claim complete product authoring from a partial payload. This needs
-contract clarification or authorized native evidence.
+The v3 OpenAPI refreshed on 2026-11-06 includes title and description in both
+batch-upsert input and native Product output, resolving the earlier contract
+discrepancy. Manual product authoring uses that refreshed contract.
 
 Wire, policy, scope, pagination and synthetic SDK/widget checks cover these
 tools. Positive native catalog-content writes and actual Claude/ChatGPT host
 execution remain unverified. These tools do not activate ads or ingest events.
 
-Contracts refreshed 2026-11-05 from the official
+Contracts refreshed 2026-11-06 from the official
 [v3 OpenAPI](https://ads-api.reddit.com/api/v3/openapi.json),
 [product catalog guide](https://ads-api.reddit.com/docs/v3/guides/programs/product-catalogs),
 [filter grammar](https://ads-api.reddit.com/docs/v3/guides/programs/product-catalogs/filter-products)

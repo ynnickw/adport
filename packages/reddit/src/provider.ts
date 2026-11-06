@@ -21,6 +21,7 @@ import { RedditCreativeService } from './creatives.js';
 import { RedditCatalogService } from './catalogs.js';
 import { RedditCatalogContentService } from './catalog-content.js';
 import { RedditCatalogFeeds } from './catalog-feeds.js';
+import { RedditCatalogProducts } from './catalog-products.js';
 import type { RedditCatalogAccessStore } from './catalog-access.js';
 import { RedditManagementService } from './management.js';
 
@@ -60,8 +61,9 @@ export class RedditAdsProvider implements AdProvider {
   readonly management: RedditManagementService;
   readonly catalogs: RedditCatalogService;
   readonly catalogContent: RedditCatalogContentService;
+  readonly catalogProducts: RedditCatalogProducts;
   readonly catalogFeeds: RedditCatalogFeeds;
-  constructor(private readonly client: RedditAdsClient, media?: MediaResolver, catalogAccess?: RedditCatalogAccessStore) { this.creatives = new RedditCreativeService(client, media); this.management = new RedditManagementService(client, this.creatives);this.catalogs = new RedditCatalogService(client, catalogAccess);this.catalogContent = new RedditCatalogContentService(client, this.catalogs);this.catalogFeeds = new RedditCatalogFeeds(client, this.catalogs); }
+  constructor(private readonly client: RedditAdsClient, media?: MediaResolver, catalogAccess?: RedditCatalogAccessStore) { this.creatives = new RedditCreativeService(client, media); this.management = new RedditManagementService(client, this.creatives);this.catalogs = new RedditCatalogService(client, catalogAccess);this.catalogContent = new RedditCatalogContentService(client, this.catalogs);this.catalogFeeds = new RedditCatalogFeeds(client, this.catalogs);this.catalogProducts = new RedditCatalogProducts(client, this.catalogs); }
 
   capabilities(): ProviderCapabilities {
     return { serverDryRun: false };
@@ -244,6 +246,7 @@ export class RedditAdsProvider implements AdProvider {
   }
 
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
+    if (['reddit_create_catalog_products', 'reddit_update_catalog_products', 'reddit_delete_catalog_products'].includes(op.tool)) return this.catalogProducts.plan(op);
     if (['reddit_create_catalog_feed', 'reddit_update_catalog_feed', 'reddit_set_catalog_feed_schedule_status', 'reddit_delete_catalog_feed'].includes(op.tool)) return this.catalogFeeds.plan(op);
     if (['reddit_create_catalog_product_set', 'reddit_update_catalog_product_set', 'reddit_delete_catalog_product_set'].includes(op.tool)) return this.catalogContent.plan(op);
     if (['reddit_set_catalog_access', 'reddit_create_catalog', 'reddit_rename_catalog', 'reddit_set_catalog_event_sources', 'reddit_delete_catalog'].includes(op.tool)) return this.catalogs.plan(op);
