@@ -39,12 +39,12 @@
     "@adport/provider-x": "workspace:*",
     "@adport/provider-tiktok": "workspace:*",
     "@modelcontextprotocol/ext-apps": "^1.7.5",
-    "@modelcontextprotocol/sdk": "^1.30.0",
-    "zod": "^4.4.3"
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/jsdom": "21.1.7",
-    "@types/node": "^26.1.2",
+    "@types/node": "^26.6.6",
     "jsdom": "26.1.0",
     "tsup": "^8.3.0",
     "typescript": "^5.8.0",
