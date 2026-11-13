@@ -7,9 +7,11 @@ Escape cancels the hold. Keyboard and assistive-technology activation are suppor
 
 ## Tool coverage
 
-Tools share one registry and declare a specialized presentation where appropriate.
-Read-only tools use the data fallback otherwise. Mutation views always retain
-the existing policy-engine preview and apply gate.
+The 2026-11-04 connected catalog is captured in
+`packages/mcp/test/fixtures/connected-tool-catalog.json`. The registry coverage test
+checks every name and declared view against the actual definitions. It also
+exercises preview and apply on every guarded handler with an inert policy-engine
+fixture. No production accounts or provider writes are used.
 
 | View | Content |
 | --- | --- |
@@ -17,12 +19,13 @@ the existing policy-engine preview and apply gate.
 | Data | Semantic fallback for native records, arrays and values |
 | Records | Compact keywords, audiences, boards and entity collections |
 | Receipt | Processing status, reported counts and individual outcomes |
-| Creatives | View-only media previews and ad copy |
+| Creatives | Media previews, ad copy, central-library upload and paging |
 | Insights | Findings, reasons and suggested actions |
 | Planning | Native estimates and existing paging |
 | Accounts | Connected accounts and provider errors |
 | Report | Currency-separated summaries, rankings or daily trends |
 
+The fixture records current tool counts; the registry coverage test rejects drift.
 Local generic API dispatchers remain excluded from the hosted surface. Newly
 registered reads get the semantic data fallback unless they declare a specialized
 presentation.
@@ -33,8 +36,14 @@ Creative galleries show smaller media, ad copy, one status label, and destinatio
 hostnames. Gallery height is bounded; all returned items remain available through
 native scrolling. Single previews stay small. Images open at full size; video and
 audio retain native playback controls. Failed media displays an unavailable state.
-Provider actions, upload grants, refresh and page metadata never create controls
-or tool calls. Editing and uploads remain available through agents and the dashboard.
+Provider previews never turn provider actions or upload configuration into controls.
+The central `media_list` view has a compact Upload files control, multi-file drop,
+per-file progress and Load more. Upload/finalize mutations use the same host bridge
+and guarded preview/apply tools as agents. Upload destination, project, SHA-256,
+size and MIME are checked; unknown outcomes never replay bytes or an uncertain
+apply. Queue updates and appended pages preserve existing media nodes. Read-only
+grants retain paging but have no upload control. Organization and distribution
+remain agent-managed; the dashboard remains an alternative upload/browsing view.
 
 ## Records, receipts, and trends
 
@@ -50,6 +59,35 @@ retain match type, scope and provider notes, and expose returned rows in a bound
 keyboard-scrollable list. Generic collections prefer named record arrays over
 warnings/errors. Monetary fields with explicit micros/cents units are converted;
 unknown currencies remain account units. Full source responses remain in Details.
+
+`apple_report` reads Apple's native `metadata`, `totalMetrics`, `granularMetrics`
+and `summary.grandTotal` explicitly. Campaign/ad-group/ad names, keyword text and
+search terms accompany spend, taps, total installs and total CPI. Provider totals
+remain separate from paginated rows; currencies are retained per amount. Missing
+metrics stay unavailable and zero installs show no CPI. Returned time buckets and
+breakdown dimensions are retained without inventing days or summing repeated totals.
+
+Metric-bearing Google GAQL, LinkedIn demographics, native Meta, TikTok, Reddit,
+Spotify, Microsoft keyword/search-term and Apple insight reads also use explicit
+report presentation. Native row identities and
+breakdowns precede reported metrics; configuration IDs do not take metric slots.
+Reddit micros and value cents are shifted exactly, including large decimal strings.
+Unreported currencies stay account units and Spotify's privacy sentinel remains
+suppressed. Microsoft offline reports remain upload diagnostics with exact counts,
+ratios, missing summaries and per-goal errors. Native reports never invent totals,
+combine attribution actions, or add edit controls. All source metrics remain in
+Details. Reports lead with comparison bars or dated series, with the complete
+record rows and source response inside one collapsed Details disclosure. Google
+conversion-lag buckets receive readable delay labels; distinct returned rows are
+not summed into invented totals. Non-metric GAQL queries retain the records view.
+Apple shows one provider-reported total and campaign comparisons. Different
+currencies remain separate; absent days break trend lines and suppressed values
+never turn into zero bars. Impression-share bounds remain intervals, not midpoint
+estimates. Charts cap rows and series with explicit notices and preserve all source
+data in Details. These views have no forms, metric configuration, or tool calls.
+The normalized performance report continues to cover all eleven providers;
+LinkedIn demographics retain their exact source records and privacy context;
+the chart flags approximate coverage and never sums segments into an account total.
 
 Recommendations show the native reason and suggested action directly. Processing
 and bulk receipts show only reported counts, statuses and individual outcomes.
@@ -102,13 +140,19 @@ Attempts are keyed to the pending token. A host echo cannot offer a second apply
 and a late response cannot replace a newer preview. Host facts include resource
 receipts and project/account scope, but never a reusable pending token.
 
-The widget resource is `ui://adport/insight-card-v13.html`. Previous v2–v12 URIs are
+The widget resource is `ui://adport/insight-card-v26.html`. Previous v2–v25 URIs are
 retained as aliases. Existing creative resource domains keep their configured CSP; provider logos
 and scripts are embedded.
+
+Claude uses its default isolated conversation sandbox. The widget does not run
+its own OAuth flow or require an origin allowlist, so it does not opt into an
+optional stable `ui.domain`. CSP restrictions remain in the resource metadata.
+Other hosts retain their existing origin metadata. See the [MCP Apps sandbox
+origin contract](https://apps.extensions.modelcontextprotocol.io/api/interfaces/app.McpUiResourceMeta.html).
 
 ## Validation
 
 Run `pnpm build`, `pnpm test`, and `pnpm typecheck`. The provider suites cover native
 request/response shapes; widget tests execute the shipped iframe script and cover
 the full registry, native and standard host bridges, scopes, errors, holds,
-processing receipts and view-only creative galleries.
+processing receipts, view-only provider galleries, and central-library uploads and pagination.

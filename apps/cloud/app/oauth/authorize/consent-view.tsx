@@ -1,9 +1,14 @@
+'use client';
+
+import { useState } from 'react';
 import { PiCheckCircleFill, PiArrowSquareOut, PiArrowsLeftRight } from 'react-icons/pi';
 import { AgentIdentityLogo } from '@/app/dashboard/agents/agent-setup-guide';
 import { BrandLockup } from '@/components/logos';
 import { Select } from '@/components/select';
+import { ToolCatalogFields } from '@/components/tool-catalog-fields';
+import type { ToolProvider } from '@adport/core/tool-catalog';
 
-export interface ConsentProject { id: string; name: string; organizationId: string; organizationName: string }
+export interface ConsentProject { id: string; name: string; organizationId: string; organizationName: string; providers?: ToolProvider[] }
 
 /** The consent screen: who is connecting, what it may do, which project, and where it returns. */
 export function ConsentView({ clientName, redirectHost, scopes, projects, defaultProjectId, hidden }: {
@@ -16,6 +21,9 @@ export function ConsentView({ clientName, redirectHost, scopes, projects, defaul
 }) {
   const organizations = [...new Set(projects.map(project => project.organizationId))];
   const defaultProject = projects.find(project => project.id === defaultProjectId) ?? projects[0];
+  const [projectId, setProjectId] = useState(defaultProject ? `all:${defaultProject.organizationId}` : '');
+  const selectedProjects = projects.filter(project => projectId.startsWith('all:') ? project.organizationId === projectId.slice(4) : project.id === projectId);
+  const suggestedProviders = [...new Set(selectedProjects.flatMap(project => project.providers ?? []))];
   const options = organizations.flatMap(id => {
     const members = projects.filter(project => project.organizationId === id);
     return [
@@ -42,9 +50,10 @@ export function ConsentView({ clientName, redirectHost, scopes, projects, defaul
         {hidden.map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
         <div className="field">
           <span className="field-label" id="consent-project-label">Project</span>
-          <Select name="project_id" aria-label="Project" options={options} defaultValue={defaultProject ? `all:${defaultProject.organizationId}` : undefined} required />
-          <span className="field-hint">All projects includes current and future projects you can access in that organization. New platforms become available when you connect them and enable their accounts.</span>
+          <Select name="project_id" aria-label="Project" options={options} value={projectId} onValueChange={setProjectId} required />
+          <span className="field-hint">All projects includes current and future projects you can access in that organization.</span>
         </div>
+        <ToolCatalogFields key={projectId} initialSelection={{ profile: 'standard', providers: suggestedProviders }} />
         <p className="consent-return"><PiArrowSquareOut aria-hidden="true" /><span>Returns to <strong>{redirectHost}</strong>. Only continue if you started this connection there.</span></p>
         <div className="consent-actions">
           <button className="button" type="submit" name="decision" value="allow">Authorize {clientName}</button>

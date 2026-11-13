@@ -1,0 +1,19 @@
+# Keep local credentials, private research and generated artifacts off deployments.
+.git/
+.vercel/
+private/
+.codex/
+.local-test/
+output/
+tmp/
+artifacts/
+**/node_modules/
+**/.next/
+**/.turbo/
+**/coverage/
+**/dist/
+**/.env
+**/.env.*
+**/*.log
+**/*.tsbuildinfo
+**/.data/

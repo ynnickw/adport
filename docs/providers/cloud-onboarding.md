@@ -4,6 +4,9 @@ The cloud runtime now includes Snapchat, Spotify, Pinterest, LinkedIn and X
 alongside the existing providers. Runtime support is not proof of API approval
 or a successful live account connection.
 
+Cloud MCP connections use the [stateless HTTP lifecycle](mcp-http.md), including
+both protocol eras, finite request cleanup and explicit catalogue refresh.
+
 ## OAuth 2.0 applications
 
 Register the exact callback for each server-owned app:
@@ -84,3 +87,29 @@ Runtime tests check all five modules and disabled-account rejection.
 Credential unit tests exercise superseded-grant rejection and token-only merges.
 These are not live provider approval, production migration, rendered
 dashboard or end-to-end external consent evidence.
+
+
+## Google Tag Manager
+
+GTM reuses the server-owned Google client, with callback
+`https://app.adport.dev/api/oauth/gtm/callback` and its own encrypted tenant grant.
+Enable Tag Manager API and configure the three scopes documented in
+[the Google verification runbook](../maintainers/google-oauth-verification.md).
+Apply the GTM provider migration before connecting.
+
+Keep `GTM_OAUTH_ENABLED=false` until Google approves external use. A comma-separated
+`GTM_TEST_ORGANIZATION_IDS` allowlist enables the hidden connection only for named
+internal test projects, including start/callback, availability and runtime checks.
+This supports Google's hidden-test-route review workflow without exposing
+unverified consent to public users. GTM account selection uses the existing tenant inventory. Analytics and tracking
+connections have their own dashboard tab and do not use advertising account slots. See [provider details](../../packages/gtm/README.md).
+
+## Google Analytics 4 and Search Console
+
+These read-only connections use independent `ga4` and `gsc` grants and exact
+callbacks at `/api/oauth/ga4/callback` and `/api/oauth/gsc/callback`. Configure
+the dedicated server-owned analytics OAuth client and the three required APIs
+as described in [the analytics setup guide](google-analytics.md). Public rollout
+flags default to false; only explicit internal projects may authorize them
+during verification. Both sources use selected-property access and do not
+consume advertising account capacity.

@@ -62,6 +62,19 @@ describe('expanded cloud runtime on production account controls', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it('injects the project media resolver into X uploads and rejects server file paths', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => {
+      const route = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url).pathname;
+      if (route.endsWith('/promotable_users')) return Response.json({ data: [{ id: 'pu1', user_id: '123', promotable_user_type: 'FULL', deleted: false }], next_cursor: null });
+      if (route.endsWith('/authenticated_user_access')) return Response.json({ data: { user_id: '123', permissions: ['ACCOUNT_ADMIN'] } });
+      if (route === '/12/accounts/allowed') return Response.json({ data: { id: 'allowed', name: 'Selected', timezone: 'UTC', approval_status: 'ACCEPTED', deleted: false } });
+      throw new Error('Unexpected upload request');
+    }));
+    const runtime = await createTenantRuntime({ organizationId: 'org', scopes: ['tools:read', 'tools:write'] });
+    await expect(runtime.ctx.providers.get('x').previewWrite({ provider: 'x', accountId: 'allowed', tool: 'x_upload_media', kind: 'create', payload: { as_user_id: '123', file_path: '/tmp/not-an-upload.png', expected_sha256: 'a'.repeat(64) } }, { forcePausedCreation: true })).rejects.toThrow('Hosted uploads require a project media_id');
+    expect(vi.mocked(fetch).mock.calls.every(([input]) => !String(input).startsWith('https://api.x.com/2/'))).toBe(true);
+  });
+
   it('persists a rotated refresh token during unscoped account discovery', async () => {
     vi.stubGlobal('fetch', vi.fn()
       .mockResolvedValueOnce(Response.json({ access_token: 'access', refresh_token: 'rotated', expires_in: 3600 }))

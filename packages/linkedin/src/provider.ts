@@ -1,9 +1,20 @@
 import { z } from 'zod';
-import { AdportError, resolveDateRange, type Account, type AdProvider, type MetricName, type NormalizedQuery, type Report, type ReportRow, type StandardActions, type WriteGuard, type WriteOperation, type WritePreview, type WriteResult } from '@adport/core';
+import { AdportError, resolveDateRange, type Account, type AdProvider, type MediaResolver, type MetricName, type NormalizedQuery, type Report, type ReportRow, type StandardActions, type WriteGuard, type WriteOperation, type WritePreview, type WriteResult } from '@adport/core';
 import { LinkedInAdsClient, type RestliValue } from './client.js';
 import { accountSchema, campaignSchema, createCampaignSchema, groupSchema, linkedinId, NON_DISCRIMINATION_NOTICE, NON_POLITICAL_CONSENT, reportRowSchema, setBudgetSchema, setStatusSchema } from './schemas.js';
+import { LinkedInCreativeService } from './creatives.js';
+import { LinkedInMediaService, LINKEDIN_MEDIA_WRITES } from './media.js';
+import { LinkedInManagementService } from './management.js';
+import { LinkedInSponsoredService } from './sponsored.js';
+import { LINKEDIN_SPONSORED_WRITES } from './sponsored-tools.js';
+import { LinkedInPlanningService } from './planning.js';
+import { LinkedInAudienceService } from './audiences.js';
+import { LinkedInReportingService } from './reporting.js';
+import { LinkedInMeasurementService } from './measurement.js';
+import { LinkedInLeadCreativeService } from './lead-creatives.js';
+import { LinkedInLeadFormService } from './lead-forms.js';
 
-interface Plan extends Omit<WritePreview, 'serverValidated'> { execute: () => Promise<string[]> }
+interface Plan extends Omit<WritePreview, 'serverValidated'> { execute: () => Promise<string[] | WriteResult> }
 const FIELDS = { spend: 'costInLocalCurrency', impressions: 'impressions', clicks: 'clicks', conversions: 'externalWebsiteConversions', conversion_value: 'conversionValueInLocalCurrency' } as const;
 const DERIVED = { ctr: ['clicks', 'impressions', 100], cpc: ['spend', 'clicks', 1], cpm: ['spend', 'impressions', 1000], cpa: ['spend', 'conversions', 1], roas: ['conversion_value', 'spend', 1] } as const;
 const STATUS = ['ACTIVE', 'PAUSED', 'ARCHIVED', 'COMPLETED', 'CANCELED', 'DRAFT', 'PENDING_DELETION', 'REMOVED'];
@@ -25,7 +36,17 @@ export function microsToDecimal(value: number): string {
 
 export class LinkedInAdsProvider implements AdProvider {
   readonly id = 'linkedin';
-  constructor(private readonly client: LinkedInAdsClient) {}
+  readonly creatives: LinkedInCreativeService;
+  readonly management: LinkedInManagementService;
+  readonly media: LinkedInMediaService;
+  readonly sponsored: LinkedInSponsoredService;
+  readonly planning: LinkedInPlanningService;
+  readonly audiences: LinkedInAudienceService;
+  readonly reporting: LinkedInReportingService;
+  readonly measurement: LinkedInMeasurementService;
+  readonly leadCreatives: LinkedInLeadCreativeService;
+  readonly leadForms: LinkedInLeadFormService;
+  constructor(private readonly client: LinkedInAdsClient, media?: MediaResolver) { this.creatives = new LinkedInCreativeService(client, this, media); this.management = new LinkedInManagementService(client, this); this.media = new LinkedInMediaService(client, this, media); this.sponsored = new LinkedInSponsoredService(client, this); this.planning = new LinkedInPlanningService(client, this); this.audiences = new LinkedInAudienceService(client, this); this.reporting = new LinkedInReportingService(client, this); this.measurement = new LinkedInMeasurementService(client, this); this.leadForms = new LinkedInLeadFormService(client, this); this.leadCreatives = new LinkedInLeadCreativeService(client, this); }
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions { return { pauseCampaign: (accountId, campaignId) => ({ tool: 'linkedin_set_campaign_status', input: { account_id: accountId, campaign_id: campaignId, status: 'PAUSED' } }) }; }
   private async search<T extends { id: number }>(path: string, schema: z.ZodType<T>, search?: RestliValue): Promise<T[]> {
@@ -114,8 +135,16 @@ export class LinkedInAdsProvider implements AdProvider {
   async previewWrite(op: WriteOperation, guard: WriteGuard): Promise<WritePreview> {
     const { execute: _execute, ...preview } = await this.plan(op, guard); return { ...preview, serverValidated: false };
   }
-  async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> { return { applied: true, resourceIds: await (await this.plan(op, guard)).execute() }; }
+  async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> { const result = await (await this.plan(op, guard)).execute(); return Array.isArray(result) ? { applied: true, resourceIds: result } : result; }
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<Plan> {
+    if (this.leadCreatives.supports(op.tool)) return this.leadCreatives.plan(op);
+    if (this.leadForms.supports(op.tool)) return this.leadForms.plan(op);
+    if (this.measurement.supports(op.tool)) return this.measurement.plan(op);
+    if (this.audiences.supports(op.tool)) return this.audiences.plan(op);
+    if (LINKEDIN_SPONSORED_WRITES.has(op.tool)) return this.sponsored.plan(op, guard);
+    if (LINKEDIN_MEDIA_WRITES.has(op.tool)) return this.media.plan(op);
+    if (/^linkedin_(?:create_campaign_group|update_(?:campaign_group|campaign|targeting)|set_(?:campaign_group_status|campaign_group_budget|bid)|delete_(?:campaign_group|campaign))$/.test(op.tool)) return this.management.plan(op, guard);
+    if (/^linkedin_(?:create_text_ad|update_(?:text_ad|image)|rename_creative|set_creative_status|delete_creative|upload_image)$/.test(op.tool)) return this.creatives.plan(op, guard);
     const accountId = linkedinId.parse(op.accountId), base = `adAccounts/${accountId}/adCampaigns`;
     if (op.provider !== this.id) throw new AdportError('INVALID_INPUT', 'linkedin: provider mismatch');
     if (op.tool === 'linkedin_create_campaign' && op.kind === 'create') {
@@ -126,6 +155,8 @@ export class LinkedInAdsProvider implements AdProvider {
       if (input.total_budget_micros && !input.end_time) throw new AdportError('INVALID_INPUT', 'linkedin: lifetime campaign budgets require an end time');
       if (input.end_time && (!input.start_time || input.end_time <= input.start_time)) throw new AdportError('INVALID_INPUT', 'linkedin: scheduled end requires an earlier start time');
       const keys = input.targeting_criteria.include.and.flatMap(clause => Object.keys(clause.or));
+      const customFacets = ['urn:li:adTargetingFacet:audienceMatchingSegments', 'urn:li:adTargetingFacet:dynamicSegments'];
+      if ([...keys, ...Object.keys(input.targeting_criteria.exclude?.or ?? {})].some(key => customFacets.includes(key))) throw new AdportError('INVALID_INPUT', 'linkedin: custom audience references require a dedicated account-availability workflow');
       if (input.targeting_criteria.include.and.some(clause => !Object.keys(clause.or).length)) throw new AdportError('INVALID_INPUT', 'linkedin: targeting include clauses cannot be empty');
       if (!keys.includes('urn:li:adTargetingFacet:locations') && !keys.includes('urn:li:adTargetingFacet:profileLocations')) throw new AdportError('INVALID_INPUT', 'linkedin: targeting must include modern geo locations');
       if (keys.includes('urn:li:adTargetingFacet:locations') && keys.includes('urn:li:adTargetingFacet:profileLocations')) throw new AdportError('INVALID_INPUT', 'linkedin: choose locations or profileLocations, not both');

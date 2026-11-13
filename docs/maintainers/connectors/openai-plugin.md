@@ -32,7 +32,22 @@ alone does not establish public provider approval or full tool coverage.
 5. Apply only a matching, unexpired preview; new campaigns remain paused where the policy requires it.
 6. Review recommendations, pending approvals, and audit evidence.
 
-The MCP App resource `ui://adport/insight-card-v1.html` renders account inventory, performance charts, recommendations, and guarded change previews. Every attached tool also returns complete text and structured data when a client does not render MCP Apps.
+The MCP App resource `ui://adport/insight-card-v3.html` renders account inventory, performance charts, creative galleries/edit forms, recommendations, and guarded change previews. Every attached tool also returns complete text and structured data when a client does not render MCP Apps.
+
+## Transport compatibility
+
+The hosted endpoint uses the official TypeScript SDK v2 and its modern MCP entry for
+`2026-07-28` requests. The SDK's request classifier routes older clients to the
+existing stateless JSON transport. Both paths build the same registry and retain
+OAuth project/account authorization and preview/apply checks. Local stdio also
+serves both protocol generations through the SDK's `serveStdio` entry.
+
+An OAuth success followed by failed action discovery can be a transport failure.
+The maintenance-line SDK v1 does not implement `2026-07-28`; changing its accepted
+version strings does not implement the new protocol. Check the server's
+`mcp_request_rejected` category before changing tool schemas or permissions. These
+operational diagnostics omit request payloads, credentials, account identifiers
+and raw error messages. See the [official SDK migration guide](https://ts.sdk.modelcontextprotocol.io/v2/migration/support-2026-07-28).
 
 ## Submission media
 

@@ -1,9 +1,11 @@
 import catalog from '@/lib/cloud/plan-catalog.json';
 import type { PlanDefinition } from '@/lib/cloud/plans';
 import { OAUTH_PROVIDERS } from '@/lib/cloud/types';
-import { providerLabel } from '@/lib/cloud/providers';
+import { providerLabel, usesAdAccountSlot } from '@/lib/cloud/providers';
 import { ProviderLogo } from './logos';
 import { PricingConnectors } from './pricing-integrations';
+
+const AD_PROVIDERS = OAUTH_PROVIDERS.filter(usesAdAccountSlot);
 
 const PLAN_IDS = ['reader', 'operator', 'premium', 'agency'] as const;
 const GROUPS: Array<{ name: string; theme: string; rows: Array<[string, (plan: Omit<PlanDefinition, 'id'>) => string | number | boolean | null]> }> = [
@@ -20,7 +22,7 @@ export function PricingFeatureTable({ idPrefix, interval, actions }: { idPrefix:
     <p className="comparison-scroll-hint" id={`${idPrefix}-comparison-hint`}>Scroll to compare all plans.</p>
     <div className="comparison-scroll" role="region" aria-label="Plan feature comparison" aria-describedby={`${idPrefix}-comparison-hint`} tabIndex={0}><table className="comparison-table"><caption className="sr-only">Adport Cloud features and limits by plan</caption>
       <thead><tr><th scope="col">Features</th>{PLAN_IDS.map(id => { const plan = catalog[id]; return <th scope="col" className={id === 'premium' ? 'comparison-featured' : undefined} key={id}><span className="comparison-plan">{plan.name}</span><div className="pricing-amount"><strong>€{interval === 'annual' && plan.writeAccess ? (plan.annualPriceEur / 12).toFixed(2) : plan.monthlyPriceEur}</strong><span>{plan.writeAccess ? '/ month' : 'forever'}</span></div><p className="pricing-billing-note">{!plan.writeAccess ? 'No card required' : interval === 'annual' ? `€${plan.annualPriceEur} billed yearly` : 'Billed monthly'}</p>{actions[id]}</th>; })}</tr></thead>
-      <tbody className="comparison-integrations"><tr><th scope="row">Supported ad platforms</th><td colSpan={PLAN_IDS.length}><ul className="comparison-platform-list" aria-label="Included in every plan">{OAUTH_PROVIDERS.map(provider => <li key={provider}><span className="pricing-provider-logo" aria-hidden="true"><ProviderLogo name={provider} /></span><span>{providerLabel(provider)}</span></li>)}</ul></td></tr><tr><th scope="row">AI agents &amp; MCP clients</th><td colSpan={PLAN_IDS.length}><div className="comparison-connectors"><PricingConnectors /><span className="comparison-included">Included in every plan</span></div></td></tr></tbody>
+      <tbody className="comparison-integrations"><tr><th scope="row">Supported ad platforms</th><td colSpan={PLAN_IDS.length}><ul className="comparison-platform-list" aria-label="Included in every plan">{AD_PROVIDERS.map(provider => <li key={provider}><span className="pricing-provider-logo" aria-hidden="true"><ProviderLogo name={provider} /></span><span>{providerLabel(provider)}</span></li>)}</ul></td></tr><tr><th scope="row">AI agents &amp; MCP clients</th><td colSpan={PLAN_IDS.length}><div className="comparison-connectors"><PricingConnectors /><span className="comparison-included">Included in every plan</span></div></td></tr></tbody>
       {GROUPS.map(group => <tbody key={group.theme}><tr className={`comparison-group comparison-group-${group.theme}`}><th colSpan={PLAN_IDS.length + 1} scope="rowgroup"><span>{group.name}</span></th></tr>{group.rows.map(([label, value]) => <tr key={label}><th scope="row">{label}</th>{PLAN_IDS.map(id => { const result = value(catalog[id]); return <td key={id} className={id === 'premium' ? 'comparison-featured' : undefined}>{typeof result === 'boolean' ? <Included value={result} /> : result}</td>; })}</tr>)}</tbody>)}
     </table></div><p className="pricing-shared-note">Operations depend on the connected provider and your account permissions. Ad spend and your AI assistant subscription or model usage are separate.</p>
   </section>;

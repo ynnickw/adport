@@ -1,7 +1,5 @@
-import { createHash } from 'node:crypto';
-
 /** Presentation routing only, never an authorization or trust decision. */
-export function mcpUiDomain(redirectUris: readonly string[], resourceUrl: string): string | undefined {
+export function mcpUiDomain(redirectUris: readonly string[]): null | undefined {
   const isClaude = redirectUris.some(value => {
     try {
       const url = new URL(value);
@@ -12,8 +10,7 @@ export function mcpUiDomain(redirectUris: readonly string[], resourceUrl: string
       return false;
     }
   });
-  // Host-specific format documented by the MCP Apps SDK's CSP/CORS pattern.
-  return isClaude
-    ? `${createHash('sha256').update(resourceUrl).digest('hex').slice(0, 32)}.claudemcpcontent.com`
-    : undefined;
+  // Stable ui.domain is optional. This UI has no OAuth callback or origin-based
+  // API allowlist, so Claude can use its normal isolated conversation sandbox.
+  return isClaude ? null : undefined;
 }

@@ -17,9 +17,52 @@ function render(options: { canManage?: boolean; available?: boolean; connections
 }
 
 describe('compact provider connection list', () => {
+  it('offers Pin management separately and preserves an enabled opt-in on reconnection', () => {
+    const pinterest = { ...connection, provider: 'pinterest', status: 'error' as const };
+    const basic = render({ connections: [pinterest] });
+    expect(basic).toContain('Authorize Pinterest public board, Pin and media management with additional permissions');
+    expect(basic).not.toContain('secret_pins=1');
+    expect(basic).toContain('/api/oauth/pinterest/start?organization_id=org&amp;pin_management=1');
+    const enabled = render({ connections: [{ ...pinterest, pinManagementEnabled: true }] });
+    expect(enabled).not.toContain('Enable Pin management');
+    expect(enabled).toContain('/api/oauth/pinterest/start?organization_id=org&amp;pin_management=1');
+    expect(render({ connections: [pinterest], canManage: false })).not.toContain('Enable Pin management');
+  });
+  it('offers secret content separately from a public grant and retains it on reconnect', () => {
+    const pinterest = { ...connection, provider: 'pinterest', pinManagementEnabled: true };
+    const publicOnly = render({ connections: [pinterest] });
+    expect(publicOnly).toContain('four additional private-content permissions');
+    expect(publicOnly).toContain('pin_management=1&amp;secret_pins=1');
+    const secret = render({ connections: [{ ...pinterest, secretPinsEnabled: true }] });
+    expect(secret).not.toContain('Enable secret Pin management');
+    expect(secret).not.toContain('pin_management=1');
+    expect(secret).toContain('/api/oauth/pinterest/start?organization_id=org&amp;secret_pins=1');
+    expect(render({ connections: [pinterest], canManage: false })).not.toContain('Enable secret Pin management');
+    expect(render({ connections: [{ ...pinterest, accountSelectionId: 'pending' }] })).not.toContain('Enable secret Pin management');
+  });
+  it('offers catalogs separately and preserves all existing Pinterest grants in either upgrade direction', () => {
+    const pinterest = { ...connection, provider: 'pinterest', pinManagementEnabled: true, secretPinsEnabled: true };
+    const html = render({ connections: [pinterest] });
+    expect(html).toContain('two additional catalog permissions'); expect(html).toContain('secret_pins=1&amp;catalog_management=1');
+    const enabled = render({ connections: [{ ...pinterest, catalogManagementEnabled: true }] });
+    expect(enabled).not.toContain('Enable catalogs'); expect(enabled).toContain('secret_pins=1&amp;catalog_management=1');
+    const catalogOnly = render({ connections: [{ ...pinterest, secretPinsEnabled: false, pinManagementEnabled: false, catalogManagementEnabled: true }] });
+    expect(catalogOnly).toContain('catalog_management=1&amp;pin_management=1');
+    expect(render({ connections: [pinterest], canManage: false })).not.toContain('Enable catalogs');
+    expect(render({ connections: [{ ...pinterest, accountSelectionId: 'pending' }] })).not.toContain('Enable catalogs');
+  });
+  it('offers conversion permission separately and retains it on later Google reconnection', () => {
+    const basic = render();
+    expect(basic).toContain('Authorize Google conversion imports with additional Data Manager permission');
+    expect(basic).toContain('/api/oauth/google/start?organization_id=org&amp;data_manager=1');
+    const enabled = render({ connections: [{ ...connection, dataManagerEnabled: true }] });
+    expect(enabled).not.toContain('Enable conversion imports');
+    expect(enabled).toContain('/api/oauth/google/start?organization_id=org&amp;data_manager=1');
+    expect(render({ canManage: false })).not.toContain('Enable conversion imports');
+  });
   it('renders every provider as a list row without card descriptions or OAuth flow details', () => {
     const html = render();
-    expect(html.match(/class="connection-row"/g)).toHaveLength(11);
+    expect(html.match(/class="connection-row"/g)).toHaveLength(OAUTH_PROVIDERS.length);
     expect(html).toContain('role="list"');
     expect(html).not.toContain('connection-grid');
     expect(html).not.toContain('connection-copy');

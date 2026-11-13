@@ -19,6 +19,34 @@ afterEach(() => {
 });
 
 describe('AuditRunner + core-performance pack', () => {
+  it.each([
+    { missing: 'conversions', metrics: { spend: 300 } },
+    { missing: 'ROAS', metrics: { spend: 300, conversions: 10, conversion_value: 100 } },
+  ])('does not invent a performance finding when $missing is unavailable', async ({ metrics }) => {
+    const { ctx } = await createContext({ includeMock: true });
+    vi.spyOn(ctx.providers.get('mock'), 'report').mockResolvedValue({ rows: [{
+      provider: 'mock', accountId: 'mock-1', entity: { level: 'campaign', id: 'c1', name: 'Incomplete metrics', status: 'ENABLED' }, metrics,
+    }] });
+    const result = await new AuditRunner(ctx.providers).run({ persist: false });
+    expect(result.findings).toEqual([]);
+    expect(result.counts).toEqual({ critical: 0, warn: 0, info: 0 });
+    expect(await new FindingsStore().list()).toEqual([]);
+  });
+
+  it.each([
+    { roas: 0, value: 0.1, expected: 1 },
+    { roas: 0.5, value: 150, expected: 1 },
+    { roas: 1, value: 300, expected: 0 },
+  ])('keeps reported ROAS $roas distinct from unavailable ROAS', async ({ roas, value, expected }) => {
+    const { ctx } = await createContext({ includeMock: true });
+    vi.spyOn(ctx.providers.get('mock'), 'report').mockResolvedValue({ rows: [{
+      provider: 'mock', accountId: 'mock-1', entity: { level: 'campaign', id: 'c1', name: 'Reported return', status: 'ENABLED' },
+      metrics: { spend: 300, conversions: 10, conversion_value: value, roas },
+    }] });
+    const result = await new AuditRunner(ctx.providers).run({ persist: false });
+    expect(result.findings.filter(finding => finding.ruleId === 'negative-roas')).toHaveLength(expected);
+  });
+
   it('finds the zero-conversion campaign and proposes a pause action', async () => {
     const { ctx } = await createContext({ includeMock: true });
     const runner = new AuditRunner(ctx.providers);

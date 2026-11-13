@@ -4,7 +4,7 @@ import { adportHome } from '../paths.js';
 
 export interface AuditEntry {
   ts: string;
-  /** 'note' records external/manual changes made outside adport's write path. */
+  /** 'note' includes apply lifecycle diagnostics and external/manual changes. */
   event: 'validated' | 'applied' | 'rejected' | 'note';
   provider: string;
   tool: string;

@@ -1,0 +1,17 @@
+import { creativesOutput, defineTool, guardedWriteTool, type AnyToolDefinition } from '@adport/core';
+import { z } from 'zod';
+import type { XAdsProvider } from './provider.js';
+import { createPrerollCta, deletePrerollCta, prerollCtaList, prerollCtaSelection, updatePrerollCta } from './preroll-cta-schemas.js';
+import { xId } from './schemas.js';
+
+export function xPrerollCtaTools(provider: XAdsProvider): AnyToolDefinition[] {
+  const shared = { namespace: 'x', catalog: { category: 'creatives' as const, exposure: 'specialist' as const } }, annotations = { readOnly: true };
+  return [
+    defineTool({ ...shared, name: 'x_preroll_ctas', description: 'Browse native preroll CTA buttons/destinations with cursor paging. Account-wide browsing avoids parent fan-out; inspect an exact CTA for editing. Optional line_item_id enables scoped edit/removal actions bound to full inventory and parent settings. Incomplete edit context stays read-only.', input: prerollCtaList, output: creativesOutput.passthrough(), presentation: 'creatives', pagination: { cursorInput: 'cursor' }, annotations, handler: input => provider.prerollCtas.list(input) }),
+    defineTool({ ...shared, name: 'x_get_preroll_cta', description: 'Read an exact account-owned preroll CTA, parent and complete active CTA inventory, with context_hash and guarded widget edits. CTA scope is the ad group, not one media association.', input: z.object({ account_id: xId, preroll_call_to_action_id: xId }).strict(), output: creativesOutput.passthrough(), presentation: 'creatives', annotations, handler: input => provider.prerollCtas.get(input.account_id, input.preroll_call_to_action_id) }),
+    defineTool({ ...shared, name: 'x_preroll_cta_context', description: 'Review a new preroll button/destination and complete current ad-group CTA inventory before creation. Returns context_hash; requires an existing non-draft PREROLL_VIEWS ad group. Existing CTA settings need explicit update, not an implicit POST replacement.', input: prerollCtaSelection.extend({ account_id: xId }).strict(), annotations, handler: ({ account_id, ...input }) => provider.prerollCtas.context(account_id, input) }),
+    guardedWriteTool({ ...shared, name: 'x_create_preroll_cta', provider: 'x', kind: 'create', destructive: true, description: 'Set one native preroll CTA with context_hash and explicit ad-group scope acknowledgement. Refuses existing active CTAs; paused_creation requires a PAUSED ad group. Five native button presets; exact URL/receipt/readback checks. No ad creation, activation or replay.', payload: createPrerollCta }),
+    guardedWriteTool({ ...shared, name: 'x_update_preroll_cta', provider: 'x', kind: 'update', destructive: true, description: 'Edit supplied native CTA button/destination fields with expected_context_hash and ad-group scope acknowledgement. Sends only actual changes, preserves omitted fields and parent settings, and verifies the receipt plus independent readback. Affects the ad group’s preroll ads.', payload: updatePrerollCta }),
+    guardedWriteTool({ ...shared, name: 'x_delete_preroll_cta', provider: 'x', kind: 'remove', destructive: true, description: 'Remove one exact preroll CTA with expected_context_hash and ad-group scope acknowledgement. Checks native tombstone and remaining CTA inventory; retains media, ads and parent delivery/budgets. Removing a CTA does not pause ads; no automatic replay.', payload: deletePrerollCta }),
+  ];
+}

@@ -9,7 +9,7 @@ import { Provider } from '@/components/ui';
 import { PlanLimitModal } from '@/components/plan-limit-modal';
 import { UpgradeButton } from '@/components/upgrade-button';
 import { planLimitFromResponse, type PlanLimitDetails } from '@/lib/cloud/plan-limit';
-import { providerLabel } from '@/lib/cloud/providers';
+import { providerLabel, providerConnectionsPath, providerCategory, usesAdAccountSlot, type ProviderCategory } from '@/lib/cloud/providers';
 import type { OAuthProvider } from '@/lib/cloud/types';
 
 export interface AccountAccessItem {
@@ -24,14 +24,16 @@ export interface AccountAccessItem {
   accountSelectionUnavailable?: boolean;
 }
 
-export function AccountAccessManager({ organizationId, accounts, canManage, maxActiveAccounts, providerFilter, organizationActiveCount }: {
+export function AccountAccessManager({ organizationId, accounts, canManage, maxActiveAccounts, providerFilter, organizationActiveCount, category: categoryOverride }: {
   organizationId: string;
   accounts: AccountAccessItem[];
   canManage: boolean;
   maxActiveAccounts: number | null;
   providerFilter?: OAuthProvider;
   organizationActiveCount?: number;
+  category?: ProviderCategory;
 }) {
+  const category = categoryOverride ?? (providerFilter ? providerCategory(providerFilter) : 'advertising');
   const router = useRouter();
   const [items, setItems] = useState(accounts);
   const [busy, setBusy] = useState<string>();
@@ -45,10 +47,10 @@ export function AccountAccessManager({ organizationId, accounts, canManage, maxA
   const providerAccounts = providerFilter ? items.filter(account => account.provider === providerFilter) : items;
   const activeCount = providerAccounts.filter(account => account.enabled).length;
   const organizationCount = organizationActiveCount === undefined ? undefined
-    : organizationActiveCount + items.filter(account => account.enabled).length - accounts.filter(account => account.enabled).length;
+    : organizationActiveCount + items.filter(account => account.enabled && usesAdAccountSlot(account.provider)).length - accounts.filter(account => account.enabled && usesAdAccountSlot(account.provider)).length;
   const visible = providerAccounts.filter(account => (filter === 'all' || account.enabled === (filter === 'enabled'))
     && (account.name + ' ' + account.accountId + ' ' + providerLabel(account.provider)).toLowerCase().includes(query.trim().toLowerCase()));
-  const atLimit = maxActiveAccounts !== null && organizationCount !== undefined && organizationCount >= maxActiveAccounts;
+  const atLimit = category === 'advertising' && maxActiveAccounts !== null && organizationCount !== undefined && organizationCount >= maxActiveAccounts;
 
   async function setEnabled(account: AccountAccessItem, enabled: boolean) {
     const key = account.provider + ':' + account.accountId;
@@ -64,7 +66,7 @@ export function AccountAccessManager({ organizationId, accounts, canManage, maxA
       else if (!response.ok) setError(body.error ?? 'Account access could not be updated. Please try again.');
       else {
         setItems(current => current.map(item => item.provider === account.provider && item.accountId === account.accountId ? { ...item, enabled } : item));
-        setNotice(account.name + ': Adport access ' + (enabled ? 'enabled.' : 'disabled. Campaigns keep running.'));
+        setNotice(account.name + ': Adport access ' + (enabled ? 'enabled.' : usesAdAccountSlot(account.provider) ? 'disabled. Campaigns keep running.' : 'disabled.'));
         startRefresh(() => router.refresh());
       }
     } catch {
@@ -72,11 +74,11 @@ export function AccountAccessManager({ organizationId, accounts, canManage, maxA
     } finally { setBusy(undefined); }
   }
 
-  return <section className="card account-access-card" aria-label="Ad account access">
+  return <section className="card account-access-card" aria-label={category === 'analytics' ? 'Analytics account access' : 'Ad account access'}>
     <PlanLimitModal limit={planLimit} onClose={() => setPlanLimit(undefined)} />
-    <div className="card-head"><div className="account-access-heading"><h2>Adport access</h2><InfoTooltip label="About account access">Enabled accounts are available to your AI assistants. Disabling access only removes the account from Adport; your campaigns keep running. Only enabled accounts use plan slots.</InfoTooltip></div><div className="account-access-counts"><Link href="/dashboard/billing#usage">{organizationCount === undefined ? 'Organization allowance: ' + (maxActiveAccounts ?? 'unlimited') + ' accounts' : organizationCount + ' / ' + (maxActiveAccounts ?? 'unlimited') + ' organization slots'}</Link></div></div>
+    <div className="card-head"><div className="account-access-heading"><h2>Adport access</h2><InfoTooltip label="About account access">{category === 'analytics' ? 'Enable the analytics and tracking accounts your assistants may access. These accounts do not use ad-account slots.' : 'Enabled ad accounts are available to your AI assistants and use plan slots. Disabling access only removes the account from Adport; your campaigns keep running.'}</InfoTooltip></div><div className="account-access-counts">{category === 'analytics' ? <span>No ad-account slots used</span> : <Link href="/dashboard/billing#usage">{organizationCount === undefined ? 'Organization allowance: ' + (maxActiveAccounts ?? 'unlimited') + ' accounts' : organizationCount + ' / ' + (maxActiveAccounts ?? 'unlimited') + ' organization slots'}</Link>}</div></div>
     <div className="account-access-toolbar">
-      <Input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search name, ID, or platform" aria-label="Search ad accounts" />
+      <Input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search name, ID, or platform" aria-label={category === 'analytics' ? 'Search analytics accounts' : 'Search ad accounts'} />
       <div className="filter-tabs" role="group" aria-label="Filter account access">
         {(['all', 'enabled', 'disabled'] as const).map(value => <Button type="button" key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{value === 'all' ? 'All' : value === 'enabled' ? 'Enabled' : 'Disabled'} <span>{value === 'all' ? providerAccounts.length : value === 'enabled' ? activeCount : providerAccounts.length - activeCount}</span></Button>)}
       </div>
@@ -99,9 +101,9 @@ export function AccountAccessManager({ organizationId, accounts, canManage, maxA
             <span>{busy === key ? 'Updating…' : account.enabled ? 'Enabled' : 'Disabled'}</span>
             <InfoTooltip label={'Platform status for ' + account.name}>{account.status ?? 'Available at the platform'}. Adport access is managed separately from the account's status at {providerLabel(account.provider)}.</InfoTooltip>
           </div>
-          {needsSelection ? <Link className="account-access-fix" href={account.accountSelectionUnavailable ? '/dashboard/connections#platform-' + account.provider : '/account-selection?selection_id=' + account.accountSelectionId}>{account.accountSelectionUnavailable ? 'Restart account selection ↗' : 'Finish account selection ↗'}</Link> : needsReconnect ? <Link className="account-access-fix" href={'/dashboard/connections#platform-' + account.provider}>Reconnect platform ↗</Link> : null}</td>
+          {needsSelection ? <Link className="account-access-fix" href={account.accountSelectionUnavailable ? providerConnectionsPath(account.provider) : '/account-selection?selection_id=' + account.accountSelectionId}>{account.accountSelectionUnavailable ? 'Restart account selection ↗' : 'Finish account selection ↗'}</Link> : needsReconnect ? <Link className="account-access-fix" href={providerConnectionsPath(account.provider)}>Reconnect platform ↗</Link> : null}</td>
         </tr>;
       })}</tbody>
-    </table></div> : <div className="empty"><h3>{providerAccounts.length ? 'No matching accounts' : providerFilter ? 'No ' + providerLabel(providerFilter) + ' accounts added' : 'No accounts added yet'}</h3><p>{providerAccounts.length ? 'Try another search or access filter.' : canManage ? 'Connect a platform, choose your accounts, then enable access here.' : 'Ask a project owner or admin to add accounts.'}</p>{providerAccounts.length ? <Button className="button secondary small" type="button" onClick={() => { setQuery(''); setFilter('all'); }}>Clear filters</Button> : canManage ? <Link className="button secondary" href="/dashboard/connections">Add accounts</Link> : null}</div>}
+    </table></div> : <div className="empty"><h3>{providerAccounts.length ? 'No matching accounts' : providerFilter ? 'No ' + providerLabel(providerFilter) + ' accounts added' : 'No accounts added yet'}</h3><p>{providerAccounts.length ? 'Try another search or access filter.' : canManage ? 'Connect a platform, choose your accounts, then enable access here.' : 'Ask a project owner or admin to add accounts.'}</p>{providerAccounts.length ? <Button className="button secondary small" type="button" onClick={() => { setQuery(''); setFilter('all'); }}>Clear filters</Button> : canManage ? <Link className="button secondary" href={category === 'analytics' ? '/dashboard/analytics' : '/dashboard/connections'}>Add accounts</Link> : null}</div>}
   </section>;
 }

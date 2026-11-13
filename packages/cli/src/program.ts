@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import packageJson from '../package.json';
+import { cloudTool, uploadCloudMedia } from './cloud-media.js';
 import {
   AdportError,
   AuditLog,
@@ -30,9 +31,9 @@ function table(rows: Array<Record<string, unknown>>): string {
   return [line(keys), line(widths.map((w) => '-'.repeat(w))), ...rows.map((r) => line(keys.map((k) => String(r[k] ?? ''))))].join('\n');
 }
 
-async function runtime(includeMock?: boolean): Promise<AdportRuntime> {
+async function runtime(includeMock?: boolean, includeRawTools = false): Promise<AdportRuntime> {
   const { assembleRuntime } = await import('@adport/mcp');
-  return assembleRuntime({ includeMock });
+  return assembleRuntime({ includeMock, includeRawTools });
 }
 
 export function buildProgram(io: ProgramIO = defaultIO): Command {
@@ -40,9 +41,10 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
   program
     .description('The open control plane for paid media (MCP + CLI)')
     .option('--demo', 'Use synthetic mock accounts and tools (never real provider data)')
+    .option('--raw-api-tools', 'Enable advanced generic provider API tools locally')
     .version(packageJson.version)
     .configureOutput({ writeOut: (s) => io.out(s.trimEnd()), writeErr: (s) => io.err(s.trimEnd()) });
-  const commandRuntime = () => runtime(program.opts<{ demo?: boolean }>().demo === true ? true : undefined);
+  const commandRuntime = () => runtime(program.opts<{ demo?: boolean }>().demo === true ? true : undefined, program.opts<{ rawApiTools?: boolean }>().rawApiTools === true);
 
   const tools = program.command('tools').description('Inspect and invoke the shared tool registry');
 
@@ -59,6 +61,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
             defs.map((t: AnyToolDefinition) => ({
               name: t.name,
               namespace: t.namespace,
+              catalog: t.catalog,
               readOnly: t.annotations.readOnly ?? false,
               destructive: t.annotations.destructive ?? false,
             })),
@@ -71,7 +74,8 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
           defs.map((t) => ({
             name: t.name,
             namespace: t.namespace,
-            mode: t.annotations.readOnly ? 'read' : t.annotations.destructive ? 'DESTRUCTIVE' : 'write',
+            mode: t.annotations.readOnly ? 'read' : 'write',
+            risk: t.annotations.destructive ? 'may modify existing data' : '-',
           })),
         ),
       );
@@ -81,11 +85,21 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .command('run <name>')
     .description('Invoke a tool with JSON input (the same tools the MCP server exposes)')
     .option('--input <json>', 'JSON object with the tool arguments', '{}')
-    .action(async (name: string, opts: { input: string }) => {
+    .option('--cloud-url <origin>', 'Run the same registry tool on this Adport Cloud server')
+    .option('--api-key-env <name>', 'Environment variable containing a project-scoped API key', 'ADPORT_API_KEY')
+    .action(async (name: string, opts: { input: string; cloudUrl?: string; apiKeyEnv: string }) => {
+      if (opts.cloudUrl) { io.out(json(await cloudTool(name, JSON.parse(opts.input), { cloudUrl: opts.cloudUrl, apiKeyEnv: opts.apiKeyEnv }))); return; }
       const rt = await commandRuntime();
       const result = await rt.registry.call(name, JSON.parse(opts.input), rt.ctx);
       io.out(json(result));
     });
+
+  program.command('media').description('Manage project assets without opening a dashboard')
+    .command('upload <file>').description('Preview a project upload; pass its pending ID to transfer and verify the exact file')
+    .option('--cloud-url <origin>', 'Adport Cloud origin', 'https://app.adport.dev')
+    .option('--api-key-env <name>', 'Environment variable containing a project-scoped API key', 'ADPORT_API_KEY')
+    .option('--pending-operation-id <id>', 'Apply the approved upload preview, transfer bytes and finalize through the policy gate')
+    .action(async (file: string, opts: { cloudUrl: string; apiKeyEnv: string; pendingOperationId?: string }) => { io.out(json(await uploadCloudMedia(file, opts))); });
 
   program
     .command('accounts')
@@ -225,10 +239,28 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .command('connect <provider>')
     .description('Connect an ad account (guided wizard)')
     .option('--no-browser', 'Print auth URLs instead of opening a browser')
-    .action(async (provider: string, opts: { browser: boolean }) => {
+    .option('--data-manager', 'Google only: explicitly request the additional Data Manager OAuth scope')
+    .option('--pin-management', 'Pinterest only: explicitly request public board, Pin and native media permissions')
+    .option('--secret-pins', 'Pinterest only: additionally authorize secret boards and Pins (includes --pin-management permissions)')
+    .option('--catalog-management', 'Pinterest only: explicitly request catalog and feed management permissions')
+    .action(async (provider: string, opts: { browser: boolean; dataManager?: boolean; pinManagement?: boolean; secretPins?: boolean; catalogManagement?: boolean }) => {
+      if (opts.dataManager && provider !== 'google') throw new Error('--data-manager is supported only for Google');
+      if (opts.pinManagement && provider !== 'pinterest') throw new Error('--pin-management is supported only for Pinterest');
+      if (opts.secretPins && provider !== 'pinterest') throw new Error('--secret-pins is supported only for Pinterest');
+      if (opts.catalogManagement && provider !== 'pinterest') throw new Error('--catalog-management is supported only for Pinterest');
+      if (provider === 'ga4' || provider === 'gsc') {
+        const { connectAnalytics } = await import('./connect/analytics.js');
+        await connectAnalytics(provider, { openBrowser: opts.browser, io });
+        return;
+      }
+      if (provider === 'gtm') {
+        const { connectGtm } = await import('./connect/gtm.js');
+        await connectGtm({ openBrowser: opts.browser, io });
+        return;
+      }
       if (provider === 'google') {
         const { connectGoogle } = await import('./connect/google.js');
-        await connectGoogle({ openBrowser: opts.browser, io });
+        await connectGoogle({ openBrowser: opts.browser, dataManager: opts.dataManager, io });
         return;
       }
       if (provider === 'meta') {
@@ -268,7 +300,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
       }
       if (provider === 'pinterest') {
         const { connectPinterest } = await import('./connect/pinterest.js');
-        await connectPinterest({ openBrowser: opts.browser, io });
+        await connectPinterest({ openBrowser: opts.browser, pinManagement: opts.pinManagement, secretPins: opts.secretPins, catalogManagement: opts.catalogManagement, io });
         return;
       }
       if (provider === 'linkedin') {
@@ -285,7 +317,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
         await connectX({ openBrowser: opts.browser, io });
         return;
       }
-      io.err(`Provider "${provider}" is not supported. Available: google, meta, tiktok, apple, microsoft, reddit, snapchat, spotify, pinterest, linkedin, x, mock.`);
+      io.err(`Provider "${provider}" is not supported. Available: ga4, gsc, gtm, google, meta, tiktok, apple, microsoft, reddit, snapchat, spotify, pinterest, linkedin, x, mock.`);
       process.exitCode = 1;
     });
 
@@ -293,8 +325,8 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .command('disconnect <provider>')
     .description('Remove a provider connection from this machine')
     .action(async (provider: string) => {
-      if (!['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'].includes(provider)) {
-        io.err(`Provider "${provider}" is not supported. Available: google, meta, tiktok, apple, microsoft, reddit, snapchat, spotify, pinterest, linkedin, x.`);
+      if (!['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'].includes(provider)) {
+        io.err(`Provider "${provider}" is not supported. Available: ga4, gsc, gtm, google, meta, tiktok, apple, microsoft, reddit, snapchat, spotify, pinterest, linkedin, x.`);
         process.exitCode = 1;
         return;
       }
@@ -369,7 +401,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
       for (const record of records) {
         io.out(`${record.provider}: credentials stored (source: ${record.source}, updated ${record.updatedAt})`);
       }
-      for (const id of ['google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const) {
+      for (const id of ['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const) {
         const provider = rt.ctx.providers.list().find((p) => p.id === id);
         if (!provider) {
           io.out(`${id}: not connected (run \`adport connect ${id}\`)`);
@@ -390,7 +422,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .description('Start the adport MCP server on stdio')
     .action(async () => {
       const { runStdioServer } = await import('@adport/mcp');
-      await runStdioServer(await commandRuntime());
+      await runStdioServer(await commandRuntime(), undefined, program.opts<{ rawApiTools?: boolean }>().rawApiTools === true);
       // Keep the process alive for the stdio transport.
       await new Promise(() => {});
     });

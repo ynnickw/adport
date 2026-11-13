@@ -1,6 +1,10 @@
 import 'server-only';
-import { AdportError, createContext, PolicyEngine, type AdportRuntime, type AnyToolDefinition, type ProviderModule } from '@adport/core';
+import { AdportError, createContext, selectRuntimeCatalog, PolicyEngine, type ToolSelection, type AdportRuntime, type AnyToolDefinition, type ProviderModule } from '@adport/core';
+import { toolAccessPath } from '@/lib/tool-access-link';
 import { AppleAdsClient, AppleAdsProvider, appleTools } from '@adport/provider-apple';
+import { AnalyticsClient, Ga4Provider, SearchConsoleProvider, ga4Tools, gscTools } from '@adport/provider-analytics';
+import { googleOAuthClient } from './google-oauth';
+import { GtmClient, GtmProvider, gtmTools } from '@adport/provider-gtm';
 import { GoogleAdsProvider, GoogleAdsRestClient, googleTools } from '@adport/provider-google';
 import { MetaAdsProvider, MetaGraphClient, metaTools } from '@adport/provider-meta';
 import { MicrosoftAdsClient, MicrosoftAdsProvider, microsoftTools } from '@adport/provider-microsoft';
@@ -30,12 +34,18 @@ import {
 import type { ProviderCredentialMap, TenantPrincipal } from './types';
 import { isSyntheticReviewer } from './synthetic-reviewer';
 import { HttpError } from '@/lib/http';
+import { ProjectMediaLibrary } from './media';
 import { instrumentCloudTools } from './analytics-tools';
+import { PostgresResourceSecretStore } from './resource-credentials';
+import { PostgresRedditCatalogAccessStore } from './reddit-catalog-access';
+import { PostgresTikTokCatalogAccessStore } from './tiktok-catalog-access';
+import { rejectUnavailableGtm } from './gtm-connection-recovery';
 
 export interface TenantRuntimeOptions {
   /** Used only immediately after OAuth exchange to discover provider accounts. */
   enforceAccountScope?: boolean;
   surface?: 'dashboard' | 'mcp' | 'api';
+  catalog?: ToolSelection;
 }
 
 /**
@@ -48,10 +58,11 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     throw new HttpError('This demo workspace has been retired. Reconnect with your real Adport account to use connected provider accounts.', 403);
   }
   const enforceAccountScope = options.enforceAccountScope ?? true;
+  const media = new ProjectMediaLibrary(principal);
   const [policy, credentials, enabledAccountIds, inventory] = await Promise.all([
     getOrganizationPolicy(principal.organizationId),
     loadProviderCredentials(principal.organizationId, !enforceAccountScope),
-    enforceAccountScope ? loadEnabledAccountIds(principal.organizationId) : Promise.resolve({}),
+    enforceAccountScope ? loadEnabledAccountIds(principal.organizationId) : Promise.resolve({} as Awaited<ReturnType<typeof loadEnabledAccountIds>>),
     enforceAccountScope ? listOrganizationAdAccounts(principal.organizationId) : Promise.resolve([]),
   ]);
   const modules: ProviderModule[] = [];
@@ -70,28 +81,43 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
   };
   if (credentials.snapchat && providerAllowedForOrganization('snapchat', principal.organizationId)) {
     const persist = persistTokens('snapchat');
-    const provider = new SnapchatAdsProvider(new SnapchatAdsClient({ ...cloudProviderApp('snapchat'), refreshToken: credentials.snapchat.refreshToken, onRefreshToken: refreshToken => persist({ refreshToken }) }));
+    const provider = new SnapchatAdsProvider(new SnapchatAdsClient({ ...cloudProviderApp('snapchat'), refreshToken: credentials.snapchat.refreshToken, onRefreshToken: refreshToken => persist({ refreshToken }) }), media);
     modules.push({ provider: scopeProvider(provider), tools: snapchatTools(provider) });
   }
   if (credentials.spotify && providerAllowedForOrganization('spotify', principal.organizationId)) {
     const persist = persistTokens('spotify');
-    const provider = new SpotifyAdsProvider(new SpotifyAdsClient({ ...cloudProviderApp('spotify'), refreshToken: credentials.spotify.refreshToken, onRefreshToken: refreshToken => persist({ refreshToken }) }));
+    const provider = new SpotifyAdsProvider(new SpotifyAdsClient({ ...cloudProviderApp('spotify'), refreshToken: credentials.spotify.refreshToken, onRefreshToken: refreshToken => persist({ refreshToken }) }), media,
+      enforceAccountScope ? { resourceSecrets: new PostgresResourceSecretStore(principal, 'spotify', enabledAccountIds.spotify ?? new Set()) } : {});
     modules.push({ provider: scopeProvider(provider), tools: spotifyTools(provider) });
   }
   if (credentials.pinterest && providerAllowedForOrganization('pinterest', principal.organizationId)) {
     const persist = persistTokens('pinterest');
-    const provider = new PinterestAdsProvider(new PinterestAdsClient({ ...cloudProviderApp('pinterest'), refreshToken: credentials.pinterest.refreshToken, onRefreshToken: refreshToken => persist({ refreshToken }) }));
+    const provider = new PinterestAdsProvider(new PinterestAdsClient({ ...cloudProviderApp('pinterest'), refreshToken: credentials.pinterest.refreshToken, onRefreshToken: refreshToken => persist({ refreshToken }) }), media);
     modules.push({ provider: scopeProvider(provider), tools: pinterestTools(provider) });
   }
   if (credentials.linkedin && providerAllowedForOrganization('linkedin', principal.organizationId)) {
-    const provider = new LinkedInAdsProvider(new LinkedInAdsClient({ ...cloudProviderApp('linkedin'), ...credentials.linkedin, onTokens: persistTokens('linkedin') }));
+    const provider = new LinkedInAdsProvider(new LinkedInAdsClient({ ...cloudProviderApp('linkedin'), ...credentials.linkedin, onTokens: persistTokens('linkedin') }), media);
     modules.push({ provider: scopeProvider(provider), tools: linkedinTools(provider) });
   }
   if (credentials.x && providerAllowedForOrganization('x', principal.organizationId)) {
     const { X_CONSUMER_KEY: consumerKey, X_CONSUMER_SECRET: consumerSecret } = env();
     if (!consumerKey || !consumerSecret) throw new Error('X Ads application credentials are not configured.');
-    const provider = new XAdsProvider(new XAdsClient({ consumerKey, consumerSecret, ...credentials.x }));
+    const provider = new XAdsProvider(new XAdsClient({ consumerKey, consumerSecret, ...credentials.x }), undefined, media);
     modules.push({ provider: scopeProvider(provider), tools: xTools(provider) });
+  }
+  for (const id of ['ga4', 'gsc'] as const) {
+    if (!credentials[id] || !providerAllowedForOrganization(id, principal.organizationId)) continue;
+    const client = new AnalyticsClient({ ...googleOAuthClient(id), refreshToken: credentials[id]!.refreshToken });
+    if (id === 'ga4') { const provider = new Ga4Provider(client); modules.push({ provider: scopeProvider(provider), tools: ga4Tools(provider) }); }
+    else { const provider = new SearchConsoleProvider(client); modules.push({ provider: scopeProvider(provider), tools: gscTools(provider) }); }
+  }
+  if (credentials.gtm && providerAllowedForOrganization('gtm', principal.organizationId)) {
+    const config = googleEnv();
+    const provider = new GtmProvider(new GtmClient({
+      clientId: config.GOOGLE_ADS_CLIENT_ID, clientSecret: config.GOOGLE_ADS_CLIENT_SECRET,
+      refreshToken: credentials.gtm.refreshToken,
+    }));
+    modules.push({ provider: scopeProvider(provider), tools: gtmTools(provider) });
   }
   if (credentials.google) {
     const config = googleEnv();
@@ -101,21 +127,22 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
       refreshToken: credentials.google.refreshToken,
       loginCustomerIds: credentials.google.loginCustomerIds,
     });
-    const provider = new GoogleAdsProvider(client);
+    const provider = new GoogleAdsProvider(client, media);
     modules.push({ provider: scopeProvider(provider), tools: googleTools(provider) });
   }
   if (credentials.meta) {
     const provider = new MetaAdsProvider(new MetaGraphClient(hydrateMeta(credentials.meta)),
-      enforceAccountScope ? new Set(credentials.meta.selectedPageIds ?? []) : undefined);
+      enforceAccountScope ? new Set(credentials.meta.selectedPageIds ?? []) : undefined, media);
     modules.push({ provider: scopeProvider(provider), tools: metaTools(provider) });
   }
   if (credentials.tiktok) {
     const resolved = hydrateTikTok(credentials.tiktok);
-    const provider = new TikTokAdsProvider(new TikTokClient(resolved), { appId: resolved.appId, secret: resolved.secret });
+    const catalogAccess = new PostgresTikTokCatalogAccessStore(principal, enabledAccountIds.tiktok ?? new Set());
+    const provider = new TikTokAdsProvider(new TikTokClient(resolved), { appId: resolved.appId, secret: resolved.secret }, media, catalogAccess);
     modules.push({ provider: scopeProvider(provider), tools: tiktokTools(provider) });
   }
   if (credentials.apple) {
-    const provider = new AppleAdsProvider(new AppleAdsClient(hydrateApple(credentials.apple)));
+    const provider = new AppleAdsProvider(new AppleAdsClient(hydrateApple(credentials.apple)), media);
     modules.push({ provider: scopeProvider(provider), tools: appleTools(provider) });
   }
   if (credentials.microsoft) {
@@ -124,7 +151,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
       const rotated: ProviderCredentialMap['microsoft'] = { ...stored, refreshToken };
       await updateProviderCredential(principal.organizationId, 'microsoft', rotated);
     });
-    const provider = new MicrosoftAdsProvider(client);
+    const provider = new MicrosoftAdsProvider(client, {}, media);
     modules.push({ provider: scopeProvider(provider), tools: microsoftTools(provider) });
   }
   if (credentials.reddit) {
@@ -136,7 +163,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
         await updateProviderCredential(principal.organizationId, 'reddit', rotated);
       },
     });
-    const provider = new RedditAdsProvider(client);
+    const provider = new RedditAdsProvider(client, media, new PostgresRedditCatalogAccessStore(principal, enabledAccountIds.reddit ?? new Set()));
     modules.push({ provider: scopeProvider(provider), tools: redditTools(provider) });
   }
   const engine = new PolicyEngine(policy, new PostgresPendingStore(principal), new PostgresAuditStore(principal));
@@ -147,14 +174,20 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     engine,
     authorizeToolCall: enforceAccountScope ? (tool, input) => {
       if (tool.namespace !== 'core' && tool.namespace !== 'audit' && !connected.has(tool.namespace)) {
+        if (tool.namespace === 'gtm') return rejectUnavailableGtm(principal, !tool.annotations.readOnly);
         throw new AdportError('NOT_CONNECTED', 'This platform is not connected in the selected project.');
       }
       authorizeAccounts(tool, input);
     } : undefined,
     findings: new PostgresFindingsStore(principal.organizationId),
+    media,
   });
-  if (options.surface === 'mcp') completeMcpCatalog(runtime);
-  return enforceAccountScope ? instrumentCloudTools(runtime, principal, options.surface ?? 'dashboard') : runtime;
+  if (options.surface === 'mcp') completeMcpCatalog(runtime, principal.organizationId);
+  const selected = options.catalog ? selectRuntimeCatalog(runtime, options.catalog, false, {
+    canWrite: principal.scopes.includes('tools:write'), excludedTools: ['recommendation_apply'],
+    manageAccessUrl: new URL(toolAccessPath(principal.organizationId, principal.apiKeyId ?? principal.clientId ?? '', principal.apiKeyId ? 'key' : 'oauth', principal.oauthOrganizationGroupId), env().ADPORT_CLOUD_BASE_URL).href,
+  }) : runtime;
+  return enforceAccountScope ? instrumentCloudTools(selected, principal, options.surface ?? 'dashboard') : selected;
 }
 
 /** Factories define schemas without calling a provider. These handlers never execute. */
@@ -167,9 +200,12 @@ function unavailableTools<T extends object>(provider: string, factory: (provider
 }
 
 /** A stable catalog lets clients use platforms connected after OAuth consent. */
-function completeMcpCatalog(runtime: AdportRuntime): void {
+function completeMcpCatalog(runtime: AdportRuntime, organizationId: string): void {
   const registered = new Set(runtime.registry.list().map(tool => tool.name));
   const catalog = [
+    ...(providerAllowedForOrganization('gtm', organizationId) ? unavailableTools('gtm', gtmTools) : []),
+    ...(providerAllowedForOrganization('ga4', organizationId) ? unavailableTools('ga4', ga4Tools) : []),
+    ...(providerAllowedForOrganization('gsc', organizationId) ? unavailableTools('gsc', gscTools) : []),
     ...unavailableTools('google', googleTools), ...unavailableTools('meta', metaTools),
     ...unavailableTools('tiktok', tiktokTools), ...unavailableTools('apple', appleTools),
     ...unavailableTools('microsoft', microsoftTools), ...unavailableTools('reddit', redditTools),

@@ -6,7 +6,19 @@
 - [Provider connections](providers.md): local applications, credentials, and all 11 provider guides
 - [Reporting semantics](reporting-semantics.md): currencies, date ranges, attribution, and comparison limits
 - [Write safety and audit](write-safety.md): previews, approval binding, policy, and audit records
+- [Creative editing and private media](creative-media.md): visual tools, project uploads, immutable assets, and provider workflows
+- [Google campaign targeting](providers/google-targeting.md): locations, exclusions, schedules, devices and current language rules
+- [Microsoft offline conversions](providers/microsoft-offline-conversions.md): private imports, restatements, retractions and indexed processing receipts
+- [Microsoft campaign and ad-group targeting](providers/microsoft-general-targeting.md): inherited settings, device percentages and schedule clocks
 - [Apple campaign setup](apple-campaign-setup.md)
+- [TikTok campaign and creative setup](tiktok-campaign-setup.md)
+- [TikTok automated-rule inspection and native limits](providers/tiktok.md)
+- [Reddit Business catalog access and configuration](providers/reddit-catalogs.md)
+- [Reddit product views, set management and import diagnostics](providers/reddit-catalog-content.md)
+- [Reddit feed management and private source handling](providers/reddit-catalog-feeds.md)
+- [Spotify campaign drafts and media](spotify-campaign-setup.md)
+- [Pinterest campaign hierarchy and previews](pinterest-campaign-setup.md)
+- [X published creatives and ad associations](providers/x-posts.md)
 - [Agent plugin](../plugins/adport/README.md)
 - [Support](../SUPPORT.md) and [security reports](../SECURITY.md)
 

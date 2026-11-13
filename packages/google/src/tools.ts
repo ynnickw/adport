@@ -1,12 +1,47 @@
-import { defineTool, guardedWriteTool, type AnyToolDefinition } from '@adport/core';
+import { creativesOutput, defineTool, guardedWriteTool, type AnyToolDefinition } from '@adport/core';
 import { z } from 'zod';
 import type { GoogleAdsProvider } from './provider.js';
+import { googlePlanningTools } from './planning.js';
+import { googleAssetTools } from './assets.js';
+import { googleAssetLinkTools } from './asset-links.js';
+import { googleLabelTools } from './labels.js';
+import { googleFieldMetadataTools } from './field-metadata.js';
+import { googleConversionTools } from './conversions.js';
+import { googleDataManagerTools } from './data-manager.js';
+import { googleExperimentTools } from './experiments.js';
+import { googlePerformanceMaxTools } from './pmax.js';
+import { googleTargetingTools } from './targeting.js';
 
 const statusSchema = z.enum(['ENABLED', 'PAUSED']);
 const matchTypeSchema = z.enum(['EXACT', 'PHRASE', 'BROAD']);
 
 export function googleTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
   return [
+    ...googlePlanningTools(provider),
+    ...googleAssetTools(provider),
+    ...googleAssetLinkTools(provider),
+    ...googleLabelTools(provider),
+    ...googleFieldMetadataTools(provider),
+    ...googleConversionTools(provider),
+    ...googleDataManagerTools(provider),
+    ...googleExperimentTools(provider),
+    ...googlePerformanceMaxTools(provider),
+    ...googleTargetingTools(provider),
+    defineTool({
+      name: 'google_ads', namespace: 'google',
+      description: 'Browse Google Ads with their actual text, final URLs, serving status and creative actions. Filter by campaign or ad group. Changes requested from the creative viewer return a preview before approval.',
+      input: z.object({
+        account_id: z.string(),
+        campaign_id: z.string().regex(/^\d+$/).optional(),
+        ad_group_id: z.string().regex(/^\d+$/).optional(),
+        include_drafts: z.boolean().optional().describe('Include in-design experiment draft ads; off by default'),
+        limit: z.number().int().positive().max(200).default(50),
+      }),
+      output: creativesOutput,
+      presentation: 'creatives',
+      annotations: { readOnly: true },
+      handler: input => provider.listAds(input),
+    }),
     defineTool({
       name: 'google_gaql',
       namespace: 'google',
@@ -20,6 +55,7 @@ export function googleTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
         fields: z.array(z.string()).min(1),
         conditions: z.array(z.string()).optional(),
         order_by: z.array(z.string()).optional(),
+        include_drafts: z.boolean().optional().describe('Include in-design experiment draft campaigns and children; off by default'),
         limit: z.number().int().positive().max(10_000).default(200),
       }),
       annotations: { readOnly: true },
@@ -46,7 +82,7 @@ export function googleTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
         search_partners: z.boolean().optional().describe('SEARCH only; defaults false'),
         display_expansion: z.boolean().optional().describe('SEARCH only; defaults false'),
         location_ids: z.array(z.string().regex(/^\d+$/)).min(1).max(100).optional().describe('Google geo target constant IDs; omitted means unrestricted locations'),
-        language_ids: z.array(z.string().regex(/^\d+$/)).min(1).max(100).optional().describe('Google language constant IDs; omitted means unrestricted languages'),
+        language_ids: z.array(z.string().regex(/^\d+$/)).min(1).max(100).optional().describe('Eligible non-Search campaigns only. Search language matching is automatic; omit this field for Search.'),
         location_presence_only: z.boolean().optional().describe('Target people in locations rather than people interested in them; defaults true when locations are specified'),
       }),
     }),
@@ -144,6 +180,31 @@ export function googleTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
       kind: 'remove',
       destructive: true,
       payload: z.object({ ad_group_id: z.string(), criterion_ids: z.array(z.string()).min(1) }),
+    }),
+    guardedWriteTool({
+      name: 'google_set_ad_status',
+      namespace: 'google',
+      description: 'Enable or pause an existing ad in its ad group. Enabling an ad does not change its campaign or ad-group status.',
+      provider: 'google',
+      kind: 'update',
+      payload: z.object({
+        ad_group_id: z.string().regex(/^\d+$/),
+        ad_id: z.string().regex(/^\d+$/),
+        status: statusSchema,
+      }),
+    }),
+    guardedWriteTool({
+      name: 'google_update_responsive_search_ad',
+      namespace: 'google',
+      description: 'Edit an existing responsive search ad’s headlines, descriptions, final URLs or display paths. Omitted fields remain unchanged. Existing headline and description pinning is retained by position. Serving status does not change.',
+      provider: 'google', kind: 'update',
+      payload: z.object({
+        ad_group_id: z.string().regex(/^\d+$/), ad_id: z.string().regex(/^\d+$/),
+        headlines: z.array(z.string().min(1).max(30)).min(3).max(15).optional(),
+        descriptions: z.array(z.string().min(1).max(90)).min(2).max(4).optional(),
+        final_urls: z.array(z.string().url()).min(1).max(10).optional(),
+        path1: z.string().max(15).optional(), path2: z.string().max(15).optional(),
+      }).refine(input => ['headlines', 'descriptions', 'final_urls', 'path1', 'path2'].some(key => input[key as keyof typeof input] !== undefined), 'Provide at least one content field'),
     }),
     guardedWriteTool({
       name: 'google_create_responsive_search_ad',

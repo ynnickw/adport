@@ -13,7 +13,7 @@ const zeroConversionSpend: Rule = {
     const minSpend = ctx.config.zero_conversion_min_spend!;
     return ctx.rows
       .filter((row) => isActive(row.entity.status))
-      .filter((row) => (row.metrics.spend ?? 0) >= minSpend && (row.metrics.conversions ?? 0) === 0)
+      .filter((row) => (row.metrics.spend ?? 0) >= minSpend && row.metrics.conversions === 0)
       .map((row) => ({
         entity: row.entity,
         severity: (row.metrics.spend ?? 0) >= minSpend * 3 ? ('critical' as const) : ('warn' as const),
@@ -85,7 +85,7 @@ const negativeRoas: Rule = {
         (row) =>
           (row.metrics.spend ?? 0) >= minSpend &&
           (row.metrics.conversion_value ?? 0) > 0 &&
-          (row.metrics.roas ?? 0) < 1,
+          row.metrics.roas !== undefined && row.metrics.roas < 1,
       )
       .map((row) => ({
         entity: row.entity,

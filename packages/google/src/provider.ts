@@ -1,4 +1,7 @@
 import {
+  creativeStatusAction,
+  type MediaResolver,
+  creativesOutput,
   AdportError,
   resolveDateRange,
   type Account,
@@ -15,6 +18,14 @@ import {
   type WriteResult,
 } from '@adport/core';
 import { GoogleAdsRestClient, normalizeCustomerId } from './client.js';
+import { GoogleAssetService, GOOGLE_ASSET_WRITES } from './assets.js';
+import { GoogleAssetLinks, GOOGLE_ASSET_LINK_WRITES } from './asset-links.js';
+import { GoogleLabelService, GOOGLE_LABEL_WRITES } from './labels.js';
+import { GoogleConversionService, GOOGLE_CONVERSION_WRITES } from './conversions.js';
+import { GoogleDataManagerService } from './data-manager.js';
+import { GoogleExperimentService, GOOGLE_EXPERIMENT_WRITES } from './experiments.js';
+import { GooglePerformanceMaxService, GOOGLE_PMAX_WRITES } from './pmax.js';
+import { GoogleTargetingService } from './targeting.js';
 
 const LEVEL_RESOURCE = {
   account: 'customer',
@@ -32,19 +43,85 @@ const BASE_METRIC_FIELDS: Record<string, string> = {
   conversion_value: 'metrics.conversions_value',
 };
 
-interface WritePlan {
-  summary: string;
-  changes: string[];
-  coercions: string[];
-  budgetDeltas: WritePreview['budgetDeltas'];
+interface WritePlan extends Omit<WritePreview, 'serverValidated'> {
+  serverValidated?: boolean;
   execute: (validateOnly: boolean) => Promise<string[]>;
+  resultDetails?: () => unknown;
+  resultWarnings?: () => string[];
 }
 
 export class GoogleAdsProvider implements AdProvider {
   readonly id = 'google';
   private readonly discoveredLoginCustomerIds = new Map<string, string>();
+  readonly assets: GoogleAssetService;
+  readonly assetLinks: GoogleAssetLinks;
+  readonly labels: GoogleLabelService;
+  readonly conversions: GoogleConversionService;
+  readonly dataManager: GoogleDataManagerService;
+  readonly experiments: GoogleExperimentService;
+  readonly performanceMax: GooglePerformanceMaxService;
+  readonly targeting: GoogleTargetingService;
 
-  constructor(private readonly client: GoogleAdsRestClient) {}
+  constructor(private readonly client: GoogleAdsRestClient, media?: MediaResolver) {
+    this.assets = new GoogleAssetService(client, media);
+    this.assetLinks = new GoogleAssetLinks(client, this.assets);
+    this.labels = new GoogleLabelService(client);
+    this.conversions = new GoogleConversionService(client);
+    this.dataManager = new GoogleDataManagerService(client, this.conversions);
+    this.experiments = new GoogleExperimentService(client);
+    this.performanceMax = new GooglePerformanceMaxService(client);
+    this.targeting = new GoogleTargetingService(client);
+  }
+
+  keywordPlanning(customerId: string, method: 'generateKeywordIdeas' | 'generateKeywordHistoricalMetrics', body: Record<string, unknown>) {
+    return this.client.keywordPlanning(customerId, method, body);
+  }
+
+  fieldMetadata(query: string, pageSize: number, pageToken?: string) {
+    return this.client.fieldMetadata(query, pageSize, pageToken);
+  }
+
+  async listAds(input: { account_id: string; campaign_id?: string; ad_group_id?: string; limit: number; include_drafts?: boolean }) {
+    const cid = normalizeCustomerId(input.account_id);
+    const conditions = ["ad_group_ad.status != 'REMOVED'"];
+    if (input.campaign_id) conditions.push(`campaign.id = ${input.campaign_id}`);
+    if (input.ad_group_id) conditions.push(`ad_group.id = ${input.ad_group_id}`);
+    const rows = await this.client.search(cid,
+      `SELECT campaign.id, ad_group.id, ad_group_ad.ad.id, ad_group_ad.ad.name, ad_group_ad.ad.type, ad_group_ad.status, ad_group_ad.ad.final_urls, ad_group_ad.ad.responsive_search_ad.headlines, ad_group_ad.ad.responsive_search_ad.descriptions FROM ad_group_ad WHERE ${conditions.join(' AND ')} LIMIT ${input.limit + 1}`,
+      { maxRows: input.limit + 1, includeDrafts: input.include_drafts });
+    const textAssets = (value: unknown): string[] => Array.isArray(value)
+      ? value.flatMap(item => item && typeof item === 'object' && 'text' in item && typeof item.text === 'string' ? [item.text] : []) : [];
+    return creativesOutput.parse({
+      truncated: rows.length > input.limit,
+      creatives: rows.slice(0, input.limit).map(row => {
+        const groupAd = row.adGroupAd as { ad?: { id?: string; name?: string; type?: string; finalUrls?: string[]; responsiveSearchAd?: { headlines?: unknown[]; descriptions?: unknown[] } }; status?: string };
+        const ad = groupAd.ad;
+        if (!ad?.id) throw new AdportError('PROVIDER_ERROR', 'google: ad response is missing its identifier');
+        const adGroupId = String((row.adGroup as { id?: string })?.id ?? '');
+        if (!/^\d+$/.test(adGroupId)) throw new AdportError('PROVIDER_ERROR', 'google: ad response is missing its ad-group identifier');
+        const headlines = textAssets(ad.responsiveSearchAd?.headlines);
+        return {
+          id: ad.id, provider: this.id, account_id: cid, ad_group_id: adGroupId,
+          campaign_id: String((row.campaign as { id?: string })?.id ?? ''),
+          name: ad.name || headlines[0] || `Ad ${ad.id}`, type: ad.type ?? 'UNKNOWN', status: groupAd.status,
+          headlines, descriptions: textAssets(ad.responsiveSearchAd?.descriptions),
+          landing_urls: (ad.finalUrls ?? []).filter(url => { try { const parsed = new URL(url); return ['http:', 'https:'].includes(parsed.protocol) && !parsed.username && !parsed.password; } catch { return false; } }),
+          media: [],
+          actions: ['ENABLED', 'PAUSED'].includes(groupAd.status ?? '')
+            ? [creativeStatusAction('google_set_ad_status', { account_id: cid, ad_group_id: adGroupId, ad_id: ad.id }, groupAd.status!, ['ENABLED', 'PAUSED']),
+              ...(ad.type === 'RESPONSIVE_SEARCH_AD' ? [{
+                label: 'Edit ad copy', tool: 'google_update_responsive_search_ad', arguments: { account_id: cid, ad_group_id: adGroupId, ad_id: ad.id },
+                fields: [
+                  { key: 'headlines', label: 'Headlines (one per line)', type: 'text_list', value: headlines },
+                  { key: 'descriptions', label: 'Descriptions (one per line)', type: 'text_list', value: textAssets(ad.responsiveSearchAd?.descriptions) },
+                  { key: 'final_urls', label: 'Landing pages (one per line)', type: 'url_list', value: ad.finalUrls ?? [] },
+                ],
+              }] : []),
+            ] : [],
+        };
+      }),
+    });
+  }
 
   capabilities(): ProviderCapabilities {
     return { serverDryRun: true };
@@ -240,13 +317,14 @@ export class GoogleAdsProvider implements AdProvider {
     conditions?: string[];
     order_by?: string[];
     limit?: number;
+    include_drafts?: boolean;
   }): Promise<Array<Record<string, unknown>>> {
     const limit = Math.min(input.limit ?? 200, 10_000);
     let query = `SELECT ${input.fields.join(', ')} FROM ${input.resource}`;
     if (input.conditions?.length) query += ` WHERE ${input.conditions.join(' AND ')}`;
     if (input.order_by?.length) query += ` ORDER BY ${input.order_by.join(', ')}`;
     query += ` LIMIT ${limit} PARAMETERS omit_unselected_resource_names=true`;
-    return this.client.search(input.customer_id, query, { maxRows: limit });
+    return this.client.search(input.customer_id, query, { maxRows: limit, includeDrafts: input.include_drafts });
   }
 
   async previewWrite(op: WriteOperation, guard: WriteGuard): Promise<WritePreview> {
@@ -257,19 +335,30 @@ export class GoogleAdsProvider implements AdProvider {
       changes: plan.changes,
       coercions: plan.coercions,
       budgetDeltas: plan.budgetDeltas,
-      serverValidated: true,
+      ...(plan.fieldChanges ? { fieldChanges: plan.fieldChanges } : {}),
+      ...(plan.notes ? { notes: plan.notes } : {}),
+      ...(plan.review ? { review: plan.review } : {}),
+      serverValidated: plan.serverValidated ?? true,
     };
   }
 
   async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> {
     const plan = await this.plan(op, guard);
     const resourceIds = await plan.execute(false);
-    return { applied: true, resourceIds };
+    return { applied: true, resourceIds, ...(plan.resultDetails ? { details: plan.resultDetails() } : {}), ...(plan.resultWarnings ? { warnings: plan.resultWarnings() } : {}) };
   }
 
   // ---- write planning ------------------------------------------------------
 
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
+    if (GOOGLE_ASSET_WRITES.has(op.tool)) return this.assets.plan(op);
+    if (GOOGLE_ASSET_LINK_WRITES.has(op.tool)) return this.assetLinks.plan(op, guard);
+    if (GOOGLE_LABEL_WRITES.has(op.tool)) return this.labels.plan(op);
+    if (GOOGLE_CONVERSION_WRITES.has(op.tool)) return this.conversions.plan(op);
+    if (op.tool === 'google_ingest_conversion_events') return this.dataManager.plan(op);
+    if (GOOGLE_EXPERIMENT_WRITES.has(op.tool)) return this.experiments.plan(op, guard);
+    if (GOOGLE_PMAX_WRITES.has(op.tool)) return this.performanceMax.plan(op, guard);
+    if (op.tool === 'google_update_targeting') return this.targeting.plan(op);
     const cid = normalizeCustomerId(op.accountId);
     // Tool input was already zod-validated at the registry boundary.
     const payload = op.payload as never;
@@ -288,6 +377,10 @@ export class GoogleAdsProvider implements AdProvider {
         return this.planAddKeywords(cid, payload);
       case 'google_set_keyword_status':
         return this.planSetKeywordStatus(cid, payload);
+      case 'google_set_ad_status':
+        return this.planSetAdStatus(cid, payload);
+      case 'google_update_responsive_search_ad':
+        return this.planUpdateRsa(cid, payload);
       case 'google_remove_keywords':
         return this.planRemoveKeywords(cid, payload);
       case 'google_create_responsive_search_ad':
@@ -316,7 +409,7 @@ export class GoogleAdsProvider implements AdProvider {
     const creates = structuredClone(payload.creates);
     validateCustomerReferences(creates, cid);
     const coercions: string[] = [];
-    if (guard.forcePausedCreation && service === 'campaigns') {
+    if (guard.forcePausedCreation && ['campaigns', 'adGroups', 'adGroupAds', 'assetGroups'].includes(service)) {
       for (const [index, create] of creates.entries()) {
         if (create.status !== 'PAUSED') {
           create.status = 'PAUSED';
@@ -399,6 +492,8 @@ export class GoogleAdsProvider implements AdProvider {
       coercions.push('status coerced to PAUSED by policy (paused_creation)');
     }
     const channelType = payload.channel_type ?? 'SEARCH';
+    if (channelType === 'SEARCH' && payload.language_ids?.length) throw new AdportError('INVALID_INPUT', 'google: Search no longer supports manual language criteria. Omit language_ids; matching uses creative/landing-page language and user preferences. Existing legacy language criteria can only be removed.');
+    if (channelType === 'PERFORMANCE_MAX') throw new AdportError('INVALID_INPUT', 'google: use google_create_performance_max_campaign to create the complete campaign, brand assets and asset-group hierarchy atomically');
     if (channelType !== 'SEARCH' && (payload.search_partners !== undefined || payload.display_expansion !== undefined)) {
       throw new AdportError('INVALID_INPUT', 'search_partners and display_expansion require a SEARCH campaign');
     }
@@ -649,6 +744,77 @@ export class GoogleAdsProvider implements AdProvider {
     };
   }
 
+  private async planSetAdStatus(
+    cid: string,
+    payload: { ad_group_id: string; ad_id: string; status: 'ENABLED' | 'PAUSED' },
+  ): Promise<WritePlan> {
+    const resourceName = `customers/${cid}/adGroupAds/${payload.ad_group_id}~${payload.ad_id}`;
+    const rows = await this.client.search(cid,
+      `SELECT ad_group_ad.resource_name, ad_group_ad.status FROM ad_group_ad WHERE ad_group.id = ${payload.ad_group_id} AND ad_group_ad.ad.id = ${payload.ad_id} LIMIT 2`,
+      { maxRows: 2, includeDrafts: true });
+    const current = rows[0]?.adGroupAd as { resourceName?: string; status?: string } | undefined;
+    if (rows.length !== 1 || current?.resourceName !== resourceName || current.status === 'REMOVED') {
+      throw new AdportError('INVALID_INPUT', 'google: ad was not found in the selected account and ad group, or has been removed');
+    }
+    return {
+      summary: `Set ad ${payload.ad_id} status ${current.status ?? 'unknown'} → ${payload.status}`,
+      changes: [`~ ad ${payload.ad_id} status ${current.status ?? 'unknown'} → ${payload.status}`],
+      coercions: [],
+      budgetDeltas: [],
+      execute: async (validateOnly) => {
+        const result = await this.client.mutate(cid, 'adGroupAds', [
+          { update: { resourceName, status: payload.status }, updateMask: 'status' },
+        ], { validateOnly });
+        return (result.results ?? []).map(item => item.resourceName ?? resourceName);
+      },
+    };
+  }
+
+  private async planUpdateRsa(
+    cid: string,
+    payload: { ad_group_id: string; ad_id: string; headlines?: string[]; descriptions?: string[]; final_urls?: string[]; path1?: string; path2?: string },
+  ): Promise<WritePlan> {
+    type TextAsset = { text: string; pinnedField?: string };
+    type Ad = { id: string; type: string; finalUrls?: string[]; responsiveSearchAd?: { headlines?: TextAsset[]; descriptions?: TextAsset[]; path1?: string; path2?: string } };
+    const rows = await this.client.search(cid,
+      `SELECT ad_group_ad.resource_name, ad_group_ad.ad.id, ad_group_ad.ad.type, ad_group_ad.ad.final_urls, ad_group_ad.ad.responsive_search_ad.headlines, ad_group_ad.ad.responsive_search_ad.descriptions, ad_group_ad.ad.responsive_search_ad.path1, ad_group_ad.ad.responsive_search_ad.path2 FROM ad_group_ad WHERE ad_group.id = ${payload.ad_group_id} AND ad_group_ad.ad.id = ${payload.ad_id} AND ad_group_ad.status != 'REMOVED' LIMIT 2`,
+      { maxRows: 2, includeDrafts: true });
+    const groupAd = rows[0]?.adGroupAd as { resourceName?: string; ad?: Ad } | undefined;
+    if (rows.length !== 1 || groupAd?.resourceName !== `customers/${cid}/adGroupAds/${payload.ad_group_id}~${payload.ad_id}` || groupAd.ad?.type !== 'RESPONSIVE_SEARCH_AD') {
+      throw new AdportError('INVALID_INPUT', 'google: responsive search ad was not found in the selected account and ad group');
+    }
+    const current = groupAd.ad;
+    const update: Record<string, unknown> = { resourceName: `customers/${cid}/ads/${payload.ad_id}` };
+    const responsiveSearchAd: Record<string, unknown> = {};
+    const mask: string[] = [], changes: string[] = [];
+    for (const key of ['headlines', 'descriptions'] as const) {
+      if (payload[key] === undefined) continue;
+      const existing = current.responsiveSearchAd?.[key] ?? [];
+      responsiveSearchAd[key] = payload[key].map((text, index) => ({ text,
+        ...(existing[index]?.pinnedField && existing[index]!.pinnedField !== 'UNSPECIFIED' ? { pinnedField: existing[index]!.pinnedField } : {}),
+      }));
+      mask.push(`responsive_search_ad.${key}`);
+      changes.push(`~ ad ${payload.ad_id} ${key} ${JSON.stringify(existing.map(item => item.text))} → ${JSON.stringify(payload[key])}`);
+    }
+    for (const key of ['path1', 'path2'] as const) {
+      if (payload[key] === undefined) continue;
+      responsiveSearchAd[key] = payload[key]; mask.push(`responsive_search_ad.${key}`);
+      changes.push(`~ ad ${payload.ad_id} ${key} ${current.responsiveSearchAd?.[key] ?? '(unset)'} → ${payload[key] || '(cleared)'}`);
+    }
+    if (Object.keys(responsiveSearchAd).length) update.responsiveSearchAd = responsiveSearchAd;
+    if (payload.final_urls !== undefined) {
+      update.finalUrls = payload.final_urls; mask.push('final_urls');
+      changes.push(`~ ad ${payload.ad_id} final URLs ${JSON.stringify(current.finalUrls ?? [])} → ${JSON.stringify(payload.final_urls)}`);
+    }
+    return {
+      summary: `Update responsive search ad ${payload.ad_id} content`, changes, coercions: [], budgetDeltas: [],
+      execute: async validateOnly => {
+        const result = await this.client.mutate(cid, 'ads', [{ update, updateMask: mask.join(',') }], { validateOnly });
+        return (result.results ?? []).map(item => item.resourceName ?? String(update.resourceName));
+      },
+    };
+  }
+
   private async planCreateRsa(
     cid: string,
     payload: {
@@ -813,10 +979,11 @@ export class GoogleAdsProvider implements AdProvider {
     cid: string,
     campaignId: string,
   ): Promise<{ name: string; strategyType: string; cpcBidCeilingMicros?: number }> {
+    if (!/^\d+$/.test(campaignId)) throw new AdportError('INVALID_INPUT', 'google: invalid campaign ID');
     const rows = await this.client.search(
       cid,
-      `SELECT campaign.name, campaign.bidding_strategy_type, campaign.target_spend.cpc_bid_ceiling_micros, campaign.target_impression_share.cpc_bid_ceiling_micros FROM campaign WHERE campaign.id = ${Number(campaignId)} LIMIT 1`,
-      { maxRows: 1 },
+      `SELECT campaign.name, campaign.bidding_strategy_type, campaign.target_spend.cpc_bid_ceiling_micros, campaign.target_impression_share.cpc_bid_ceiling_micros FROM campaign WHERE campaign.id = ${campaignId} LIMIT 1`,
+      { maxRows: 1, includeDrafts: true },
     );
     const row = rows[0];
     if (!row) {
@@ -841,10 +1008,11 @@ export class GoogleAdsProvider implements AdProvider {
     cid: string,
     campaignId: string,
   ): Promise<{ name: string; status: string; budgetResource: string; budgetMicros: number; budgetShared: boolean }> {
+    if (!/^\d+$/.test(campaignId)) throw new AdportError('INVALID_INPUT', 'google: invalid campaign ID');
     const rows = await this.client.search(
       cid,
-      `SELECT campaign.name, campaign.status, campaign.campaign_budget, campaign_budget.resource_name, campaign_budget.amount_micros, campaign_budget.explicitly_shared FROM campaign WHERE campaign.id = ${Number(campaignId)} LIMIT 1`,
-      { maxRows: 1 },
+      `SELECT campaign.name, campaign.status, campaign.campaign_budget, campaign_budget.resource_name, campaign_budget.amount_micros, campaign_budget.explicitly_shared FROM campaign WHERE campaign.id = ${campaignId} LIMIT 1`,
+      { maxRows: 1, includeDrafts: true },
     );
     const row = rows[0];
     if (!row) {

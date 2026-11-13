@@ -5,21 +5,19 @@ const mocks = vi.hoisted(() => ({
   principal: vi.fn(),
   runtime: vi.fn(),
   server: vi.fn(),
+  uiServer: vi.fn(),
   oauthClient: vi.fn(),
   membership: vi.fn(),
 }));
 
+vi.mock('@/lib/cloud/tool-catalog', () => ({ principalToolSelection: async () => ({ profile: 'full', providers: null }) }));
 vi.mock('@/lib/db', () => ({ db: () => mocks.membership }));
 vi.mock('@/lib/cloud/auth', () => ({ apiPrincipal: mocks.principal }));
 vi.mock('@/lib/cloud/runtime', () => ({ createTenantRuntime: mocks.runtime }));
 vi.mock('@/lib/cloud/mcp-projects', () => ({ routeMcpProjects: (runtime: unknown) => runtime }));
 vi.mock('@/lib/cloud/mcp-oauth-repository', () => ({ getMcpOAuthClient: mocks.oauthClient }));
-vi.mock('@adport/mcp', () => ({ createMcpServer: mocks.server, ADPORT_UI_RESOURCE_DOMAINS: [] }));
-vi.mock('@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js', () => ({
-  WebStandardStreamableHTTPServerTransport: class {
-    async handleRequest() { return Response.json({ ok: true }); }
-  },
-}));
+vi.mock('@adport/mcp', async importOriginal => ({ ...await importOriginal<typeof import('@adport/mcp')>(), createMcpServer: mocks.server, createMcpUiServer: mocks.uiServer }));
+vi.mock('@/lib/mcp-http', async importOriginal => ({ ...await importOriginal<typeof import('@/lib/mcp-http')>(), serveMcpHttp: async () => Response.json({ ok: true }) }));
 
 import { POST } from '@/app/mcp/route';
 
@@ -41,6 +39,7 @@ beforeEach(() => {
   mocks.runtime.mockResolvedValue({});
   mocks.oauthClient.mockResolvedValue(undefined);
   mocks.server.mockReturnValue({ connect: vi.fn().mockResolvedValue(undefined) });
+  mocks.uiServer.mockReturnValue({ connect: vi.fn().mockResolvedValue(undefined) });
 });
 
 async function serverOptions(principal = freePrincipal) {
@@ -51,12 +50,34 @@ async function serverOptions(principal = freePrincipal) {
 }
 
 describe('hosted MCP entitlement explanation', () => {
+  it.each(['resources/read', 'resources/list', 'resources/templates/list'])('authenticates %s while avoiding tenant/provider and billing runtime assembly', async method => {
+    mocks.oauthClient.mockResolvedValue({ redirectUris: ['https://claude.ai/api/mcp/auth_callback'] });
+    const response = await POST(new Request('https://app.adport.test/mcp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params: { uri: 'ui://adport/insight-card-v3.html' } }) }));
+    expect(response.status).toBe(200); expect(mocks.principal).toHaveBeenCalledOnce();
+    expect(mocks.runtime).not.toHaveBeenCalled(); expect(mocks.server).not.toHaveBeenCalled(); expect(mocks.membership).not.toHaveBeenCalled();
+    expect(mocks.uiServer).toHaveBeenCalledWith(expect.objectContaining({ name: 'adport-cloud', uiDomain: null, uiResourceDomains: expect.arrayContaining([new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).origin]) }));
+  });
+
+  it('does not let an unauthenticated UI resource request reach either server', async () => {
+    mocks.principal.mockRejectedValueOnce(new Error('Unauthorized'));
+    const response = await POST(new Request('https://app.adport.test/mcp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'resources/read', params: { uri: 'ui://adport/insight-card-v3.html' } }) }));
+    expect(response.status).toBe(401); expect(response.headers.get('www-authenticate')).toContain('resource_metadata=');
+    expect(mocks.runtime).not.toHaveBeenCalled(); expect(mocks.uiServer).not.toHaveBeenCalled(); expect(mocks.server).not.toHaveBeenCalled();
+  });
+
+  it('keeps forged resource headers on business calls in the normal scope and policy server', async () => {
+    await POST(new Request('https://app.adport.test/mcp', { method: 'POST', headers: { 'content-type': 'application/json', 'mcp-method': 'resources/read' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'some_write', arguments: {} } }) }));
+    expect(mocks.runtime).toHaveBeenCalledOnce(); expect(mocks.uiServer).not.toHaveBeenCalled(); expect(mocks.server).toHaveBeenCalledWith(expect.objectContaining({ scopes: ['tools:read'], scopeDenials: { 'tools:write': expect.objectContaining({ code: 'PLAN_LIMIT' }) } }));
+  });
+
   it('selects Claude metadata without requiring an initialize request', async () => {
     mocks.oauthClient.mockResolvedValue({ redirectUris: ['https://claude.ai/api/mcp/auth_callback'] });
     const options = await serverOptions();
-    expect(options.uiDomain).toMatch(/^[a-f0-9]{32}\.claudemcpcontent\.com$/);
+    expect(options.uiDomain).toBeNull();
     expect(mocks.oauthClient).toHaveBeenCalledWith('fictional-client');
     expect(options.scopes).toEqual(['tools:read']);
+    expect(options.uiResourceDomains).toContain(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).origin);
+    expect(options.uiConnectDomains).toEqual([new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).origin]);
   });
 
   it('preserves default metadata for other clients and skips lookup for API keys', async () => {

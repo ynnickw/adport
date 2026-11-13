@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { accountSelectionPath, accountSelectionSavedPath } from '@/lib/account-selection-path';
 
 describe('integrated account selection routing', () => {
+  it('keeps analytics authorization in its own tab', () => {
+    expect(accountSelectionPath('selection', '/dashboard/analytics')).toBe('/dashboard/analytics?selection_id=selection');
+  });
   it('keeps dashboard account selection in the Accounts layout', () => {
     expect(accountSelectionPath('selection', '/dashboard/connections')).toBe('/dashboard/accounts?selection_id=selection');
   });

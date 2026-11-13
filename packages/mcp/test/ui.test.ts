@@ -82,6 +82,26 @@ const row = (accountId: string, spend: number, currency?: string, conversionValu
 });
 
 describe('shipped MCP iframe', () => {
+  it('renders exact planning amounts, unavailable values and native units without approval controls', () => {
+    const ui = widget();
+    ui.render('planning', { planning: { title: 'LinkedIn pricing', columns: [{ key: 'amount', label: 'Native amount' }, { key: 'missing', label: 'Unavailable' }, { key: 'unit', label: 'Unit' }], rows: [{ amount: '7.12345678', missing: null, unit: 'EUR per 1,000,000 clicks' }], notes: ['Estimates, not observed results.'] }, truncated: true });
+    expect(ui.app.innerHTML).toContain('7.12345678'); expect(ui.app.innerHTML).toContain('<td>—</td>'); expect(ui.app.innerHTML).toContain('EUR per 1,000,000 clicks');
+    expect(ui.app.innerHTML).toContain('Partial native response'); expect(ui.app.innerHTML).toContain('Read-only estimates'); expect(ui.app.innerHTML).not.toContain('data-approve');
+  });
+  it('pages planning rows locally and resets for new results without making a tool call', () => {
+    const ui = widget(), planning = { title: 'Native forecast', columns: [{ key: 'metric', label: 'Metric' }], rows: Array.from({ length: 205 }, (_, i) => ({ metric: `Native row ${i}` })), notes: [] };
+    ui.render('planning', { planning }); expect(ui.app.innerHTML).toContain('Rows 1–100 of 205'); expect(ui.app.innerHTML).not.toContain('<td>Native row 100</td>');
+    ui.planningButtons.find(b => b.dataset.planningPage === 'previous')!.click(); expect(ui.app.innerHTML).toContain('Rows 1–100 of 205');
+    ui.planningButtons.find(b => b.dataset.planningPage === 'next')!.click(); expect(ui.app.innerHTML).toContain('Rows 101–200 of 205');
+    ui.planningButtons.find(b => b.dataset.planningPage === 'next')!.click(); expect(ui.app.innerHTML).toContain('Rows 201–205 of 205');
+    expect(ui.planningButtons.find(b => b.dataset.planningPage === 'next')!.disabled).toBe(true);
+    ui.render('planning', { planning: { ...planning, title: 'Another selection' } }); expect(ui.app.innerHTML).toContain('Rows 1–100 of 205');
+    expect(ui.sent.some(v => (v as { method?: string }).method === 'tools/call')).toBe(false);
+  });
+  it('escapes native planning content and never reads an inherited row value', () => {
+    const ui = widget(); ui.render('planning', { planning: { title: '<img src=x onerror=alert(1)>', columns: [{ key: 'constructor', label: '<script>unsafe</script>' }], rows: [{}], notes: ['<button>not an action</button>'] } });
+    expect(ui.app.innerHTML).toContain('&lt;img'); expect(ui.app.innerHTML).toContain('&lt;script&gt;'); expect(ui.app.innerHTML).toContain('<td>—</td>'); expect(ui.app.innerHTML).not.toContain('function Object'); expect(ui.app.innerHTML).not.toContain('<img src=x');
+  });
   it('uses the same server summary as the agent and preserves explicit unavailable ratios', () => {
     const ui = widget();
     ui.render('report', {
@@ -336,7 +356,7 @@ describe('shipped MCP iframe', () => {
 
   it('shares confirmed IDs and async receipts through standard host context without a consumed apply token', async () => {
     const ui = widget();
-    const original = { structuredContent: structuredResult('google_list_campaigns', 'data', { campaigns: [], truncated: false }) };
+    const original = { structuredContent: structuredResult('media_get', 'data', { asset: { id: 'source-file', name: 'QA source', status: 'READY' } }) };
     ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: original });
     const pending = { structuredContent: structuredResult('x_upload_media', 'operation', { status: 'pending_validation', applied: false, expires_at: '2099-01-01T00:00:00Z', pending_operation_id: 'consumed-token', preview: { summary: 'Upload QA image', changes: ['+ image'] } }, { arguments: { account_id: 'a1', project_id: 'project-b' } }) };
     ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: pending });
@@ -349,6 +369,21 @@ describe('shipped MCP iframe', () => {
     expect(JSON.stringify(context)).not.toContain('consumed-token'); expect(ui.sent.filter((value: any) => value.method === 'tools/call')).toHaveLength(1);
     for (const stale of [pending,original]) ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: stale });
     expect(ui.app.innerHTML).toContain('>Applied</span>'); expect(ui.app.innerHTML).toContain('3_123'); expect(ui.app.innerHTML).not.toContain('Hold to apply');
+  });
+
+  it('bounds error reconciliation identifiers and omits arbitrary native details', async () => {
+    const ui = widget();
+    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult('x_upload_media', 'operation', {
+      status: 'pending_validation', applied: false, expires_at: '2099-01-01T00:00:00Z', pending_operation_id: 'consumed-token', preview: { summary: 'Upload image', changes: ['+ image'] },
+    }, { arguments: { account_id: 'account', project_id: 'project' } }) } });
+    ui.approvals[0]!.click();const request = ui.sent.at(-1) as { id: number };
+    ui.message({ jsonrpc: '2.0', id: request.id, result: { isError: true, structuredContent: { error: 'PROVIDER_ERROR', message: 'Upload unconfirmed', details: { resourceIds: [...Array.from({ length: 105 }, (_, i) => `media_${i}`), 'media_0', 'https://private.example?token=PRIVATE', '<script>PRIVATE</script>'], native_body: 'PRIVATE', next_tool: 'PRIVATE', confirmed_source_copy_mappings: [{ source_tweet_id: '1', copied_tweet_id: '2', promoted_tweet_id: 'private' }] } } } });
+    for (let i = 0; i < 12; i++) await Promise.resolve();
+    const update = ui.sent.at(-1) as any, facts = update.params.structuredContent.adport_operation;
+    expect(facts).toMatchObject({ status: 'unconfirmed', resource_ids: Array.from({ length: 100 }, (_, i) => `media_${i}`), resource_ids_truncated: true, total_resource_ids: 105 });
+    expect(facts.reconciliation).toEqual({ resource_ids: facts.resource_ids, resource_ids_truncated: true, total_resource_ids: 105 });
+    expect(ui.app.innerHTML).toContain('Reconciliation');expect(ui.app.innerHTML).toContain('media_99');expect(ui.app.innerHTML).not.toContain('media_100');expect(ui.app.innerHTML).not.toContain('PRIVATE');expect(JSON.stringify(facts)).not.toMatch(/PRIVATE|consumed-token|confirmed_source_copy_mappings/);
+    expect(ui.app.innerHTML).not.toContain('data-approve');expect(ui.sent.filter((value: any) => value.method === 'tools/call')).toHaveLength(1);
   });
 
   it.each([false, true])('renders partial-write warnings and shares them through the host context (ChatGPT bridge=%s)', async native => {

@@ -37,13 +37,14 @@ describe('hosted provider OAuth broker', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it('reports every provider as unavailable until its Adport-owned application is configured', () => {
-    expect(oauthAvailability()).toEqual({ google: false, meta: false, tiktok: false, microsoft: false, reddit: false, apple: false, snapchat: false, spotify: false, pinterest: false, linkedin: false, x: false });
+    expect(oauthAvailability()).toEqual({ gtm: false, ga4: false, gsc: false, google: false, meta: false, tiktok: false, microsoft: false, reddit: false, apple: false, snapchat: false, spotify: false, pinterest: false, linkedin: false, x: false });
     Object.assign(process.env, APP_ENV);
     resetEnvForTests();
-    expect(oauthAvailability()).toEqual({ google: true, meta: true, tiktok: true, microsoft: true, reddit: true, apple: true, snapchat: false, spotify: false, pinterest: false, linkedin: false, x: false });
+    expect(oauthAvailability()).toEqual({ ga4: false, gsc: false, gtm: false, google: true, meta: true, tiktok: true, microsoft: true, reddit: true, apple: true, snapchat: false, spotify: false, pinterest: false, linkedin: false, x: false });
   });
 
   it('routes every provider callback through the hosted broker path', () => {
@@ -103,6 +104,63 @@ describe('hosted provider OAuth broker', () => {
   it('refuses to build a consent URL when the application is not configured', () => {
     expect(() => oauthAdapter('meta').authorizationUrl({ state: 's', challenge: 'c' })).toThrow(/META_APP_ID/);
     expect(() => oauthAdapter('reddit').authorizationUrl({ state: 's', challenge: 'c' })).toThrow(/REDDIT_CLIENT_ID/);
+  });
+
+  it('requests Data Manager only for explicit Google authorization and refuses an unconfirmed grant before persistence', async () => {
+    Object.assign(process.env, APP_ENV); resetEnvForTests();
+    const adapter = oauthAdapter('google', { googleDataManager: true });
+    const url = new URL(adapter.authorizationUrl({ state: 'bound-state', challenge: 'pkce' }));
+    expect(url.searchParams.get('scope')?.split(' ')).toEqual(['https://www.googleapis.com/auth/adwords', 'https://www.googleapis.com/auth/datamanager']);
+    expect(url.searchParams.get('include_granted_scopes')).toBe('false');
+    expect(() => oauthAdapter('meta', { googleDataManager: true })).toThrow('only for Google');
+    const request = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ access_token: 'access', refresh_token: 'refresh', scope: 'https://www.googleapis.com/auth/adwords' }));
+    await expect(adapter.exchange({ code: 'code', verifier: 'verifier' })).rejects.toThrow('previous connection was preserved');
+    request.mockResolvedValueOnce(Response.json({ access_token: 'access', refresh_token: 'refresh', scope: adapter.scopes.join(' ') }));
+    expect(await adapter.exchange({ code: 'code', verifier: 'verifier' })).toEqual({ refreshToken: 'refresh' });
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps Pinterest ads-only by default and verifies an explicitly requested Pin-management grant', async () => {
+    vi.stubEnv('PINTEREST_CLIENT_ID', 'pinterest-client'); vi.stubEnv('PINTEREST_CLIENT_SECRET', 'pinterest-secret'); vi.stubEnv('PINTEREST_OAUTH_ENABLED', 'true'); resetEnvForTests();
+    const input = { state: 'bound-state', challenge: 'unused' };
+    expect(new URL(oauthAdapter('pinterest').authorizationUrl(input)).searchParams.get('scope')).toBe('ads:read,ads:write');
+    const adapter = oauthAdapter('pinterest', { pinterestPinManagement: true });
+    expect(new URL(adapter.authorizationUrl(input)).searchParams.get('scope')?.split(',')).toEqual(adapter.scopes);
+    expect(() => oauthAdapter('meta', { pinterestPinManagement: true })).toThrow('only for Pinterest');
+    expect(() => oauthAdapter('pinterest', { pinterestPinManagement: true, googleDataManager: true })).toThrow('only for Pinterest');
+    const request = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ access_token: 'access', expires_in: 3600, refresh_token: 'refresh', scope: 'ads:read ads:write' }));
+    await expect(adapter.exchange({ code: 'code', verifier: 'unused' })).rejects.toThrow('previous connection was preserved');
+    request.mockResolvedValueOnce(Response.json({ access_token: 'access', expires_in: 3600, refresh_token: 'refresh', scope: adapter.scopes.join(' ') }));
+    expect(await adapter.exchange({ code: 'code', verifier: 'unused' })).toEqual({ refreshToken: 'refresh' });
+  });
+
+  it('requires a separate verified grant for secret Pins and never broadens a public-only adapter', async () => {
+    vi.stubEnv('PINTEREST_CLIENT_ID', 'pinterest-client'); vi.stubEnv('PINTEREST_CLIENT_SECRET', 'pinterest-secret'); vi.stubEnv('PINTEREST_OAUTH_ENABLED', 'true'); resetEnvForTests();
+    const publicAdapter = oauthAdapter('pinterest', { pinterestPinManagement: true });
+    expect(publicAdapter.scopes).not.toContain('pins:read_secret');
+    const secretAdapter = oauthAdapter('pinterest', { pinterestSecretPins: true });
+    expect(secretAdapter.scopes).toEqual([...publicAdapter.scopes, 'boards:read_secret', 'boards:write_secret', 'pins:read_secret', 'pins:write_secret']);
+    expect(new URL(secretAdapter.authorizationUrl({ state: 'bound', challenge: 'unused' })).searchParams.get('scope')?.split(',')).toEqual(secretAdapter.scopes);
+    expect(() => oauthAdapter('meta', { pinterestSecretPins: true })).toThrow('only for Pinterest');
+    expect(() => oauthAdapter('pinterest', { pinterestSecretPins: true, googleDataManager: true })).toThrow('only for Pinterest');
+    const request = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ access_token: 'access', expires_in: 3600, refresh_token: 'refresh', scope: publicAdapter.scopes.join(' ') }));
+    await expect(secretAdapter.exchange({ code: 'code', verifier: 'unused' })).rejects.toThrow('previous connection was preserved');
+    request.mockResolvedValueOnce(Response.json({ access_token: 'access', expires_in: 3600, refresh_token: 'refresh', scope: secretAdapter.scopes.join(' ') }));
+    expect(await secretAdapter.exchange({ code: 'code', verifier: 'unused' })).toEqual({ refreshToken: 'refresh' });
+  });
+
+  it('adds catalog access separately while retaining the verified secret Pin grant', async () => {
+    vi.stubEnv('PINTEREST_CLIENT_ID', 'pinterest-client'); vi.stubEnv('PINTEREST_CLIENT_SECRET', 'pinterest-secret'); vi.stubEnv('PINTEREST_OAUTH_ENABLED', 'true'); resetEnvForTests();
+    const old = oauthAdapter('pinterest', { pinterestSecretPins: true });
+    expect(old.scopes).not.toContain('catalogs:read');
+    const adapter = oauthAdapter('pinterest', { pinterestSecretPins: true, pinterestCatalogManagement: true });
+    expect(adapter.scopes).toEqual([...old.scopes, 'catalogs:read', 'catalogs:write']);
+    expect(new URL(adapter.authorizationUrl({ state: 'bound', challenge: 'unused' })).searchParams.get('scope')?.split(',')).toEqual(adapter.scopes);
+    expect(() => oauthAdapter('meta', { pinterestCatalogManagement: true })).toThrow('only for Pinterest');
+    const request = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ access_token: 'access', expires_in: 3600, refresh_token: 'refresh', scope: old.scopes.join(' ') }));
+    await expect(adapter.exchange({ code: 'code', verifier: 'unused' })).rejects.toThrow('previous connection was preserved');
+    request.mockResolvedValueOnce(Response.json({ access_token: 'access', expires_in: 3600, refresh_token: 'refresh', scope: adapter.scopes.join(' ') }));
+    expect(await adapter.exchange({ code: 'code', verifier: 'unused' })).toEqual({ refreshToken: 'refresh' });
   });
 
   it('injects the Adport-owned application identity into tenant grants at runtime', () => {
