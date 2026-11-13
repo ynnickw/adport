@@ -39,14 +39,14 @@
     "@adport/provider-tiktok": "workspace:*",
     "@adport/provider-x": "workspace:*",
     "@modelcontextprotocol/ext-apps": "^2.0.4",
-    "zod": "^4.4.3",
+    "zod": "^4.6.7",
     "@modelcontextprotocol/server": "^2.4.0",
     "@adport/provider-gtm": "workspace:*",
     "@adport/provider-analytics": "workspace:*"
   },
   "devDependencies": {
     "@types/jsdom": "^21.1.7",
-    "@types/node": "^26.1.2",
+    "@types/node": "^26.6.6",
     "jsdom": "26.1.0",
     "tsup": "^8.3.0",
     "typescript": "^5.8.0",

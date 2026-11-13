@@ -23,6 +23,6 @@
     "release:prepare": "node scripts/release/prepare-release.mjs"
   },
   "devDependencies": {
-    "turbo": "^2.5.0"
+    "turbo": "^2.11.10"
   }
 }
