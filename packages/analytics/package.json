@@ -1,6 +1,6 @@
 {
   "name": "@adport/provider-analytics",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Read-only Google Analytics 4 and Search Console providers for adport",
   "license": "Apache-2.0",
   "type": "module",
