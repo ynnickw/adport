@@ -1,3 +1,4 @@
+import { usesAdAccountSlot, providerConnectionsPath } from '@/lib/cloud/providers';
 import Link from 'next/link';
 import { Empty, PageHeader, Provider, StatusPill } from '@/components/ui';
 import { providerLabel } from '@/components/logos';
@@ -13,11 +14,15 @@ import { ConnectAssistantButton } from '@/components/assistant-connect';
 import { getAssistantConnectionStatus } from '@/lib/cloud/assistant-connection';
 import { getAssistantListings } from '@/lib/cloud/assistant-listings';
 import { env } from '@/lib/env';
+import { overviewRangeFromParams, type OverviewRange } from '@/lib/overview-range';
 
 export const metadata = { title: 'Overview' };
 
-export default async function OverviewPage() {
+export default async function OverviewPage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> } = {}) {
   const tenant = await requireDashboardTenant();
+  const query = await searchParams ?? {};
+  let initialRange: OverviewRange = 'last_7_days';
+  try { initialRange = overviewRangeFromParams(new URLSearchParams(Object.entries(query).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))); } catch { /* Invalid shared links use the default reporting period. */ }
   if (isSyntheticReviewer(tenant.organizationId)) return <SyntheticReviewer tenant={tenant} />;
   const [connections, pending, accounts, onboarding] = await Promise.all([
     listConnections(tenant.organizationId, tenant.userId),
@@ -27,8 +32,8 @@ export default async function OverviewPage() {
   ]);
   const connected = connections.filter((connection) => connection.status === 'connected');
   const broken = connections.filter((connection) => connection.status === 'error');
-  const usableAccounts = accounts.filter(account => account.enabled && connected.some(connection => connection.provider === account.provider && !connection.accountSelectionId));
-  const selectionPending = connected.some(connection => connection.accountSelectionId);
+  const usableAccounts = accounts.filter(account => usesAdAccountSlot(account.provider) && account.enabled && connected.some(connection => connection.provider === account.provider && !connection.accountSelectionId));
+  const selectionPending = connected.some(connection => usesAdAccountSlot(connection.provider) && connection.accountSelectionId);
   const canManage = ['owner', 'admin'].includes(tenant.role);
   const assistantStatus = canManage && onboarding.currentStep !== 'complete'
     ? await getAssistantConnectionStatus({ ...tenant, scopes: [] }) : undefined;
@@ -64,7 +69,7 @@ export default async function OverviewPage() {
                 <div className="attention-item critical" key={connection.provider}>
                   <span className="attention-dot" aria-hidden="true" />
                   <p><strong>{providerLabel(connection.provider)} needs reconnecting.</strong> {connection.lastError ?? 'Verification failed.'}</p>
-                  <Link className="button small secondary" href="/dashboard/connections" prefetch={false}>Open connections</Link>
+                  <Link className="button small secondary" href={providerConnectionsPath(connection.provider)} prefetch={false}>Open connections</Link>
                 </div>
               ))}
             </section>
@@ -74,18 +79,14 @@ export default async function OverviewPage() {
             <div><strong>{accounts.length ? 'Enable account access to get started' : 'Choose your ad accounts'}</strong><p>{canManage ? accounts.length ? 'Your platforms are connected. Choose which accounts Adport can use.' : 'The connection is ready. Add the accounts you want to use in this project.' : 'Ask a project owner or admin to make accounts available.'}</p></div>
             <Link className="button secondary small" href={accounts.length ? '/dashboard/accounts' : '/dashboard/connections'}>{accounts.length ? 'Open accounts' : 'Choose accounts'}</Link>
           </section> : null}
-          {usableAccounts.length ? <LiveData key={tenant.organizationId} organizationId={tenant.organizationId} connected /> : null}
-            <section className="card" style={{ marginTop: '1rem' }}>
-              <div className="card-head"><h2>Platforms</h2><Link className="card-note" href="/dashboard/connections" prefetch={false}>Manage</Link></div>
-              <div className="card-body stack">
-                {connections.map((connection) => (
-                  <div key={connection.provider} className="connection-top">
-                    <Provider name={connection.provider} />
-                    <StatusPill status={connection.status} />
-                  </div>
-                ))}
-              </div>
-            </section>
+          {usableAccounts.length ? <LiveData key={tenant.organizationId} organizationId={tenant.organizationId} connected initialRange={initialRange} /> : null}
+          {(['advertising', 'analytics'] as const).map(category => {
+            const categoryConnections = connections.filter(connection => usesAdAccountSlot(connection.provider) === (category === 'advertising'));
+            return categoryConnections.length ? <section className="card" style={{ marginTop: '1rem' }} key={category}>
+              <div className="card-head"><h2>{category === 'advertising' ? 'Ad platforms' : 'Analytics & tracking'}</h2><Link className="card-note" href={category === 'advertising' ? '/dashboard/connections' : '/dashboard/analytics'} prefetch={false}>Manage</Link></div>
+              <div className="card-body stack">{categoryConnections.map(connection => <div key={connection.provider} className="connection-top"><Provider name={connection.provider} /><StatusPill status={connection.status} /></div>)}</div>
+            </section> : null;
+          })}
         </>
       )}
     </main>

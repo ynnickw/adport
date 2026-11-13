@@ -15,11 +15,17 @@ For a source checkout, replace `adport` below with `node packages/cli/dist/index
 | Google | Google Ads API v25 | `google_gaql` covers every GAQL resource and field available to the credential | `google_api_create`, `google_api_update`, and `google_api_remove` route to v25 mutate services |
 | Meta | Marketing API v25.0 | `meta_api_read` covers ad-account edges; `meta_insights` is the reporting convenience tool | `meta_api_create`, `meta_api_update`, and `meta_api_delete` cover account-owned Marketing API objects |
 | TikTok | Business API v1.3 | `tiktok_api_read` covers documented GET endpoints | `tiktok_api_create`, `tiktok_api_update`, and `tiktok_api_delete` cover endpoints with the matching action suffix |
-| Apple | Ads Platform API v1 | Typed ad-group, keyword, negative-keyword, ad, creative and product-page reads; `apple_api_read` for other documented queries | Typed batch keywords/exclusions, campaign schedules, creatives and ads; generic guarded entity mutations |
+| Apple | Ads Platform API v1 | Native reports, recommendations/suggestions, insights, app/geo/eligibility discovery, configuration and creative cards; `apple_api_read` for other documented queries | Typed targeting, Search Match, creative/name/status edits, keyword/bid/budget tools and resource removal; generic guarded entity mutations |
 | Microsoft | Advertising API v13 | `microsoft_api_read` covers query, search, get, and reporting operations | `microsoft_api_create`, `microsoft_api_update`, and `microsoft_api_delete` cover Campaign Management collections |
 | Reddit | Ads API v3 | `reddit_api_read` covers account-scoped GET and read-only POST endpoints; `reddit_report` exposes native reports | `reddit_api_create`, `reddit_api_update`, and `reddit_api_delete` cover account-owned v3 resources |
 
+Generic `*_api_*` tools are advanced local access: opt in with `adport --raw-api-tools tools list`, `adport --raw-api-tools tools run <name>`, `adport --raw-api-tools mcp`, or `adport-mcp --raw-api-tools`. Hosted MCP excludes these tools even in the Full profile. Standard, Reporting, and Full profiles select explicit hosted operations and platforms per connection; existing connections retain Full until changed.
+
 The native tools accept provider-shaped payloads, so use the provider's current API reference when composing them. They are still normal Adport tools: every mutation goes through the same preview, pending-operation binding, policy checks, and audit log as the typed convenience tools. Created campaigns are forced paused. Generic budget updates are deliberately rejected; use the provider's typed budget tool so Adport can fetch the current value and enforce the exact before/after delta. Generic deletes use a client-side preview when the provider has no applicable validation endpoint.
+
+## Google Tag Manager
+
+Use `adport connect gtm` with your own Google Desktop OAuth client after enabling Tag Manager API. See the [GTM provider guide](../packages/gtm/README.md) for credentials, native configuration tools, fingerprints, and the separate version/publish workflow. GTM supplies tracking configuration and is excluded from performance reports. Hosted access is separately gated pending Google scope approval.
 
 ## Google Ads
 
@@ -36,7 +42,70 @@ Existing credential files and `google-ads.yaml` imports continue to work; any le
 
 Google refresh tokens are stored locally. If consent is still in testing mode, Google may expire the authorization after approximately seven days; publish the consent configuration or re-authorize as appropriate for your application.
 
+### Keyword planning
+
+`google_keyword_ideas` discovers keywords from a keyword seed, URL, both, or a site. `google_keyword_historical_metrics` returns historical search volumes, competition and bid estimates for supplied keywords. Both are read-only tools in the shared MCP/CLI registry; neither creates a keyword plan or campaign. Both accept the selected `account_id`, optional language and up to ten location IDs, and explicitly default to Google Search without partners.
+
+Idea results contain one native page. Continue with `next_page_token` as `page_token` and the same seed and targeting. A short or empty page can still have a continuation token. Native metrics retain their original names and integer strings, including monetary values in micros; unavailable values remain absent. Google can merge close variants, so historical results need not have one row per supplied keyword. These are historical estimates, not forecasts or delivery guarantees.
+
+The REST paths, seed variants and limits follow Google's [v25 keyword planning protocol](https://github.com/googleapis/googleapis/blob/master/google/ads/googleads/v25/services/keyword_plan_idea_service.proto). Provider authorization, API quotas and account eligibility still apply.
+
+### Field metadata
+
+`google_field_metadata` looks up up to 20 exact resource or field names, such as `campaign`, `campaign.status` and `metrics.cost_micros`, through the native [GoogleAdsFieldService](https://github.com/googleapis/googleapis/blob/57aa4dbce5d23b2115b2732b10dcb7ddc8e8698d/google/ads/googleads/v25/services/google_ads_field_service.proto). It returns the connected API version, native categories, types, enum values, and select/filter/sort flags. Optional compatibility lists include `selectableWith`, `attributeResources`, metrics and segments. Metadata queries have no `FROM` clause and do not fetch account performance or customer data; `account_id` selects the authorized project connection.
+
+Results contain one native page. Continue `next_page_token` as `page_token` with the same field names and compatibility option. Missing fields and omitted native values are preserved; an empty page can still have a continuation token. Compatibility is a query-building aid, not proof that a particular campaign supports a mutation or that every combination is valid.
+
+### Shared assets and extensions
+
+`google_assets` provides a visual account-owned library with native image previews, extension copy, policy information and name-edit actions. `google_upload_image_asset` accepts checksum-bound PNG/JPEG/GIF bytes; hosted calls use the private project media library. `google_create_youtube_asset` references an existing video without uploading or publishing one. `google_create_extension_asset` creates an unattached sitelink, callout or structured snippet. Creation previews use Google's native `validate_only`; no association or ad is created by these asset tools.
+
+`google_rename_asset` changes only the shared name. `google_update_extension_asset` edits supported extension content of the same type. Every ad sharing that extension, including active ads, can change. Omitted sitelink descriptions are preserved; supply both as empty strings to clear them. Text, image and YouTube content are not editable through this extension tool.
+
+`google_asset_links` reads associations for a customer, campaign or ad group. `google_link_asset` attaches a compatible owned asset, defaulting to PAUSED with policy coercions reported. `google_set_asset_link_status` pauses or enables an existing association; `google_unlink_asset` removes that exact association. Native validation determines placement eligibility. Parent campaign/ad statuses are independent, and every serving use of an association can be affected. These tools cover sitelinks, callouts, structured snippets, ad images and business branding. Use the [Performance Max workflow](providers/google-performance-max.md) for complete campaign/asset-group creation, atomic copy/asset edits, campaign brand management, signals and retail product trees.
+
+Google's [Asset protocol](https://github.com/googleapis/googleapis/blob/master/google/ads/googleads/v25/resources/asset.proto) and [AssetOperation](https://github.com/googleapis/googleapis/blob/master/google/ads/googleads/v25/services/asset_service.proto) provide no asset-removal operation. Assets remain in the library after unlinking; Adport does not advertise an asset-delete tool. Association status and removal follow the native [CampaignAsset](https://github.com/googleapis/googleapis/blob/master/google/ads/googleads/v25/resources/campaign_asset.proto) contract, with corresponding customer/ad-group services.
+
+### Labels
+
+`google_labels` lists enabled account-owned labels with native ID continuation. `google_label_context` reads one label and returns `snapshot_hash`; supply it as `expected_label_hash` when updating or removing that label, or changing an assignment. Metadata changes after the read reject the operation at preview and apply. The snapshot covers label metadata; Google does not provide an atomic compare-and-set or freeze assignment membership.
+
+`google_create_label` creates unattached metadata. `google_update_label` changes only supplied name, hex background color or description; omission preserves a field and an empty description clears it. `google_remove_label` removes the shared label and its assignments. Label names are 1–80 characters and descriptions at most 200. Labels have no pause state; Adport does not invent one. Every mutation uses the normal two-step policy gate and native `validate_only` preview.
+
+`google_label_associations`, `google_link_label` and `google_unlink_label` cover campaigns, ad groups, ads and ad-group criteria. The target includes the full campaign/ad-group hierarchy, checked in the selected account before use. Association lists report truncation. Unlinking preserves the label and labeled entity; removing the label affects all assignments. Classification can affect label-based reports and automation, while these tools preserve serving statuses, entity content and budgets.
+
+The wire formats follow the [v25 label service](https://github.com/googleapis/googleapis/blob/57aa4dbce5d23b2115b2732b10dcb7ddc8e8698d/google/ads/googleads/v25/services/label_service.proto) and corresponding campaign/ad-group/ad/criterion label services. Manager-to-customer labels use a different native contract and are not exposed by these named tools.
+
 Google can show an “unverified app” warning when your private OAuth project requests the Google Ads scope without completing verification. For the CLI, that warning concerns your BYO project and credentials are not sent to Adport Cloud. Add yourself as a test user during development. The managed cloud application's own OAuth project must complete Google's production verification before public use.
+
+See [Google conversion management](providers/google-conversions.md) for tracking ownership, conversion configuration, Data Manager event ingestion and asynchronous diagnostics, and legacy click/call/adjustment imports. Data Manager permission is an explicit opt-in through `adport connect google --data-manager` or the hosted Google connection's **Enable conversion imports** action.
+
+See [Google experiments](providers/google-experiments.md) for system-managed draft setup, arm edits, native lifecycle actions and asynchronous status/errors. Scheduling remains blocked under paused creation. Drafts are available through the explicit `include_drafts` option on GAQL and ad reads.
+
+## Agent-managed project media
+
+Hosted agents can upload and manage private project files entirely through MCP or the tool REST API. Opening the asset dashboard is optional. Local provider uploads still accept an absolute `file_path`; a hosted server cannot read a file in the agent's computer or container.
+
+For files up to 1 MiB, preview and apply `media_upload` with `name`, `content_type`, `byte_length`, `sha256` and canonical `data_base64`. It returns a ready immutable `media_id`. For files up to 50 MiB:
+
+1. Preview and apply `media_prepare_upload` with the file's name, MIME type, exact byte length and SHA-256.
+2. Send the raw file bytes with HTTP `PUT` to the returned `result.details.upload_url`, using its returned headers. The upload capability is temporary; it is not a dashboard link. Do not send the Adport API key to the storage URL.
+3. Preview and apply `media_finalize_upload` with `media_id` and `expected_sha256`. Finalization verifies length, actual format, checksum and image decoding before making the file available.
+4. Pass the ready `media_id` and checksum to a provider upload tool such as `meta_upload_video` or `google_upload_image_asset`. Provider mutations retain their own preview/apply gate; library staging does not publish or activate an ad.
+
+Agents without HTTP upload access can replace step 2 with `media_upload_part` preview/apply calls, using the reservation's `mcp_upload` plan. Each part binds the whole-file checksum, zero-based index, part checksum and canonical base64 bytes. `media_get` reports received parts; finalization verifies and assembles the entire file. See [MCP-only file transfer](creative-media.md#project-media-library) for part sizes and reconciliation. Upload, part transfer, finalization and rename are annotated as writes; permanent source deletion is annotated as destructive. Every mutation still requires the normal policy preview/apply pair.
+
+`media_list` and `media_get` return metadata and temporary `preview_url` download links for ready files. Agents can fetch these links directly and verify the checksum. `media_rename` and `media_delete` require the current `expected_name` and `expected_sha256`, preventing a stale selection from silently changing a renamed source. Deletion removes the project source and blocks further reuse; provider-uploaded copies, ads and campaigns are independent. A temporary deletion record allows cleanup after outstanding upload grants expire. Replacing content means uploading a new immutable file and selecting its new ID.
+
+The CLI can handle the raw transfer and finalization without opening a browser. It uses a project-scoped API key from an environment variable:
+
+```sh
+adport media upload ./creative.mp4 --api-key-env ADPORT_API_KEY
+adport media upload ./creative.mp4 --api-key-env ADPORT_API_KEY --pending-operation-id <id-from-preview>
+adport tools run media_get --cloud-url https://app.adport.dev --input '{"media_id":"<uploaded-id>"}'
+```
+
+The first upload command only previews. The second applies that exact preview, sends the bytes directly to private storage, and verifies/finalizes through the shared guarded tools. `--cloud-url` selects a self-hosted Cloud origin. Cloud tool calls use the same registry as MCP and honor the key's project, role, plan and scopes. An agent already connected through MCP can use the upload tools with its existing project authorization.
 
 ## Meta Ads
 
@@ -49,6 +118,12 @@ For accounts you control, use a Meta Business app with the Marketing API product
 
 System-user tokens are preferred. Extended user tokens normally expire and require re-authorization. App Review and business verification may be required before an app can authorize assets belonging to other businesses.
 
+See [Meta audiences](providers/meta-audiences.md) for empty containers, metadata editing, usage checks, guarded deletion, website rules and lookalikes. Audience previews are local; native permissions and eligibility still apply.
+
+See [Meta custom conversions](providers/meta-conversions.md) for account-owned website definitions, native stats, partial metadata editing, bounded usage checks and guarded deletion. These previews are local; native default values are preserved without inferred currency conversion.
+
+See [Meta app campaigns](providers/meta-app-campaigns.md) for account-scoped app discovery, campaign-level SKAdNetwork binding and app ad-set targeting with native validation.
+
 ## TikTok Ads
 
 TikTok supports a sandbox for development; production access requires an approved Business API application.
@@ -59,6 +134,14 @@ TikTok supports a sandbox for development; production access requires an approve
 4. Run `adport connect tiktok`, select sandbox or production, and provide the app ID, app secret, and access token.
 
 Keep the environment consistent: sandbox credentials cannot be used against production endpoints.
+
+See [automated-rule inspection and native limits](providers/tiktok.md) for typed
+rule/history reads, pagination and TikTok's direct-advertiser creation restriction.
+Generic mutation dispatch does not bypass scheduled-action policy checks.
+
+See [TikTok JSON catalog products](providers/tiktok-json-products.md) for typed
+schema discovery, scoped authoring/removal, asynchronous processing and reuse of
+central Adport media through agents.
 
 ## Apple Ads
 
@@ -91,6 +174,22 @@ Adport persists rotated Microsoft refresh tokens after use. Public-client refres
 
 Microsoft may show an unverified-publisher notice or require administrator consent based on your Entra application and tenant policy. For the CLI, that identity belongs to your application; the Adport Cloud broker uses an Adport-owned Entra application with its own publisher verification.
 
+`microsoft_images` and `microsoft_get_library_image` expose the selected account's image library, native previews and creation-time alt text. `microsoft_upload_image` accepts a SHA-256-bound static PNG, JPEG or GIF, up to 76,800 bytes; hosted calls require a project `media_id`. It creates an unattached asset and verifies the returned ID and requested alt text through the account library. Microsoft converts PNG to JPEG and validates dimensions and animation. These operations use the same guarded preview/apply flow from the CLI, MCP and creative gallery.
+
+`microsoft_image_extension_associations` reports image-extension uses only. An empty result does not establish that a responsive ad is not using the image. `microsoft_delete_image` verifies account ownership, blocks known extension references, relies on Microsoft's atomic rejection of any assigned media, and confirms disappearance. Existing-image alt-text updates are not exposed: a live update was accepted but did not change the readback. Replacement uploads and explicit reference changes are required instead. These contracts were checked against the [official media reference](https://learn.microsoft.com/en-us/advertising/campaign-management-service/image?view=bingads-13) and SDK; library reads and creation-time alt text were live-verified on 2026-11-03.
+
+`microsoft_ad_extensions` provides a paginated gallery for callouts, sitelinks, structured snippets and image extensions. Create, update, delete, link and unlink tools use the same guarded registry as the CLI. Updates require the latest `expected_version`, preserve omitted mutable fields, scheduling, device preference and tracking, and verify native readback. Shared-content edits can affect every associated entity, including active ads. Microsoft's version field is read-only, so the preflight version check is not an atomic server-side lock. Image extension alternative text is distinct from the source media's alt text. Unknown non-null content fields block a full replacement rather than being silently dropped.
+
+Extensions are natively Active but cannot serve while unattached. New associations have no paused state: the default `paused_creation` policy requires a paused campaign or ad group and blocks account-wide associations. Association reads preserve direct native editorial status; they do not combine inherited associations. Native editorial rejection remains a failure even when HTTP succeeds. Sitelink creation/editing and association/unlink readback were live-verified on 2026-11-03.
+
+Image-extension placement crops have stricter pixel requirements than library uploads. A live 640×640 library image was rejected with native code 6235; a separate 1200×628 fixture passed. Image-extension and structured-snippet creation, callout creation/deletion, and SHA-bound image upload/readback were also live-verified. No live QA ad was created or activated.
+
+`microsoft_campaign_targets` reads one concrete subtype: age, gender, device, day/time, location, location intent or radius. Mutation tools use Microsoft's `Targets` selector, validate account/campaign ownership, bind edits to expected current bid or intent values, and confirm readback. New targets have native Active status, so default policy requires a paused campaign. Bid adjustments are integer percentages, generally -90 through 900; devices also support -100 for exclusion. Native REST radius values are decimal strings. Deprecated geographical IDs remain the provider's validation responsibility; `microsoft_geo_locations_file` returns the current reference-file URL and expiry.
+
+Device creation and removal require all three device types together. Location intent cannot be deleted; use `microsoft_set_campaign_location_intent` with `PeopleInOrSearchingForOrViewingPages` to restore the API default. These constraints were confirmed against real endpoints, including native errors 2957 and 2965. Day/time creation, bid editing and removal, plus device/age/gender/radius creation and cleanup and location-intent editing, were live-verified on a paused QA campaign. Location inclusion/exclusion has contract tests but has not yet been live-verified. Audience targeting, ad-group targeting, performance planners and additional extension formats remain separate coverage gaps.
+
+`microsoft_negative_keywords` reads direct campaign or ad-group exclusions with keyset pagination. Add/remove tools verify the full account/parent hierarchy, support native Exact/Phrase matches, preserve inherited and shared-list exclusions, and confirm returned IDs and content. Negative keywords have no individual pause state; adding them restricts delivery without changing parent status. Text and match type are immutable: add and verify a replacement before removing its predecessor. Each call accepts up to 1,000 entries within Microsoft's 20,000-entry direct-entity limit. Campaign and ad-group creation, pagination and removal were live-verified and their QA fixtures cleaned up on 2026-11-03. See the [official entity-query contract](https://github.com/MicrosoftDocs/Advertising/blob/fdee2fcf05a65d4837f2d171396ee345577681d2/advertising/bingads-13/campaign-management-service/getnegativekeywordsbyentityids.md). Shared negative-keyword lists remain a separate workflow.
+
 ## Reddit Ads
 
 Reddit uses OAuth 2.0 with a confidential developer application and requires an honest, uniquely identifying `User-Agent` on every request.
@@ -101,7 +200,7 @@ Reddit uses OAuth 2.0 with a confidential developer application and requires an 
 4. Approve the requested `adsread`, `adsedit`, and `adsdatadeletion` scopes. Adport requests `duration=permanent` and stores the refresh token locally.
 5. Verify discovery with `adport accounts --provider reddit` and reporting with `adport report --provider reddit`.
 
-Reddit Ads API v3 campaign budget, bid, spend, CPC, and CPM fields use integer micros. Conversion total-value report fields use cents. Adport preserves the native integer micros for policy checks and converts report output to whole account-currency units. Reddit requires `conversion_pixel_id` for CBO campaigns as of July 13, 2026. Reddit has also announced new campaign objective enums for September 30, 2026, so use the current API reference when supplying a native objective.
+Reddit Ads API v3 campaign budget, bid, spend, CPC, and CPM fields use integer micros. Conversion total-value report fields use cents. Adport preserves native micros for policy checks and converts reports to whole account-currency units without fabricating missing conversions. Report pagination repeats the original POST body and remains bound to the selected account. Reddit requires `conversion_pixel_id` for CBO campaigns; campaign budget type is immutable. The current objective enums are enforced, with `CLICKS` as the default. Transport, pagination and campaign receipts were checked against the [official v3 OpenAPI](https://ads-api.reddit.com/api/v3/openapi.json) on 2026-11-03. These contract checks are separate from live account verification.
 
 Read access is open to developers, while some create/edit/delete functionality can depend on Reddit API partner or advertiser approval. A successful OAuth connection therefore does not guarantee mutation access for every app.
 

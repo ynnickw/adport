@@ -2,12 +2,15 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AccountAccessManager, type AccountAccessItem } from '@/app/dashboard/accounts/account-access-manager';
 import AccountsPage from '@/app/dashboard/accounts/page';
+import AnalyticsPage from '@/app/dashboard/analytics/page';
+import { usesAdAccountSlot } from '@/lib/cloud/providers';
 import { OnboardingFlow } from '@/app/onboarding/onboarding-flow';
 import { OAUTH_PROVIDERS } from '@/lib/cloud/types';
 
 const mocks = vi.hoisted(() => ({ inventory: vi.fn(), connections: vi.fn(), tenant: vi.fn(), selection: vi.fn() }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
-vi.mock('@/lib/cloud/dashboard', () => ({ requireDashboardTenant: mocks.tenant }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }), redirect: (path: string) => { throw new Error('NEXT_REDIRECT:' + path); } }));
+vi.mock('@/lib/cloud/dashboard', () => ({ requireDashboardTenant: mocks.tenant, canAdminister: (tenant: { role: string }) => ['owner', 'admin'].includes(tenant.role) }));
+vi.mock('@/lib/cloud/provider-oauth', () => ({ oauthAvailability: () => Object.fromEntries(OAUTH_PROVIDERS.map(id => [id, true])) }));
 vi.mock('@/lib/cloud/account-selection', () => ({ getAccountSelection: mocks.selection }));
 vi.mock('@/lib/cloud/repository', () => ({ listOrganizationAdAccounts: mocks.inventory, listConnections: mocks.connections }));
 vi.mock('@/lib/cloud/plans', () => ({ getOrganizationEntitlement: async () => ({ plan: { maxActiveAccounts: 3 } }) }));
@@ -27,18 +30,30 @@ beforeEach(() => {
 });
 
 describe('provider-specific account picker', () => {
+  it('renders analytics separately without account-slot limits', async () => {
+    const html = renderToStaticMarkup(await AnalyticsPage({ searchParams: Promise.resolve({}) }));
+    expect(html).toContain('gtm unique account');
+    expect(html).not.toContain('google unique account');
+    expect(html).toContain('No ad-account slots used');
+    expect(html).not.toContain('organization slots');
+    await expect(AccountsPage({ searchParams: Promise.resolve({ select_provider: 'gtm' }) })).rejects.toThrow('NEXT_REDIRECT:/dashboard/analytics');
+  });
+
   it.each(OAUTH_PROVIDERS)('only renders %s accounts while preserving workspace limits', (providerFilter) => {
     const html = renderToStaticMarkup(<AccountAccessManager organizationId="org" accounts={accounts} canManage maxActiveAccounts={3} providerFilter={providerFilter} />);
     expect(html).toContain(`${providerFilter} unique account`);
     for (const other of accounts.filter((account) => account.provider !== providerFilter)) expect(html).not.toContain(other.name);
-    expect(html).toContain('Organization allowance: 3 accounts');
+    expect(html).toContain(usesAdAccountSlot(providerFilter) ? 'Organization allowance: 3 accounts' : 'No ad-account slots used');
     expect(html).toContain('role="switch"');
     expect(html).toContain('aria-checked="' + String(accounts.find(account => account.provider === providerFilter)!.enabled) + '"');
   });
 
-  it('shows all accounts during ordinary account management', async () => {
+  it('shows only advertising accounts during ordinary account management', async () => {
     const html = renderToStaticMarkup(await AccountsPage({ searchParams: Promise.resolve({}) }));
-    for (const account of accounts) expect(html).toContain(account.name);
+    for (const account of accounts) {
+      if (usesAdAccountSlot(account.provider)) expect(html).toContain(account.name);
+      else expect(html).not.toContain(account.name);
+    }
   });
 
   it.each([{ select_provider: 'tiktok' }, { connected: 'tiktok' }])('scopes dashboard OAuth returns from %j', async (params) => {
@@ -59,7 +74,10 @@ describe('provider-specific account picker', () => {
 
   it('ignores invalid provider parameters', async () => {
     const html = renderToStaticMarkup(await AccountsPage({ searchParams: Promise.resolve({ select_provider: 'unknown' }) }));
-    for (const account of accounts) expect(html).toContain(account.name);
+    for (const account of accounts) {
+      if (usesAdAccountSlot(account.provider)) expect(html).toContain(account.name);
+      else expect(html).not.toContain(account.name);
+    }
   });
 
   it('keeps read-only access read-only', () => {

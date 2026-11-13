@@ -1,6 +1,7 @@
 import 'server-only';
 import {
   AdportError,
+  additionalAccountIds,
   type AdProvider,
   type Account,
   type AnyToolDefinition,
@@ -8,6 +9,7 @@ import {
   type WriteGuard,
   type WriteOperation,
 } from '@adport/core';
+import { usesAdAccountSlot } from './providers';
 import type { CloudProvider } from './types';
 
 function canonicalAccountId(provider: string, accountId: string): string {
@@ -21,7 +23,7 @@ function assertAllowed(providerId: string, allowed: ReadonlySet<string>, account
   if (![...allowed].some((value) => canonicalAccountId(providerId, value) === normalized)) {
     throw new AdportError(
       'POLICY_VIOLATION',
-      `Account ${accountId} is not active for this Adport Cloud workspace. Enable it in Accounts before using it.`,
+      `Account ${accountId} is not active for this Adport Cloud workspace. Enable it in ${usesAdAccountSlot(providerId) ? 'Accounts' : 'Analytics & tracking'} before using it.`,
       { provider: providerId, accountId },
     );
   }
@@ -52,6 +54,7 @@ export function createAccountScopeAuthorizer(accountIds: Partial<Record<CloudPro
         ? input.customer_id
         : undefined;
     if (explicit) assertAllowed(tool.namespace, allowed, explicit);
+    for (const id of additionalAccountIds(tool, input)) assertAllowed(tool.namespace, allowed, id);
   };
 }
 
@@ -84,11 +87,13 @@ export class AccountScopedProvider implements AdProvider {
 
   async previewWrite(operation: WriteOperation, guard: WriteGuard) {
     assertAllowed(this.id, this.allowed, operation.accountId);
+    for (const id of operation.affectedAccountIds ?? []) assertAllowed(this.id, this.allowed, id);
     return this.provider.previewWrite(operation, guard);
   }
 
   async applyWrite(operation: WriteOperation, guard: WriteGuard) {
     assertAllowed(this.id, this.allowed, operation.accountId);
+    for (const id of operation.affectedAccountIds ?? []) assertAllowed(this.id, this.allowed, id);
     return this.provider.applyWrite(operation, guard);
   }
 

@@ -17,12 +17,18 @@ describe('explicit Meta campaign reads', () => {
     expect(await provider.getCampaign({ account_id: 'act_456', campaign_id: '123' })).toEqual(campaign);
     const url = new URL(String(fetch.mock.calls[0]?.[0]));
     expect(url.pathname).toMatch(/\/123$/);
-    expect(url.searchParams.get('fields')).toBe('id,account_id,name,status,effective_status,objective,daily_budget,lifetime_budget');
+    expect(url.searchParams.get('fields')).toBe('id,account_id,name,status,effective_status,objective,daily_budget,lifetime_budget,is_skadnetwork_attribution,promoted_object');
   });
 
   it('rejects a campaign belonging to another account', async () => {
     const { provider } = fixture(campaign);
     await expect(provider.getCampaign({ account_id: '789', campaign_id: '123' })).rejects.toThrow(/does not belong/);
+  });
+
+  it('preserves native app and SKAdNetwork binding in campaign reads', async () => {
+    const bound = { ...campaign, objective: 'OUTCOME_APP_PROMOTION', is_skadnetwork_attribution: true, promoted_object: { application_id: '789' } };
+    const { provider } = fixture(bound);
+    expect(await provider.getCampaign({ account_id: '456', campaign_id: '123' })).toEqual(bound);
   });
 
   it('lists only the campaigns edge with bounded pagination', async () => {

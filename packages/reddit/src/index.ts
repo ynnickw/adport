@@ -1,3 +1,4 @@
+import { FileRedditCatalogAccessStore } from './catalog-access.js';
 import type { CredentialStore, ProviderModule } from '@adport/core';
 import { RedditAdsClient, type RedditCredentials } from './client.js';
 import { RedditAdsProvider } from './provider.js';
@@ -36,6 +37,10 @@ export async function resolveRedditCredentials(store: CredentialStore): Promise<
 export async function createRedditModule(store: CredentialStore): Promise<ProviderModule | undefined> {
   const credentials = await resolveRedditCredentials(store);
   if (!credentials) return undefined;
-  const provider = new RedditAdsProvider(new RedditAdsClient(credentials));
-  return { provider, tools: redditTools(provider) };
+  const provider = new RedditAdsProvider(new RedditAdsClient(credentials), undefined, new FileRedditCatalogAccessStore());
+  return { provider, tools: redditTools(provider, { catalogAccessManagement: true }) };
 }
+
+export { RedditCatalogService } from './catalogs.js';
+export { redditCatalogTools } from './catalog-tools.js';
+export { FileRedditCatalogAccessStore, catalogGrant, catalogScope, catalogScopeKey, creationScope, requireCatalogAccess, requireCatalogCreationAccess, redditBusinessId, redditCatalogId, type RedditCatalogAccessMode, type RedditCatalogAccessStore, type RedditCatalogGrant, type RedditCatalogScope } from './catalog-access.js';

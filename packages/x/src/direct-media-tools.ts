@@ -1,0 +1,19 @@
+import { creativesOutput, defineTool, guardedWriteTool, type AnyToolDefinition } from '@adport/core';
+import { z } from 'zod';
+import type { XAdsProvider } from './provider.js';
+import { accountMediaList, createDirectMedia, deleteDirectMedia, directMediaList, directMediaSelection } from './direct-media-schemas.js';
+import { xId } from './schemas.js';
+
+export function xDirectMediaTools(provider: XAdsProvider): AnyToolDefinition[] {
+  const shared = { namespace: 'x', catalog: { category: 'creatives' as const, exposure: 'specialist' as const } };
+  const annotations = { readOnly: true };
+  return [
+    defineTool({ ...shared, name: 'x_account_media', description: 'View native Account Media assets with cursor paging and safe image/video previews. These IDs are distinct from media-library keys and serving associations. Unknown or VAST formats retain native metadata without invented previews.', input: accountMediaList, output: creativesOutput.passthrough(), presentation: 'creatives', pagination: { cursorInput: 'cursor' }, annotations, handler: input => provider.directMedia.assets(input) }),
+    defineTool({ ...shared, name: 'x_get_account_media', description: 'Read one exact account-owned Account Media asset and configuration hash. Does not turn a media-library key or upload receipt into an Account Media ID.', input: z.object({ account_id: xId, account_media_id: xId }).strict(), annotations, handler: input => provider.directMedia.getAsset(input.account_id, input.account_media_id) }),
+    defineTool({ ...shared, name: 'x_media_creatives', description: 'View direct-media ad associations in one verified ad group, with native paging, source previews and guarded disassociation actions. Native ACTIVE association state is separate from parent delivery.', input: directMediaList, output: creativesOutput.passthrough(), presentation: 'creatives', pagination: { cursorInput: 'cursor' }, annotations, handler: input => provider.directMedia.list(input) }),
+    defineTool({ ...shared, name: 'x_get_media_creative', description: 'Read an exact direct-media association, parent configuration and context_hash. Media-creative IDs are distinct from their source account_media_id. Deleted tombstones may retain ACTIVE.', input: z.object({ account_id: xId, media_creative_id: xId }).strict(), annotations, handler: input => provider.directMedia.get(input.account_id, input.media_creative_id) }),
+    defineTool({ ...shared, name: 'x_media_creative_context', description: 'Review an existing Account Media asset, MEDIA ad group and complete bounded association inventory before linking. Binds source, parent, destination and existing associations in context_hash. Supports PREROLL and documented TAP image formats; VAST authoring is unverified.', input: directMediaSelection.extend({ account_id: xId }).strict(), output: creativesOutput.passthrough(), presentation: 'creatives', annotations, handler: ({ account_id, ...input }) => provider.directMedia.context(account_id, input) }),
+    guardedWriteTool({ ...shared, name: 'x_create_media_creative', provider: 'x', kind: 'create', destructive: true, description: 'Associate one verified Account Media asset with a MEDIA ad group using context_hash and explicit native ACTIVE acknowledgement. paused_creation requires a PAUSED ad group. WEBSITE_CLICKS needs landing_url; preroll destinations use separate native CTA settings. Checks receipt/readback; no upload, parent edit or replay.', payload: createDirectMedia }),
+    guardedWriteTool({ ...shared, name: 'x_delete_media_creative', provider: 'x', kind: 'remove', destructive: true, description: 'Disassociate one exact direct-media ad with expected_context_hash, native DELETE and independent tombstone readback. Preserves Account Media, library assets, other associations and parent status/budgets. No fictitious PUT pause or automatic replay.', payload: deleteDirectMedia }),
+  ];
+}

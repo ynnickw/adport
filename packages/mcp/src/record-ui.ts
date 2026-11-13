@@ -30,6 +30,10 @@ export const RECORD_UI_STYLES = String.raw`
 `;
 
 export const RECORD_UI_SCRIPT = String.raw`
+    let recordPages=null;
+    function recordPagesIgnoreEcho(data) {
+      return !!recordPages?.busy && data?._adport?.view==='records' && galleryMatches(data._adport,recordPages.meta) && galleryScope(data._adport)===recordPages.scope;
+    }
     function providerMarks(values,meta,label='Platforms') {
       const providers=[...new Set(arr(values).filter(value=>typeof value==='string'&&value))];
       return providers.length?'<div class="record-providers" role="group" aria-label="'+esc(label)+'">'+providers.map(provider=>{
@@ -50,15 +54,16 @@ export const RECORD_UI_SCRIPT = String.raw`
       app.querySelectorAll('.project-logo img').forEach(image=>image.addEventListener('error',()=>{const parent=image.parentElement;parent.textContent=parent.dataset.projectInitial;},{once:true}));
     }
     function recordPayload(data) {
+      if(object(data)&&Array.isArray(data.records))return {records:data.records};
       const value=data.value ?? data.data ?? data.result ?? data;
       if(!object(value))return value;
-      for(const key of ['keyword','audience','board','campaign','ad_group','ad','asset','customer_list'])if(object(value[key]))return value[key];
+      for(const key of ['keyword','audience','pixel','capi_integration','mobile_app','dataset','board','campaign','ad_group','ad','asset','customer_list'])if(object(value[key]))return value[key];
       return value;
     }
     function recordEntries(payload) {
       if(Array.isArray(payload))return payload;
       if(!object(payload))return null;
-      if(['name','value','title','id'].some(key=>Object.hasOwn(payload,key)&&!object(payload[key])&&!Array.isArray(payload[key])))return null;
+      if(['name','value','title','id','saved_audience_name','saved_audience_id','pixel_name','pixel_id','capi_connection_id'].some(key=>Object.hasOwn(payload,key)&&!object(payload[key])&&!Array.isArray(payload[key])))return null;
       const ignored=/^(_adport|notes|warnings|errors|actions|creatives|fields|media|resourceIds|resource_ids)$/;
       const keys=['items','results','records','campaigns','ad_groups','ad_sets','ads','keywords','audiences','accounts','projects','assets','data'];
       const key=keys.find(key=>Array.isArray(payload[key])) ?? Object.keys(payload).find(key=>!ignored.test(key)&&Array.isArray(payload[key]));
@@ -71,26 +76,67 @@ export const RECORD_UI_SCRIPT = String.raw`
     function recordRow(value,index,meta) {
       if(!object(value))return '<article class="record-row">'+valueHTML(value,true)+'</article>';
       const fields=dataFields(value).filter(field=>!/(?:hash|token|secret|password|authorization|pending operation|snapshot)/i.test(field.label));
-      const name=fields.find(field=>/^(name|display name|title|value|keyword|keyword text|campaign name|ad group name|ad name|creative name|account name|audience name)$/i.test(field.label));
-      const id=fields.find(field=>/^(id|resource name)$/i.test(field.label));
+      const name=fields.find(field=>/^(name|display name|title|value|keyword|keyword text|campaign name|ad group name|ad name|creative name|account name|audience name|saved audience name|pixel name)$/i.test(field.label));
+      const id=fields.find(field=>/^(id|resource name|saved audience id|pixel id|capi connection id)$/i.test(field.label));
       const status=fields.find(field=>/^(status|state|delivery status|archived)$/i.test(field.label));
       const currency=currencyOf(value)||(/^[A-Z]{3}$/.test(value.currency_code||'')?value.currency_code:currencyOf(meta));
-      const chosen=fields.filter(field=>!/^note$|^notes$|^actions$|preview url|preview cover url|logo url/i.test(field.label)&&field!==name&&field!==status&&!/^(id|account id|provider|resource name|currency|currency code)$/i.test(field.label));
+      const chosen=fields.filter(field=>!/^note$|^notes$|^actions$|preview url|preview cover url|logo url/i.test(field.label)&&field!==name&&field!==status&&!/^(id|saved audience id|pixel id|pixel code|capi connection id|account id|provider|resource name|currency|currency code)$/i.test(field.label));
       chosen.sort((a,b)=>{const priority=field=>/match type|scope|budget|bid|size|type|rule|frequency/i.test(field.label)?0:1;return priority(a)-priority(b);});
       const label=name?.after ?? id?.after ?? 'Record '+(index+1);
       const nativeProvider=typeof value.provider==='string'?value.provider:typeof value.platform==='string'&&providerSvg[value.platform]?value.platform:undefined;
       const provider=nativeProvider!==meta.provider?nativeProvider:undefined;
       return '<article class="record-row"><div class="record-heading"><div class="record-name">'+(provider?'<span role="img" aria-label="'+esc(providerName(provider,meta.providerNames||{}))+'">'+logo(provider)+'</span>':'')+'<strong>'+esc(label)+'</strong></div>'+(status?'<span>'+esc(status.label==='Archived'&&typeof status.after==='boolean'?(status.after?'Archived':'Unarchived'):status.after)+'</span>':'')+'</div>'+(chosen.length?'<dl class="record-fields">'+chosen.slice(0,4).map(field=>/^(providers|platforms)$/i.test(field.label)&&Array.isArray(field.after)?'<div><dd>'+providerMarks(field.after,meta)+'</dd></div>':'<div><dt>'+esc(/micros$|cents$/i.test(field.label)?field.label.replace(/ (?:micros|cents)$/i,'')+' · '+(currency||'account units'):field.label)+'</dt><dd>'+recordValue(field.after,field.label.replaceAll(' ','_'),currency)+'</dd></div>').join('')+'</dl>':'')+'</article>';
     }
+    function renderRecordPages(message='') {
+      const pages=recordPages,area=app.querySelector('[data-record-pages]');if(!pages||!area)return;
+      const next=pages.rows.length<1000 && galleryNext(pages.meta);
+      let status=area.querySelector('[role="status"]');if(!status){status=document.createElement('p');status.className='operation-note';status.setAttribute('role','status');area.prepend(status);}status.textContent=message;status.hidden=!message;
+      let button=area.querySelector('[data-record-more]');
+      if(next){if(!button){button=document.createElement('button');button.type='button';button.className='media-button';button.dataset.recordMore='';button.addEventListener('click',loadRecordPage);area.append(button);}button.textContent=pages.busy?'Loading…':'Load more';button.setAttribute('aria-disabled',String(!!pages.busy));}
+      else if(button){const focused=button===document.activeElement;button.remove();if(focused)app.querySelector('[data-record-list]')?.focus({preventScroll:true});}
+    }
+    async function loadRecordPage() {
+      const pages=recordPages,args=pages && galleryNext(pages.meta);if(!pages||pages.busy||!args||pages.rows.length>=1000)return;
+      const key=galleryStable(args);if(pages.seen.has(key)){pages.meta={...pages.meta,next:undefined};renderRecordPages('No new page was returned.');return;}
+      pages.busy=true;state.hasLocalResult=true;renderRecordPages();
+      try {
+        const response=await callTool(pages.meta.tool,args,60000),value=resultData(response),meta=value?._adport,rows=recordEntries(recordPayload(value));
+        hostResults.add(JSON.stringify(value));if(hostResults.size>16)hostResults.delete(hostResults.values().next().value);
+        if(recordPages!==pages){state.hasLocalResult=true;return;}
+        if(response?.isError||value?.error||!Array.isArray(rows)||!meta||meta.view!=='records'||!galleryMatches(meta,pages.meta)||galleryScope(meta)!==pages.scope||!object(meta.refresh?.arguments)||galleryStable(meta.refresh.arguments)!==key||!rows.length&&(value.truncated!==false||galleryNext(meta)))throw new Error('The next page could not be confirmed.');
+        const root=app.querySelector('[data-record-list]');if(!root)return;
+        let added=0;
+        rows.forEach((row,index)=>{
+          const identity=object(row)&&(typeof row.id==='string'&&row.id||typeof row.id==='number'&&Number.isSafeInteger(row.id))?'id:'+String(row.id):key+':'+index;
+          const previous=pages.items.get(identity);
+          if(previous){if(galleryStable(previous.row)!==galleryStable(row)){const template=document.createElement('template');template.innerHTML=recordRow(row,previous.index,meta);const node=template.content.firstElementChild;previous.node.replaceWith(node);previous.node=node;previous.row=row;pages.rows[previous.index]=row;}return;}
+          if(pages.rows.length>=1000)return;
+          const template=document.createElement('template');template.innerHTML=recordRow(row,pages.rows.length,meta);const node=template.content.firstElementChild;
+          pages.items.set(identity,{row,index:pages.rows.length,node});pages.rows.push(row);root.append(node);added++;
+        });
+        pages.seen.add(key);pages.meta={...meta,...(!added||pages.rows.length>=1000?{next:undefined}:{})};pages.data=value;
+        state.hasLocalResult=true;state.result={structuredContent:{...value,records:pages.rows.slice(),_adport:pages.meta}};
+        const notes=app.querySelector('.record-notes');if(notes)notes.innerHTML=notices(value);
+        const details=app.querySelector('[data-record-details]');if(details){details.querySelector('summary').textContent='Details · '+pages.rows.length+' loaded';details.querySelector('pre').textContent=JSON.stringify({loaded_records:pages.rows,latest_page:Object.fromEntries(Object.entries(value).filter(([field])=>field!=='_adport'))},null,2);}
+        pages.busy=false;renderRecordPages(pages.rows.length>=1000?'Showing 1,000 records. Ask your assistant if you need more results.':!added&&rows.length?'No new records were returned. Ask your assistant for a fresh view.':'');
+      }catch(error){if(recordPages===pages){pages.busy=false;renderRecordPages(error?.message||'Could not load more records.');}}
+    }
     function renderRecords(data,meta) {
       if(meta.tool==='projects_list')return renderProjects(data,meta);
+      if(meta.tool==='apple_report')return renderAppleReport(data,meta);
+      if(nativeReportTools.has(meta.tool)&&(meta.tool!=='google_gaql'||arr(recordPayload(data)?.rows).some(row=>object(row?.metrics)&&Object.keys(row.metrics).length)))return renderNativeReport(data,meta);
       const payload=recordPayload(data),entries=recordEntries(payload),rows=entries ?? [payload];
       const title=human(String(meta.tool||'Results').replace(/^(?:google|meta|tiktok|apple|microsoft|reddit|snapchat|spotify|pinterest|linkedin|x)_/,'').replace(/^(?:list|get)_/,'').replace(/_(?:list|get)$/,'').replaceAll('_',' '));
       const parent=object(data.parent)?Object.entries(data.parent).filter(([key])=>/_id$/.test(key)).map(([key,value])=>human(key.replace(/_id$/,''))+' '+value).join(' · '):'';
       const scope=[parent,typeof data.parent_id==='string'&&!parent?data.parent_id:'',meta.accountId].filter(Boolean).join(' · ');
       const clean=object(data)?Object.fromEntries(Object.entries(data).filter(([key])=>key!=='_adport'&&!(key==='creatives'&&meta.view==='records'))):data;
-      const content=rows.length?'<div class="record-list" role="region" aria-label="Returned records" tabindex="0">'+rows.slice(0,1000).map((row,index)=>recordRow(row,index,meta)).join('')+'</div>':'<p class="operation-note">No results returned.</p>';
-      app.innerHTML=chrome(operationHeader(title,scope,meta.provider)+'<div class="record-notes">'+notices(data)+'</div>'+content+(rows.length>1000?'<p class="operation-note">Showing 1,000 of '+rows.length+' records. The full response is in Details.</p>':'')+'<details><summary>Details'+(entries?' · '+entries.length+' results':'')+'</summary><pre>'+esc(JSON.stringify(clean,null,2))+'</pre></details>','');
+      const content=rows.length?'<div class="record-list" data-record-list role="region" aria-label="Returned records" tabindex="0">'+rows.slice(0,1000).map((row,index)=>recordRow(row,index,meta)).join('')+'</div>':'<p class="operation-note">No results returned.</p>';
+      app.innerHTML=chrome(operationHeader(title,scope,meta.provider)+'<div class="record-notes">'+notices(data)+'</div>'+content+(rows.length>1000?'<p class="operation-note">Showing 1,000 of '+rows.length+' records. The full response is in Details.</p>':'')+'<div data-record-pages></div><details data-record-details><summary>Details'+(entries?' · '+entries.length+' results':'')+'</summary><pre>'+esc(JSON.stringify(clean,null,2))+'</pre></details>','');
+      if(meta.view==='records'&&Array.isArray(entries)&&rows.length&&galleryNext(meta)){
+        recordPages={scope:galleryScope(meta),meta,data,rows:rows.slice(0,1000),items:new Map(),seen:new Set([galleryStable(meta.refresh.arguments)]),busy:false};
+        const nodes=app.querySelectorAll('[data-record-list]>article');recordPages.rows.forEach((row,index)=>{const identity=object(row)&&(typeof row.id==='string'&&row.id||typeof row.id==='number'&&Number.isSafeInteger(row.id))?'id:'+String(row.id):galleryStable(meta.refresh.arguments)+':'+index;recordPages.items.set(identity,{row,index,node:nodes[index]});});
+        renderRecordPages();
+      }
     }
     function renderData(data,meta) {
       const payload=recordPayload(data);

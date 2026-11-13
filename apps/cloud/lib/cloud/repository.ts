@@ -1,4 +1,5 @@
 import 'server-only';
+import { usesAdAccountSlot } from './providers';
 import { randomBytes } from 'node:crypto';
 import type {
   Account,
@@ -12,6 +13,7 @@ import type {
 import { policySchema } from '@adport/core';
 import { db } from '@/lib/db';
 import { decryptSecret, digestApiKey, digestState, encryptSecret } from '@/lib/crypto';
+import { openPendingOperation, sealPendingOperation } from './pending-operation';
 import { PlanLimitError, type UpgradePlanId } from './plan-limit';
 import type {
   CloudProvider,
@@ -64,6 +66,10 @@ export async function createOAuthTransaction(input: {
   state: string;
   verifier: string;
   returnPath?: string;
+  googleDataManager?: boolean;
+  pinterestPinManagement?: boolean;
+  pinterestSecretPins?: boolean;
+  pinterestCatalogManagement?: boolean;
 }): Promise<void> {
   const aad = `oauth:${input.organizationId}:${input.userId}:${input.provider}`;
   await db()`
@@ -71,7 +77,7 @@ export async function createOAuthTransaction(input: {
       (organization_id, user_id, provider, state_hash, verifier_ciphertext, return_path, expires_at)
     values
       (${input.organizationId}, ${input.userId}, ${input.provider}, ${digestState(input.state)},
-       ${encryptSecret({ verifier: input.verifier }, aad)}, ${input.returnPath ?? '/dashboard/connections'}, now() + interval '10 minutes')
+       ${encryptSecret({ verifier: input.verifier, ...(input.provider === 'google' && input.googleDataManager ? { googleDataManager: true } : {}), ...(input.provider === 'pinterest' && input.pinterestPinManagement ? { pinterestPinManagement: true } : {}), ...(input.provider === 'pinterest' && input.pinterestSecretPins ? { pinterestSecretPins: true } : {}), ...(input.provider === 'pinterest' && input.pinterestCatalogManagement ? { pinterestCatalogManagement: true } : {}) }, aad)}, ${input.returnPath ?? '/dashboard/connections'}, now() + interval '10 minutes')
   `;
 }
 
@@ -79,6 +85,10 @@ export async function consumeOAuthTransaction(provider: OAuthProvider, state: st
   organizationId: string;
   verifier: string;
   returnPath: string;
+  googleDataManager?: boolean;
+  pinterestPinManagement?: boolean;
+  pinterestSecretPins?: boolean;
+  pinterestCatalogManagement?: boolean;
 }> {
   return db().begin(async (sql) => {
     const rows = await sql<Array<{
@@ -101,8 +111,8 @@ export async function consumeOAuthTransaction(provider: OAuthProvider, state: st
     }
     await sql`update private.oauth_transactions set consumed_at = now() where id = ${transaction.id}`;
     const aad = `oauth:${transaction.organizationId}:${userId}:${provider}`;
-    const secret = decryptSecret<{ verifier: string }>(transaction.verifierCiphertext, aad);
-    return { organizationId: transaction.organizationId, verifier: secret.verifier, returnPath: transaction.returnPath };
+    const secret = decryptSecret<{ verifier: string; googleDataManager?: boolean; pinterestPinManagement?: boolean; pinterestSecretPins?: boolean; pinterestCatalogManagement?: boolean }>(transaction.verifierCiphertext, aad);
+    return { organizationId: transaction.organizationId, verifier: secret.verifier, returnPath: transaction.returnPath, ...(provider === 'google' && secret.googleDataManager === true ? { googleDataManager: true } : {}), ...(provider === 'pinterest' && secret.pinterestPinManagement === true ? { pinterestPinManagement: true } : {}), ...(provider === 'pinterest' && secret.pinterestSecretPins === true ? { pinterestSecretPins: true } : {}), ...(provider === 'pinterest' && secret.pinterestCatalogManagement === true ? { pinterestCatalogManagement: true } : {}) };
   });
 }
 
@@ -380,7 +390,7 @@ export class PostgresPendingStore {
         (id, organization_id, provider, operation_hash, operation, preview, created_by, created_at, expires_at)
       values
         (${operation.id}, ${this.principal.organizationId}, ${operation.provider}, ${operation.opHash},
-         ${db().json(operation.op as never)}, ${db().json(operation.preview as never)},
+         ${db().json(sealPendingOperation(this.principal.organizationId, operation.id, operation.op) as never)}, ${db().json(operation.preview as never)},
          ${this.principal.userId ?? null}, ${operation.createdAt}, ${operation.expiresAt})
     `;
   }
@@ -390,7 +400,7 @@ export class PostgresPendingStore {
       id: string;
       provider: string;
       operationHash: string;
-      operation: PendingOperation['op'];
+      operation: unknown;
       preview: PendingOperation['preview'];
       createdAt: Date;
       expiresAt: Date;
@@ -406,7 +416,7 @@ export class PostgresPendingStore {
       id: row.id,
       provider: row.provider,
       opHash: row.operationHash,
-      op: row.operation,
+      op: openPendingOperation(this.principal.organizationId, row.id, row.operation),
       preview: row.preview,
       createdAt: row.createdAt.toISOString(),
       expiresAt: row.expiresAt.toISOString(),
@@ -418,6 +428,21 @@ export class PostgresPendingStore {
       update public.pending_operations set consumed_at = now()
       where id = ${id} and organization_id = ${this.principal.organizationId}
     `;
+  }
+
+  async consume(id: string, expectedHash: string): Promise<boolean> {
+    return db().begin(async sql => {
+      const selected = await sql`select id from public.pending_operations
+        where id = ${id} and organization_id = ${this.principal.organizationId}
+          and operation_hash = ${expectedHash} and consumed_at is null for update`;
+      if (!selected.length) return false;
+      // Check the deadline after acquiring the row lock, not before a wait.
+      const rows = await sql`update public.pending_operations set consumed_at = clock_timestamp()
+        where id = ${id} and organization_id = ${this.principal.organizationId}
+          and operation_hash = ${expectedHash} and consumed_at is null and expires_at > clock_timestamp()
+        returning id`;
+      return rows.length === 1;
+    });
   }
 
   async sweep(now = new Date()): Promise<void> {
@@ -598,8 +623,9 @@ export async function syncDiscoveredAccounts(input: {
     const otherRows = await sql<Array<{ count: number }>>`
       select count(*)::int as count from public.organization_ad_accounts
       where organization_id = ${input.organizationId} and provider <> ${input.provider} and enabled = true
+        and private.provider_uses_ad_account_slot(provider)
     `;
-    const available = input.maxActiveAccounts === null
+    const available = !usesAdAccountSlot(input.provider) || input.maxActiveAccounts === null
       ? refreshed.length
       : Math.max(0, input.maxActiveAccounts - (otherRows[0]?.count ?? 0));
     const enabledIds = new Set(refreshed.filter((account) => account.enabled).slice(0, available).map((account) => account.accountId));
@@ -666,12 +692,13 @@ export async function setOrganizationAdAccountEnabled(input: {
     `;
     const account = rows[0];
     if (!account) throw new Error('Ad account was not found in this organization.');
-    if (input.enabled && !account.enabled && input.maxActiveAccounts !== null) {
+    if (input.enabled && !account.enabled && usesAdAccountSlot(input.provider) && input.maxActiveAccounts !== null) {
       const totals = await sql<Array<{ count: number }>>`
         select count(*)::int as count from public.organization_ad_accounts account
         join public.organizations project on project.id = account.organization_id
         where project.organization_group_id = (select organization_group_id from public.organizations where id = ${input.principal.organizationId})
           and project.archived_at is null and account.enabled = true
+          and private.provider_uses_ad_account_slot(account.provider)
       `;
       if ((totals[0]?.count ?? 0) >= input.maxActiveAccounts) {
         throw new PlanLimitError({
@@ -700,7 +727,7 @@ export interface PendingOperationRow {
   id: string;
   provider: string;
   operationHash: string;
-  operation: PendingOperation['op'];
+  operation: Pick<PendingOperation['op'], 'tool' | 'accountId'>;
   preview: PendingOperation['preview'];
   createdBy: string | null;
   createdAt: Date;
@@ -709,13 +736,17 @@ export interface PendingOperationRow {
 }
 
 export async function listPendingOperations(organizationId: string, limit = 50): Promise<PendingOperationRow[]> {
-  return db()<PendingOperationRow[]>`
+  const rows = await db()<Array<Omit<PendingOperationRow, 'operation'> & { operation: unknown }>>`
     select id, provider, operation_hash, operation, preview, created_by, created_at, expires_at, consumed_at
     from public.pending_operations
     where organization_id = ${organizationId} and consumed_at is null and expires_at > now()
     order by created_at desc
     limit ${limit}
   `;
+  return rows.map(row => {
+    const operation = openPendingOperation(organizationId, row.id, row.operation);
+    return { ...row, operation: { tool: operation.tool, accountId: operation.accountId } };
+  });
 }
 
 export interface AuditEventRow {

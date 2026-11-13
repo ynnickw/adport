@@ -18,6 +18,8 @@ import {
   setOrganizationAdAccountEnabled,
   syncDiscoveredAccounts,
   upsertProviderConnection,
+  createOAuthTransaction,
+  consumeOAuthTransaction,
 } from '@/lib/cloud/repository';
 import { createTenantRuntime } from '@/lib/cloud/runtime';
 import { processStripeEvent, stripeClient } from '@/lib/cloud/billing';
@@ -87,6 +89,17 @@ describeDatabase('Supabase tenant boundary', () => {
     const other = await firstUserClient.from('organizations').select('id').eq('id', secondOrgId);
     expect(other.error).toBeNull();
     expect(other.data).toEqual([]);
+  });
+
+  it.each(['pinterestPinManagement', 'pinterestSecretPins', 'pinterestCatalogManagement'] as const)('keeps %s in a tenant/user-bound encrypted one-use OAuth transaction', async option => {
+    const state = randomUUID();
+    await createOAuthTransaction({ organizationId: firstOrgId, userId: firstUserId, provider: 'pinterest', state, verifier: 'local-test-verifier', [option]: true });
+    await expect(consumeOAuthTransaction('pinterest', state, secondUserId)).rejects.toThrow('invalid');
+    expect(await consumeOAuthTransaction('pinterest', state, firstUserId)).toMatchObject({ organizationId: firstOrgId, verifier: 'local-test-verifier', [option]: true });
+    await expect(consumeOAuthTransaction('pinterest', state, firstUserId)).rejects.toThrow('already used');
+    const foreignState = randomUUID();
+    await createOAuthTransaction({ organizationId: firstOrgId, userId: firstUserId, provider: 'google', state: foreignState, verifier: 'local-test-verifier', [option]: true });
+    expect(await consumeOAuthTransaction('google', foreignState, firstUserId)).not.toHaveProperty(option);
   });
 
   it('persists first-run progress and tenant-scoped support messages', async () => {
@@ -395,6 +408,6 @@ describeDatabase('Supabase tenant boundary', () => {
       where organization_id = ${firstOrgId} and pending_id = ${preview.pending_operation_id}
       order by created_at asc
     `;
-    expect(events.map((event) => event.event)).toEqual(['validated', 'applied']);
+    expect(events.map((event) => event.event)).toEqual(['validated', 'note', 'applied']);
   });
 });

@@ -4,6 +4,18 @@ import type { FindingsRepository } from '../audit/store.js';
 import { AdportError } from '../errors.js';
 import type { PolicyEngine } from '../policy/engine.js';
 import type { ProviderRegistry } from '../provider.js';
+import type { MediaLibrary } from '../media.js';
+import { classifyTool, type ToolCatalogMetadata, type ToolSelection } from './catalog.js';
+
+export interface ToolCatalogContext {
+  tools: readonly AnyToolDefinition[];
+  selection: ToolSelection;
+  connectedProviders: readonly string[];
+  includeRawTools: boolean;
+  canWrite?: boolean;
+  manageAccessUrl?: string;
+  excludedTools?: readonly string[];
+}
 
 export interface ToolAnnotations {
   readOnly?: boolean;
@@ -21,18 +33,31 @@ export interface ToolContext {
   authorizeToolCall?: (tool: AnyToolDefinition, input: Record<string, unknown>) => void | Promise<void>;
   /** Hosted runtimes inject a tenant-scoped findings repository. */
   findings?: FindingsRepository;
+  media?: MediaLibrary;
+  /** Metadata discovery never invokes hidden handlers or changes access. */
+  catalog?: ToolCatalogContext;
 }
 
 export interface AnyToolDefinition {
   name: string;
   /** Grouping key used for config-based enable/disable ("core", "mock", "google", ...). */
   namespace: string;
+  catalog?: ToolCatalogMetadata;
   description: string;
   input: z.ZodObject<z.ZodRawShape>;
   /** Successful result contract, shared by all transports. Errors use their own envelope. */
   output?: z.ZodType;
-  presentation?: 'creatives' | 'planning' | 'records' | 'receipt';
   annotations: ToolAnnotations;
+  /** Optional presentation shared by hosted and local MCP adapters. */
+  presentation?: 'creatives' | 'planning' | 'records' | 'receipt';
+  /** Input field receiving the result's native next_cursor. Read-only tools only. */
+  pagination?: { cursorInput: string; cursorOutput?: string };
+  /** Top-level host file inputs, declared once for transport adapters. */
+  fileInputs?: readonly string[];
+  /** Dot paths whose presence prevents adapters from echoing arguments into widget approvals. */
+  sensitiveInputs?: readonly string[];
+  /** Top-level account ID/string-array inputs subject to project scope and policy. */
+  additionalAccountInputs?: readonly string[];
   handler: (input: never, ctx: ToolContext) => Promise<unknown>;
 }
 
@@ -42,13 +67,22 @@ export function defineTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   description: string;
   input: S;
   output?: z.ZodType;
-  presentation?: AnyToolDefinition['presentation'];
   annotations?: ToolAnnotations;
+  presentation?: AnyToolDefinition['presentation'];
+  pagination?: AnyToolDefinition['pagination'];
+  fileInputs?: AnyToolDefinition['fileInputs'];
+  sensitiveInputs?: AnyToolDefinition['sensitiveInputs'];
+  additionalAccountInputs?: AnyToolDefinition['additionalAccountInputs'];
+  catalog?: ToolCatalogMetadata;
   handler: (input: z.infer<S>, ctx: ToolContext) => Promise<unknown>;
 }): AnyToolDefinition {
+  for (const key of def.additionalAccountInputs ?? []) {
+    if (!/^[a-z][a-z0-9_]*$/.test(key) || !Object.hasOwn(def.input.shape, key)) throw new AdportError('INVALID_INPUT', 'Additional account inputs must name declared top-level fields.');
+  }
   const openWorldByDefault = !['core', 'mock', 'audit'].includes(def.namespace);
   return {
     ...def,
+    catalog: def.catalog ?? classifyTool(def.name, def.namespace),
     annotations: {
       readOnly: def.annotations?.readOnly ?? false,
       // Directory reviewers treat modifying tools, not just deletions, as
@@ -57,6 +91,37 @@ export function defineTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
       openWorld: def.annotations?.openWorld ?? openWorldByDefault,
     },
   } as AnyToolDefinition;
+}
+
+/** Internal authorization metadata is defined once, alongside the input schema. */
+export function additionalAccountIds(tool: Pick<AnyToolDefinition, 'additionalAccountInputs'>, input: Record<string, unknown>): string[] {
+  const ids = new Set<string>();
+  for (const key of tool.additionalAccountInputs ?? []) {
+    const value = input[key];if (value === undefined) continue;
+    const values = typeof value === 'string' ? [value] : Array.isArray(value) ? value : undefined;
+    if (!values || values.some(id => typeof id !== 'string' || !id.trim() || id.length > 200)) throw new AdportError('INVALID_INPUT', 'Additional account inputs must contain exact account ID strings.');
+    for (const id of values) ids.add(id as string);
+  }
+  if (ids.size > 100) throw new AdportError('INVALID_INPUT', 'Too many additional accounts for one operation.');
+  return [...ids].sort();
+}
+
+/** Derive a validated continuation without changing the original selection. */
+export function nextPageArguments(tool: AnyToolDefinition, args: Record<string, unknown>, result: Record<string, unknown>): Record<string, unknown> | undefined {
+  const key = tool.pagination?.cursorInput, cursor = result[tool.pagination?.cursorOutput ?? 'next_cursor'];
+  if (!tool.annotations.readOnly || !key || ['account_id', 'project_id', 'pending_operation_id', '__proto__', 'constructor', 'prototype'].includes(key)
+    || !Object.hasOwn(tool.input.shape, key) || !((typeof cursor === 'string' && cursor) || (typeof cursor === 'number' && Number.isSafeInteger(cursor) && cursor >= 0))) return;
+  const field = tool.input.shape[key]!;
+  let value: unknown = cursor;
+  if (!z.safeParse(field, value).success) {
+    if (typeof cursor !== 'string' || !/^\d+$/.test(cursor) || !Number.isSafeInteger(Number(cursor))) return;
+    value = Number(cursor);
+    if (!z.safeParse(field, value).success) return;
+  }
+  if (value === args[key]) return;
+  const next = { ...args, [key]: value };
+  delete next.pending_operation_id;
+  return tool.input.safeParse(next).success ? next : undefined;
 }
 
 export class ToolRegistry {

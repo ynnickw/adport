@@ -110,7 +110,8 @@ export async function listOrganizationProjects(userId: string, organizationId: s
   await requireOrganizationAdmin(userId, organizationId);
   return db()<Array<{ id: string; name: string; logoPath: string | null; archivedAt: Date | null; enabledAccounts: number }>>`
     select project.id, project.name, project.logo_path, project.archived_at,
-      (select count(*)::int from public.organization_ad_accounts account where account.organization_id = project.id and account.enabled) as enabled_accounts
+      (select count(*)::int from public.organization_ad_accounts account where account.organization_id = project.id and account.enabled
+        and private.provider_uses_ad_account_slot(account.provider)) as enabled_accounts
     from public.organizations project where project.organization_group_id = ${organizationId} order by project.created_at, project.id
   `;
 }
@@ -120,7 +121,8 @@ export async function organizationActiveAccounts(projectId: string): Promise<num
     from public.organization_ad_accounts account
     join public.organizations project on project.id = account.organization_id
     where project.organization_group_id = (select organization_group_id from public.organizations where id = ${projectId})
-      and project.archived_at is null and account.enabled`;
+      and project.archived_at is null and account.enabled
+      and private.provider_uses_ad_account_slot(account.provider)`;
   return rows[0]?.count ?? 0;
 }
 

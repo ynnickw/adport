@@ -20,10 +20,11 @@ function hosts(sandbox: boolean) {
     campaign: `https://campaign.api${infix}.bingads.microsoft.com/CampaignManagement/v13`,
     customer: `https://clientcenter.api${infix}.bingads.microsoft.com/CustomerManagement/v13`,
     reporting: `https://reporting.api${infix}.bingads.microsoft.com/Reporting/v13`,
+    adinsight: `https://adinsight.api${infix}.bingads.microsoft.com/AdInsight/v13`,
   };
 }
 
-export type MicrosoftService = 'campaign' | 'customer' | 'reporting';
+export type MicrosoftService = 'campaign' | 'customer' | 'reporting' | 'adinsight';
 
 export interface RequestScope {
   /** Manager account (customer) id header. */
@@ -89,6 +90,7 @@ export class MicrosoftAdsClient {
     path: string,
     body: unknown,
     scope: RequestScope = {},
+    options: { privatePayload?: boolean } = {},
   ): Promise<T> {
     const token = await this.getAccessToken();
     const headers: Record<string, string> = {
@@ -104,8 +106,15 @@ export class MicrosoftAdsClient {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const raw = await response.text();
-    if (!response.ok) {
+    if (!response.ok || options.privatePayload && response.status !== 200) {
+      if (options.privatePayload) throw new AdportError('PROVIDER_ERROR', `microsoft: private request failed (HTTP ${response.status}); native response values omitted`);
       throw new AdportError('PROVIDER_ERROR', formatMicrosoftError(response.status, raw), safeJson(raw));
+    }
+    if (options.privatePayload) {
+      try {
+        if (!raw.trim()) throw new Error('Empty receipt');
+        return JSON.parse(raw) as T;
+      } catch { throw new AdportError('PROVIDER_ERROR', 'microsoft: private request returned an unrecognized JSON receipt; native values omitted'); }
     }
     return (raw ? JSON.parse(raw) : {}) as T;
   }
@@ -169,9 +178,10 @@ export function formatMicrosoftError(status: number, raw: string): string {
   return message;
 }
 
-export function formatPartialErrors(partialErrors: BatchErrorItem[] | undefined): string | undefined {
-  if (!partialErrors || partialErrors.length === 0) return undefined;
-  return partialErrors
+export function formatPartialErrors(partialErrors: Array<BatchErrorItem | null> | undefined): string | undefined {
+  const errors = partialErrors?.filter((error): error is BatchErrorItem => error !== null) ?? [];
+  if (errors.length === 0) return undefined;
+  return errors
     .map((e) => `item ${e.Index ?? '?'}: ${e.Code ?? ''} ${e.ErrorCode ?? ''} ${e.Message ?? ''}${e.FieldPath ? ` (${e.FieldPath})` : ''}`)
     .join('; ');
 }

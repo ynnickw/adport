@@ -320,7 +320,7 @@ describe('MetaAdsProvider writes', () => {
     const { impl } = fakeFetch([
       {
         match: (url) => url.includes('/120210000000/') || url.includes('/120210000000?'),
-        reply: { name: 'Prospecting DE', daily_budget: '5000', id: '120210000000' },
+        reply: { account_id: '426197654150180', name: 'Prospecting DE', daily_budget: '5000', id: '120210000000' },
       },
       { match: (url, body) => url.includes('/120210000000') && body.includes('daily_budget'), reply: { success: true } },
     ]);
@@ -344,7 +344,7 @@ describe('MetaAdsProvider writes', () => {
 
   it('fails clearly when the object has no daily_budget', async () => {
     const { impl } = fakeFetch([
-      { match: (url) => url.includes('/120210000000'), reply: { name: 'CBO child adset', id: '120210000000' } },
+      { match: (url) => url.includes('/120210000000'), reply: { account_id: '426197654150180', name: 'CBO child adset', id: '120210000000' } },
     ]);
     const provider = new MetaAdsProvider(new MetaGraphClient(CREDS, 'v25.0', impl));
     await expect(
@@ -363,6 +363,7 @@ describe('MetaAdsProvider writes', () => {
 
   it('creates an ad set with JSON-encoded targeting', async () => {
     const { impl, calls } = fakeFetch([
+      { match: url => new URL(url).pathname.endsWith('/23851234567890123'), reply: { id: '23851234567890123', account_id: '426197654150180', name: 'Parent', status: 'PAUSED', objective: 'OUTCOME_TRAFFIC' } },
       { match: (url) => url.includes('/adsets'), reply: { id: '120210000001' } },
     ]);
     const provider = new MetaAdsProvider(new MetaGraphClient(CREDS, 'v25.0', impl));
@@ -377,7 +378,7 @@ describe('MetaAdsProvider writes', () => {
       { forcePausedCreation: true },
     );
     expect(result.resourceIds).toEqual(['120210000001']);
-    const body = new URLSearchParams(String(calls[0]!.init.body));
+    const body = new URLSearchParams(String(calls[1]!.init.body));
     expect(JSON.parse(body.get('targeting')!)).toEqual({ geo_locations: { countries: ['DE'] } });
     expect(body.get('optimization_goal')).toBe('LINK_CLICKS');
     expect(body.get('billing_event')).toBe('IMPRESSIONS');
@@ -395,7 +396,7 @@ describe('MetaAdsProvider writes', () => {
     { bid_strategy: 'LOWEST_COST_WITH_BID_CAP', bid_amount: 75, expected: 'LOWEST_COST_WITH_BID_CAP' },
     { bid_strategy: 'LOWEST_COST_WITH_MIN_ROAS', optimization_goal: 'VALUE', bid_constraints: { roas_average_floor: 15000 }, expected: 'LOWEST_COST_WITH_MIN_ROAS' },
   ])('previews bidding without applying: %j', async ({ expected, ...bidding }) => {
-    const { impl, calls } = fakeFetch([{ match: url => url.includes('/adsets'), reply: { success: true } }]);
+    const { impl, calls } = fakeFetch([{ match: url => new URL(url).pathname.endsWith('/23851234567890123'), reply: { id: '23851234567890123', account_id: '426197654150180', name: 'Parent', status: 'PAUSED', objective: 'OUTCOME_TRAFFIC' } }, { match: url => url.includes('/adsets'), reply: { success: true } }]);
     const provider = new MetaAdsProvider(new MetaGraphClient(CREDS, 'v25.0', impl));
     const op = {
       tool: 'meta_create_ad_set', provider: 'meta', accountId: '426197654150180', kind: 'create' as const,
@@ -406,8 +407,8 @@ describe('MetaAdsProvider writes', () => {
     expect(preview.changes).toContain('+ advertiser (DSA beneficiary)=Test Advertiser');
     expect(preview.changes).toContain('+ payer (DSA)=Test Payer');
     expect(preview.changes.join(' ')).toContain(`strategy=${expected ?? 'inherited from campaign'}`);
-    expect(calls).toHaveLength(1);
-    const body = new URLSearchParams(String(calls[0]!.init.body));
+    expect(calls).toHaveLength(2);
+    const body = new URLSearchParams(String(calls[1]!.init.body));
     expect(body.get('execution_options')).toBe('["validate_only"]');
     expect(body.get('status')).toBe('PAUSED');
     expect(body.get('bid_strategy')).toBe(expected);
@@ -416,7 +417,7 @@ describe('MetaAdsProvider writes', () => {
     expect(body.get('bid_amount')).toBe(bidding.bid_amount === undefined ? null : String(bidding.bid_amount));
     expect(body.get('bid_constraints')).toBe(bidding.bid_constraints === undefined ? null : JSON.stringify(bidding.bid_constraints));
     await provider.applyWrite(op, { forcePausedCreation: true });
-    const appliedBody = new URLSearchParams(String(calls[1]!.init.body));
+    const appliedBody = new URLSearchParams(String(calls[3]!.init.body));
     body.delete('execution_options');
     expect(appliedBody.toString()).toBe(body.toString());
   });
@@ -536,7 +537,7 @@ describe('end-to-end through the shared tool registry (policy engine + meta tool
     const { impl } = fakeFetch([
       {
         match: (url) => url.includes('/120210000000'),
-        reply: { name: 'Prospecting DE', daily_budget: '5000', id: '120210000000' },
+        reply: { account_id: '426197654150180', name: 'Prospecting DE', daily_budget: '5000', id: '120210000000' },
       },
     ]);
     const provider = new MetaAdsProvider(new MetaGraphClient(CREDS, 'v25.0', impl));

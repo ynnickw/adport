@@ -5,6 +5,7 @@ These are maintainer review guides, separate from the [local CLI and MCP setup](
 - [OpenAI connector review guide](openai-plugin.md)
 - [Anthropic connector review guide](anthropic-connector.md)
 - [Production review gate](production-readiness.md)
+- [API tool search and benchmark](tool-search.md)
 - [Generate portal icons](icons.md)
 - [Historical verification records](archive/README.md)
 

@@ -23,6 +23,13 @@ describe('buildGoogleAuthUrl', () => {
     expect(url.searchParams.get('code_challenge_method')).toBe('S256');
     expect(url.searchParams.get('state')).toBe('state');
   });
+  it('adds Data Manager only with the explicit opt-in while preserving PKCE and offline access', () => {
+    const url = new URL(buildGoogleAuthUrl('client', 'http://127.0.0.1:1234', 'challenge', 'state', true));
+    expect(url.searchParams.get('scope')?.split(' ')).toEqual(['https://www.googleapis.com/auth/adwords', 'https://www.googleapis.com/auth/datamanager']);
+    expect(url.searchParams.get('code_challenge')).toBe('challenge');
+    expect(url.searchParams.get('access_type')).toBe('offline');
+    expect(url.searchParams.get('include_granted_scopes')).toBe('false');
+  });
 });
 
 describe('parseClientSecretJson', () => {

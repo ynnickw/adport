@@ -36,6 +36,16 @@ export class XAdsEntities {
   listLineItems(accountId: string) {
     return this.client.list(`accounts/${xId.parse(accountId)}/line_items`, lineItemSchema, { with_deleted: true, with_draft: true });
   }
+  async getLineItem(accountId: string, resourceId: string) {
+    const { data } = await this.client.request('GET', `accounts/${xId.parse(accountId)}/line_items/${xId.parse(resourceId)}`, z.object({ data: lineItemSchema }));
+    if (data.id !== resourceId) throw new AdportError('PROVIDER_ERROR', 'x: line-item ID mismatch');
+    const campaign = await this.getCampaign(accountId, data.campaign_id);
+    if (campaign.currency !== data.currency) throw new AdportError('PROVIDER_ERROR', 'x: line-item currency differs from its campaign');
+    return data;
+  }
+  lineItemPlacements() {
+    return this.client.request('GET', 'line_items/placements', z.object({ data: z.array(z.object({ product_type: z.string(), placements: z.array(z.array(z.string())) })) }));
+  }
   listPromotedTweets(accountId: string) {
     return this.client.list(`accounts/${xId.parse(accountId)}/promoted_tweets`, promotedTweetSchema, { with_deleted: true });
   }

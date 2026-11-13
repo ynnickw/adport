@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { WriteOperation, WritePreview } from '../provider.js';
 
 export interface ReviewField {
@@ -25,12 +26,18 @@ const routing = /^(account_id|pending_operation_id|project_id|campaign_id|ad_gro
 const budget = /^(?:(?:daily|total|lifetime|shared)[_ ]?)?(?:budget|budget_amount|amount_micros|dailyBudget\.value)(?:[_ ]?(?:micros|cents|amount|value))?$/i;
 const status = /^(?:status|entity_status|configured_status|operation_status|delivery)$/i;
 const secret = /(?:access_token|refresh_token|authorization|password|client_secret|private_key)/i;
+const binding = /^expected_.*hash$/i;
+const identifiers = /^(?:records(?:_v2|_sha256)?|user_data|user_identifiers|identifiers|users|hashes|emails?|email_address|email_sha256|maid_sha256|phone_numbers?|caller_id|hashed_(?:email|phone_number|pinner_id|first_name|last_name|street_address)|external_id|ip_address|user_agent|aaid|idfa)$/i;
 
 function reviewValue(value: unknown, adjustedStatus: boolean, key = ''): unknown {
+  if (value !== undefined && identifiers.test(key)) {
+    const digest = createHash('sha256').update(JSON.stringify(value)).digest('hex');
+    return `Protected data (${Array.isArray(value) ? `${value.length} records` : '1 value'}; SHA-256 ${digest})`;
+  }
   if (typeof value === 'string' && (/^data:/.test(value) || /base64|file_content|image_data/i.test(key))) return `Attached content (${value.length} characters)`;
   if (Array.isArray(value)) return value.map(item => reviewValue(item, adjustedStatus));
   if (isObject(value)) return Object.fromEntries(Object.entries(value)
-    .filter(([key]) => !secret.test(key) && !(adjustedStatus && status.test(key)))
+    .filter(([key]) => !secret.test(key) && !binding.test(key) && !(adjustedStatus && status.test(key)))
     .map(([key, item]) => [key, reviewValue(item, adjustedStatus, key)]));
   return value;
 }

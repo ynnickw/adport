@@ -18,6 +18,8 @@ export interface WriteOperation {
   tool: string;
   provider: string;
   accountId: string;
+  /** Additional accounts affected by a cross-account action, derived by its tool. */
+  affectedAccountIds?: string[];
   kind: WriteKind;
   payload: Record<string, unknown>;
 }
@@ -34,14 +36,15 @@ export interface BudgetDelta {
 export interface WritePreview {
   summary: string;
   changes: string[];
+  /** Explicit values read by the provider; never inferred from freeform change text. */
+  fieldChanges?: Array<{ field: string; before: string; after: string }>;
+  /** Review context shown alongside structured fields; full changes remain in Details. */
+  notes?: string[];
   /** Adjustments the guard forced (e.g. "status coerced to PAUSED"). Never silent. */
   coercions: string[];
   budgetDeltas: BudgetDelta[];
   /** True when the platform validated the operation server-side (dry run). */
   serverValidated: boolean;
-  /** Observed provider values, when the preview can report both sides. */
-  fieldChanges?: Array<{ field: string; before: string; after: string }>;
-  notes?: string[];
   /** Structured review, shared by the CLI and every graphical adapter. */
   review?: WriteReview;
 }
@@ -50,6 +53,8 @@ export interface WriteResult {
   applied: true;
   resourceIds: string[];
   details?: unknown;
+  /** Safe for audit/host display; summarize partial failures without identifiers or secrets. */
+  warnings?: string[];
 }
 
 /** Policy-derived constraints handed to providers on every preview/apply. */
@@ -59,6 +64,8 @@ export interface WriteGuard {
 
 export interface ProviderCapabilities {
   serverDryRun: boolean;
+  /** Configuration-only integrations do not participate in performance reports. */
+  reporting?: boolean;
 }
 
 /** A ready-to-call tool invocation (flows through the normal validate→apply gate). */

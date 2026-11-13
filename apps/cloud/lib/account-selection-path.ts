@@ -9,7 +9,7 @@ export function accountSelectionPath(selectionId: string, returnPath: string, ne
     if (destination) query.set('return_to', safeDashboardReturnPath(destination));
     return '/onboarding?' + query;
   }
-  return '/dashboard/accounts?' + new URLSearchParams({ selection_id: selectionId });
+  return (source.pathname === '/dashboard/analytics' ? '/dashboard/analytics?' : '/dashboard/accounts?') + new URLSearchParams({ selection_id: selectionId });
 }
 
 export function accountSelectionSavedPath(returnPath: string, provider: string, enabled?: boolean): string {

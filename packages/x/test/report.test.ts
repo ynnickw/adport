@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AuditLog, CredentialStore, DEFAULT_POLICY, PendingStore, PolicyEngine, createContext, type NormalizedQuery } from '@adport/core';
+import { AuditLog, AuditRunner, CredentialStore, DEFAULT_POLICY, FindingsStore, PendingStore, PolicyEngine, ProviderRegistry, createContext, type NormalizedQuery } from '@adport/core';
 import { XAdsClient, type XParams } from '../src/client.js';
 import { XAdsAnalytics, X_PLACEMENTS, xAccountMidnight } from '../src/analytics.js';
 import { XAdsProvider } from '../src/provider.js';
@@ -55,6 +55,25 @@ afterEach(async () => { vi.useRealTimers(); vi.unstubAllEnvs(); for (const dir o
 function recent() { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-08-31T00:00:00Z')); }
 
 describe('X normalized reporting', () => {
+  it('does not recommend pausing a spending campaign whose conversion metrics are unavailable', async () => {
+    recent();
+    const { provider, calls } = setup(({ url }) => {
+      if (url.pathname.endsWith('/campaigns')) return { data: [{ ...campaign, entity_status: 'ACTIVE' }] };
+      if (!url.pathname.includes('/stats/')) return undefined;
+      const data = stats(params(url));
+      data.data[0]!.id_data[0]!.metrics = { ...metrics, billed_charge_local_micro: [100_000_000] };
+      return data;
+    });
+    const providers = new ProviderRegistry();providers.register(provider);
+    const report = vi.spyOn(provider, 'report');
+    const result = await new AuditRunner(providers, new FindingsStore(path.join(await temp(), 'findings'))).run({ provider: 'x', accountIds: ['a1'], dateRange: query.dateRange, persist: false });
+    const rows = (await report.mock.results[0]!.value).rows;
+    expect(rows[0]!.metrics.spend).toBe(300);expect(rows[0]!.metrics).not.toHaveProperty('conversions');
+    expect(result.evaluatedAccounts).toBe(1);expect(result.findings).toEqual([]);
+    expect(calls.filter(call => call.url.pathname.includes('/stats/'))).toHaveLength(3);
+    expect(calls.every(call => call.init.method === 'GET')).toBe(true);
+  });
+
   it('sums all placements and maps micros and link clicks, not engagement clicks', async () => {
     recent(); const { provider, calls } = setup();
     const result = await provider.report(query);

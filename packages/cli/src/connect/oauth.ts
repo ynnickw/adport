@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { AdportError } from '@adport/core';
+import { GOOGLE_DATA_MANAGER_SCOPE } from '@adport/provider-google';
 
 export const GOOGLE_ADS_SCOPE = 'https://www.googleapis.com/auth/adwords';
 const AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -12,14 +13,17 @@ export function buildGoogleAuthUrl(
   redirectUri: string,
   codeChallenge: string,
   state: string,
+  dataManager = false,
+  scopes?: readonly string[],
 ): string {
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: GOOGLE_ADS_SCOPE,
+    scope: (scopes ?? [GOOGLE_ADS_SCOPE, ...(dataManager ? [GOOGLE_DATA_MANAGER_SCOPE] : [])]).join(' '),
     access_type: 'offline',
     prompt: 'consent',
+    include_granted_scopes: 'false',
     code_challenge: codeChallenge,
     code_challenge_method: 'S256',
     state,
