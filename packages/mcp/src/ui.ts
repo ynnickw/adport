@@ -12,7 +12,7 @@ import { APPLE_REPORT_UI_SCRIPT, APPLE_REPORT_UI_STYLES } from './apple-report-u
 import { NATIVE_REPORT_UI_SCRIPT, NATIVE_REPORT_UI_STYLES } from './native-report-ui.js';
 import { REPORT_CHART_SCRIPT, REPORT_CHART_STYLES } from './report-chart-ui.js';
 
-export const ADPORT_UI_URI = 'ui://adport/insight-card-v30.html';
+export const ADPORT_UI_URI = 'ui://adport/insight-card-v31.html';
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
 export const ADPORT_UI_RESOURCE_DOMAINS = [
   ADPORT_UI_DOMAIN,
@@ -396,6 +396,10 @@ ${PROVIDER_GALLERY_UI}
       if (meta.view === 'insights') return renderInsights(data,meta);
       return renderData(data,meta);
     }
+    function rememberHostResult(fingerprint) {
+      hostResults.add(fingerprint);
+      if (hostResults.size>16) hostResults.delete(hostResults.values().next().value);
+    }
     function acceptResult(result,local=false) {
       if (!result || typeof result !== 'object') return;
       const incoming=resultData(result);
@@ -405,7 +409,7 @@ ${PROVIDER_GALLERY_UI}
       // Host state updates can echo an old tool result after a local edit/apply.
       if (!local && state.hasLocalResult && hostResults.has(fingerprint)) return;
       if (local) state.hasLocalResult=true;
-      else {hostResults.add(fingerprint);if (hostResults.size>16) hostResults.delete(hostResults.values().next().value);}
+      else rememberHostResult(fingerprint);
       clearTimeout(resultWait);
       // ChatGPT can deliver the same result through both supported bridges.
       // Do not reset an open disclosure when the second copy arrives.
