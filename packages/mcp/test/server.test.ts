@@ -1,13 +1,13 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { AdportError, createContext, FindingsStore } from '@adport/core';
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
+import { AdportError, createContext, defineTool, FindingsStore, type ManagedMediaLibrary } from '@adport/core';
+import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { createMcpServer } from '../src/index.js';
-import { ADPORT_UI_DOMAIN, ADPORT_UI_URI, ADPORT_UI_RESOURCE_DOMAINS } from '../src/ui.js';
+import { createMcpServer, createMcpUiServer } from '../src/index.js';
+import { ADPORT_UI_DOMAIN, ADPORT_UI_HTML, ADPORT_UI_URI, ADPORT_UI_RESOURCE_DOMAINS } from '../src/ui.js';
 
 let home: string;
 let client: Client;
@@ -32,7 +32,7 @@ it('allows an empty real runtime without substituting demos in production', asyn
   await productionClient.connect(clientTransport);
   try {
     expect((await productionClient.listTools()).tools.every(tool => !/^(demo|mock|synthetic)_/.test(tool.name))).toBe(true);
-    expect((await productionClient.callTool({ name: 'demo_set_budget', arguments: {} })).isError).toBe(true);
+    await expect(productionClient.callTool({ name: 'demo_set_budget', arguments: {} })).rejects.toThrow(/not found/);
   } finally { await productionClient.close(); await server.close(); }
 });
 
@@ -58,6 +58,28 @@ afterEach(async () => {
 });
 
 describe('adport MCP server', () => {
+  it('keeps sensitive read arguments out of refresh/continuation metadata while preserving ordinary paging', async () => {
+    const runtime = await createContext({ providerModules: [] });runtime.registry.register(defineTool({ name: 'private_records', namespace: 'core', description: 'Synthetic private read', annotations: { readOnly: true }, presentation: 'records', pagination: { cursorInput: 'cursor' }, sensitiveInputs: ['source'], input: z.object({ source: z.string().optional(), cursor: z.string().optional() }), output: z.object({ records: z.array(z.object({ id: z.string() })), next_cursor: z.string() }), handler: async () => ({ records: [{ id: 'safe' }], next_cursor: 'next' }) }));
+    const server = createMcpServer({ runtime }), host = new Client({ name: 'private-read-metadata-test', version: '1' }), [ct, st] = InMemoryTransport.createLinkedPair();await server.connect(st);await host.connect(ct);
+    try {
+      const privateResult = await host.callTool({ name: 'private_records', arguments: { source: 'https://source.example.test/private?secret=PRIVATE' } });expect(privateResult.isError).not.toBe(true);expect(JSON.stringify(privateResult)).not.toContain('PRIVATE');expect(privateResult.structuredContent).toMatchObject({ records: [{ id: 'safe' }] });expect(privateResult.structuredContent).not.toHaveProperty('_adport.refresh');expect(privateResult.structuredContent).not.toHaveProperty('_adport.next');
+      const ordinary = await host.callTool({ name: 'private_records', arguments: {} });expect(ordinary.structuredContent).toMatchObject({ _adport: { refresh: { arguments: {} }, next: { arguments: { cursor: 'next' } } } });
+    } finally { await host.close();await server.close(); }
+  });
+  it('exports complete native file parameter schemas on read and guarded write tools', async () => {
+    const tools = (await client.listTools()).tools;
+    for (const name of ['media_inspect_file', 'media_import_file']) {
+      const tool = tools.find(tool => tool.name === name)!;
+      expect(tool._meta?.['openai/fileParams']).toEqual(['file']);
+      const schema = (tool.inputSchema.properties as Record<string, any>).file;
+      expect(Object.keys(schema.properties).sort()).toEqual(['download_url', 'file_id', 'file_name', 'mime_type']);
+      expect(schema.required.sort()).toEqual(['download_url', 'file_id']);
+      expect(schema.additionalProperties).toBe(false);
+    }
+    const imported = tools.find(tool => tool.name === 'media_import_file')!;
+    expect(imported.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
+    expect(imported._meta).toHaveProperty('ui');
+  });
   it('includes the display title in annotations for directory clients', async () => {
     const { tools } = await client.listTools();
     expect(tools.length).toBeGreaterThan(0);
@@ -78,10 +100,11 @@ describe('adport MCP server', () => {
     expect(second.structuredContent).toHaveProperty('applied', true);
     expect(second.structuredContent).not.toHaveProperty('_adport.approval');
   });
-  it('uses the host sandbox domain consistently without changing the OpenAI domain', async () => {
+  it('uses the host sandbox domain without a conflicting OpenAI origin alias', async () => {
     const runtime = await createContext({ providerModules: [] });
     const uiDomain = '0123456789abcdef0123456789abcdef.claudemcpcontent.com';
-    const server = createMcpServer({ runtime, uiDomain });
+    const uiConnectDomains = ['https://private-storage.example'];
+    const server = createMcpServer({ runtime, uiDomain, uiConnectDomains });
     const hostClient = new Client({ name: 'host-domain-test', version: '1' });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
@@ -91,11 +114,57 @@ describe('adport MCP server', () => {
       const content = (await hostClient.readResource({ uri: ADPORT_UI_URI })).contents[0];
       for (const resource of [listing, content]) {
         expect(resource?._meta).toMatchObject({
-          ui: { domain: uiDomain, csp: { connectDomains: [], resourceDomains: ADPORT_UI_RESOURCE_DOMAINS } },
-          'openai/widgetDomain': ADPORT_UI_DOMAIN,
+          ui: { domain: uiDomain, csp: { connectDomains: uiConnectDomains, resourceDomains: ADPORT_UI_RESOURCE_DOMAINS } },
         });
+        expect(resource?._meta).not.toHaveProperty('openai/widgetDomain');
       }
     } finally { await hostClient.close(); await server.close(); }
+  });
+
+  it.each(['registry', 'static'] as const)('allows the %s server to omit an optional sandbox domain while retaining CSP and resource aliases', async kind => {
+    const runtime = await createContext({ providerModules: [] });
+    const options = { uiDomain: null, uiConnectDomains: ['https://private-storage.example'] };
+    const server = kind === 'registry' ? createMcpServer({ runtime, ...options }) : createMcpUiServer(options);
+    const host = new Client({ name: 'default-sandbox-test', version: '1' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport); await host.connect(clientTransport);
+    try {
+      const listing = (await host.listResources()).resources.find(resource => resource.uri === ADPORT_UI_URI);
+      for (const resource of [listing, (await host.readResource({ uri: ADPORT_UI_URI })).contents[0], (await host.readResource({ uri: 'ui://adport/insight-card-v10.html' })).contents[0]]) {
+        expect(resource?._meta).toMatchObject({ ui: { prefersBorder: false, csp: { connectDomains: options.uiConnectDomains, resourceDomains: ADPORT_UI_RESOURCE_DOMAINS } } });
+        expect(resource?._meta).not.toHaveProperty('ui.domain');
+        expect(resource?._meta).not.toHaveProperty('openai/widgetDomain');
+      }
+    } finally { await host.close(); await server.close(); }
+  });
+
+  it('returns read-only creative refresh arguments and keeps upload checksums outside human copy', async () => {
+    const runtime = await createContext({ providerModules: [], media: { read: async () => { throw new Error('No upload'); }, list: async () => ({ assets: [{ id: '11111111-1111-4111-8111-111111111111', name: 'QA.png', content_type: 'image/png', byte_length: 17095, sha256: 'a'.repeat(64), status: 'READY', width: 640, height: 640 }], truncated: true, next_cursor: '22222222-2222-4222-8222-222222222222' }) } });
+    const server = createMcpServer({ runtime, scopes: ['tools:read'] }), host = new Client({ name: 'media-read-host', version: '1' }), [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair(); await server.connect(serverTransport); await host.connect(clientTransport);
+    try {
+      const result = await host.callTool({ name: 'media_list', arguments: { limit: 10 } }); expect(result.isError).not.toBe(true); expect(result.structuredContent).toMatchObject({ assets: [{ sha256: 'a'.repeat(64), status: 'READY' }], creatives: [{ status: 'READY', descriptions: ['17 KB · 640 × 640'] }], _adport: { capabilities: { can_write: false }, refresh: { arguments: { limit: 10 } }, next: { arguments: { limit: 10, cursor: '22222222-2222-4222-8222-222222222222' } } } });
+      expect(result.structuredContent).not.toHaveProperty('_adport.approval');
+    } finally { await host.close(); await server.close(); }
+  });
+
+  it('renders a single media_get source through the real SDK result without adding upload or write controls', async () => {
+    const asset = { id: '11111111-1111-4111-8111-111111111111', name: 'QA single.png', content_type: 'image/png', byte_length: 172, sha256: 'a'.repeat(64), status: 'READY' as const, width: 1200, height: 628, preview_url: 'https://storage.example/qa.png', metadata_version: 1 };
+    const media: ManagedMediaLibrary = { scopeId: 'project-a', get: async () => asset, list: async () => { throw new Error('No list expected'); }, read: async () => { throw new Error('No byte read expected'); }, previewWrite: async () => { throw new Error('No write expected'); }, applyWrite: async () => { throw new Error('No write expected'); } };
+    const runtime = await createContext({ providerModules: [], media });
+    const server = createMcpServer({ runtime, scopes: ['tools:read'] }), host = new Client({ name: 'single-media-read-host', version: '1' }), [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport); await host.connect(clientTransport);
+    const dom = new JSDOM(ADPORT_UI_HTML, { runScripts: 'dangerously', url: 'https://widget.example' });
+    try {
+      const result = await host.callTool({ name: 'media_get', arguments: { media_id: asset.id } });
+      expect(result.isError).not.toBe(true);
+      expect(result.structuredContent).toMatchObject({ asset, truncated: false, _adport: { tool: 'media_get', view: 'creatives', capabilities: { can_write: false } } });
+      dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window.parent, data: { jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: result } }));
+      expect(dom.window.document.querySelector('img')?.getAttribute('src')).toBe(asset.preview_url);
+      expect(dom.window.document.querySelector('.creative-name')?.textContent).toBe(asset.name);
+      expect(dom.window.document.querySelector('main')?.textContent).toContain('172 bytes · 1200 × 628');
+      expect(dom.window.document.querySelector('[data-upload-files], [data-library-more], .creative-action')).toBeNull();
+      expect(dom.window.document.querySelector('main')?.textContent).not.toContain(asset.sha256);
+    } finally { dom.window.close(); await host.close(); await server.close(); }
   });
 
   it('advertises meaningful shared output schemas for every common submission tool', async () => {
@@ -289,7 +358,8 @@ describe('adport MCP server', () => {
     expect(content.text).toContain('ui/notifications/tool-result');
     expect(content.text).toContain('<b>adport<span class="wordmark-dot" aria-hidden="true">.</span></b>');
     expect(content.text).not.toContain('evidence before action');
-    expect(content.text).not.toMatch(/https?:\/\//);
+    // The sole external URL is a validated dashboard navigation link, never a network dependency.
+    expect(content.text?.replaceAll('https://app.adport.dev/dashboard/analytics', '')).not.toMatch(/https?:\/\//);
     const script = content.text?.match(/<script>([\s\S]+)<\/script>/)?.[1];
     expect(script).toBeTruthy();
     expect(() => new Function(script!)).not.toThrow();
@@ -301,6 +371,8 @@ describe('adport MCP server', () => {
       },
       'openai/widgetDomain': ADPORT_UI_DOMAIN,
     });
+    const previous = await client.readResource({ uri: 'ui://adport/insight-card-v2.html' });
+    expect(previous.contents[0]).toMatchObject({ uri: 'ui://adport/insight-card-v2.html', mimeType: content.mimeType, text: content.text });
   });
 
   it('answers accounts_list', async () => {

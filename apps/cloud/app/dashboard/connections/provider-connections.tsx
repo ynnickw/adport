@@ -20,6 +20,10 @@ export interface ConnectionView {
   lastVerifiedAt: string | null;
   accountSelectionId?: string | null;
   accountSelectionUnavailable?: boolean;
+  dataManagerEnabled?: boolean;
+  pinManagementEnabled?: boolean;
+  secretPinsEnabled?: boolean;
+  catalogManagementEnabled?: boolean;
 }
 
 export interface OAuthProviderView {
@@ -80,7 +84,7 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
       {visibleProviders.map((provider, index) => {
         const connection = find(provider.id);
         const message = notice[provider.id];
-        const startHref = `/api/oauth/${provider.id}/start?organization_id=${organizationId}${returnTo ? `&return_to=${encodeURIComponent(returnTo)}` : ''}`;
+        const startHref = `/api/oauth/${provider.id}/start?organization_id=${organizationId}${returnTo ? `&return_to=${encodeURIComponent(returnTo)}` : ''}${provider.id === 'google' && connection?.dataManagerEnabled ? '&data_manager=1' : ''}${provider.id === 'pinterest' ? `${connection?.secretPinsEnabled ? '&secret_pins=1' : connection?.pinManagementEnabled ? '&pin_management=1' : ''}${connection?.catalogManagementEnabled ? '&catalog_management=1' : ''}` : ''}`;
         return (
           <Fragment key={provider.id}>
           {visibleProviders.some(item => !usesAdAccountSlot(item.id)) && visibleProviders.some(item => usesAdAccountSlot(item.id))
@@ -108,6 +112,10 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
                   {!connection && provider.available ? <OAuthPopupLink className="button" label={`Connect ${providerLabel(provider.id)}`} href={startHref}>Connect</OAuthPopupLink> : null}
                   {connection?.accountSelectionId && connection.status === 'connected' && !connection.accountSelectionUnavailable ? <a className="button secondary" href={'/account-selection?selection_id=' + connection.accountSelectionId}>Choose accounts</a>
                     : connection && provider.available ? <OAuthPopupLink className="button secondary" label={`${connection.status !== 'connected' ? 'Reconnect' : connection.accountSelectionUnavailable ? 'Restart selection for' : 'Change accounts for'} ${providerLabel(provider.id)}`} href={startHref}>{connection.status !== 'connected' ? 'Reconnect' : connection.accountSelectionUnavailable ? 'Restart selection' : 'Change accounts'}</OAuthPopupLink> : null}
+                  {provider.id === 'google' && provider.available && connection?.status === 'connected' && !connection.accountSelectionId && !connection.dataManagerEnabled && variant === 'settings' ? <OAuthPopupLink className="button secondary" label="Authorize Google conversion imports with additional Data Manager permission" href={`${startHref}&data_manager=1`}>Enable conversion imports</OAuthPopupLink> : null}
+                  {provider.id === 'pinterest' && provider.available && connection && !connection.accountSelectionId && !connection.pinManagementEnabled && !connection.secretPinsEnabled && variant === 'settings' ? <OAuthPopupLink className="button secondary" label="Authorize Pinterest public board, Pin and media management with additional permissions" href={`${startHref}&pin_management=1`}>Enable Pin management</OAuthPopupLink> : null}
+                  {provider.id === 'pinterest' && provider.available && connection?.pinManagementEnabled && !connection.accountSelectionId && !connection.secretPinsEnabled && variant === 'settings' ? <OAuthPopupLink className="button secondary" label="Authorize Pinterest secret board and Pin management with four additional private-content permissions" href={`${startHref}&secret_pins=1`}>Enable secret Pin management</OAuthPopupLink> : null}
+                  {provider.id === 'pinterest' && provider.available && connection?.status === 'connected' && !connection.accountSelectionId && !connection.catalogManagementEnabled && variant === 'settings' ? <OAuthPopupLink className="button secondary" label="Authorize Pinterest catalogs and feeds with two additional catalog permissions" href={`${startHref}&catalog_management=1`}>Enable catalogs</OAuthPopupLink> : null}
                   {connection && variant !== 'onboarding' ? <Button className="button secondary small" aria-label={`Disconnect ${providerLabel(provider.id)}`} type="button" disabled={busy === provider.id} onClick={() => void disconnect(provider.id, shortLabel(provider.id))}>{busy === provider.id ? 'Disconnecting…' : 'Disconnect'}</Button> : null}
                 </>
               ) : null
@@ -135,5 +143,5 @@ function accountSummary(label: string | null): string {
 }
 
 function shortLabel(provider: string): string {
-  return { gtm: 'Google Tag Manager', google: 'Google Ads', meta: 'Meta', tiktok: 'TikTok', microsoft: 'Microsoft', reddit: 'Reddit', apple: 'Apple Ads', snapchat: 'Snapchat', spotify: 'Spotify', pinterest: 'Pinterest', linkedin: 'LinkedIn', x: 'X Ads' }[provider] ?? provider;
+  return { ga4: 'Google Analytics 4', gsc: 'Google Search Console', gtm: 'Google Tag Manager', google: 'Google Ads', meta: 'Meta', tiktok: 'TikTok', microsoft: 'Microsoft', reddit: 'Reddit', apple: 'Apple Ads', snapchat: 'Snapchat', spotify: 'Spotify', pinterest: 'Pinterest', linkedin: 'LinkedIn', x: 'X Ads' }[provider] ?? provider;
 }

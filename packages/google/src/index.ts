@@ -3,7 +3,7 @@ import { GoogleAdsRestClient, type GoogleCredentials } from './client.js';
 import { GoogleAdsProvider } from './provider.js';
 import { googleTools } from './tools.js';
 
-export { GoogleAdsRestClient, DEFAULT_API_VERSION, normalizeCustomerId, formatGoogleAdsError, type GoogleCredentials } from './client.js';
+export { GoogleAdsRestClient, DEFAULT_API_VERSION, GOOGLE_DATA_MANAGER_SCOPE, normalizeCustomerId, formatGoogleAdsError, type GoogleCredentials } from './client.js';
 export { GoogleAdsProvider } from './provider.js';
 export { googleTools } from './tools.js';
 

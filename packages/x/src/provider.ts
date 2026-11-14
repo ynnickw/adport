@@ -1,9 +1,28 @@
 import { z } from 'zod';
-import { AdportError, resolveDateRange, type AdProvider, type MetricName, type NormalizedQuery, type Report, type ReportRow, type StandardActions, type WriteGuard, type WriteOperation, type WritePreview, type WriteResult } from '@adport/core';
+import { AdportError, resolveDateRange, type AdProvider, type MediaResolver, type MetricName, type NormalizedQuery, type Report, type ReportRow, type StandardActions, type WriteGuard, type WriteOperation, type WritePreview, type WriteResult } from '@adport/core';
 import { XAdsClient } from './client.js';
 import { XAdsEntities } from './entities.js';
 import { XAdsAnalytics, X_PLACEMENTS, xAccountMidnight } from './analytics.js';
 import { planXWrite } from './writes.js';
+import { XManagementService } from './management.js';
+import { XTargetingService } from './targeting.js';
+import { XCreativeService } from './creatives.js';
+import { XMediaService } from './media.js';
+import { XCardService } from './cards.js';
+import { cardWrites } from './card-schemas.js';
+import { XAudienceService } from './audiences.js';
+import { XMeasurementService } from './measurement.js';
+import { XPostService } from './posts.js';
+import { postWrites } from './post-schemas.js';
+import { XScheduledService } from './scheduled.js';
+import { scheduledWrites } from './scheduled-schemas.js';
+import { XDirectMediaService } from './direct-media.js';
+import { directMediaWrites } from './direct-media-schemas.js';
+import { XPrerollCtaService } from './preroll-cta.js';
+import { prerollCtaWrites } from './preroll-cta-schemas.js';
+import { XAccountMediaService } from './account-media.js';
+import { XPromotedAccountService } from './promoted-accounts.js';
+import { promotedAccountWrites } from './promoted-account-schemas.js';
 
 type BaseMetric = 'spend' | 'impressions' | 'clicks';
 type Metrics = Partial<Record<BaseMetric, number>>;
@@ -14,15 +33,29 @@ const DAY = 86_400_000;
 export class XAdsProvider extends XAdsEntities implements AdProvider {
   readonly id = 'x';
   private readonly analytics: XAdsAnalytics;
-  constructor(client: XAdsClient, analytics?: XAdsAnalytics) { super(client); this.analytics = analytics ?? new XAdsAnalytics(client); }
+  private readonly management: XManagementService;
+  readonly targeting: XTargetingService;
+  readonly creatives: XCreativeService;
+  readonly mediaUploads: XMediaService;
+  readonly cards: XCardService;
+  readonly audiences: XAudienceService;
+  readonly measurement: XMeasurementService;
+  readonly posts: XPostService;
+  readonly scheduled: XScheduledService;
+  readonly directMedia: XDirectMediaService;
+  readonly prerollCtas: XPrerollCtaService;
+  readonly accountMedia: XAccountMediaService;
+  readonly promotedAccounts: XPromotedAccountService;
+  constructor(client: XAdsClient, analytics?: XAdsAnalytics, media?: MediaResolver) { super(client); this.analytics = analytics ?? new XAdsAnalytics(client); this.measurement = new XMeasurementService(this, this.analytics); this.management = new XManagementService(this, this.measurement); this.targeting = new XTargetingService(this); this.creatives = new XCreativeService(this); this.mediaUploads = new XMediaService(this, media); this.cards = new XCardService(this, this.creatives); this.audiences = new XAudienceService(this); this.posts = new XPostService(this, this.creatives); this.scheduled = new XScheduledService(this, this.creatives, this.posts); this.directMedia = new XDirectMediaService(this, this.posts); this.prerollCtas = new XPrerollCtaService(this, this.posts); this.accountMedia = new XAccountMediaService(this, this.directMedia); this.promotedAccounts = new XPromotedAccountService(this, this.creatives, this.posts); }
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions { return { pauseCampaign: (accountId, campaignId) => ({ tool: 'x_set_campaign_status', input: { account_id: accountId, campaign_id: campaignId, status: 'PAUSED' } }) }; }
   async previewWrite(op: WriteOperation, guard: WriteGuard): Promise<WritePreview> {
-    const { execute: _execute, ...preview } = await planXWrite(this, op, guard); return { ...preview, serverValidated: false };
+    const { execute: _execute, ...preview } = await this.writePlan(op, guard); return { ...preview, serverValidated: false };
   }
   async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> {
-    return { applied: true, resourceIds: await (await planXWrite(this, op, guard)).execute() };
+    const result = await (await this.writePlan(op, guard)).execute(); return Array.isArray(result) ? { applied: true, resourceIds: result } : result;
   }
+  private writePlan(op: WriteOperation, guard: WriteGuard) { if (promotedAccountWrites.has(op.tool)) return this.promotedAccounts.plan(op, guard); if (op.tool === 'x_delete_account_media') return this.accountMedia.plan(op); if (prerollCtaWrites.has(op.tool)) return this.prerollCtas.plan(op, guard); if (directMediaWrites.has(op.tool)) return this.directMedia.plan(op, guard); if (scheduledWrites.has(op.tool)) return this.scheduled.plan(op, guard); if (postWrites.has(op.tool)) return this.posts.plan(op, guard); if (/^x_(?:create|update|delete)_tracking_tag$/.test(op.tool)) return this.measurement.plan(op); if (/^x_(?:create_custom_audience|update_custom_audience|update_custom_audience_users|delete_custom_audience)$/.test(op.tool)) return this.audiences.plan(op); if (cardWrites.has(op.tool)) return this.cards.plan(op); if (['x_upload_media', 'x_register_uploaded_media'].includes(op.tool)) return this.mediaUploads.plan(op); if (/^x_(?:create_draft_tweet|update_draft_tweet|delete_draft_tweet|update_media_library|delete_media_library_item)$/.test(op.tool)) return this.creatives.plan(op, guard); if (['x_add_targeting_criterion', 'x_remove_targeting_criterion', 'x_update_targeting'].includes(op.tool)) return this.targeting.plan(op, guard); return /^x_(?:create_line_item|update_line_item|set_line_item_(?:status|budget|bidding)|delete_line_item)$/.test(op.tool) ? this.management.plan(op, guard) : planXWrite(this, op, guard); }
   async report(query: NormalizedQuery): Promise<Report> {
     const range = resolveDateRange(query.dateRange);
     z.iso.date().parse(range.start); z.iso.date().parse(range.end);
@@ -92,7 +125,7 @@ export class XAdsProvider extends XAdsEntities implements AdProvider {
     if (level === 'account' || level === 'campaign') return (await this.listCampaigns(accountId)).filter(c => c.entity_status !== 'DRAFT').map(c => ({ id: c.id, name: c.name, currency: c.currency, status: c.entity_status, type: 'CAMPAIGN' }));
     const allLines = await this.listLineItems(accountId);
     const lines = allLines.filter(l => l.entity_status !== 'DRAFT');
-    if (level === 'ad_group') return lines.map(l => ({ id: l.id, name: l.name, currency: l.currency, status: l.entity_status, type: 'LINE_ITEM' }));
+    if (level === 'ad_group') return lines.map(l => ({ id: l.id, name: l.name ?? l.id, currency: l.currency, status: l.entity_status, type: 'LINE_ITEM' }));
     const lookup = new Map(allLines.map(l => [l.id, l]));
     const tweets = await this.listPromotedTweets(accountId), media = await this.listMediaCreatives(accountId);
     const promoted = lines.some(l => l.product_type === 'PROMOTED_ACCOUNT') ? await this.listPromotedAccounts(accountId) : [];

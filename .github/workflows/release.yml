@@ -51,7 +51,7 @@ jobs:
       - run: pnpm check:release "$RELEASE_TAG"
       - run: pnpm build
       - run: pnpm typecheck
-      - run: pnpm test
+      - run: pnpm exec turbo run test --concurrency=1 -- --maxWorkers=4
       - run: pnpm check:packages
 
   publish:

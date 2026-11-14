@@ -1,6 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["fra1"],
-  "crons": [{ "path": "/api/billing/reconcile", "schedule": "17 * * * *" }],
+  "crons": [
+    { "path": "/api/billing/reconcile", "schedule": "17 * * * *" },
+    { "path": "/api/media/cleanup", "schedule": "43 * * * *" }
+  ],
   "buildCommand": "cd ../.. && pnpm exec turbo run build --filter=@adport/cloud... --env-mode=loose"
 }

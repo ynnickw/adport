@@ -86,9 +86,25 @@ seat, enabled accounts and policy in the selected project. Removed or archived
 projects immediately disappear from discovery and cannot be called. Pending
 operations, credentials and audit events stay isolated in that project.
 
-The hosted MCP catalog includes all supported platform tools. Connecting a
-platform later and enabling its accounts does not require a new assistant
-authorization. New calls load the project's current connections. Existing
+Each assistant connection has a tool profile and platform selection under
+**AI assistants → Tool access**. New connections default to **Standard** with
+the authorized projects' connected platforms preselected. **Reporting** includes
+read-only tools; **Full** adds advanced operations such as experiments, conversion
+uploads and audience management. Existing connections retain Full / All platforms
+until their owner changes the selection. Generic raw API dispatchers are excluded
+from hosted MCP in every profile.
+
+If a needed tool is absent, call `capabilities_list` with a provider and keywords
+such as `lookalike` or `offline conversions`. This always-visible read-only tool
+searches the shared definitions and explains profile, platform, connection and
+write-permission requirements. It returns a project- and connection-specific
+Manage tool access link. It does not enable tools or invoke hidden operations.
+After saving settings, refresh tools in the assistant or reconnect if its catalog
+stays unchanged. The dashboard explains the profiles with concrete examples.
+
+Connecting a platform and enabling its accounts does not require new assistant
+authorization if that platform is already selected. Otherwise enable it under
+Tool access too. New calls load the project's current connections. Existing
 single-project connections need one new consent to opt into All projects.
 Provider authorization callbacks retain their initiating project even if the
 dashboard selection changes in another tab.

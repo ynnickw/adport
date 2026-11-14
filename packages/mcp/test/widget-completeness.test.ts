@@ -11,6 +11,37 @@ function mount(view: AdportView, data: unknown, tool = 'pinterest_keywords', des
 }
 
 describe('compact record, recommendation, receipt and trend views', () => {
+  it('keeps an unnamed native CAPI connection as one record instead of treating its empty activity as an empty inventory', () => {
+    const { dom, document } = mount('records', { capi_integration: { capi_connection_id: 'native-capi-id', events_received: [] } }, 'spotify_get_capi_integration', { provider: 'spotify' });
+    try { expect(document.querySelectorAll('.record-row')).toHaveLength(1);expect(document.querySelector('.record-name strong')?.textContent).toBe('native-capi-id'); }
+    finally { dom.window.close(); }
+  });
+  it.each([['spotify_get_dataset','dataset'], ['spotify_get_capi_integration','capi_integration'], ['spotify_get_mobile_app','mobile_app']])('shows a single named Spotify measurement record: %s', (tool, key) => {
+    const { dom, document, callTool } = mount('records', { [key]: { name: 'Private QA measurement', id: 'safe-id', configuration_hash: 'private-hash' }, resource_receipt: 'signed-recovery-proof' }, tool, { provider: 'spotify' });
+    try { expect(document.querySelectorAll('.record-row')).toHaveLength(1);expect(document.querySelector('.record-name strong')?.textContent).toBe('Private QA measurement');expect(document.querySelector('.record-list')?.textContent).not.toMatch(/private-hash|signed-recovery-proof|Record 1/);expect(document.querySelector('.operation-heading .logo.spotify svg')).not.toBeNull();expect(callTool).not.toHaveBeenCalled(); }
+    finally { dom.window.close(); }
+  });
+  it.each(['tiktok_get_pixel', 'tiktok_pixels'])('shows one named Pixel with its native flags kept together: %s', tool => {
+    const pixel = { pixel_id: '9007199254740993123', pixel_name: 'Synthetic Pixel', pixel_code: 'QA_PIXEL_CODE', events: ['ViewContent'], advanced_matching_fields: { email: false, phone_number: false }, configuration_hash: 'private-configuration' };
+    const { dom, document, callTool } = mount('records', tool === 'tiktok_pixels' ? { pixels: [pixel], complete: true } : { pixel }, tool, { provider: 'tiktok' });
+    try {
+      expect(document.querySelectorAll('.record-row')).toHaveLength(1);
+      expect(document.querySelector('.record-name strong')?.textContent).toBe('Synthetic Pixel');
+      expect(document.querySelector('.record-list')?.textContent).not.toMatch(/private-configuration|QA_PIXEL_CODE|9007199254740993123|Record 1/);
+      expect(document.querySelector('details')?.textContent).toContain('9007199254740993123');expect(callTool).not.toHaveBeenCalled();
+    } finally { dom.window.close(); }
+  });
+  it.each(['tiktok_get_saved_audience', 'tiktok_saved_audiences'])('shows native saved-audience names and keeps targeting arrays inside one record: %s', tool => {
+    const audience = { saved_audience_id: '9007199254740993123', saved_audience_name: 'Synthetic targeting', location_ids: ['6252001'], languages: ['en'], snapshot_hash: 'private-snapshot' };
+    const { dom, document, callTool } = mount('records', tool === 'tiktok_saved_audiences' ? { saved_audiences: [audience], complete: true } : { audience }, tool, { provider: 'tiktok' });
+    try {
+      expect(document.querySelectorAll('.record-row')).toHaveLength(1);
+      expect(document.querySelector('.record-name strong')?.textContent).toBe('Synthetic targeting');
+      expect(document.querySelector('.record-list')?.textContent).not.toMatch(/private-snapshot|9007199254740993123|Record 1/);
+      expect(document.querySelector('details')?.textContent).toContain('9007199254740993123');
+      expect(document.querySelector('.operation-heading .logo.tiktok svg')).not.toBeNull();expect(callTool).not.toHaveBeenCalled();
+    } finally { dom.window.close(); }
+  });
   it.each(Object.keys(PROVIDER_LOGOS))('retains the real %s provider mark on generic tool results', provider => {
     const { dom, document } = mount('data', { items: [{ name: 'Example record', status: 'ACTIVE' }] }, provider+'_records', { provider });
     try { expect(document.querySelector('.operation-heading .logo.'+provider+' svg')).not.toBeNull(); }

@@ -36,6 +36,23 @@ function verifySignature(call: Call) {
   expect(signature).toBe(createHmac('sha1', `${percent(credentials.consumerSecret)}&${percent(credentials.accessTokenSecret)}`).update(base).digest('base64'));
 }
 
+describe('X native line-item configuration', () => {
+  // Current provider-owned v12 reference (2026-11-03) returns nullable names,
+  // micro budgets/bids and additional configuration fields on the same entity.
+  const line = { id: 'l1', name: null, campaign_id: 'c1', currency: 'EUR', entity_status: 'PAUSED', deleted: false, placements: ['ALL_ON_TWITTER'], product_type: 'PROMOTED_TWEETS', objective: 'ENGAGEMENTS', bid_strategy: 'MAX', bid_amount_local_micro: 3210001, daily_budget_amount_local_micro: 1000001, total_budget_amount_local_micro: null, start_time: '2026-11-10T00:00:00Z', end_time: null, goal: 'ENGAGEMENT', standard_delivery: true };
+  it('preserves nullable names and native bid/budget/goal settings in configuration reads', async () => {
+    const { entities } = fixture(() => ({ data: [line], next_cursor: null })); expect(await entities.listLineItems('a1')).toEqual([line]);
+  });
+  it('verifies an exact line item and its account-scoped campaign with independently signed requests', async () => {
+    const { entities, calls } = fixture(call => ({ data: call.url.pathname.endsWith('/line_items/l1') ? line : campaign }));
+    expect(await entities.getLineItem('a1', 'l1')).toEqual(line); expect(calls.map(call => call.url.pathname)).toEqual(['/12/accounts/a1/line_items/l1', '/12/accounts/a1/campaigns/c1']); for (const call of calls) verifySignature(call);
+  });
+  it('rejects a mismatched ID before parent lookup and a currency mismatch before returning data', async () => {
+    const wrong = fixture(() => ({ data: { ...line, id: 'other' } })); await expect(wrong.entities.getLineItem('a1', 'l1')).rejects.toThrow('ID mismatch'); expect(wrong.calls).toHaveLength(1);
+    const currency = fixture(call => ({ data: call.url.pathname.endsWith('/line_items/l1') ? { ...line, currency: 'USD' } : campaign })); await expect(currency.entities.getLineItem('a1', 'l1')).rejects.toThrow('currency differs');
+  });
+});
+
 describe('X OAuth 1.0a and safe transport', () => {
   it('matches the published OAuth 1.0 photo-request signature vector', () => {
     const creds = { consumerKey: 'dpf43f3p2l4k3l03', consumerSecret: 'kd94hf93k423kf44', accessToken: 'nnch734d00sl2jdk', accessTokenSecret: 'pfkkdhi9sl3r4s00' };
@@ -44,7 +61,7 @@ describe('X OAuth 1.0a and safe transport', () => {
     const signed = signer.authorize({ method: 'GET', url: 'http://photos.example.net/photos?file=vacation.jpg&size=original' }, { key: creds.accessToken, secret: creds.accessTokenSecret });
     expect(signed.oauth_signature).toBe('tR3+Ty81lMeYAr/Fid0kMTYa/WM=');
   });
-  it.each(['GET', 'POST', 'PUT'] as const)('signs the exact %s query URL once with RFC3986 punctuation and Unicode', async method => {
+  it.each(['GET', 'POST', 'PUT', 'DELETE'] as const)('signs the exact %s query URL once with RFC3986 punctuation and Unicode', async method => {
     const { client, calls } = fixture(() => ({ data: campaign }));
     await client.request(method, 'accounts/a1/campaigns', z.object({ data: campaignSchema }), { name: "A + B & (C)! 'Ü'", daily_budget_amount_local_micro: 1_000_001, entity_status: 'PAUSED' });
     const call = calls[0]!;

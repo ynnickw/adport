@@ -3,6 +3,7 @@ import type { TenantPrincipal } from '@/lib/cloud/types';
 import { HttpError } from '@/lib/http';
 
 const mocks = vi.hoisted(() => ({ principal: vi.fn(), membership: vi.fn(), call: vi.fn(), get: vi.fn() }));
+vi.mock('@/lib/cloud/tool-catalog', () => ({ principalToolSelection: async () => ({ profile: 'full', providers: null }) }));
 vi.mock('@/lib/db', () => ({ db: () => mocks.membership }));
 vi.mock('@/lib/cloud/auth', () => ({
   apiPrincipal: mocks.principal,

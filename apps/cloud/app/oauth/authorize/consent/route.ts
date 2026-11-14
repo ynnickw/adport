@@ -3,6 +3,8 @@ import { sessionPrincipal } from '@/lib/cloud/auth';
 import { oauthError, validateAuthorizationRequest } from '@/lib/mcp-oauth';
 import { z } from 'zod';
 import { listProjectAccess } from '@/lib/cloud/workspaces';
+import { saveToolSelection } from '@/lib/cloud/tool-catalog';
+import { toolSelectionFromForm } from '@/lib/mcp-tool-selection';
 
 export async function POST(request: Request) {
   try {
@@ -19,6 +21,7 @@ export async function POST(request: Request) {
       target.searchParams.set('error', 'access_denied');
       target.searchParams.set('error_description', 'The resource owner denied the request.');
     } else {
+      const selection = toolSelectionFromForm(form);
       const projectId = form.get('project_id');
       if (typeof projectId === 'string' && projectId.startsWith('all:')) {
         const organizationId = z.string().uuid().parse(projectId.slice(4));
@@ -27,10 +30,14 @@ export async function POST(request: Request) {
         const project = projects.find(project => project.organizationId === organizationId);
         if (!project) throw new Error('You do not have access to this organization.');
         const principal = await sessionPrincipal(project.id);
-        target.searchParams.set('code', await createMcpAuthorizationCode(principal, authorization, organizationId));
+        const code = await createMcpAuthorizationCode(principal, authorization, organizationId);
+        await saveToolSelection({ ...principal, clientId: authorization.clientId, resource: authorization.resource, oauthOrganizationGroupId: organizationId }, selection);
+        target.searchParams.set('code', code);
       } else {
         const principal = await sessionPrincipal(projectId ? z.string().uuid().parse(projectId) : undefined);
-        target.searchParams.set('code', await createMcpAuthorizationCode(principal, authorization));
+        const code = await createMcpAuthorizationCode(principal, authorization);
+        await saveToolSelection({ ...principal, clientId: authorization.clientId, resource: authorization.resource }, selection);
+        target.searchParams.set('code', code);
       }
     }
     if (authorization.state) target.searchParams.set('state', authorization.state);

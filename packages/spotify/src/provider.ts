@@ -1,17 +1,22 @@
 import { z } from 'zod';
 import {
-  AdportError, resolveDateRange, type Account, type AdProvider, type MetricName,
+  AdportError, LocalMediaResolver, resolveDateRange, type Account, type AdProvider, type MediaResolver, type MetricName,
   type NormalizedQuery, type Report, type ReportRow, type StandardActions,
-  type WriteGuard, type WriteOperation, type WritePreview, type WriteResult,
+  type WriteGuard, type WriteOperation, type WritePreview, type WriteResult, type ResourceSecretStore,
 } from '@adport/core';
 import { SpotifyAdsClient } from './client.js';
+import { SpotifyCreativeService } from './creatives.js';
+import { SpotifyManagementService } from './management.js';
+import { managementWriteNames } from './management-tools.js';
+import { SpotifyMeasurementService } from './measurement.js';
+import { measurementWriteNames } from './measurement-tools.js';
 import {
   accountSchema, adSetSchema, businessSchema, campaignSchema, createDraftSchema,
   draftSchema, pagingSchema, reportSchema, setBudgetSchema, setDeliverySchema,
   setStatusSchema, spotifyId,
 } from './schemas.js';
 
-interface Plan extends Omit<WritePreview, 'serverValidated'> { execute: () => Promise<string[]> }
+interface Plan extends Omit<WritePreview, 'serverValidated'> { execute: () => Promise<string[] | WriteResult> }
 const LEVEL = { account: 'AD_ACCOUNT', campaign: 'CAMPAIGN', ad_group: 'AD_SET', ad: 'AD' } as const;
 const FIELDS = { spend: 'SPEND', impressions: 'IMPRESSIONS', clicks: 'CLICKS', conversions: 'PURCHASES', conversion_value: 'REVENUE' } as const;
 const DERIVED = {
@@ -21,7 +26,10 @@ const DERIVED = {
 
 export class SpotifyAdsProvider implements AdProvider {
   readonly id = 'spotify';
-  constructor(private readonly client: SpotifyAdsClient) {}
+  readonly creatives: SpotifyCreativeService;
+  readonly management: SpotifyManagementService;
+  readonly measurement: SpotifyMeasurementService;
+  constructor(private readonly client: SpotifyAdsClient, media: MediaResolver = new LocalMediaResolver(), options: { resourceSecrets?: ResourceSecretStore } = {}) { this.creatives = new SpotifyCreativeService(client, media); this.management = new SpotifyManagementService(client, this.creatives); this.measurement = new SpotifyMeasurementService(client, options.resourceSecrets); }
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions {
     return { pauseCampaign: (accountId, campaignId) => ({ tool: 'spotify_set_campaign_status', input: { account_id: accountId, campaign_id: campaignId, status: 'PAUSED' } }) };
@@ -110,13 +118,15 @@ export class SpotifyAdsProvider implements AdProvider {
     return { ...preview, serverValidated: false };
   }
   async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> {
-    return { applied: true, resourceIds: await (await this.plan(op, guard)).execute() };
+    const result = await (await this.plan(op, guard)).execute();
+    return Array.isArray(result) ? { applied: true, resourceIds: result } : result;
   }
 
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<Plan> {
     const accountId = spotifyId.parse(op.accountId);
     const base = `ad_accounts/${accountId}`;
     if (op.provider !== this.id) throw new AdportError('INVALID_INPUT', 'spotify: provider mismatch');
+    if (measurementWriteNames.has(op.tool)) return this.measurement.plan(op);
     if (op.tool === 'spotify_create_campaign_draft' && op.kind === 'create') {
       const input = createDraftSchema.parse(op.payload);
       const status = guard.forcePausedCreation ? 'PAUSED' : input.status;
@@ -167,7 +177,7 @@ export class SpotifyAdsProvider implements AdProvider {
         },
       };
     }
-    throw new AdportError('INVALID_INPUT', `spotify: unsupported write ${op.tool}`);
+    return managementWriteNames.has(op.tool) ? this.management.plan(op) : this.creatives.plan(op, guard);
   }
 }
 

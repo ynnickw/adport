@@ -39,16 +39,17 @@ suite('analytics accounts do not consume advertising capacity', () => {
     await closeDbForTests(); await admin?.end();
   });
 
-  it('allows analytics selection, activation and discovery at the full ad limit without opening an extra advertising slot', async () => {
+  it.each(['gtm', 'ga4', 'gsc'] as const)('allows %s selection, activation and discovery at the full ad limit', async provider => {
     const selectionId = randomUUID();
-    const connectionId = await upsertProviderConnection({ organizationId: principal.organizationId, userId, provider: 'gtm', credential: { refreshToken: 'local-analytics-fixture' }, selectionId });
-    const accounts = ['101', '102'].map(id => ({ provider: 'gtm', id, name: 'Local tracking fixture' }));
-    await stageAccountSelection({ principal, id: selectionId, connectionId, provider: 'gtm', accounts, returnPath: '/dashboard/analytics' });
+    const connectionId = await upsertProviderConnection({ organizationId: principal.organizationId, userId, provider, credential: { refreshToken: 'local-analytics-fixture' }, selectionId });
+    const ids = provider === 'gsc' ? ['sc-domain:example.test', 'https://example.test/'] : ['101', '102'];
+    const accounts = ids.map(id => ({ provider, id, name: 'Local analytics fixture' }));
+    await stageAccountSelection({ principal, id: selectionId, connectionId, provider, accounts, returnPath: '/dashboard/analytics' });
     const saved = await saveAccountSelection(principal, selectionId, accounts.map(account => account.id), undefined, { maxActiveAccounts: 3, currentPlan: 'Free', currentPlanId: 'reader' });
     expect(saved.returnPath).toContain('/dashboard/analytics?');
-    const toggle = (enabled: boolean) => setOrganizationAdAccountEnabled({ principal, provider: 'gtm', accountId: '101', enabled, maxActiveAccounts: 3, currentPlan: 'Free', recommendedPlan: 'operator' });
+    const toggle = (enabled: boolean) => setOrganizationAdAccountEnabled({ principal, provider, accountId: ids[0]!, enabled, maxActiveAccounts: 3, currentPlan: 'Free', recommendedPlan: 'operator' });
     await toggle(false); await toggle(true);
-    expect(await syncDiscoveredAccounts({ organizationId: principal.organizationId, connectionId, provider: 'gtm', accounts, maxActiveAccounts: 3 })).toHaveLength(2);
+    expect(await syncDiscoveredAccounts({ organizationId: principal.organizationId, connectionId, provider, accounts, maxActiveAccounts: 3 })).toHaveLength(2);
     expect(await organizationActiveAccounts(principal.organizationId)).toBe(3);
     expect(await getOrganizationUsage(principal.organizationId)).toMatchObject({ enabledAccounts: 3 });
     expect((await listOrganizationProjects(userId, principal.organizationId)).find(project => project.id === principal.organizationId)?.enabledAccounts).toBe(3);
@@ -57,16 +58,18 @@ suite('analytics accounts do not consume advertising capacity', () => {
   });
 
   it('preserves analytics on downgrade across projects while limiting only advertising accounts', async () => {
-    const connectionId = await upsertProviderConnection({ organizationId: sibling, userId, provider: 'gtm', credential: { refreshToken: 'local-sibling-fixture' } });
-    await admin`insert into public.organization_ad_accounts (organization_id, connection_id, provider, account_id, name, enabled)
-      values (${sibling}, ${connectionId}, 'gtm', '103', 'Sibling tracking', true)`;
+    for (const provider of ['gtm', 'ga4', 'gsc'] as const) {
+      const connectionId = await upsertProviderConnection({ organizationId: sibling, userId, provider, credential: { refreshToken: 'local-sibling-fixture' } });
+      await admin`insert into public.organization_ad_accounts (organization_id, connection_id, provider, account_id, name, enabled)
+        values (${sibling}, ${connectionId}, ${provider}, ${provider === 'gsc' ? 'sc-domain:sibling.test' : '103'}, 'Sibling analytics', true)`;
+    }
     await admin`update public.organization_subscriptions set plan = 'agency', status = 'active' where organization_id = ${principal.organizationId}`;
     await admin`update public.organization_ad_accounts set enabled = true where organization_id = ${principal.organizationId} and provider = 'google'`;
     await db().begin(sql => applyOrganizationPlanLimits(sql, principal.organizationId, 'reader'));
     const [counts] = await admin`select count(*) filter (where provider = 'google' and enabled)::int as ads,
-      count(*) filter (where provider = 'gtm' and enabled)::int as analytics from public.organization_ad_accounts
+      count(*) filter (where provider in ('gtm', 'ga4', 'gsc') and enabled)::int as analytics from public.organization_ad_accounts
       where organization_id in (${principal.organizationId}, ${sibling})`;
-    expect(counts).toMatchObject({ ads: 3, analytics: 3 });
+    expect(counts).toMatchObject({ ads: 3, analytics: 9 });
     expect(await organizationActiveAccounts(sibling)).toBe(3);
     expect(await getOrganizationUsage(sibling)).toMatchObject({ enabledAccounts: 3 });
   });

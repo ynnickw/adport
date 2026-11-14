@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { adportHome } from '../paths.js';
 import type { WriteOperation, WritePreview } from '../provider.js';
 
@@ -17,6 +18,8 @@ export interface PendingOperation {
 export interface PendingOperationStore {
   put(op: PendingOperation): Promise<void>;
   get(id: string): Promise<PendingOperation | undefined>;
+  /** Atomically consume one matching, unexpired approval before provider execution. */
+  consume(id: string, expectedHash: string): Promise<boolean>;
   delete(id: string): Promise<void>;
   sweep(now?: Date): Promise<void>;
 }
@@ -51,6 +54,20 @@ export class PendingStore implements PendingOperationStore {
     await fs.rm(this.file(id), { force: true });
   }
 
+  async consume(id: string, expectedHash: string): Promise<boolean> {
+    const current = await this.get(id);
+    if (!current || current.opHash !== expectedHash || !(Date.parse(current.expiresAt) > Date.now())) return false;
+    const source = this.file(id), claimed = `${source}.${randomUUID()}.claim`;
+    try { await fs.rename(source, claimed); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false; throw error; }
+    // Rename removes the shared source atomically across processes. Never put
+    // it back, including after a crash, bad receipt, timeout or failed audit.
+    try {
+      const actual = JSON.parse(await fs.readFile(claimed, 'utf8')) as PendingOperation;
+      return actual.opHash === expectedHash && Date.parse(actual.expiresAt) > Date.now();
+    } finally { await fs.rm(claimed, { force: true }); }
+  }
+
   /** Remove expired entries. Called opportunistically; never throws on races. */
   async sweep(now = new Date()): Promise<void> {
     let names: string[];
@@ -60,7 +77,7 @@ export class PendingStore implements PendingOperationStore {
       return;
     }
     for (const name of names) {
-      if (!name.endsWith('.json')) continue;
+      if (!name.endsWith('.json') && !name.endsWith('.claim')) continue;
       try {
         const op = JSON.parse(await fs.readFile(path.join(this.dir, name), 'utf8')) as PendingOperation;
         if (Date.parse(op.expiresAt) < now.getTime()) {

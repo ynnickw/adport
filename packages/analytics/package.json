@@ -1,0 +1,48 @@
+{
+  "name": "@adport/provider-analytics",
+  "version": "0.9.0",
+  "description": "Read-only Google Analytics 4 and Search Console providers for adport",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --sourcemap --clean",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@adport/core": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "tsup": "^8.3.0",
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.10"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ynnickw/adport.git",
+    "directory": "packages/analytics"
+  },
+  "homepage": "https://github.com/ynnickw/adport#readme",
+  "bugs": {
+    "url": "https://github.com/ynnickw/adport/issues"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

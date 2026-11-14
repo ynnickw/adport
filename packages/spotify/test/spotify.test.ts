@@ -247,7 +247,7 @@ describe('Spotify guarded writes and credentials', () => {
     await expect(runtime.registry.call(budgetOp.tool, { ...args, budget_micros: 121_000_000, ...pending }, runtime.ctx)).rejects.toThrow('differs');
     await runtime.registry.call(budgetOp.tool, { ...args, pending_operation_id: pending.pending_operation_id }, runtime.ctx);
     expect(calls.filter(c => c.init.method === 'PATCH')).toHaveLength(1);
-    await expect(runtime.registry.call(budgetOp.tool, { ...args, pending_operation_id: pending.pending_operation_id }, runtime.ctx)).rejects.toThrow('No pending');
+    await expect(runtime.registry.call(budgetOp.tool, { ...args, pending_operation_id: pending.pending_operation_id }, runtime.ctx)).rejects.toMatchObject({ code: 'PENDING_NOT_FOUND' });
     await expect(runtime.registry.call(budgetOp.tool, { ...args, budget_micros: 200_000_000 }, runtime.ctx)).rejects.toThrow('budget-delta cap');
     const blocked = new PolicyEngine({ ...DEFAULT_POLICY, protected_accounts: [ACCOUNT] }, new PendingStore(path.join(dir, 'protected')), audit);
     await expect(blocked.validate(provider, budgetOp)).rejects.toThrow('protected');

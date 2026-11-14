@@ -16,8 +16,9 @@ export const reportRowSchema = z.looseObject({
 });
 export const NON_DISCRIMINATION_NOTICE = 'LinkedIn tools may not be used to discriminate based on personal characteristics such as gender, age, race, or ethnicity. Learn more: https://www.linkedin.com/legal/ads-policy';
 export const NON_POLITICAL_CONSENT = 'I confirm this is not political advertising. None of my ads qualify as political advertising under the law of the targeted countries, including EU law for ads targeted to the EU.';
-const facets = z.record(z.string().regex(/^urn:li:adTargetingFacet:[a-zA-Z]+$/), z.array(z.string().regex(/^urn:li:[a-zA-Z]+:[a-zA-Z0-9_()-]+$/)).min(1));
-export const targetingSchema = z.object({ include: z.object({ and: z.array(z.object({ or: facets })).min(1) }), exclude: z.object({ or: facets }).optional() });
+const targetingEntity = z.union([z.string().regex(/^urn:li:[a-zA-Z]+:[a-zA-Z0-9_()-]+$/), z.string().regex(/^urn:li:staffCountRange:\(\d+,\d+\)$/)]);
+const facets = z.record(z.string().regex(/^urn:li:adTargetingFacet:[a-zA-Z]+$/), z.array(targetingEntity).min(1));
+export const targetingSchema = z.object({ include: z.object({ and: z.array(z.object({ or: facets }).strict()).min(1) }).strict(), exclude: z.object({ or: facets }).strict().optional() }).strict();
 const micros = z.number().int().positive().safe();
 export const createCampaignSchema = z.object({
   name: z.string().trim().min(1).max(200), campaign_group_id: linkedinId,

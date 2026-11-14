@@ -306,4 +306,41 @@ describe('MicrosoftAdsProvider', () => {
     await provider.applyWrite(op, { forcePausedCreation: true });
     expect(calls.some((item) => item.init.method === 'DELETE')).toBe(true);
   });
+
+  it('does not let resource or property casing avoid typed monetary and customer-scope guards', async () => {
+    const { impl, calls } = fakeFetch([]), provider = new MicrosoftAdsProvider(new MicrosoftAdsClient(CREDS, undefined, impl));
+    for (const resource of ['BUDGETS', 'BUdGets', 'CONVERSIONGOALS', 'UETTags']) for (const [tool, kind] of [['microsoft_api_create', 'create'], ['microsoft_api_update', 'update'], ['microsoft_api_delete', 'remove']] as const) {
+      await expect(provider.previewWrite({ tool, provider: 'microsoft', accountId: '777', kind, payload: { resource, body: {} } }, { forcePausedCreation: true })).rejects.toThrow();
+    }
+    for (const key of ['budgetid', 'BUDGETID', 'BudgetID']) await expect(provider.previewWrite({ tool: 'microsoft_api_create', provider: 'microsoft', accountId: '777', kind: 'create', payload: { resource: 'Campaigns', body: { Campaigns: [{ [key]: '100' }] } } }, { forcePausedCreation: true })).rejects.toThrow('typed microsoft');
+    expect(calls).toEqual([]);
+  });
+
+  it('rejects foreign and malformed case-variant account fields before network access', async () => {
+    const { impl, calls } = fakeFetch([]), provider = new MicrosoftAdsProvider(new MicrosoftAdsClient(CREDS, undefined, impl));
+    for (const body of [{ accountid: 999 }, { ACCOUNTID: 999 }, { accountids: [777, 999] }, { ACCOUNTIDS: '999' }]) {
+      await expect(provider.apiRead({ account_id: '777', service: 'campaign', path: 'Campaigns/QueryByAccountId', body })).rejects.toThrow('selected account');
+      await expect(provider.previewWrite({ tool: 'microsoft_api_update', provider: 'microsoft', accountId: '777', kind: 'update', payload: { resource: 'Campaigns', body } }, { forcePausedCreation: true })).rejects.toThrow('selected account');
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it('writes canonical Paused for all four serving collections when status is omitted or ambiguously cased', async () => {
+    for (const resource of ['Campaigns', 'AdGroups', 'Ads', 'Keywords']) {
+      const { impl, calls } = fakeFetch([tokenRoute, getUserRoute, searchAccountsRoute, { match: url => url.endsWith(`/${resource}`), reply: { PartialErrors: [] } }]);
+      const provider = new MicrosoftAdsProvider(new MicrosoftAdsClient(CREDS, undefined, impl)), original = [{ Name: 'Omitted' }, { Name: 'Aliases', status: 'active', STATUS: 'Active' }, { Name: 'Paused alias', status: 'paused' }];
+      const operation = { tool: 'microsoft_api_create', provider: 'microsoft', accountId: '777', kind: 'create' as const, payload: { resource, body: { [resource]: original } } };
+      const preview = await provider.previewWrite(operation, { forcePausedCreation: true }); expect(preview.coercions).toHaveLength(3);
+      await provider.applyWrite(operation, { forcePausedCreation: true });
+      const body = JSON.parse(String(calls.find(value => value.url.endsWith(`/${resource}`))!.init.body));
+      expect(body[resource]).toEqual([{ Name: 'Omitted', Status: 'Paused' }, { Name: 'Aliases', Status: 'Paused' }, { Name: 'Paused alias', Status: 'Paused' }]);
+      expect(original[1]).toHaveProperty('status', 'active'); expect(original[0]).not.toHaveProperty('Status');
+    }
+  });
+
+  it('rejects nonarray serving collections when it cannot enforce paused creation', async () => {
+    const { impl, calls } = fakeFetch([]), provider = new MicrosoftAdsProvider(new MicrosoftAdsClient(CREDS, undefined, impl));
+    for (const body of [{}, { Ads: { Name: 'Not an array' } }, { Ads: [null] }]) await expect(provider.previewWrite({ tool: 'microsoft_api_create', provider: 'microsoft', accountId: '777', kind: 'create', payload: { resource: 'Ads', body } }, { forcePausedCreation: true })).rejects.toThrow();
+    expect(calls).toEqual([]);
+  });
 });

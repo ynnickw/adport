@@ -4,6 +4,8 @@ export const campaignOutput = z.object({
   id: z.string(), account_id: z.string(), name: z.string(), status: z.string(),
   effective_status: z.string().optional(), objective: z.string().optional(),
   daily_budget: z.string().optional(), lifetime_budget: z.string().optional(),
+  is_skadnetwork_attribution: z.boolean().optional(),
+  promoted_object: z.object({ application_id: z.string().optional(), object_store_url: z.string().optional() }).nullish(),
 });
 export const campaignsOutput = z.object({ campaigns: z.array(campaignOutput), count: z.number().int().nonnegative() });
 

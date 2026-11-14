@@ -1,0 +1,33 @@
+import { creativesOutput, defineTool, guardedWriteTool, mediaSourceFields, type AnyToolDefinition } from '@adport/core';
+import { z } from 'zod';
+import type { LinkedInAdsProvider } from './provider.js';
+import { linkedinId, NON_POLITICAL_CONSENT } from './schemas.js';
+
+export const creativeUrn = z.string().regex(/^urn:li:sponsoredCreative:[1-9]\d*$/), imageUrn = z.string().regex(/^urn:li:image:[A-Za-z0-9_-]+$/);
+const href = z.string().url().refine(value => { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password; }, 'Use an HTTP(S) URL without embedded credentials');
+const name = z.string().trim().min(1).max(200), headline = z.string().min(1).max(25), description = z.string().min(1).max(75);
+export const textAd = z.object({ headline, description, landingPage: href, image: imageUrn.optional() }).strict();
+export const createText = z.object({ campaign_id: linkedinId, name: name.optional(), headline, description, landing_page: href, image: imageUrn.optional(), status: z.enum(['PAUSED', 'ACTIVE', 'DRAFT']).default('PAUSED'), non_political_consent: z.literal(true).describe(NON_POLITICAL_CONSENT) });
+export const updateText = z.object({ creative_id: creativeUrn, headline: headline.optional(), description: description.optional(), landing_page: href.optional(), image: imageUrn.optional() }).refine(v => Object.keys(v).length > 1, 'Provide text-ad changes');
+export const uploadImage = z.object({ name, ...mediaSourceFields }).refine(v => Boolean(v.media_id) !== Boolean(v.file_path), 'Choose project media_id or local file_path');
+export const creativeStatus = z.object({ creative_id: creativeUrn, status: z.enum(['PAUSED', 'ACTIVE', 'ARCHIVED']), non_political_consent: z.literal(true).optional().describe(`Required for activation: ${NON_POLITICAL_CONSENT}`) });
+
+export function linkedinCreativeTools(provider: LinkedInAdsProvider): AnyToolDefinition[] {
+  const account = { account_id: linkedinId };
+  const read = <T extends z.ZodRawShape>(name: string, description: string, input: z.ZodObject<T>, handler: (input: z.output<z.ZodObject<T>>) => Promise<unknown>) => defineTool({ name, namespace: 'linkedin', description, input, annotations: { readOnly: true }, handler });
+  const write = (name: string, description: string, payload: z.ZodObject, kind: 'create' | 'update' | 'remove' = 'update') => guardedWriteTool({ name, namespace: 'linkedin', provider: 'linkedin', description, payload, kind });
+  return [
+    defineTool({ name: 'linkedin_creatives', namespace: 'linkedin', description: 'View account-owned creatives and actual text-ad copy/images. With include_media, non-text formats use individual API202610 metadata reads for native copy and primary previews. Full sponsored-post contents require separate Page access; missing details remain explicit.', input: z.object({ ...account, campaign_ids: z.array(linkedinId).max(100).optional(), creative_ids: z.array(creativeUrn).max(100).optional(), statuses: z.array(z.enum(['ACTIVE', 'PAUSED', 'DRAFT', 'ARCHIVED', 'CANCELED', 'PENDING_DELETION', 'REMOVED'])).optional(), page_size: z.number().int().min(1).max(100).default(20), page_token: z.string().optional(), include_media: z.boolean().default(true) }), output: creativesOutput.passthrough(), presentation: 'creatives', pagination: { cursorInput: 'page_token', cursorOutput: 'next_page_token' }, annotations: { readOnly: true }, handler: v => provider.creatives.list(v) }),
+    read('linkedin_get_creative', 'Read one creative, verifying account and parent campaign ownership before returning native content/review settings.', z.object({ ...account, creative_id: creativeUrn }), v => provider.creatives.owned(v.account_id, v.creative_id)),
+    read('linkedin_get_image', 'Read a native image associated with the selected account, including processing readiness and an expiring preview URL.', z.object({ ...account, image_id: imageUrn }), v => provider.creatives.image(v.account_id, v.image_id)),
+    read('linkedin_get_library_image', 'Read one exact image through the selected account media-library finder, including archived entries, native readiness and preview. Searches at most 5,000 entries and fails explicitly if membership cannot be confirmed.', z.object({ ...account, image_id: imageUrn }), v => provider.creatives.libraryImage(v.account_id, v.image_id)),
+    defineTool({ name: 'linkedin_images', namespace: 'linkedin', description: 'View the selected account’s native media-library images, processing status and expiring previews. Archive status affects library visibility, not delivery of existing ads.', input: z.object({ ...account, library_status: z.enum(['ACTIVE', 'ARCHIVED']).default('ACTIVE'), start: z.number().int().nonnegative().default(0), count: z.number().int().min(1).max(100).default(20) }), output: creativesOutput.passthrough(), presentation: 'creatives', pagination: { cursorInput: 'start', cursorOutput: 'next_start' }, annotations: { readOnly: true }, handler: v => provider.creatives.images(v) }),
+    write('linkedin_create_text_ad', 'Create a native text creative under a TEXT_AD campaign, paused by policy. Requires explicit non-political advertiser confirmation; optional image must belong to the account.', createText, 'create'),
+    write('linkedin_update_text_ad', 'Edit supplied text-ad headline/body/destination/image fields, preserving omitted content and delivery status. Can trigger creative review.', updateText),
+    write('linkedin_rename_creative', 'Rename one verified creative without changing its content or intended delivery status.', z.object({ creative_id: creativeUrn, name })),
+    write('linkedin_set_creative_status', 'Pause, activate or archive one verified creative. Activation requires explicit advertiser confirmation; parent campaign status remains separate.', creativeStatus),
+    write('linkedin_delete_creative', 'Delete an eligible draft creative, or request PENDING_DELETION for other states using the native lifecycle.', z.object({ creative_id: creativeUrn }), 'remove'),
+    write('linkedin_upload_image', 'Initialize and upload SHA-256-bound PNG/JPEG/GIF bytes to an account-owned native image/media-library entry. Check readiness with linkedin_get_library_image after upload acceptance.', uploadImage, 'create'),
+    write('linkedin_update_image', 'Rename or archive/unarchive an image in the selected account’s native media library. Preserves the image and existing ads; this is not image deletion or an ad-status change.', z.object({ image_id: imageUrn, asset_name: name.optional(), library_status: z.enum(['ACTIVE', 'ARCHIVED']).optional() }).refine(v => v.asset_name !== undefined || v.library_status !== undefined, 'Provide image library changes')),
+  ];
+}

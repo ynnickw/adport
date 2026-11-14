@@ -38,7 +38,7 @@ const CAMPAIGN = {
   goal_value: 100_000_000,
   id: '579922433862993631',
   name: 'Prospecting',
-  objective: 'TRAFFIC',
+  objective: 'CLICKS',
   is_campaign_budget_optimization: true,
   conversion_pixel_id: 't2_pixel',
 };
@@ -124,13 +124,13 @@ describe('RedditAdsProvider guarded writes', () => {
       TOKEN_ROUTE,
       {
         match: (url, body, method) => url.includes('/ad_accounts/a2_acme/campaigns') && method === 'POST' && body.includes('PAUSED'),
-        reply: { data: { ...CAMPAIGN, configured_status: 'PAUSED', id: 'new-campaign' } }, status: 201,
+        reply: { data: { ...CAMPAIGN, configured_status: 'PAUSED', id: 'new-campaign', name: 'New campaign', goal_value: 50_000_000 } }, status: 201,
       },
     ]);
     const provider = new RedditAdsProvider(new RedditAdsClient(CREDS, impl));
     const op = {
       tool: 'reddit_create_campaign', provider: 'reddit', accountId: 'a2_acme', kind: 'create' as const,
-      payload: { name: 'New campaign', objective: 'TRAFFIC', funding_instrument_id: 'fi_1', configured_status: 'ACTIVE', budget_micros: 50_000_000, conversion_pixel_id: 't2_pixel' },
+      payload: { name: 'New campaign', objective: 'CLICKS', funding_instrument_id: 'fi_1', configured_status: 'ACTIVE', budget_micros: 50_000_000, conversion_pixel_id: 't2_pixel' },
     };
     const preview = await provider.previewWrite(op, { forcePausedCreation: true });
     expect(preview.serverValidated).toBe(false);

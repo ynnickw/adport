@@ -2,8 +2,9 @@ import { mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createContext, CredentialStore, DEFAULT_POLICY, PolicyEngine, PendingStore, AuditLog, type NormalizedQuery, type WriteOperation } from '@adport/core';
-import { PinterestAdsClient, PINTEREST_TOKEN_URL, buildPinterestAuthUrl, exchangePinterestCode } from '../src/client.js';
+import { z } from 'zod';
+import { AdportError, createContext, CredentialStore, DEFAULT_POLICY, PolicyEngine, PendingStore, AuditLog, type NormalizedQuery, type WriteOperation } from '@adport/core';
+import { PinterestAdsClient, PINTEREST_TOKEN_URL, PINTEREST_PIN_SCOPES, PINTEREST_SECRET_PIN_SCOPES, PINTEREST_CATALOG_SCOPES, buildPinterestAuthUrl, exchangePinterestCode } from '../src/client.js';
 import { PinterestAdsProvider } from '../src/provider.js';
 import { accountSchema } from '../src/schemas.js';
 import { pinterestTools } from '../src/tools.js';
@@ -51,9 +52,41 @@ describe('Pinterest OAuth and transport', () => {
     expect(Object.fromEntries(new URLSearchParams(String(calls[0]!.init.body)))).toEqual({ grant_type: 'authorization_code', code: 'code+&', redirect_uri: 'http://localhost:53686/callback', continuous_refresh: 'true' });
     expect(calls[0]!.init.redirect).toBe('error');
   });
+  it('requests Pin management only on explicit opt-in and requires the actual granted scope set', async () => {
+    const url = new URL(buildPinterestAuthUrl('client', 'http://localhost:53686/callback', 'csrf', { pinManagement: true }));
+    expect(url.searchParams.get('scope')?.split(',')).toEqual([...PINTEREST_PIN_SCOPES]);
+    const denied = fixture(() => ({}));
+    await expect(exchangePinterestCode({ ...creds, code: 'code', redirectUri: 'http://localhost:53686/callback', pinManagement: true }, denied.fetchImpl)).rejects.toThrow('previous connection was preserved');
+    const granted = fixture(() => ({}), { ...token, scope: PINTEREST_PIN_SCOPES.join(' ') });
+    expect(await exchangePinterestCode({ ...creds, code: 'code', redirectUri: 'http://localhost:53686/callback', pinManagement: true }, granted.fetchImpl)).toBe('refresh');
+  });
+  it.each([false, true])('adds catalog scopes only on opt-in while retaining the requested Pin grant (secret=%s)', async secretPins => {
+    const base = secretPins ? PINTEREST_SECRET_PIN_SCOPES : PINTEREST_PIN_SCOPES;
+    const scopes = [...base, ...PINTEREST_CATALOG_SCOPES];
+    const options = { pinManagement: true, secretPins, catalogManagement: true };
+    expect(new URL(buildPinterestAuthUrl('client', 'http://localhost:53686/callback', 'csrf', options)).searchParams.get('scope')?.split(',')).toEqual(scopes);
+    for (const missing of scopes) {
+      const partial = fixture(() => ({}), { ...token, scope: scopes.filter(scope => scope !== missing).join(' ') });
+      await expect(exchangePinterestCode({ ...creds, code: 'code', redirectUri: 'http://localhost:53686/callback', ...options }, partial.fetchImpl)).rejects.toThrow('previous connection was preserved');
+    }
+    const granted = fixture(() => ({}), { ...token, scope: scopes.join(',') });
+    expect(await exchangePinterestCode({ ...creds, code: 'code', redirectUri: 'http://localhost:53686/callback', ...options }, granted.fetchImpl)).toBe('refresh');
+    expect(new URL(buildPinterestAuthUrl('client', 'http://localhost:53686/callback', 'csrf', { secretPins })).searchParams.get('scope')).not.toContain('catalogs:');
+  });
   it('requires a refresh token on exchange', async () => {
     const { fetchImpl } = fixture(() => ({}), { access_token: 'access', expires_in: 3600 });
     await expect(exchangePinterestCode({ ...creds, code: 'code', redirectUri: 'http://localhost:53686/callback' }, fetchImpl)).rejects.toThrow('refresh token');
+  });
+  it('requests secret content only through a separate opt-in, including public content permissions', async () => {
+    const url = new URL(buildPinterestAuthUrl('client', 'http://localhost:53686/callback', 'csrf', { secretPins: true }));
+    expect(url.searchParams.get('scope')?.split(',')).toEqual([...PINTEREST_SECRET_PIN_SCOPES]);
+    expect(new URL(buildPinterestAuthUrl('client', 'http://localhost:53686/callback', 'csrf', { pinManagement: true })).searchParams.get('scope')).not.toContain('_secret');
+    const granted = fixture(() => ({}), { ...token, scope: PINTEREST_SECRET_PIN_SCOPES.join(',') });
+    expect(await exchangePinterestCode({ ...creds, code: 'code', redirectUri: 'http://localhost:53686/callback', secretPins: true }, granted.fetchImpl)).toBe('refresh');
+  });
+  it.each(PINTEREST_SECRET_PIN_SCOPES)('does not replace a secret-content grant when %s is unconfirmed', async missing => {
+    const partial = fixture(() => ({}), { ...token, scope: PINTEREST_SECRET_PIN_SCOPES.filter(scope => scope !== missing).join(' ') });
+    await expect(exchangePinterestCode({ ...creds, code: 'code', redirectUri: 'http://localhost:53686/callback', secretPins: true }, partial.fetchImpl)).rejects.toThrow('secret Pin management permissions were not all confirmed');
   });
   it('single-flights refresh, uses form encoding and persists rotation before reads', async () => {
     const { fetchImpl, calls } = fixture(() => account, { ...token, refresh_token: 'rotated' });
@@ -71,6 +104,47 @@ describe('Pinterest OAuth and transport', () => {
     await client.get('ad_accounts', accountSchema);
     expect(attempts).toBe(2);
     expect(calls.filter(c => c.url.href === PINTEREST_TOKEN_URL)).toHaveLength(2);
+  });
+  it('does not refresh a known missing catalog grant or discard its usable Ads token', async () => {
+    // All catalog GETs require catalogs:read in Pinterest OpenAPI 5.28.0.
+    // Native QA on 2026-11-07 confirmed code3/401 for an Ads-only grant.
+    const { client, calls } = fixture(({ url }) => url.pathname === '/v5/catalogs'
+      ? Response.json({ code: 3, message: 'private provider body secret-token' }, { status: 401 }) : account);
+    await client.get(`ad_accounts/${ACCOUNT}`, accountSchema);
+    const error = await client.get('catalogs', z.unknown(), new URLSearchParams({ ad_account_id: ACCOUNT })).catch(error => error);
+    if (!(error instanceof AdportError)) throw new Error('Expected the catalog permission denial');
+    expect(error).toMatchObject({ code: 'PROVIDER_ERROR', details: { http_status: 401, missing_scopes: ['catalogs:read'] } });
+    expect(error.message).toContain('catalogs:read');
+    expect(error.message).not.toContain('secret-token');
+    expect(error.details).not.toHaveProperty('api_message');
+    await expect(client.get(`ad_accounts/${ACCOUNT}`, accountSchema)).resolves.toEqual(account);
+    expect(calls.map(call => call.url.pathname)).toEqual(['/v5/oauth/token', `/v5/ad_accounts/${ACCOUNT}`, '/v5/catalogs', `/v5/ad_accounts/${ACCOUNT}`]);
+    expect(calls[2]!.url.searchParams.get('ad_account_id')).toBe(ACCOUNT);
+    expect(calls[2]!.init.headers).toEqual({ authorization: 'Bearer access' });
+  });
+  it.each(['ads:read catalogs:read', 'ads:read,catalogs:read'])('retains one authentication retry when catalog read is granted (%s)', async scope => {
+    let attempts = 0;
+    const { client, calls } = fixture(() => ++attempts === 1 ? Response.json({}, { status: 401 }) : { items: [] }, { ...token, scope });
+    await expect(client.get('catalogs', z.object({ items: z.array(z.unknown()) }))).resolves.toEqual({ items: [] });
+    expect(calls.filter(call => call.url.href === PINTEREST_TOKEN_URL)).toHaveLength(2);
+    expect(attempts).toBe(2);
+  });
+  it('retains one authentication retry when the token response omits granted scopes', async () => {
+    let attempts = 0;
+    const { scope: _scope, ...unconfirmed } = token;
+    const { client, calls } = fixture(() => ++attempts === 1 ? Response.json({}, { status: 401 }) : { items: [] }, unconfirmed);
+    await expect(client.get('catalogs/feeds', z.object({ items: z.array(z.unknown()) }))).resolves.toEqual({ items: [] });
+    expect(calls.filter(call => call.url.href === PINTEREST_TOKEN_URL)).toHaveLength(2);
+    expect(attempts).toBe(2);
+  });
+  it('does not diagnose a catalog server failure as a missing grant', async () => {
+    const { client, calls } = fixture(() => Response.json({}, { status: 500 }));
+    const error = await client.get('catalogs/feeds', z.unknown()).catch(error => error);
+    if (!(error instanceof AdportError)) throw new Error('Expected the catalog server failure');
+    expect(error).toMatchObject({ code: 'PROVIDER_ERROR', details: { http_status: 500 } });
+    expect(error.details).not.toHaveProperty('missing_scopes');
+    expect(error.message).not.toContain('catalogs:read');
+    expect(calls.filter(call => call.url.href === PINTEREST_TOKEN_URL)).toHaveLength(1);
   });
   it('never automatically replays mutations', async () => {
     const { client, calls } = fixture(() => Response.json({}, { status: 401 }));
@@ -108,10 +182,10 @@ describe('Pinterest discovery and normalized reporting', () => {
     const { provider } = fixture(() => ({ items: [account], bookmark: 'same' }));
     await expect(provider.listAccounts()).rejects.toThrow('repeated an entity');
   });
-  it('includes archived and draft campaigns using schema-defined query arrays', async () => {
+  it('includes archived and draft campaigns using live-verified CSV query arrays', async () => {
     const { provider, calls } = fixture(() => ({ items: [campaign] }));
     expect(await provider.listCampaigns(ACCOUNT)).toHaveLength(1);
-    expect(calls[1]!.url.searchParams.getAll('entity_statuses')).toEqual(['ACTIVE', 'PAUSED', 'ARCHIVED', 'DRAFT', 'DELETED_DRAFT']);
+    expect(calls[1]!.url.searchParams.getAll('entity_statuses')).toEqual(['ACTIVE,PAUSED,ARCHIVED,DRAFT,DELETED_DRAFT']);
   });
   it('rejects cross-account entity responses', async () => {
     const { provider } = fixture(() => ({ items: [{ ...campaign, ad_account_id: SECOND }] }));
@@ -136,9 +210,9 @@ describe('Pinterest discovery and normalized reporting', () => {
   });
   it('chunks entity filters at the official 250-item limit', async () => {
     const entities = Array.from({ length: 251 }, (_, i) => ({ ...campaign, id: String(1000 + i) }));
-    const { provider, calls } = fixture(({ url }) => url.pathname.endsWith('/analytics') ? url.searchParams.getAll('campaign_ids').map(id => ({ CAMPAIGN_ID: id, ...stats })) : url.searchParams.has('bookmark') ? { items: entities.slice(250) } : { items: entities.slice(0, 250), bookmark: 'next' });
+    const { provider, calls } = fixture(({ url }) => url.pathname.endsWith('/analytics') ? url.searchParams.get('campaign_ids')!.split(',').map(id => ({ CAMPAIGN_ID: id, ...stats })) : url.searchParams.has('bookmark') ? { items: entities.slice(250) } : { items: entities.slice(0, 250), bookmark: 'next' });
     expect((await provider.report(query)).rows).toHaveLength(251);
-    expect(calls.filter(c => c.url.pathname.endsWith('/analytics')).map(c => c.url.searchParams.getAll('campaign_ids').length)).toEqual([250, 1]);
+    expect(calls.filter(c => c.url.pathname.endsWith('/analytics')).map(c => c.url.searchParams.get('campaign_ids')!.split(',').length)).toEqual([250, 1]);
   });
   it('requests derived-metric dependencies only and omits missing values', async () => {
     const { provider, calls } = fixture(({ url }) => url.pathname.endsWith('/analytics') ? [{ CAMPAIGN_ID: CAMPAIGN, SPEND_IN_MICRO_DOLLAR: 10_000_000 }] : { items: [campaign] });

@@ -9,6 +9,7 @@ import {
   registerMcpOAuthClient,
   revokeMcpOAuthToken,
 } from '@/lib/cloud/mcp-oauth-repository';
+import { loadToolSelection, saveToolSelection } from '@/lib/cloud/tool-catalog';
 import { resolveMembership } from '@/lib/cloud/repository';
 import { digestState } from '@/lib/crypto';
 import { closeDbForTests, db } from '@/lib/db';
@@ -83,6 +84,10 @@ describeDatabase('MCP OAuth persistence and token lifecycle', () => {
       clientId, code, codeVerifier: verifier, redirectUri, resource: mcpResourceUrl(),
     })).rejects.toThrow(/already used/);
 
+    const catalogConnection = { organizationId, userId, clientId, resource: mcpResourceUrl() };
+    expect(await loadToolSelection(catalogConnection)).toEqual({ profile: 'full', providers: null });
+    await saveToolSelection(catalogConnection, { profile: 'standard', providers: ['meta'] });
+
     const [second, concurrent] = await Promise.all([
       exchangeMcpRefreshToken({
         clientId,
@@ -98,6 +103,10 @@ describeDatabase('MCP OAuth persistence and token lifecycle', () => {
       }),
     ]);
     expect(second.scopes).toEqual(['tools:read']);
+    const refreshedPrincipal = await authenticateMcpOAuthAccessToken(second.accessToken);
+    expect(await loadToolSelection(refreshedPrincipal!)).toEqual({ profile: 'standard', providers: ['meta'] });
+    await saveToolSelection(catalogConnection, { profile: 'reporting', providers: [] });
+    expect(await loadToolSelection(refreshedPrincipal!)).toEqual({ profile: 'reporting', providers: [] });
     expect(concurrent.scopes).toEqual(['tools:read']);
     expect(second.refreshToken).not.toBe(first.refreshToken);
     expect([second.reusedRotatedToken, concurrent.reusedRotatedToken].sort()).toEqual([false, true]);

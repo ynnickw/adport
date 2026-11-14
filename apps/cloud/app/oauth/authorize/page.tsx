@@ -7,6 +7,7 @@ import { sessionPrincipal } from '@/lib/cloud/auth';
 import { validateAuthorizationRequest } from '@/lib/mcp-oauth';
 import { createClient } from '@/lib/supabase/server';
 import { listProjectAccess } from '@/lib/cloud/workspaces';
+import { connectedCatalogProviders } from '@/lib/cloud/tool-catalog';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,6 +39,7 @@ export default async function AuthorizePage({ searchParams }: {
   if (!data.user) redirect(`/login?return_to=${encodeURIComponent(`/oauth/authorize?${params.toString()}`)}`);
   const principal = await sessionPrincipal();
   const projects = await listProjectAccess(data.user.id);
+  const providers = await connectedCatalogProviders(projects.map(project => project.id));
   const credentialScopes = principal.grantedScopes ?? principal.scopes;
   const grantedScopes = authorization.scopes.filter((scope) => credentialScopes.includes(scope));
   const redirectHost = new URL(authorization.redirectUri).host;
@@ -48,9 +50,9 @@ export default async function AuthorizePage({ searchParams }: {
         clientName={authorization.clientName}
         redirectHost={redirectHost}
         scopes={grantedScopes}
-        projects={projects.map(project => ({ id: project.id, name: project.name, organizationId: project.organizationId, organizationName: project.organizationName }))}
+        projects={projects.map(project => ({ id: project.id, name: project.name, organizationId: project.organizationId, organizationName: project.organizationName, providers: providers[project.id] ?? [] }))}
         defaultProjectId={principal.organizationId}
-        hidden={Array.from(params.entries()).filter(([name]) => name !== 'project_id')}
+        hidden={Array.from(params.entries()).filter(([name]) => !['project_id', 'tool_profile', 'tool_platform_mode', 'tool_providers'].includes(name))}
       />
     </AuthFrame>
   );

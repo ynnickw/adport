@@ -32,8 +32,15 @@ describe('shared guarded-write review', () => {
     expect(reviewWrite(operation(), plan({ review }))).toBe(review);
   });
   it('omits credentials in nested inputs and uses metadata for binary uploads', () => {
-    const review = reviewWrite(operation({ access_token: 'do-not-show', body: { objects: [{ client_secret: 'secret', name: 'A' }], content_base64: 'AAAA' } }), plan());
+    const review = reviewWrite(operation({ access_token: 'do-not-show', expected_parent_hash: 'f'.repeat(64), body: { objects: [{ client_secret: 'secret', expected_snapshot_hash: '0'.repeat(64), name: 'A' }], content_base64: 'AAAA' } }), plan());
     expect(JSON.stringify(review)).not.toContain('do-not-show'); expect(JSON.stringify(review)).not.toContain('secret');
+    expect(JSON.stringify(review)).not.toContain('f'.repeat(64)); expect(JSON.stringify(review)).not.toContain('0'.repeat(64)); expect(JSON.stringify(review)).toContain('A');
     expect(review.fields).toContainEqual({ label: 'Content base64', after: 'Attached content (4 characters)' });
+  });
+  it('keeps customer records and nested conversion identifiers out of fallback reviews', () => {
+    const review = reviewWrite(operation({ records_sha256: ['a'.repeat(64), 'b'.repeat(64)], hashes: ['d'.repeat(64)], events: [{ event_name: 'purchase', user: { email: 'private@example.com', ip_address: '192.0.2.1' }, user_identifiers: [{ hashed_email: 'e'.repeat(64) }] }], body: { user_data: [['c'.repeat(64)]] } }), plan());
+    for (const value of ['a'.repeat(64), 'b'.repeat(64), 'c'.repeat(64), 'd'.repeat(64), 'e'.repeat(64), 'private@example.com', '192.0.2.1']) expect(JSON.stringify(review)).not.toContain(value);
+    expect(review.fields).toContainEqual({ label: 'Records sha256', after: expect.stringMatching(/^Protected data \(2 records; SHA-256 [a-f0-9]{64}\)$/) });
+    expect(JSON.stringify(review)).toContain('purchase');
   });
 });

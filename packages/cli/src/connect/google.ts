@@ -19,17 +19,22 @@ import { printLocalConnectionIntro, printLocalConnectionSaved } from './local.js
 
 export interface ConnectGoogleOptions {
   openBrowser: boolean;
+  dataManager?: boolean;
   io: ProgramIO;
 }
 
 /**
  * Guided Google Ads connection using Cloud project API access and OAuth.
  */
-export async function connectGoogle({ openBrowser, io }: ConnectGoogleOptions): Promise<void> {
+export async function connectGoogle({ openBrowser, dataManager = false, io }: ConnectGoogleOptions): Promise<void> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const store = new CredentialStore();
   try {
     printLocalConnectionIntro(io, 'Google Ads');
+    if (dataManager) {
+      io.out('Data Manager is explicitly requested: OAuth will also request the datamanager scope for conversion ingestion.');
+      io.out('Enable Data Manager API in the same Google Cloud project first. Existing grants are unchanged until you approve consent.');
+    }
     io.out('Google may show "Google has not verified this app" for a private/unverified');
     io.out('OAuth project. The developer shown will be your project contact. That warning');
     io.out('is expected for BYO personal use; a verified Adport screen is Cloud-only.');
@@ -51,6 +56,7 @@ export async function connectGoogle({ openBrowser, io }: ConnectGoogleOptions): 
           existing.data.client_secret,
           openBrowser,
           io,
+          dataManager,
         );
         await verifyAndSave(
           {
@@ -61,6 +67,7 @@ export async function connectGoogle({ openBrowser, io }: ConnectGoogleOptions): 
           },
           store,
           io,
+          dataManager,
         );
         return;
       }
@@ -79,6 +86,7 @@ export async function connectGoogle({ openBrowser, io }: ConnectGoogleOptions): 
     let creds: GoogleCredentials;
     if (imported) {
       creds = imported;
+      if (dataManager && (await new GoogleAdsRestClient(creds).dataManagerAccess()).scope_status !== 'GRANTED') creds.refreshToken = await runOAuthFlow(creds.clientId, creds.clientSecret, openBrowser, io, true);
     } else {
       let clientId = '';
       let clientSecret = '';
@@ -103,11 +111,11 @@ export async function connectGoogle({ openBrowser, io }: ConnectGoogleOptions): 
       const loginCustomerId =
         (await rl.question('Manager (MCC) customer id for login-customer-id (Enter to skip): ')).trim() || undefined;
 
-      const refreshToken = await runOAuthFlow(clientId, clientSecret, openBrowser, io);
+      const refreshToken = await runOAuthFlow(clientId, clientSecret, openBrowser, io, dataManager);
       creds = { clientId, clientSecret, refreshToken, loginCustomerId };
     }
 
-    await verifyAndSave(creds, store, io);
+    await verifyAndSave(creds, store, io, dataManager);
   } finally {
     rl.close();
   }
@@ -118,14 +126,15 @@ async function runOAuthFlow(
   clientSecret: string,
   openBrowser: boolean,
   io: ProgramIO,
+  dataManager = false,
 ): Promise<string> {
   io.out('');
-  io.out('Starting the OAuth flow (scope: Google Ads). A browser window should open;');
+  io.out(`Starting the OAuth flow (scopes: Google Ads${dataManager ? ' + Data Manager' : ''}). A browser window should open;`);
   io.out('sign in with the Google account that can access your ad accounts.');
   const pkce = generatePkce();
   const state = generateOAuthState();
   const loopback = await startLoopbackServer('127.0.0.1', state);
-  const authUrl = buildGoogleAuthUrl(clientId, loopback.redirectUri, pkce.challenge, state);
+  const authUrl = buildGoogleAuthUrl(clientId, loopback.redirectUri, pkce.challenge, state, dataManager);
   if (openBrowser) {
     openInBrowser(authUrl);
     io.out(`If the browser did not open, visit:\n  ${authUrl}`);
@@ -147,10 +156,15 @@ async function runOAuthFlow(
   }
 }
 
-async function verifyAndSave(creds: GoogleCredentials, store: CredentialStore, io: ProgramIO): Promise<void> {
+async function verifyAndSave(creds: GoogleCredentials, store: CredentialStore, io: ProgramIO, dataManager = false): Promise<void> {
   io.out('Verifying access…');
   const client = new GoogleAdsRestClient(creds);
   const customers = await client.listAccessibleCustomers();
+  if (dataManager) {
+    const access = await client.dataManagerAccess();
+    if (access.scope_status === 'MISSING') throw new Error('Data Manager scope was not granted. The previous stored connection has been preserved.');
+    io.out(`Data Manager OAuth scope: ${access.scope_status}. API enablement and native event eligibility are checked during validate-only previews.`);
+  }
   await store.set({
     provider: 'google',
     source: 'byo',

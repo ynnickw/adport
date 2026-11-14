@@ -19,11 +19,14 @@ export const createCampaignSchema = z.object({
   objective_type: z.enum(['AWARENESS', 'CONSIDERATION', 'WEB_CONVERSION', 'CATALOG_SALES', 'VIDEO_COMPLETION', 'APP_INSTALL', 'SALES', 'LEADS', 'CTV_CONSIDERATION']),
   status: z.enum(['PAUSED', 'ACTIVE']).default('PAUSED'),
   budget_type: z.enum(['DAILY', 'LIFETIME']).default('DAILY'),
+  daily_budget_mode: z.enum(['FIXED', 'AVERAGE']).default('FIXED'),
+  acknowledge_variable_daily_spend: z.literal(true).optional(),
   budget_micros: micros.positive(),
   start_time: z.number().int().positive().safe().optional(),
   end_time: z.number().int().positive().safe().optional(),
   app_id: z.string().min(1).optional(), app_platform: z.enum(['IOS', 'ANDROID']).optional(),
 }).superRefine((value, ctx) => {
+  if (value.daily_budget_mode === 'AVERAGE' && (value.budget_type !== 'DAILY' || !value.acknowledge_variable_daily_spend)) ctx.addIssue({ code: 'custom', path: ['daily_budget_mode'], message: 'AVERAGE requires DAILY and acknowledge_variable_daily_spend: true.' });
   if (value.budget_type === 'LIFETIME' && !value.end_time) ctx.addIssue({ code: 'custom', path: ['end_time'], message: 'Lifetime campaign budgets require an end time.' });
   if (value.start_time && value.end_time && value.end_time <= value.start_time) ctx.addIssue({ code: 'custom', path: ['end_time'], message: 'End time must be after start time.' });
   if (value.objective_type === 'APP_INSTALL' && (!value.app_id || !value.app_platform)) ctx.addIssue({ code: 'custom', path: ['app_id'], message: 'APP_INSTALL requires app_id and app_platform and Pinterest beta access.' });

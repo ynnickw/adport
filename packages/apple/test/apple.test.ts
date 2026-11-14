@@ -41,6 +41,32 @@ const tokenRoute = {
   reply: { access_token: 'eyJhbGci-test', token_type: 'Bearer', expires_in: 3600, scope: 'searchadsorg' },
 };
 
+// Official v1 adgroups, keywords and ads PUT endpoints, checked 2026-11-03.
+describe('Apple child activation', () => {
+  it.each([
+    ['apple_set_ad_group_status', 'ad_group_id', 'adgroups'],
+    ['apple_set_keyword_status', 'keyword_id', 'keywords'],
+    ['apple_set_ad_status', 'ad_id', 'ads'],
+  ])('previews %s through a scoped read and applies only the status field', async (tool, field, collection) => {
+    const { impl, calls } = fakeFetch([tokenRoute, { match: url => url.endsWith(`/${collection}/2`), reply: { result: { id: 2, name: 'Paused test', status: 'PAUSED', adAccountId: 1 } } }]);
+    const provider = new AppleAdsProvider(new AppleAdsClient(CREDS, impl));
+    const op = { tool, provider: 'apple', accountId: '1', kind: 'update' as const, payload: { [field]: '2', status: 'ENABLED' } };
+    expect((await provider.previewWrite(op, { forcePausedCreation: true })).serverValidated).toBe(false);
+    expect(calls.filter(c => c.url.includes(`/${collection}/`)).every(c => c.init.method === 'GET')).toBe(true);
+    expect(await provider.applyWrite(op, { forcePausedCreation: true })).toEqual({ applied: true, resourceIds: ['2'] });
+    const write = calls.find(c => c.init.method === 'PUT')!;
+    expect(JSON.parse(String(write.init.body))).toEqual({ status: 'ENABLED' });
+    expect((write.init.headers as Record<string, string>)['X-AP-Context']).toBe('adAccountId=1');
+    expect(appleTools(provider).find(t => t.name === tool)?.annotations.readOnly).toBe(false);
+  });
+  it('refuses a response for a different account before writing', async () => {
+    const { impl, calls } = fakeFetch([tokenRoute, { match: () => true, reply: { result: { id: 2, status: 'PAUSED', adAccountId: 9 } } }]);
+    const provider = new AppleAdsProvider(new AppleAdsClient(CREDS, impl));
+    await expect(provider.previewWrite({ tool: 'apple_set_ad_status', provider: 'apple', accountId: '1', kind: 'update', payload: { ad_id: '2', status: 'ENABLED' } }, { forcePausedCreation: true })).rejects.toThrow('selected ad account');
+    expect(calls.some(c => c.init.method === 'PUT')).toBe(false);
+  });
+});
+
 // Wire shapes: developer.apple.com/documentation/apple-ads-platform-api,
 // KeywordCreateBulkRequest, NegativeKeywordCreate, CampaignUpdate, CreativeCreate (2026-10-24).
 describe('Apple campaign setup capabilities', () => {
@@ -94,7 +120,7 @@ describe('Apple campaign setup capabilities', () => {
     const provider = new AppleAdsProvider(new AppleAdsClient(CREDS, impl));
     const tool = appleTools(provider).find((t) => t.name === `apple_${resource}`)!;
     const input = tool.input.parse({ account_id: '1', offset: 100, filters: [{ field: 'campaignId', value: ['2'] }] });
-    expect(await tool.handler(input as never, {} as never)).toEqual({ result, pagination: { totalCount: 101 } });
+    expect(await tool.handler(input as never, {} as never)).toMatchObject({ result, pagination: { totalCount: 101 } });
     expect(JSON.parse(String(calls.at(-1)!.init.body)).pagination.offset).toBe(100);
   });
 });
@@ -287,6 +313,7 @@ describe('AppleAdsProvider', () => {
     expect(body.promotedObjectType).toBe('APPSTORE_APP');
     expect(body.promotedObjectId).toBe('535500008');
     expect(body.targeting).toEqual({
+      supplySource: { include: ['APPSTORE'] },
       countryOrRegion: { include: ['US', 'CA'] },
       supplyPlacement: { include: ['APPSTORE_SEARCH_RESULTS'] },
     });
@@ -428,6 +455,7 @@ describe('AppleAdsProvider', () => {
       tool: 'apple_create_ad_group', provider: 'apple', accountId: '40669820', kind: 'create' as const,
       payload: {
         campaign_id: '444555666', name: 'AwayFinder Brand', bid: 2.5, currency: 'USD',
+        start_time: '2026-11-03T00:00:00.000Z',
         status: 'ENABLED' as const, device_classes: ['IPHONE' as const],
       },
     };
@@ -438,6 +466,7 @@ describe('AppleAdsProvider', () => {
     const adGroupBody = JSON.parse(String(calls.find((call) => call.url.endsWith('/adgroups'))!.init.body));
     expect(adGroupBody).toEqual({
       campaignId: 444555666,
+      startTime: '2026-11-03T00:00:00.000',
       name: 'AwayFinder Brand',
       pricingModel: 'CPT',
       status: 'PAUSED',
@@ -560,7 +589,7 @@ describe('AppleAdsProvider', () => {
   it('binds asset uploads to a SHA-256 and sends documented multipart fields', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'adport-apple-v1-'));
     const filePath = join(directory, 'creative.png');
-    const bytes = Buffer.from('fake-png-for-wire-test');
+    const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=', 'base64');
     await writeFile(filePath, bytes);
     const sha256 = createHash('sha256').update(bytes).digest('hex');
     try {

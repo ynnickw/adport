@@ -22,7 +22,7 @@ export async function connectGtm(input: { openBrowser: boolean; io: ProgramIO })
     let timeout: ReturnType<typeof setTimeout> | undefined;
     let refreshToken: string;
     try {
-      const authUrl = buildGoogleAuthUrl(clientId, loopback.redirectUri, pkce.challenge, state, GTM_SCOPES);
+      const authUrl = buildGoogleAuthUrl(clientId, loopback.redirectUri, pkce.challenge, state, false, GTM_SCOPES);
       input.io.out(`Authorize your Google Tag Manager connection:\n  ${authUrl}`);
       if (input.openBrowser) openInBrowser(authUrl);
       const code = await Promise.race([loopback.waitForCode, new Promise<never>((_resolve, reject) => {

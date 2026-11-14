@@ -1,9 +1,9 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { CredentialStore } from '@adport/core';
+import { MetaAdsProvider, MetaGraphClient, metaTools } from '@adport/provider-meta';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { assembleRuntime, createMcpServer } from '../src/index.js';
 
@@ -87,8 +87,8 @@ beforeEach(async () => {
     }),
   );
 
-  const runtime = await assembleRuntime();
-  const server = createMcpServer({ runtime });
+  const runtime = await assembleRuntime({ includeRawTools: true });
+  const server = createMcpServer({ runtime, includeRawTools: true });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   client = new Client({ name: 'e2e-client', version: '0.0.0' });
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
@@ -126,7 +126,8 @@ describe('Meta E2E over MCP with doc-faithful Graph mocks', () => {
     expect(names.some((n) => n.startsWith('mock_'))).toBe(false);
     expect(names.some((n) => n.startsWith('google_'))).toBe(false);
     const meta = tools.filter(tool => tool.name.startsWith('meta_'));
-    expect(meta).toHaveLength(15);
+    const definitions = metaTools(new MetaAdsProvider(new MetaGraphClient({ accessToken: 'catalog-only' })));
+    expect(meta.map(tool => tool.name).sort()).toEqual(definitions.map(tool => tool.name).sort());
     for (const tool of meta) {
       expect(tool.outputSchema, tool.name).toMatchObject({ type: 'object' });
       expect(Object.keys(tool.outputSchema?.properties ?? {}).length).toBeGreaterThan(0);

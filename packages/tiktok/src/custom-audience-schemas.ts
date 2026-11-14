@@ -1,0 +1,20 @@
+import { z } from 'zod';
+import { mediaSourceFields } from '@adport/core';
+
+export const audienceId = z.string().regex(/^\d+$/);
+export const audienceNativeId = z.union([audienceId, z.number().int().positive().safe()]).transform(String);
+export const audienceIds = z.array(audienceId).min(1).max(100).refine(ids => new Set(ids).size === ids.length, 'Audience IDs must be unique');
+export const audienceName = z.string().trim().min(1).max(128).regex(/^[^\x00-\x1f\x7f]+$/);
+export const calculateType = z.enum(['EMAIL_SHA256', 'PHONE_SHA256', 'FIRST_SHA256', 'FIRST_MD5', 'IDFA_SHA256', 'IDFA_MD5', 'GAID_SHA256', 'GAID_MD5', 'MULTIPLE_TYPES']);
+const hash = z.string().regex(/^[a-f0-9]{64}$/);
+const receipt = z.string().min(80).max(8192);
+const receipts = z.array(receipt).min(1).max(49).refine(values => new Set(values).size === values.length, 'Upload receipts must be unique');
+export const customAudienceList = z.object({ account_id: audienceId, custom_audience_ids: audienceIds.optional(), page: z.number().int().positive().safe().default(1), page_size: z.number().int().positive().max(100).default(100) }).strict();
+export const customAudienceGet = z.object({ account_id: audienceId, custom_audience_id: audienceId }).strict();
+export const audienceFileUpload = z.object({ ...mediaSourceFields, calculate_type: calculateType }).strict().refine(value => Number(!!value.media_id) + Number(!!value.file_path) === 1, 'Choose exactly one project media ID or local file path');
+export const customerAudienceCreate = z.object({ custom_audience_name: audienceName, upload_receipts: receipts, audience_sub_type: z.enum(['NORMAL', 'REACH_FREQUENCY']).default('NORMAL'), retention_in_days: z.number().int().min(1).max(365).optional() }).strict();
+const selected = { custom_audience_id: audienceId, expected_snapshot_hash: hash, acknowledge_shared_effects: z.literal(true) };
+export const customerAudienceUpdate = z.object({ ...selected, upload_receipts: receipts, action: z.enum(['APPEND', 'REMOVE', 'REPLACE']) }).strict();
+export const customAudienceRename = z.object({ ...selected, custom_audience_name: audienceName }).strict();
+export const customAudiencesDelete = z.object({ targets: z.array(z.object({ custom_audience_id: audienceId, expected_snapshot_hash: hash, confirm_name: z.string().min(1).max(4096) }).strict()).min(1).max(100).refine(values => new Set(values.map(v => v.custom_audience_id)).size === values.length, 'Audience IDs must be unique'), acknowledge_shared_effects: z.literal(true), acknowledge_permanent_deletion: z.literal(true) }).strict();
+export const audienceFileProof = z.object({ kind: z.literal('tiktok_audience_file_v1'), account_id: audienceId, scope_id: z.string().min(1).max(200), file_path: z.string().min(1).max(4096).regex(/^[^\x00-\x1f\x7f]+$/), calculate_type: calculateType, sha256: hash, byte_length: z.number().int().positive().max(50 * 1024 * 1024), record_count: z.number().int().positive().max(100_000), expires_at: z.number().int().positive().safe() }).strict();

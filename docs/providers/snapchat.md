@@ -2,6 +2,8 @@
 
 Implementation target: Ads API v1. Official references reviewed 2026-08-31:
 
+Campaign children, creatives/media and audiences/measurement were expanded against current official references on2026-11-03. See [Snapchat campaign setup](../snapchat-campaign-setup.md) for tool workflows, shared-creative impact, upload constraints, source ownership and verification boundaries.
+
 - [Authentication](https://developers.snap.com/marketing-api/Ads-API/authentication): authorization-code OAuth; form-encoded token requests, client credentials in the body; rotating refresh tokens.
 - [Organizations](https://developers.snap.com/marketing-api/Ads-API/organizations) and [ad accounts](https://developers.snap.com/marketing-api/Ads-API/ad-accounts): nested per-item response envelopes and account timezone.
 - [Campaigns](https://developers.snap.com/marketing-api/Ads-API/campaigns): creation arrays, account ownership, micro-currency budgets, partial JSON Patch updates, and `paging.next_link`.

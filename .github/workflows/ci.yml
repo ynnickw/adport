@@ -67,7 +67,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm typecheck
-      - run: pnpm test
+      - run: pnpm exec turbo run test --concurrency=1 -- --maxWorkers=4
       - name: Verify packed packages and isolated CLI installation
         if: matrix.node == 24
         run: pnpm check:packages

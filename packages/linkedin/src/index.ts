@@ -2,7 +2,7 @@ import { AdportError, type CredentialStore, type ProviderModule } from '@adport/
 import { LinkedInAdsClient, type LinkedInCredentials, type LinkedInTokens } from './client.js';
 import { LinkedInAdsProvider } from './provider.js';
 import { linkedinTools } from './tools.js';
-export { LinkedInAdsClient, LINKEDIN_API_BASE, LINKEDIN_API_VERSION, LINKEDIN_TOKEN_URL, buildLinkedInAuthUrl, exchangeLinkedInCode, restli, type LinkedInCredentials, type LinkedInTokens } from './client.js';
+export { LinkedInAdsClient, LINKEDIN_API_BASE, LINKEDIN_API_VERSION, LINKEDIN_CREATIVE_METADATA_VERSION, LINKEDIN_TOKEN_URL, buildLinkedInAuthUrl, exchangeLinkedInCode, restli, type LinkedInCredentials, type LinkedInTokens } from './client.js';
 export { LinkedInAdsProvider } from './provider.js';
 export { linkedinTools } from './tools.js';
 

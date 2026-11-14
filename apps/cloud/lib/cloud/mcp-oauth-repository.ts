@@ -14,6 +14,8 @@ import {
   verifyAccessTokenSignature,
 } from '@/lib/mcp-oauth';
 import type { TenantPrincipal } from './types';
+import type { ToolSelection } from '@adport/core';
+import { loadToolSelection } from './tool-catalog';
 import { mcpProjectLogoUrls } from './mcp-project-logos';
 
 const ACCESS_TOKEN_SECONDS = 60 * 60;
@@ -52,6 +54,7 @@ export interface McpOAuthTokenPair {
 }
 
 export interface McpOAuthGrantSummary {
+  toolSelection: ToolSelection;
   organizationGroupId?: string | null;
   clientId: string;
   userId: string;
@@ -106,10 +109,11 @@ export async function listMcpOAuthGrants(organizationId: string): Promise<McpOAu
       or refresh.organization_group_id = (select organization_group_id from public.organizations where id = ${organizationId})
     order by refresh.client_id, refresh.user_id, refresh.resource, refresh.organization_group_id, refresh.created_at desc
   `;
-  return grants.map(({ consumedAt, revokedAt, ...grant }) => ({
+  return Promise.all(grants.map(async ({ consumedAt, revokedAt, ...grant }) => ({
     ...grant,
+    toolSelection: await loadToolSelection({ organizationId, userId: grant.userId, clientId: grant.clientId, resource: grant.resource, oauthOrganizationGroupId: grant.organizationGroupId ?? undefined }),
     status: revokedAt ? 'revoked' : grant.expiresAt.getTime() <= Date.now() ? 'expired' : consumedAt ? 'rotated' : 'active',
-  }));
+  } as McpOAuthGrantSummary)));
 }
 
 export async function registerMcpOAuthClient(input: {

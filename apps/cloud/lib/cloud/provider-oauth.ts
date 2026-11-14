@@ -1,5 +1,5 @@
 import 'server-only';
-import { GTM_SCOPES } from '@adport/core';
+import { GA4_SCOPES, GSC_SCOPES, GTM_SCOPES } from '@adport/core';
 import { createClientSecret, type AppleCredentials } from '@adport/provider-apple';
 import { DEFAULT_GRAPH_VERSION } from '@adport/provider-meta';
 import { TIKTOK_API_VERSION } from '@adport/provider-tiktok';
@@ -8,11 +8,12 @@ import {
   buildGoogleAuthorizationUrl,
   exchangeGoogleCode,
   GOOGLE_ADS_SCOPE,
+  GOOGLE_DATA_MANAGER_SCOPE,
   googleConfigured,
   revokeGoogleToken,
 } from './google-oauth';
 import type { OAuthProvider, ProviderCredentialMap, StoredProviderCredential } from './types';
-import { extraOAuthAdapters } from './provider-oauth-extra';
+import { extraOAuthAdapters, pinterestManagementAdapter } from './provider-oauth-extra';
 import { xOAuthAdapter } from './provider-oauth-x';
 import { providerAllowedForOrganization } from './provider-rollout';
 
@@ -401,9 +402,48 @@ const gtm: OAuthAdapter<'gtm'> = {
   async revoke() { return false; },
 };
 
-const adapters = { gtm, google, meta, tiktok, microsoft, reddit, apple, ...extraOAuthAdapters, x: xOAuthAdapter } satisfies { [P in OAuthProvider]: OAuthAdapter<P> };
+function analyticsAdapter<P extends 'ga4' | 'gsc'>(provider: P, scopes: string[]): OAuthAdapter<P> {
+  return {
+    provider, flowLabel: provider === 'ga4' ? 'Google Analytics 4 OAuth 2.0 (read-only)' : 'Google Search Console OAuth 2.0 (read-only)',
+    scopes, pkce: true, codeParam: 'code', manualRevocationUrl: 'https://myaccount.google.com/permissions',
+    configured: () => googleConfigured(provider) && (env()[provider === 'ga4' ? 'GA4_OAUTH_ENABLED' : 'GSC_OAUTH_ENABLED'] === 'true' || Boolean(env().ANALYTICS_TEST_ORGANIZATION_IDS?.trim())),
+    authorizationUrl(input) {
+      if (!this.configured()) throw new Error('This analytics authorization is not enabled.');
+      return buildGoogleAuthorizationUrl(input, { provider, scopes });
+    },
+    async exchange({ code, verifier }) {
+      if (!this.configured()) throw new Error('This analytics authorization is not enabled.');
+      const tokens = await exchangeGoogleCode(code, verifier, provider);
+      if (scopes.some(scope => !tokens.scopes.includes(scope))) throw new Error('Google did not grant the requested read-only analytics permission. The existing connection was preserved.');
+      return { refreshToken: tokens.refreshToken };
+    },
+    // Google revocation can affect other services using the same application.
+    async revoke() { return false; },
+  };
+}
+const ga4 = analyticsAdapter('ga4', GA4_SCOPES), gsc = analyticsAdapter('gsc', GSC_SCOPES);
 
-export function oauthAdapter<P extends OAuthProvider>(provider: P): OAuthAdapter<P> {
+const adapters = { ga4, gsc, gtm, google, meta, tiktok, microsoft, reddit, apple, ...extraOAuthAdapters, x: xOAuthAdapter } satisfies { [P in OAuthProvider]: OAuthAdapter<P> };
+
+export function oauthAdapter<P extends OAuthProvider>(provider: P, options: { googleDataManager?: boolean; pinterestPinManagement?: boolean; pinterestSecretPins?: boolean; pinterestCatalogManagement?: boolean } = {}): OAuthAdapter<P> {
+  if (options.pinterestPinManagement || options.pinterestSecretPins || options.pinterestCatalogManagement) {
+    if (provider !== 'pinterest' || options.googleDataManager) throw new Error('Pin management authorization is supported only for Pinterest.');
+    return pinterestManagementAdapter({ pinManagement: options.pinterestPinManagement === true, secretPins: options.pinterestSecretPins === true, catalogManagement: options.pinterestCatalogManagement === true }) as OAuthAdapter<P>;
+  }
+  if (options.googleDataManager) {
+    if (provider !== 'google') throw new Error('Data Manager authorization is supported only for Google.');
+    return {
+      ...google,
+      flowLabel: 'Google OAuth 2.0 with additional Data Manager permission',
+      scopes: [GOOGLE_ADS_SCOPE, GOOGLE_DATA_MANAGER_SCOPE],
+      authorizationUrl: input => buildGoogleAuthorizationUrl(input, true),
+      async exchange({ code, verifier }) {
+        const tokens = await exchangeGoogleCode(code, verifier);
+        if (!tokens.scopes?.includes(GOOGLE_ADS_SCOPE) || !tokens.scopes.includes(GOOGLE_DATA_MANAGER_SCOPE)) throw new Error('Google did not confirm both Ads and Data Manager permission. The previous connection was preserved.');
+        return { refreshToken: tokens.refreshToken };
+      },
+    } as OAuthAdapter<P>;
+  }
   return adapters[provider] as unknown as OAuthAdapter<P>;
 }
 
@@ -414,6 +454,8 @@ export function revokeGrant(provider: OAuthProvider, credential: StoredProviderC
 /** Availability of every hosted OAuth application, for the connections UI. */
 export function oauthAvailability(organizationId?: string): Record<OAuthProvider, boolean> {
   const availability: Record<OAuthProvider, boolean> = {
+    ga4: ga4.configured(),
+    gsc: gsc.configured(),
     gtm: gtm.configured(),
     google: google.configured(),
     meta: meta.configured(),

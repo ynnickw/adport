@@ -1,22 +1,25 @@
 import {
   AdportError, resolveDateRange, type Account, type AdProvider, type MetricName,
   type NormalizedQuery, type Report, type ReportRow, type StandardActions,
-  type WriteGuard, type WriteOperation, type WritePreview, type WriteResult,
+  type WriteGuard, type WriteOperation, type WritePreview, type WriteResult, type MediaResolver,
 } from '@adport/core';
 import { SnapchatAdsClient } from './client.js';
+import { SnapchatCreativeService, type SnapchatPlan } from './creatives.js';
+import { SnapchatManagementService } from './management.js';
 import {
   accountSchema, campaignSchema, createCampaignSchema, organizationSchema,
   setBudgetSchema, setStatusSchema, snapchatId, statSchema,
 } from './schemas.js';
 
-interface Plan extends Omit<WritePreview, 'serverValidated'> { execute: () => Promise<string[]> }
 const MICROS = 1_000_000;
 const FIELDS = 'spend,impressions,swipes,conversion_purchases,conversion_purchases_value';
 const BREAKDOWN = { account: 'campaign', campaign: 'campaign', ad_group: 'adsquad', ad: 'ad' } as const;
 
 export class SnapchatAdsProvider implements AdProvider {
   readonly id = 'snapchat';
-  constructor(private readonly client: SnapchatAdsClient) {}
+  readonly creatives: SnapchatCreativeService;
+  readonly management: SnapchatManagementService;
+  constructor(private readonly client: SnapchatAdsClient, media?: MediaResolver) { this.creatives = new SnapchatCreativeService(client, media); this.management = new SnapchatManagementService(client, this.creatives); }
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions {
     return { pauseCampaign: (accountId, campaignId) => ({
@@ -69,7 +72,7 @@ export class SnapchatAdsProvider implements AdProvider {
       if (query.level === 'account') {
         const sums: Record<string, number> = {};
         for (const field of FIELDS.split(',')) {
-          if (stats.every(row => row.stats[field] !== undefined)) sums[field] = stats.reduce((sum, row) => sum + row.stats[field]!, 0);
+          if (stats.length && stats.every(row => row.stats[field] !== undefined)) sums[field] = stats.reduce((sum, row) => sum + row.stats[field]!, 0);
         }
         rows.push({ provider: this.id, accountId, entity: { level: 'account', id: accountId, name: account.name, status: account.status }, metrics: normalize(sums, query.metrics) });
       } else {
@@ -86,10 +89,10 @@ export class SnapchatAdsProvider implements AdProvider {
     return { ...preview, serverValidated: false };
   }
   async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> {
-    return { applied: true, resourceIds: await (await this.plan(op, guard)).execute() };
+    return (await this.plan(op, guard)).execute();
   }
 
-  private async plan(op: WriteOperation, guard: WriteGuard): Promise<Plan> {
+  private async plan(op: WriteOperation, guard: WriteGuard): Promise<SnapchatPlan> {
     const accountId = snapchatId.parse(op.accountId);
     if (op.provider !== this.id) throw new AdportError('INVALID_INPUT', 'snapchat: provider mismatch');
     if (op.tool === 'snapchat_create_campaign' && op.kind === 'create') {
@@ -107,11 +110,17 @@ export class SnapchatAdsProvider implements AdProvider {
           const value = input[field as 'daily_budget_micro' | 'lifetime_spend_cap_micro'];
           return value === undefined ? [] : [{ target: `new campaign ${field}`, toMicros: value }];
         }),
-        execute: async () => (await this.client.mutate(`adaccounts/${accountId}/campaigns`, 'POST', body, 'campaigns', 'campaign', campaignSchema)).map(c => c.id),
+        execute: async () => {
+          const data = await this.client.mutation(`adaccounts/${accountId}/campaigns`, 'POST', body, 'campaigns', 'campaign', campaignSchema);
+          const ids = data.items.map(c => c.id);
+          if (data.items.length !== 1 || data.items.some(c => c.ad_account_id !== accountId || c.status !== status || c.name !== input.name || (input.daily_budget_micro !== undefined && c.daily_budget_micro !== input.daily_budget_micro) || (input.lifetime_spend_cap_micro !== undefined && c.lifetime_spend_cap_micro !== input.lifetime_spend_cap_micro))) throw new AdportError('PROVIDER_ERROR', 'snapchat: campaign creation receipt mismatch; reconcile before retrying', { resource_ids: ids, warnings: data.warnings });
+          return { applied: true, resourceIds: ids, ...(data.warnings.length ? { details: { warnings: data.warnings } } : {}) };
+        },
       };
     }
     if (op.kind !== 'update' || !['snapchat_set_campaign_status', 'snapchat_set_budget'].includes(op.tool)) {
-      throw new AdportError('INVALID_INPUT', `snapchat: unsupported write ${op.tool}`);
+      if (/^snapchat_(?:create_(?:customer_audience|website_audience|mobile_audience|engagement_audience|profile_audience|lookalike|custom_conversion)|update_audience|add_audience_users|remove_audience_users|clear_audience_users|delete_audience|rename_pixel|set_adsquad_measurement|delete_custom_conversion)$/.test(op.tool)) return this.management.plan(op, guard);
+      return this.creatives.plan(op, guard);
     }
     const input = op.tool === 'snapchat_set_budget' ? setBudgetSchema.parse(op.payload) : setStatusSchema.parse(op.payload);
     const campaigns = await this.client.collection(`campaigns/${input.campaign_id}`, 'campaigns', 'campaign', campaignSchema);
@@ -127,9 +136,11 @@ export class SnapchatAdsProvider implements AdProvider {
       summary: `Change Snapchat campaign "${current.name}" ${field}`,
       changes: [`~ ${current.id} ${field}: ${previous ?? 'unset'} → ${value}`], coercions: [],
       budgetDeltas: typeof value === 'number' ? [{ target: `campaign ${current.id} ${field}`, ...(typeof previous === 'number' ? { fromMicros: previous } : {}), toMicros: value }] : [],
-      execute: async () => (await this.client.mutate(
-        `adaccounts/${accountId}/campaigns/${current.id}`, 'PATCH', patch, 'campaigns', 'campaign', campaignSchema,
-      )).map(c => c.id),
+      execute: async () => {
+        const data = await this.client.mutation(`adaccounts/${accountId}/campaigns/${current.id}`, 'PATCH', patch, 'campaigns', 'campaign', campaignSchema), ids = data.items.map(c => c.id);
+        if (data.items.length !== 1 || data.items.some(c => c.id !== current.id || c.ad_account_id !== accountId || c[field] !== value)) throw new AdportError('PROVIDER_ERROR', 'snapchat: campaign update receipt mismatch; reconcile before retrying', { resource_ids: ids, warnings: data.warnings });
+        return { applied: true, resourceIds: ids, ...(data.warnings.length ? { details: { warnings: data.warnings } } : {}) };
+      },
     };
   }
 }

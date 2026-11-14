@@ -2,9 +2,13 @@ import { z } from 'zod';
 import { defineTool, guardedWriteTool, type AnyToolDefinition } from '@adport/core';
 import { createCampaignSchema, setBudgetSchema, setStatusSchema, snapchatId } from './schemas.js';
 import type { SnapchatAdsProvider } from './provider.js';
+import { snapchatCreativeTools } from './creative-tools.js';
+import { snapchatManagementTools } from './management-tools.js';
 
 export function snapchatTools(provider: SnapchatAdsProvider): AnyToolDefinition[] {
   return [
+    ...snapchatCreativeTools(provider),
+    ...snapchatManagementTools(provider),
     defineTool({ name: 'snapchat_list_campaigns', namespace: 'snapchat', description: 'List Snapchat campaigns in the selected ad account.',
       input: z.object({ account_id: snapchatId }), annotations: { readOnly: true }, handler: input => provider.listCampaigns(input.account_id) }),
     guardedWriteTool({ name: 'snapchat_create_campaign', namespace: 'snapchat', provider: 'snapchat', kind: 'create',

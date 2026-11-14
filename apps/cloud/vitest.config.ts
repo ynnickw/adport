@@ -17,6 +17,8 @@ export default defineConfig({
     setupFiles: ['./test/setup-env.ts'],
     testTimeout: 20_000,
     hookTimeout: 20_000,
+    // Each database worker owns a pool of up to ten connections.
+    maxWorkers: 4,
     sequence: { concurrent: false },
   },
 });

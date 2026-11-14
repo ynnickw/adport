@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, afterEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { mediaCoverSource, mediaCoverUrl } from '@/lib/cloud/media-cover';
 import { GET } from '@/app/api/media/cover/route';
 import { pdfCover } from '@/lib/cloud/pdf-cover';
@@ -7,6 +7,7 @@ import { existsSync } from 'node:fs';
 
 const origin = 'https://example.supabase.co';
 const source = origin+'/storage/v1/object/sign/creative-media/0350a0a1-567d-427e-a479-c3a385cd3da6/ccd3710c-594a-4c31-8cc0-3f0317213154?token=temporary-read-grant';
+beforeEach(() => { vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', origin); });
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 describe('private PDF cover rendering', () => {
@@ -18,6 +19,14 @@ describe('private PDF cover rendering', () => {
       expect((await GET(new Request('https://app.adport.test/api/media/cover?source='+encodeURIComponent(invalid)))).status).toBe(404);
     }
     expect(fetcher).not.toHaveBeenCalled();
+  });
+  it('supports only the configured local Storage origin over HTTP, retaining exact grant paths', () => {
+    const local = source.replace(origin, 'http://127.0.0.1:54321');
+    expect(mediaCoverSource(local, 'http://127.0.0.1:54321').href).toBe(local);
+    expect(() => mediaCoverSource(local, origin)).toThrow('Invalid private media preview');
+    expect(() => mediaCoverSource(local.replace(':54321', ':54322'), 'http://127.0.0.1:54321')).toThrow();
+    expect(() => mediaCoverSource(source.replace(origin, 'http://remote.example'), 'http://remote.example')).toThrow();
+    expect(() => mediaCoverSource(local.replace('/object/sign/', '/object/public/'), 'http://127.0.0.1:54321')).toThrow();
   });
   it('forwards no credentials, refuses redirects and oversized or non-PDF source data', async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response('not PDF', { status: 200 })); vi.stubGlobal('fetch', fetcher);
@@ -46,7 +55,7 @@ describe('private PDF cover rendering', () => {
     if (existsSync('.pdf-renderer/worker.mjs')) {
       vi.stubEnv('NODE_ENV', 'production');
       expect(Buffer.from(await pdfCover(new Uint8Array(Buffer.from(pdf))))).toEqual(Buffer.from(image));
-      vi.unstubAllEnvs();
+      vi.stubEnv('NODE_ENV', 'test');
     }
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(Buffer.from(pdf), { headers: { 'content-type': 'application/pdf' } })));
     const response = await GET(new Request('https://app.adport.test/api/media/cover?source='+encodeURIComponent(source)));

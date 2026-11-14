@@ -28,6 +28,64 @@ const tokenRoute = {
   reply: { access_token: 'access-token', expires_in: 3600 },
 };
 
+// Official v25 AdGroupAdOperation and ad_group_ad fields, checked 2026-11-03.
+describe('ad activation', () => {
+  const resourceName = 'customers/1234567890/adGroupAds/22~33';
+  it('updates RSA copy through AdService with exact masks and preserves pinned assets', async () => {
+    const { impl, calls } = fakeFetch([tokenRoute,
+      { match: url => url.includes('googleAds:search'), reply: { results: [{ adGroupAd: { resourceName, ad: { id: '33', type: 'RESPONSIVE_SEARCH_AD', finalUrls: ['https://old.example'], responsiveSearchAd: { headlines: [{ text: 'Old', pinnedField: 'HEADLINE_1' }, { text: 'Two' }, { text: 'Three' }], descriptions: [{ text: 'Description one' }, { text: 'Description two' }] } } } }] } },
+      { match: url => url.includes('/ads:mutate'), reply: { results: [{ resourceName: 'customers/1234567890/ads/33' }] } },
+    ]);
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
+    await provider.previewWrite({ tool: 'google_update_responsive_search_ad', provider: 'google', accountId: '1234567890', kind: 'update', payload: { ad_group_id: '22', ad_id: '33', headlines: ['New', 'Two', 'Three'] } }, { forcePausedCreation: true });
+    const body = JSON.parse(String(calls.at(-1)!.init.body));
+    expect(body).toEqual({ validateOnly: true, partialFailure: false, operations: [{ update: { resourceName: 'customers/1234567890/ads/33', responsiveSearchAd: { headlines: [{ text: 'New', pinnedField: 'HEADLINE_1' }, { text: 'Two' }, { text: 'Three' }] } }, updateMask: 'responsive_search_ad.headlines' }] });
+    expect(body.operations[0].update).not.toHaveProperty('status');
+    expect(body.operations[0].update).not.toHaveProperty('finalUrls');
+  });
+  it('reads actual RSA content and emits a status action bound to the returned account and ad group', async () => {
+    const { impl, calls } = fakeFetch([tokenRoute,
+      { match: url => url.includes('googleAds:search'), reply: { results: [{ campaign: { id: '11' }, adGroup: { id: '22' }, adGroupAd: {
+        status: 'PAUSED', ad: { id: '33', type: 'RESPONSIVE_SEARCH_AD', finalUrls: ['https://example.com'],
+          responsiveSearchAd: { headlines: [{ text: 'Headline' }], descriptions: [{ text: 'Description' }] } },
+      } }] } },
+    ]);
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
+    const result = await provider.listAds({ account_id: '1234567890', ad_group_id: '22', limit: 10 });
+    expect(result.creatives[0]).toMatchObject({ id: '33', name: 'Headline', headlines: ['Headline'], descriptions: ['Description'],
+      actions: expect.arrayContaining([expect.objectContaining({ tool: 'google_set_ad_status', arguments: { account_id: '1234567890', ad_group_id: '22', ad_id: '33' } })]),
+    });
+    expect(result.truncated).toBe(false);
+    const query = JSON.parse(String(calls.at(-1)!.init.body)).query;
+    expect(query).toContain('ad_group.id = 22');
+    expect(calls.some(c => c.url.includes(':mutate'))).toBe(false);
+  });
+  it('validates an exact account/ad-group ad status update before applying it', async () => {
+    const { impl, calls } = fakeFetch([tokenRoute,
+      { match: url => url.includes('googleAds:search'), reply: { results: [{ adGroupAd: { resourceName, status: 'PAUSED' } }] } },
+      { match: url => url.includes('adGroupAds:mutate'), reply: { results: [{ resourceName }] } },
+    ]);
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
+    const op = { tool: 'google_set_ad_status', provider: 'google', accountId: '1234567890', kind: 'update' as const,
+      payload: { ad_group_id: '22', ad_id: '33', status: 'ENABLED' } };
+    expect(await provider.previewWrite(op, { forcePausedCreation: true })).toMatchObject({ serverValidated: true, changes: ['~ ad 33 status PAUSED → ENABLED'] });
+    let mutations = calls.filter(c => c.url.includes('adGroupAds:mutate'));
+    expect(JSON.parse(String(mutations[0]!.init.body))).toEqual({ operations: [{ update: { resourceName, status: 'ENABLED' }, updateMask: 'status' }], validateOnly: true, partialFailure: false });
+    expect(await provider.applyWrite(op, { forcePausedCreation: true })).toEqual({ applied: true, resourceIds: [resourceName] });
+    mutations = calls.filter(c => c.url.includes('adGroupAds:mutate'));
+    expect(JSON.parse(String(mutations[1]!.init.body)).validateOnly).toBe(false);
+    expect(calls.filter(c => c.url.includes('googleAds:search'))).toHaveLength(2);
+  });
+  it('rejects a missing or differently scoped ad before mutation', async () => {
+    const { impl, calls } = fakeFetch([tokenRoute,
+      { match: url => url.includes('googleAds:search'), reply: { results: [{ adGroupAd: { resourceName: 'customers/1234567890/adGroupAds/99~33', status: 'PAUSED' } }] } },
+    ]);
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
+    await expect(provider.previewWrite({ tool: 'google_set_ad_status', provider: 'google', accountId: '1234567890', kind: 'update', payload: { ad_group_id: '22', ad_id: '33', status: 'ENABLED' } }, { forcePausedCreation: true })).rejects.toThrow('selected account and ad group');
+    expect(calls.some(c => c.url.includes(':mutate'))).toBe(false);
+  });
+});
+
 describe('normalizeCustomerId', () => {
   it('strips dashes and prefixes', () => {
     expect(normalizeCustomerId('123-456-7890')).toBe('1234567890');
@@ -262,11 +320,11 @@ describe('GoogleAdsProvider writes', () => {
     const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
     const preview = await provider.previewWrite({
       tool: 'google_create_campaign', provider: 'google', accountId: '1234567890', kind: 'create',
-      payload: { name: 'Targeted', daily_budget_micros: 3_000_000, bidding_strategy: 'MAXIMIZE_CONVERSIONS', location_ids: ['2840', '2826', '2276'], language_ids: ['1000'] },
+      payload: { name: 'Targeted', daily_budget_micros: 3_000_000, bidding_strategy: 'MAXIMIZE_CONVERSIONS', location_ids: ['2840', '2826', '2276'] },
     }, { forcePausedCreation: true });
     const body = JSON.parse(String(calls.find(c => c.url.includes('googleAds:mutate'))?.init.body));
     expect(body.validateOnly).toBe(true);
-    expect(body.mutateOperations).toHaveLength(6);
+    expect(body.mutateOperations).toHaveLength(5);
     expect(body.mutateOperations[1].campaignOperation.create).toMatchObject({
       resourceName: 'customers/1234567890/campaigns/-2', status: 'PAUSED', maximizeConversions: {},
       networkSettings: { targetGoogleSearch: true, targetSearchNetwork: false, targetContentNetwork: false, targetPartnerSearchNetwork: false },
@@ -274,7 +332,7 @@ describe('GoogleAdsProvider writes', () => {
     });
     expect(body.mutateOperations[1].campaignOperation.create).not.toHaveProperty('manualCpc');
     expect(body.mutateOperations[2]).toEqual({ campaignCriterionOperation: { create: { campaign: 'customers/1234567890/campaigns/-2', location: { geoTargetConstant: 'geoTargetConstants/2840' } } } });
-    expect(body.mutateOperations[5]).toEqual({ campaignCriterionOperation: { create: { campaign: 'customers/1234567890/campaigns/-2', language: { languageConstant: 'languageConstants/1000' } } } });
+    expect(body.mutateOperations.some((value: any) => value.campaignCriterionOperation?.create?.language)).toBe(false);
     expect(preview.changes.join(' ')).toContain('presence only');
     expect(preview.budgetDeltas[0]?.toMicros).toBe(3_000_000);
   });
@@ -319,6 +377,14 @@ describe('GoogleAdsProvider writes', () => {
     const body = JSON.parse(String(calls.find((call) => call.url.includes('campaigns:mutate'))!.init.body));
     expect(body.validateOnly).toBe(true);
     expect(body.operations[0].create.status).toBe('PAUSED');
+  });
+  it.each(['adGroups', 'adGroupAds', 'assetGroups'])('does not let the local generic %s creation bypass paused policy', async service => {
+    const { impl, calls } = fakeFetch([tokenRoute, { match: url => url.endsWith(`/${service}:mutate`), reply: {} }]);
+    const provider = new GoogleAdsProvider(new GoogleAdsRestClient(CREDS, 'v25', impl));
+    const preview = await provider.previewWrite({ tool: 'google_api_create', provider: 'google', accountId: '1234567890', kind: 'create', payload: { service, creates: [{ status: 'ENABLED' }] } }, { forcePausedCreation: true });
+    const body = JSON.parse(String(calls.at(-1)!.init.body));
+    expect(body.operations[0].create.status).toBe('PAUSED'); expect(preview.coercions).toHaveLength(1); expect(body.validateOnly).toBe(true);
+    if (service === 'assetGroups') expect(body).not.toHaveProperty('partialFailure'); else expect(body.partialFailure).toBe(false);
   });
 
   it('policy-checks generic budget creates and rejects generic budget updates', async () => {
@@ -384,7 +450,7 @@ describe('GoogleAdsProvider bidding tools', () => {
       {
         tool: 'google_set_bid_ceiling',
         provider: 'google',
-        accountId: '5622048100',
+        accountId: '5511000001',
         kind: 'update',
         payload: { campaign_id: '24030163641', cpc_bid_ceiling_micros: 1_200_000 },
       },
@@ -409,7 +475,7 @@ describe('GoogleAdsProvider bidding tools', () => {
         {
           tool: 'google_set_bid_ceiling',
           provider: 'google',
-          accountId: '5622048100',
+          accountId: '5511000001',
           kind: 'update',
           payload: { campaign_id: '24030163641', cpc_bid_ceiling_micros: 1_200_000 },
         },
@@ -429,7 +495,7 @@ describe('GoogleAdsProvider bidding tools', () => {
       {
         tool: 'google_set_bidding_strategy',
         provider: 'google',
-        accountId: '5622048100',
+        accountId: '5511000001',
         kind: 'update',
         payload: { campaign_id: '24030163641', strategy: 'MAXIMIZE_CONVERSIONS', target_cpa_micros: 5_000_000 },
       },
@@ -451,7 +517,7 @@ describe('GoogleAdsProvider bidding tools', () => {
         {
           tool: 'google_set_bidding_strategy',
           provider: 'google',
-          accountId: '5622048100',
+          accountId: '5511000001',
           kind: 'update',
           payload: { campaign_id: '24030163641', strategy: 'MANUAL_CPC', target_cpa_micros: 5_000_000 },
         },

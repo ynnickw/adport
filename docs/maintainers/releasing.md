@@ -80,7 +80,9 @@ adport --version
 adport --demo accounts
 ```
 
-Verify Cloud deployments and live-provider workflows separately when those are in scope. Default smoke checks never mutate a real advertising account.
+For releases that ship Cloud changes, verify that `main`, the release tag, and the production deployment behind `app.adport.dev` resolve to the same commit. Use the live production alias to find the deployment and check its Git source. Confirm that any migrations required by that commit are applied and run read-only smoke checks against the alias. If production is serving a branch build with changes absent from `main`, integrate the intended changes through a PR before tagging the release or promoting the replacement build.
+
+Verify live-provider workflows separately when they are in scope. Default smoke checks never mutate a real advertising account.
 
 ## Repository settings
 

@@ -1,0 +1,74 @@
+# TikTok campaign and creative workflows
+
+The CLI and MCP server use the same core tool definitions. All advertising writes require a preview, followed by identical arguments plus the returned `pending_operation_id`. TikTok provides no server validation-only mode: previews read current configuration and produce local plans. `DISABLE` is TikTok's paused status; creation policy applies to each ad-group/ad creative, including omitted default statuses on generic creates.
+
+| Workflow | Tools | Native API |
+| --- | --- | --- |
+| Inspect child configuration | `tiktok_ad_groups`, `tiktok_ads` | `GET adgroup/get`, `GET ad/get`; native configuration and page metadata remain visible. |
+| Create an ad group | `tiktok_create_ad_group` | `POST adgroup/create`; explicit objective-dependent placement, promotion, optimization, budget, bidding and advertiser-time schedule. Targeting fields are flattened into the native request. |
+| Create standard or Spark ads | `tiktok_create_ads` | `POST ad/create`; up to20 creatives, each forced paused when policy requires it. Select existing authorized identity and media IDs first. |
+| Change child status | `tiktok_set_ad_group_status`, `tiktok_set_ad_status` | Separate `adgroup/status/update` and `ad/status/update` endpoints. Every requested ID is checked in the advertiser before submission. |
+| Edit copy/media | `tiktok_update_ad` | `POST ad/update` with `patch_update:true` and native `creatives`. Omitted creative fields and serving status stay unchanged. |
+| Change targeting | `tiktok_update_targeting` | `POST adgroup/update`; only supplied dimensions replace their existing arrays. |
+| Change child money/ROAS | `tiktok_set_ad_group_budget`, `tiktok_set_ad_group_bidding` | Current monetary values are fetched and checked in micros. ROAS remains a ratio. Unknown current amounts reject the preview. |
+| Select identity | `tiktok_identities` | `GET identity/get`; lists existing authorized identities without granting access. |
+| Inspect media | `tiktok_videos`, `tiktok_image_info`, `tiktok_video_info` | Video library search and image/video metadata endpoints. Provider-returned media URLs are preserved. |
+| Upload media | `tiktok_upload_image`, `tiktok_upload_video` | Multipart `file/{image,video}/ad/upload` with native MD5 signatures. SHA-256 binds the approved bytes to preview/apply. |
+| Inspect audiences/pixels | `tiktok_custom_audiences`, `tiktok_saved_audiences`, `tiktok_pixels` | Native advertiser-scoped list endpoints; no customer data or tracking events are uploaded. |
+| Manage Pixel configuration | `tiktok_get_pixel`, `tiktok_create_pixel`, `tiktok_update_pixel` | Guarded native creation/name/matching changes with independent readback. No tracking installation or event sending. |
+| Read Pixel event statistics | `tiktok_pixel_event_stats` | Native aggregate fields for explicit Pixel IDs and dates. |
+| Find location targeting | `tiktok_search_targeting` | Read-only `POST tool/targeting/search`. Explicit objective/placement; promotion type is needed for some objectives. |
+
+Use [`media_list` and the project asset library](creative-media.md) to upload files for hosted tools. Hosted runtimes accept scoped immutable `media_id` values; local CLI/stdio can use an absolute `file_path`. Adport's current provider upload caps are10MiB for images and100MiB for videos; the hosted staging cap may be smaller. Media formats, dimensions, identity eligibility, objective combinations and account limits are additionally validated by TikTok.
+
+Ad cards display native text, destination and available preview URLs. Their edit/status actions bind the advertiser and entity IDs, request a new policy preview and use the ordinary approval flow. Spark text can come from its source post, so its card omits the ad-copy text form. Creating a standard ad does not grant Spark authorization or create an identity.
+
+Wire contracts are tested against the [official SDK at f809c396](https://github.com/tiktok/tiktok-business-api-sdk/tree/f809c396520df2d7b201a9ccc5378d822b728ed3), including `adgroup_create_body.py`, `ad_update_body.py`, child status bodies, `file_api.py` multipart fields and the targeting OpenAPI definitions. Tests check headers, trailing slashes, JSON parameters, payload masks, monetary conversion, parent/account validation and changed-byte rejection. This extension has not yet been verified through the existing hosted TikTok grant; live verification and additional audience/measurement/automation workflows remain pending.
+
+
+## Saved targeting templates
+
+`tiktok_saved_audiences` supports native ID filters, up to 100 IDs and 100 rows per page. Each record includes a snapshot hash; missing or contradictory native paging is reported as unknown completeness. `tiktok_get_saved_audience` uses the same ID-filtered native endpoint.
+
+Preview/apply `tiktok_create_saved_audience` to save location, interest, audience, device and action targeting for reuse. This does not create or change a campaign, budget or delivery setting. Native creator/hashtag action periods are coerced to zero and the preview reports that coercion. Creation is independently read back; an uncertain result must be reconciled by ID or filtered list before another create. TikTok's documented saved-audience API has no update endpoint. Create a new template for changed targeting.
+
+`tiktok_delete_saved_audiences` permanently deletes up to 100 templates using a current `snapshot_hash` for each target. All snapshots are checked again before any deletion; a filtered native read must confirm absence before Adport reports success. Deletion has no restore endpoint. Native permission errors are preserved and writes never retry automatically.
+
+These contracts follow TikTok's [official saved-audience models](https://github.com/tiktok/tiktok-business-api-sdk/blob/f809c396520df2d7b201a9ccc5378d822b728ed3/python_sdk/docs/SavedAudienceCreateBody.md) and [Audience API](https://github.com/tiktok/tiktok-business-api-sdk/blob/f809c396520df2d7b201a9ccc5378d822b728ed3/python_sdk/docs/AudienceApi.md). Account grants and native targeting eligibility remain authoritative.
+
+### Pixel configuration and event statistics
+
+`tiktok_pixels` supports the native `pixel_id`, `code`, `name`, `order_by` and
+`filtering.available_for_catalog_only` filters. Its default and maximum page
+size are 20, matching TikTok's endpoint. Native `pixels` and `page_info` fields
+are retained; missing or contradictory paging is explicitly unknown rather
+than an empty-account or complete-list claim.
+
+Read one Pixel with `tiktok_get_pixel` before updating it. Pass its current
+`configuration_hash` to `tiktok_update_pixel`; the hash binds the advertiser,
+Pixel ID, name, code, category, partner and matching settings. A name-only update
+explicitly preserves both current email and phone matching flags. To change
+matching, supply both booleans in `advanced_matching_fields`. Unknown native
+matching settings or stale configuration reject before any update request.
+
+`tiktok_create_pixel` accepts TikTok's native name, category and partner fields.
+It creates a record with TikTok's matching defaults, then independently reads
+back the returned ID and requested fields. Inspect that configuration before
+separately approving matching changes or installing tracking. Neither Pixel
+write installs website code, sends conversion events or changes ad delivery.
+All writes use the shared preview/apply policy gate; previews are local because
+TikTok has no server dry-run. An uncertain write/readback is never retried
+and must be reconciled by ID before another attempt. There is no invented
+Pixel deletion tool: the reviewed SDK has no native Pixel-delete endpoint.
+
+`tiktok_pixel_event_stats` sends native JSON `pixel_ids` and `date_range` query
+parameters. Adport limits a request to 20 unique IDs and validates calendar dates
+and ordering. It returns TikTok's aggregate fields without inventing normalized
+counts, attribution or conversion success. This is a read; it sends no events.
+Native advertiser/app permissions are still required for every endpoint.
+
+Wire formats are pinned to TikTok's official SDK
+[`pixel_list.yml`](https://github.com/tiktok/tiktok-business-api-sdk/blob/f809c396520df2d7b201a9ccc5378d822b728ed3/yml_files/pixel_list.yml),
+[`pixel_create.yml`](https://github.com/tiktok/tiktok-business-api-sdk/blob/f809c396520df2d7b201a9ccc5378d822b728ed3/yml_files/pixel_create.yml),
+[`pixel_update.yml`](https://github.com/tiktok/tiktok-business-api-sdk/blob/f809c396520df2d7b201a9ccc5378d822b728ed3/yml_files/pixel_update.yml) and
+[`pixel_event_stats.yml`](https://github.com/tiktok/tiktok-business-api-sdk/blob/f809c396520df2d7b201a9ccc5378d822b728ed3/yml_files/pixel_event_stats.yml).

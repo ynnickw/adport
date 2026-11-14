@@ -15,9 +15,12 @@ export const campaignSchema = z.object({
   id: xId, name: z.string(), currency, funding_instrument_id: xId, entity_status: z.string(), deleted: z.boolean(),
   budget_optimization: z.string(), daily_budget_amount_local_micro: micros.nullable(), total_budget_amount_local_micro: micros.nullable(),
 });
-export const lineItemSchema = z.object({
-  id: xId, name: z.string(), campaign_id: xId, currency, entity_status: z.string(), deleted: z.boolean(),
+export const lineItemSchema = z.looseObject({
+  id: xId, name: z.string().nullable(), campaign_id: xId, currency, entity_status: z.string(), deleted: z.boolean(),
   placements: z.array(z.string()), product_type: z.string(), objective: z.string(),
+  bid_strategy: z.string().optional(), bid_amount_local_micro: micros.nullable().optional(),
+  daily_budget_amount_local_micro: micros.nullable().optional(), total_budget_amount_local_micro: micros.nullable().optional(),
+  start_time: z.string().nullable().optional(), end_time: z.string().nullable().optional(),
 });
 export const promotedTweetSchema = z.object({
   id: xId, line_item_id: xId, tweet_id: z.string().regex(/^\d+$/), entity_status: z.string(), deleted: z.boolean(),

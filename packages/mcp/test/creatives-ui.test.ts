@@ -23,7 +23,7 @@ function widget(overrides: Record<string, unknown> = {}, canWrite = true) {
   return { dom, document: dom.window.document, callTool, send };
 }
 
-describe('view-only creative previews', () => {
+describe('unscoped and read-only creative previews', () => {
   it.each([true, false])('ignores action, upload, refresh, and paging configuration with can_write=%s', canWrite => {
     const { dom, document, callTool, send } = widget({}, canWrite);
     try {
@@ -63,8 +63,16 @@ describe('view-only creative previews', () => {
       expect(document.querySelector('video')?.hasAttribute('controls')).toBe(true);
       expect(document.querySelector('[autoplay],[onerror],.creative-destination')).toBeNull();
       expect(document.querySelector('.creative-name')?.textContent).toContain('<img src=x');
-      document.querySelector('img')!.dispatchEvent(new dom.window.Event('error'));
-      expect(document.querySelector('.creative-placeholder')?.textContent).toBe('Preview unavailable');
+      for (const element of document.querySelectorAll('img,video,audio')) {
+        element.dispatchEvent(new dom.window.Event('error'));
+      }
+      const fallbackLinks = [...document.querySelectorAll('.creative-media a')];
+      expect(fallbackLinks.map(link => link.getAttribute('href'))).toEqual([
+        'https://scontent.xx.fbcdn.net/ad.jpg',
+        'https://scontent.xx.fbcdn.net/ad.mp4',
+        'https://scontent.xx.fbcdn.net/ad.mp3',
+      ]);
+      expect(fallbackLinks.every(link => link.textContent === 'Open preview' && link.getAttribute('rel') === 'noopener noreferrer')).toBe(true);
       expect(document.querySelector('button')).toBeNull();
     } finally { dom.window.close(); }
   });
@@ -73,7 +81,7 @@ describe('view-only creative previews', () => {
     const { dom, document } = widget({ truncated: true, warnings: [{ message: 'Some native previews expired' }],
       creatives: [{ ...creative, status: undefined, type: 'application/pdf', headlines: [], descriptions: [] }] });
     try {
-      expect(document.querySelector('main')?.textContent).toContain('Showing 1 preview from a partial result.');
+      expect(document.querySelector('main')?.textContent).toContain('More creatives may exist.');
       expect(document.querySelector('main')?.textContent).toContain('Some native previews expired');
       expect(document.querySelector('.creative-status')?.textContent).toBe('Status unavailable');
       expect(document.querySelector('.creative-placeholder')?.textContent).toBe('Document preview unavailable');
@@ -86,6 +94,7 @@ describe('view-only creative previews', () => {
 
   it('retains every returned creative and media item in the scrollable gallery without duplicating copy', () => {
     const { dom, document } = widget({ creatives: Array.from({ length: 9 }, (_, i) => ({ ...creative,
+      id: 'creative-'+i,
       name: `Creative ${i + 1}`, headlines: ['A real headline', 'A real headline'], descriptions: ['A real headline', 'Actual copy', 'Actual copy'],
       media: [{ type: 'image', url: `https://example.com/${i}.jpg` }, { type: 'image', url: `https://example.com/${i}-2.jpg` }],
     })) });

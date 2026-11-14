@@ -1,13 +1,24 @@
 import { z } from 'zod';
 import {
-  AdportError, resolveDateRange, type Account, type AdProvider, type MetricName,
+  AdportError, LocalMediaResolver, resolveDateRange, type Account, type AdProvider, type MediaResolver, type MetricName,
   type NormalizedQuery, type Report, type ReportRow, type StandardActions,
   type WriteGuard, type WriteOperation, type WritePreview, type WriteResult,
 } from '@adport/core';
 import { PinterestAdsClient } from './client.js';
+import { PinterestCreativeService } from './creatives.js';
+import { PINTEREST_ASSET_WRITES, PinterestAssetService } from './assets.js';
+import { PinterestKeywordService } from './keywords.js';
+import { PinterestAudienceService } from './audiences.js';
+import { PinterestMeasurementService } from './measurement.js';
+import { PinterestCatalogService } from './catalogs.js';
+import { PinterestProductGroups } from './product-groups.js';
+import { PinterestCatalogItems } from './catalog-items.js';
+import { PinterestLocalStores } from './local-stores.js';
+import { PinterestLocalInventory } from './local-inventory.js';
+import { PinterestCampaignBudgets } from './campaign-budgets.js';
 import { accountSchema, batchResponseSchema, campaignSchema, createCampaignSchema, entitySchema, entityStatus, pinterestId, setBudgetSchema, setStatusSchema } from './schemas.js';
 
-interface Plan extends Omit<WritePreview, 'serverValidated'> { execute: () => Promise<string[]> }
+interface Plan extends Omit<WritePreview, 'serverValidated'> { execute: () => Promise<string[]>; resultDetails?: () => unknown; resultWarnings?: () => string[] }
 const LEVEL = {
   account: { path: '', id: 'AD_ACCOUNT_ID', filter: '' },
   campaign: { path: 'campaigns', id: 'CAMPAIGN_ID', filter: 'campaign_ids' },
@@ -22,7 +33,30 @@ const DERIVED = {
 
 export class PinterestAdsProvider implements AdProvider {
   readonly id = 'pinterest';
-  constructor(private readonly client: PinterestAdsClient) {}
+  readonly creatives: PinterestCreativeService;
+  readonly assets: PinterestAssetService;
+  readonly keywords: PinterestKeywordService;
+  readonly audiences: PinterestAudienceService;
+  readonly measurement: PinterestMeasurementService;
+  readonly catalogs: PinterestCatalogService;
+  readonly productGroups: PinterestProductGroups;
+  readonly catalogItems: PinterestCatalogItems;
+  readonly localStores: PinterestLocalStores;
+  readonly localInventory: PinterestLocalInventory;
+  readonly campaignBudgets: PinterestCampaignBudgets;
+  constructor(private readonly client: PinterestAdsClient, media: MediaResolver = new LocalMediaResolver()) {
+    this.creatives = new PinterestCreativeService(client, (account, id) => this.getCampaign(account, id));
+    this.assets = new PinterestAssetService(client, media);
+    this.keywords = new PinterestKeywordService(client, (account, entity, resource) => this.creatives.getEntity(account, entity, resource));
+    this.audiences = new PinterestAudienceService(client, (account, entity, resource) => this.creatives.getEntity(account, entity, resource), (account, resource) => this.assets.getPin(account, resource));
+    this.measurement = new PinterestMeasurementService(client);
+    this.catalogs = new PinterestCatalogService(client);
+    this.productGroups = new PinterestProductGroups(client, this.catalogs);
+    this.catalogItems = new PinterestCatalogItems(client, this.catalogs, media);
+    this.localStores = new PinterestLocalStores(client, this.catalogs);
+    this.localInventory = new PinterestLocalInventory(client, this.localStores, media);
+    this.campaignBudgets = new PinterestCampaignBudgets(client, (account, id) => this.getCampaign(account, id), () => { const value = (media as { scopeId?: unknown }).scopeId;return typeof value === 'string' && value ? value : 'local'; });
+  }
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions {
     return { pauseCampaign: (accountId, campaignId) => ({ tool: 'pinterest_set_campaign_status', input: { account_id: accountId, campaign_id: campaignId, status: 'PAUSED' } }) };
@@ -51,9 +85,9 @@ export class PinterestAdsProvider implements AdProvider {
   }
   private async listEntities<T extends z.infer<typeof entitySchema>>(accountId: string, collection: string, schema: z.ZodType<T>) {
     const params = new URLSearchParams();
-    // Include archived entities so historical reporting isn't silently filtered
-    // to the API's ACTIVE/PAUSED default. Arrays use OpenAPI form/explode.
-    for (const status of entityStatus.options) params.append('entity_statuses', status);
+    // Live v5 requires CSV arrays; repeated status parameters select only the
+    // final value despite the specification's omitted explode annotation.
+    params.set('entity_statuses', entityStatus.options.join(','));
     const rows = await this.collect(`ad_accounts/${pinterestId.parse(accountId)}/${collection}`, schema, params);
     if (rows.some(row => row.ad_account_id !== accountId)) throw new AdportError('PROVIDER_ERROR', 'pinterest: entity account mismatch');
     return rows;
@@ -91,7 +125,7 @@ export class PinterestAdsProvider implements AdProvider {
           start_date: start, end_date: end, granularity: 'TOTAL', columns: [level.id, ...fields].join(','),
           click_window_days: '30', view_window_days: '1', conversion_report_time: 'TIME_OF_AD_ACTION',
         });
-        if (level.filter) for (const entity of batch) params.append(level.filter, entity.id);
+        if (level.filter) params.set(level.filter, batch.map(entity => entity.id).join(','));
         const data = await this.client.get(`${base}/${level.path ? `${level.path}/` : ''}analytics`, z.array(z.record(z.string(), z.unknown())), params);
         for (const row of data) {
           const entityId = pinterestId.parse(row[level.id]);
@@ -106,11 +140,12 @@ export class PinterestAdsProvider implements AdProvider {
     return { rows };
   }
   async previewWrite(op: WriteOperation, guard: WriteGuard): Promise<WritePreview> {
-    const { execute: _execute, ...preview } = await this.plan(op, guard);
+    const { execute: _execute, resultDetails: _details, resultWarnings: _warnings, ...preview } = await this.plan(op, guard);
     return { ...preview, serverValidated: false };
   }
   async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> {
-    return { applied: true, resourceIds: await (await this.plan(op, guard)).execute() };
+    const plan = await this.plan(op, guard), resourceIds = await plan.execute();
+    return { applied: true, resourceIds, ...(plan.resultDetails ? { details: plan.resultDetails() } : {}), ...(plan.resultWarnings ? { warnings: plan.resultWarnings() } : {}) };
   }
   private async write(accountId: string, method: 'POST' | 'PATCH', body: Record<string, unknown>) {
     const result = await this.client.mutate(`ad_accounts/${accountId}/campaigns`, method, [body], batchResponseSchema);
@@ -128,9 +163,20 @@ export class PinterestAdsProvider implements AdProvider {
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<Plan> {
     const accountId = pinterestId.parse(op.accountId);
     if (op.provider !== this.id) throw new AdportError('INVALID_INPUT', 'pinterest: provider mismatch');
+    if (this.measurement.supports(op.tool)) return this.measurement.plan(op);
+    if (this.catalogs.supports(op.tool)) return this.catalogs.plan(op);
+    if (this.catalogItems.supports(op.tool)) return this.catalogItems.plan(op);
+    if (this.localStores.supports(op.tool)) return this.localStores.plan(op);
+    if (this.localInventory.supports(op.tool)) return this.localInventory.plan(op);
+    if (this.campaignBudgets.supports(op.tool)) return this.campaignBudgets.plan(op);
+    if (['pinterest_create_product_group', 'pinterest_update_product_group', 'pinterest_delete_product_group'].includes(op.tool)) return this.productGroups.plan(op);
+    if (this.keywords.supports(op.tool)) return this.keywords.plan(op, guard);
+    if (this.audiences.supports(op.tool)) return this.audiences.plan(op);
+    if (PINTEREST_ASSET_WRITES.has(op.tool)) return this.assets.plan(op);
     if (op.tool === 'pinterest_create_campaign' && op.kind === 'create') {
       const input = createCampaignSchema.parse(op.payload);
-      const { budget_type, budget_micros, ...rest } = input;
+      if (input.daily_budget_mode === 'AVERAGE') return this.campaignBudgets.create(input, op, guard);
+      const { budget_type, budget_micros, daily_budget_mode: _mode, acknowledge_variable_daily_spend: _ack, ...rest } = input;
       const status = guard.forcePausedCreation ? 'PAUSED' : input.status;
       const cap = budget_type === 'DAILY' ? 'daily_spend_cap' : 'lifetime_spend_cap';
       const body = { ...rest, status, [cap]: budget_micros, is_campaign_budget_optimization: true, is_flexible_daily_budgets: false };
@@ -147,7 +193,8 @@ export class PinterestAdsProvider implements AdProvider {
       if ('budget_micros' in input) {
         const daily = current.daily_spend_cap ?? 0, lifetime = current.lifetime_spend_cap ?? 0;
         if (!current.is_campaign_budget_optimization || (daily > 0) === (lifetime > 0)) throw new AdportError('INVALID_INPUT', 'pinterest: campaign budget update requires CBO with exactly one existing daily/lifetime cap');
-        if (current.is_flexible_daily_budgets) throw new AdportError('INVALID_INPUT', 'pinterest: flexible daily budgets may exceed the daily amount; update this campaign in Ads Manager');
+        if (current.is_flexible_daily_budgets) throw new AdportError('INVALID_INPUT', 'pinterest: use pinterest_campaign_budget_context and pinterest_set_campaign_daily_budget with variable-spend/reset acknowledgements for an average daily budget');
+        if (daily > 0 && typeof current.is_flexible_daily_budgets !== 'boolean') throw new AdportError('INVALID_INPUT', 'pinterest: daily budget mode is unconfirmed; read pinterest_campaign_budget_context');
         const cap = daily > 0 ? 'daily_spend_cap' : 'lifetime_spend_cap', from = daily || lifetime;
         return {
           summary: `Change Pinterest campaign "${current.name ?? current.id}" budget`, changes: [`~ ${current.id} ${cap}: ${from} → ${input.budget_micros} micros`], coercions: [],
@@ -160,7 +207,7 @@ export class PinterestAdsProvider implements AdProvider {
         execute: () => this.write(accountId, 'PATCH', { id: current.id, status: input.status }),
       };
     }
-    throw new AdportError('INVALID_INPUT', `pinterest: unsupported write ${op.tool}`);
+    return this.creatives.plan(op, guard);
   }
 }
 

@@ -1,7 +1,11 @@
 import { defineTool, guardedWriteTool, type AnyToolDefinition } from '@adport/core';
 import { z } from 'zod';
 import type { MetaAdsProvider } from './provider.js';
+import { metaCreativeTools } from './creative-tools.js';
+import { metaAudienceTools } from './audiences.js';
+import { metaConversionTools } from './conversions.js';
 import { apiReadOutput, campaignOutput, campaignsOutput, insightsOutput, pageEngagementOutput, pagesOutput } from './outputs.js';
+import { adSetAppPromotedObject, appPromotedObject, advertisableApplicationsOutput } from './app-schemas.js';
 
 const statusSchema = z.enum(['ACTIVE', 'PAUSED']);
 
@@ -27,6 +31,24 @@ const specialAdCategorySchema = z.enum([
 
 export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
   return [
+    ...metaCreativeTools(provider),
+    ...metaAudienceTools(provider),
+    ...metaConversionTools(provider),
+    defineTool({
+      name: 'meta_advertisable_applications',
+      namespace: 'meta',
+      description: 'Find the Meta application IDs and store URLs available to the selected ad account for app-promotion campaigns. Continue next_cursor as after. Does not return app credentials.',
+      input: z.object({
+        account_id: z.string().regex(/^(act_)?\d+$/),
+        app_id: z.string().regex(/^\d+$/).optional(),
+        limit: z.number().int().min(1).max(100).default(50),
+        after: z.string().min(1).max(4096).regex(/^[^\u0000-\u001f\u007f]+$/).optional(),
+      }),
+      output: advertisableApplicationsOutput,
+      pagination: { cursorInput: 'after', cursorOutput: 'next_cursor' },
+      annotations: { readOnly: true, openWorld: false },
+      handler: input => provider.advertisableApplications(input),
+    }),
     defineTool({
       name: 'meta_list_campaigns',
       namespace: 'meta',
@@ -122,6 +144,7 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
       description:
         'Create a Meta campaign. Budget is optional at campaign level (Advantage/CBO) — otherwise set it on ad sets. ' +
         'special_ad_categories is required by Meta for regulated verticals; defaults to none. ' +
+        'For app campaigns discover the Meta application ID first; SKAdNetwork requires promoted_object at campaign creation. ' +
         'Creates only a campaign, not ad sets, ads or creatives. The first call previews; an identical call with the pending token applies. Workspace policy can force paused creation. No ad is published by this tool.',
       provider: 'meta',
       kind: 'create',
@@ -129,6 +152,8 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
         name: z.string().min(1),
         objective: objectiveSchema.default('OUTCOME_TRAFFIC'),
         status: statusSchema.optional(),
+        is_skadnetwork_attribution: z.boolean().optional().describe('iOS SKAdNetwork campaign; requires APP_PROMOTION, the Meta application ID and its store URL at creation'),
+        promoted_object: appPromotedObject.optional(),
         special_ad_categories: z.array(specialAdCategorySchema).default([]),
         daily_budget_cents: z
           .number()
@@ -141,6 +166,12 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
           .optional()
           .describe('For campaigns without a campaign budget: allow eligible ad sets to share up to 20% of their daily budgets; defaults to false'),
       }).superRefine((value, ctx) => {
+        if (value.is_skadnetwork_attribution && (value.objective !== 'OUTCOME_APP_PROMOTION' || !value.promoted_object?.object_store_url)) {
+          ctx.addIssue({ code: 'custom', path: ['promoted_object'], message: 'SKAdNetwork requires OUTCOME_APP_PROMOTION, promoted_object.application_id and object_store_url at campaign creation' });
+        }
+        if (value.promoted_object && value.objective !== 'OUTCOME_APP_PROMOTION') {
+          ctx.addIssue({ code: 'custom', path: ['objective'], message: 'The typed application binding requires OUTCOME_APP_PROMOTION' });
+        }
         if (value.daily_budget_cents !== undefined && value.is_adset_budget_sharing_enabled !== undefined) {
           ctx.addIssue({
             code: 'custom',
@@ -175,8 +206,8 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
       name: 'meta_create_ad_set',
       namespace: 'meta',
       description:
-        'Create an ad set in a campaign with minimal country targeting. Omit daily_budget_cents when the campaign ' +
-        'uses CBO. Defaults: LINK_CLICKS optimization, IMPRESSIONS billing. With an ad-set budget and no bidding inputs, ' +
+        'Create an ad set after verifying parent account and app binding. For app promotion pass promoted_object and optional user_os. Omit daily_budget_cents when the campaign ' +
+        'uses CBO. Defaults: APP_INSTALLS for explicit app binding, otherwise LINK_CLICKS; IMPRESSIONS billing. With an ad-set budget and no bidding inputs, ' +
         'uses LOWEST_COST_WITHOUT_CAP; otherwise omitted strategy inherits campaign bidding. Bid/cost caps require ' +
         'bid_amount; minimum ROAS requires bid_constraints and VALUE optimization. For EU targeting supply dsa_beneficiary ' +
         'and dsa_payor with the actual advertiser and payer names. Meta validates compatibility before apply.',
@@ -186,6 +217,8 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
         campaign_id: z.string(),
         name: z.string().min(1),
         countries: z.array(z.string().length(2)).min(1).describe('ISO country codes for geo targeting'),
+        promoted_object: adSetAppPromotedObject.optional().describe('Required for an app-promotion parent; the app must match its campaign binding'),
+        user_os: z.array(z.string().trim().min(1).max(100)).min(1).max(10).optional().describe('Meta targeting OS strings, for example iOS_ver_14.0_and_above; compatibility is validated by Meta'),
         daily_budget_cents: z.number().int().positive().optional(),
         optimization_goal: z.string().optional(),
         billing_event: z.string().optional(),

@@ -56,7 +56,7 @@ export const auditOutput = z.object({
 
 const preview = z.object({
   summary: z.string(), changes: z.array(z.string()), coercions: z.array(z.string()),
-  fieldChanges: z.array(z.object({ field: z.string(), before: z.string(), after: z.string() })).optional(),
+  fieldChanges: z.array(z.object({ field: z.string().min(1), before: z.string(), after: z.string() })).max(100).optional(),
   notes: z.array(z.string()).optional(),
   budgetDeltas: z.array(z.object({
     target: z.string(), currency: z.string().optional(), fromMicros: z.number().optional(), toMicros: z.number(),
@@ -78,7 +78,7 @@ const pending = z.object({
 });
 const applied = z.object({
   status: z.literal('applied'), applied: z.literal(true), preview,
-  result: z.object({ applied: z.literal(true), resourceIds: z.array(z.string()), details: z.unknown().optional() }),
+  result: z.object({ applied: z.literal(true), resourceIds: z.array(z.string()), details: z.unknown().optional(), warnings: z.array(z.string()).optional() }),
 });
 
 // Flat wire format is retained for existing CLI/REST consumers. Phase-specific

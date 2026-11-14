@@ -1,16 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_POLICY } from '@adport/core';
+import { AdportError, DEFAULT_POLICY } from '@adport/core';
 import { createTenantRuntime } from '@/lib/cloud/runtime';
 import { resetEnvForTests } from '@/lib/env';
+import { rejectUnavailableGtm } from '@/lib/cloud/gtm-connection-recovery';
+
+const { loadCredentials } = vi.hoisted(() => ({ loadCredentials: vi.fn() }));
+vi.mock('@/lib/cloud/gtm-connection-recovery', () => ({ rejectUnavailableGtm: vi.fn(async () => { throw new AdportError('NOT_CONNECTED', 'Finish account selection', { apply_state: 'NOT_STARTED' }); }) }));
 
 vi.mock('@/lib/cloud/repository', () => ({
   getOrganizationPolicy: async () => DEFAULT_POLICY,
   loadEnabledAccountIds: async () => ({ gtm: new Set(['1']) }),
   listOrganizationAdAccounts: async () => [{ provider: 'gtm', accountId: '1', name: 'Selected GTM' }],
-  loadProviderCredentials: async () => ({ gtm: { refreshToken: 'tenant-grant', connectionId: 'gtm-connection' } }),
+  loadProviderCredentials: loadCredentials,
   PostgresAuditStore: class {}, PostgresPendingStore: class {}, PostgresFindingsStore: class {},
 }));
 beforeEach(() => {
+  loadCredentials.mockResolvedValue({ gtm: { refreshToken: 'tenant-grant', connectionId: 'gtm-connection' } });
+  vi.mocked(rejectUnavailableGtm).mockClear();
   vi.stubEnv('GTM_OAUTH_ENABLED', 'true');
   vi.stubEnv('GOOGLE_ADS_CLIENT_ID', 'test-client.apps.googleusercontent.com');
   vi.stubEnv('GOOGLE_ADS_CLIENT_SECRET', 'test-secret'); resetEnvForTests();
@@ -19,6 +25,14 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); resetEnvForTests(); });
 
 describe('tenant-scoped GTM runtime', () => {
+  it('rejects a publish during account selection before inspecting or consuming its pending approval', async () => {
+    loadCredentials.mockResolvedValue({});
+    const principal = { organizationId: 'org', scopes: ['tools:read', 'tools:write'] };
+    const runtime = await createTenantRuntime(principal, { surface: 'mcp' });
+    await expect(runtime.registry.call('gtm_publish_version', { account_id: '1', container_id: '2', version_id: '4', expected_fingerprint: 'reviewed', expected_live_version_id: '3', pending_operation_id: 'unused' }, runtime.ctx)).rejects.toMatchObject({ code: 'NOT_CONNECTED', details: { apply_state: 'NOT_STARTED' } });
+    expect(rejectUnavailableGtm).toHaveBeenCalledWith(principal, true);
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it('registers the shared tools and retains selected accounts without discovery requests', async () => {
     const runtime = await createTenantRuntime({ organizationId: 'org', scopes: [] });
     const provider = runtime.ctx.providers.get('gtm');

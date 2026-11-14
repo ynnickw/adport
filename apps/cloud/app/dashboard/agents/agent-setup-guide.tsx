@@ -3,6 +3,7 @@
 import { Button, Disclosure } from '@/components/controls';
 import { useState } from 'react';
 import { SiClaude, SiCursor, SiModelcontextprotocol } from 'react-icons/si';
+import { matchesAssistant } from '@/lib/assistant-client';
 
 import { AGENT_SETUPS, cursorInstallUrl, type AgentSetup } from '@/lib/agent-setups.mjs';
 export { AGENT_SETUPS, cursorInstallUrl } from '@/lib/agent-setups.mjs';
@@ -28,9 +29,10 @@ export function AgentLogo({ provider }: { provider: AgentSetup['provider'] }) {
   return <SiModelcontextprotocol aria-hidden="true" />;
 }
 
-export function AgentIdentityLogo({ name }: { name: string }) {
-  const setup = AGENT_SETUPS.find(item => item.name.toLowerCase() === name.toLowerCase());
-  return <span className={`agent-logo ${setup?.provider ?? 'mcp'}`} aria-hidden="true">{setup ? <AgentLogo provider={setup.provider} /> : name.slice(0, 1).toUpperCase()}</span>;
+export function AgentIdentityLogo({ name, clientUri }: { name: string; clientUri?: string | null }) {
+  const setup = AGENT_SETUPS.find(item => item.id !== 'mcp' && matchesAssistant(item.id, { clientName: name, clientUri: clientUri ?? null, kind: 'oauth' }));
+  const provider = setup?.provider ?? 'mcp';
+  return <span className={`agent-logo ${provider}`} aria-hidden="true"><AgentLogo provider={provider} /></span>;
 }
 
 export function CopyButton({ value, label, className = '', onCopyFailure }: { value: string; label: string; className?: string; onCopyFailure?: () => void }) {

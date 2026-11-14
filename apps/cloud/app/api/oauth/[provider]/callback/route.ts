@@ -65,7 +65,9 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
     if (oauthError) throw new Error(`${label} authorization was not completed.`);
     if (!providerAllowedForOrganization(provider, transaction.organizationId)) throw new Error('This provider is not enabled for this organization.');
 
-    const credential = await adapter.exchange({ code: code!, verifier: transaction.verifier, state });
+    // The optional scope is bound to the consumed encrypted transaction, never callback parameters.
+    const exchangeAdapter = oauthAdapter(provider, { googleDataManager: transaction.googleDataManager === true, pinterestPinManagement: transaction.pinterestPinManagement === true, pinterestSecretPins: transaction.pinterestSecretPins === true, pinterestCatalogManagement: transaction.pinterestCatalogManagement === true });
+    const credential = await exchangeAdapter.exchange({ code: code!, verifier: transaction.verifier, state });
     const selectionId = randomUUID();
     const connectionId = await upsertProviderConnection({
       organizationId: transaction.organizationId,
@@ -73,7 +75,7 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
       provider,
       credential,
       externalLabel: `${label} grant pending verification`,
-      scopes: adapter.scopes,
+      scopes: exchangeAdapter.scopes,
       selectionId,
     });
 

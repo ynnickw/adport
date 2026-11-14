@@ -1,4 +1,4 @@
-import type { CredentialStore, ProviderModule } from '@adport/core';
+import { FileResourceSecretStore, type CredentialStore, type ProviderModule } from '@adport/core';
 import { SpotifyAdsClient, type SpotifyCredentials } from './client.js';
 import { SpotifyAdsProvider } from './provider.js';
 import { spotifyTools } from './tools.js';
@@ -25,6 +25,6 @@ export async function resolveSpotifyCredentials(store: CredentialStore): Promise
 export async function createSpotifyModule(store: CredentialStore): Promise<ProviderModule | undefined> {
   const credentials = await resolveSpotifyCredentials(store);
   if (!credentials) return undefined;
-  const provider = new SpotifyAdsProvider(new SpotifyAdsClient(credentials));
+  const provider = new SpotifyAdsProvider(new SpotifyAdsClient(credentials), undefined, { resourceSecrets: new FileResourceSecretStore() });
   return { provider, tools: spotifyTools(provider) };
 }

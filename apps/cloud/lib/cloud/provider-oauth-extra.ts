@@ -1,7 +1,7 @@
 import 'server-only';
 import { buildSnapchatAuthUrl, exchangeSnapchatCode, SNAPCHAT_SCOPE } from '@adport/provider-snapchat';
 import { buildSpotifyAuthUrl, exchangeSpotifyCode } from '@adport/provider-spotify';
-import { buildPinterestAuthUrl, exchangePinterestCode } from '@adport/provider-pinterest';
+import { buildPinterestAuthUrl, exchangePinterestCode, pinterestAuthorizationScopes, type PinterestAuthorizationOptions } from '@adport/provider-pinterest';
 import { buildLinkedInAuthUrl, exchangeLinkedInCode } from '@adport/provider-linkedin';
 import { env } from '@/lib/env';
 import type { OAuthAdapter } from './provider-oauth';
@@ -62,3 +62,13 @@ export const extraOAuthAdapters = {
     async revoke() { return false; },
   },
 } satisfies { [P in Provider]: OAuthAdapter<P> };
+
+export function pinterestManagementAdapter(options: PinterestAuthorizationOptions): OAuthAdapter<'pinterest'> {
+  return {
+    ...extraOAuthAdapters.pinterest,
+    flowLabel: options.catalogManagement ? 'Pinterest Ads OAuth 2.0 with catalog management permission' : options.secretPins ? 'Pinterest Ads OAuth 2.0 with public and secret Pin management permission' : 'Pinterest Ads OAuth 2.0 with additional public Pin management permission',
+    scopes: [...pinterestAuthorizationScopes(options)],
+    authorizationUrl({ state }) { const app = appForConsent('pinterest'); return buildPinterestAuthUrl(app.clientId, app.redirectUri, state, options); },
+    async exchange({ code }) { return { refreshToken: await exchangePinterestCode({ ...appForConsent('pinterest'), code, ...options }) }; },
+  };
+}

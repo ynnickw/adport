@@ -1,5 +1,7 @@
 import {
   AdportError,
+  LocalMediaResolver,
+  type MediaResolver,
   resolveDateRange,
   type Account,
   type AdProvider,
@@ -15,6 +17,17 @@ import {
   type WriteResult,
 } from '@adport/core';
 import { TikTokClient } from './client.js';
+import { TikTokCreativeService } from './creatives.js';
+import { TikTokAudienceService } from './audiences.js';
+import { TikTokCustomAudiences } from './custom-audiences.js';
+import { TikTokAudienceSources } from './audience-sources.js';
+import { TikTokAudienceAuthoring } from './audience-authoring.js';
+import { TikTokMeasurementService } from './measurement.js';
+import { TikTokAutomatedRulesService } from './automated-rules.js';
+import { TikTokCatalogService } from './catalogs.js';
+import { TikTokAudienceSharing } from './audience-sharing.js';
+import { audienceSharingWrites } from './audience-sharing-schemas.js';
+import type { TikTokCatalogAccessStore } from './catalog-access.js';
 
 /** TikTok budgets are floats in whole account-currency units. */
 export const UNITS_TO_MICROS = 1_000_000;
@@ -34,6 +47,7 @@ const ID_DIMENSION = {
 } as const;
 
 interface TikTokCampaign {
+  advertiser_id?: string;
   campaign_id: string;
   campaign_name: string;
   operation_status: 'ENABLE' | 'DISABLE';
@@ -43,21 +57,40 @@ interface TikTokCampaign {
   objective_type: string;
 }
 
-interface WritePlan {
-  summary: string;
-  changes: string[];
-  coercions: string[];
-  budgetDeltas: WritePreview['budgetDeltas'];
-  execute: () => Promise<string[]>;
-}
+type WritePlan = Omit<WritePreview, 'serverValidated'> & { execute: () => Promise<string[] | WriteResult> };
 
 export class TikTokAdsProvider implements AdProvider {
   readonly id = 'tiktok';
+  readonly creatives: TikTokCreativeService;
+  readonly audiences: TikTokAudienceService;
+  readonly customAudiences: TikTokCustomAudiences;
+  readonly audienceSources: TikTokAudienceSources;
+  readonly audienceAuthoring: TikTokAudienceAuthoring;
+  readonly audienceSharing: TikTokAudienceSharing;
+  readonly measurement: TikTokMeasurementService;
+  readonly automatedRules: TikTokAutomatedRulesService;
+  readonly catalogs: TikTokCatalogService;
 
   constructor(
     private readonly client: TikTokClient,
     private readonly app: { appId: string; secret: string },
-  ) {}
+    media: MediaResolver = new LocalMediaResolver(),
+    catalogAccess?: TikTokCatalogAccessStore,
+  ) {
+    const authorizeAccounts = async (ids: string[]) => {
+      const authorized = await client.get<{ list?: Array<{ advertiser_id: string }> }>('oauth2/advertiser/get', { app_id: this.appId(), secret: this.secret() });
+      if (!Array.isArray(authorized.list) || authorized.list.some(row => typeof row.advertiser_id !== 'string') || ids.some(id => !authorized.list!.some(row => row.advertiser_id === id))) throw new AdportError('POLICY_VIOLATION', 'Every selected advertiser must be in the current native authorization.');
+    };
+    this.creatives = new TikTokCreativeService(client, media);
+    this.audiences = new TikTokAudienceService(client);
+    this.customAudiences = new TikTokCustomAudiences(client, media);
+    this.audienceSources = new TikTokAudienceSources(client, account => authorizeAccounts([account]));
+    this.audienceAuthoring = new TikTokAudienceAuthoring(client, this.customAudiences, this.audienceSources);
+    this.audienceSharing = new TikTokAudienceSharing(client, this.customAudiences, authorizeAccounts);
+    this.measurement = new TikTokMeasurementService(client);
+    this.automatedRules = new TikTokAutomatedRulesService(client);
+    this.catalogs = new TikTokCatalogService(client, catalogAccess, media);
+  }
 
   capabilities(): ProviderCapabilities {
     // No server-side dry run in the Marketing API — previews are client-side diffs.
@@ -221,24 +254,76 @@ export class TikTokAdsProvider implements AdProvider {
   async previewWrite(op: WriteOperation, guard: WriteGuard): Promise<WritePreview> {
     const plan = await this.plan(op, guard);
     // No validate_only equivalent — the preview is a client-side diff from live lookups.
-    return {
-      summary: plan.summary,
-      changes: plan.changes,
-      coercions: plan.coercions,
-      budgetDeltas: plan.budgetDeltas,
-      serverValidated: false,
-    };
+    const { execute: _execute, ...preview } = plan;
+    return { ...preview, serverValidated: false };
   }
 
   async applyWrite(op: WriteOperation, guard: WriteGuard): Promise<WriteResult> {
     const plan = await this.plan(op, guard);
     const resourceIds = await plan.execute();
+    if (!Array.isArray(resourceIds)) return resourceIds;
+    if (op.tool === 'tiktok_create_catalog') return { applied: true, resourceIds, details: { configuration_readback: 'VERIFIED', project_catalog_access: 'write', products_created: false, ads_created: false } };
+    if (op.tool === 'tiktok_delete_catalog') return { applied: true, resourceIds, details: { deletion_readback: 'ABSENT_FROM_FILTERED_CATALOG_VIEW', resource_grant_retained: true } };
+    if (op.tool === 'tiktok_upload_catalog_videos') {
+      const payload = op.payload as { bc_id: string; catalog_id: string; media_id: string; expected_sha256: string; sync_to_selected_account?: boolean };
+      return { applied: true, resourceIds, details: { status: 'ACCEPTED_FOR_PROCESSING', processed: false, feed_log_id: resourceIds[0], source_media_id: payload.media_id, source_sha256: payload.expected_sha256, advertiser_sync_requested: payload.sync_to_selected_account === true, advertiser_sync_confirmed: false, next_tool: 'tiktok_catalog_video_log', next_arguments: { account_id: op.accountId, bc_id: payload.bc_id, catalog_id: payload.catalog_id, feed_log_id: resourceIds[0] } } };
+    }
+    if (op.tool === 'tiktok_delete_catalog_video') return { applied: true, resourceIds, details: { deletion_readback: 'ABSENT_FROM_FILTERED_CATALOG_VIEW', synced_copies_may_remain: true } };
+    if (['tiktok_import_catalog_file', 'tiktok_upsert_catalog_products', 'tiktok_update_catalog_products', 'tiktok_delete_catalog_products'].includes(op.tool)) {
+      const payload = op.payload as { bc_id: string; catalog_id: string; feed_id: string; media_id: string; expected_sha256: string; media_assets?: unknown[] };
+      return { applied: true, resourceIds, details: { status: 'ACCEPTED_FOR_PROCESSING', processed: false, feed_log_id: resourceIds[0], feed_id: payload.feed_id,
+        ...(op.tool === 'tiktok_import_catalog_file' ? { source_media_id: payload.media_id, source_sha256: payload.expected_sha256 } : payload.media_assets?.length ? { source_media_assets: payload.media_assets } : {}), next_tool: 'tiktok_catalog_product_log',
+        next_arguments: { account_id: op.accountId, bc_id: payload.bc_id, catalog_id: payload.catalog_id, feed_id: payload.feed_id, feed_log_id: resourceIds[0] },
+      } };
+    }
     return { applied: true, resourceIds };
   }
 
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<WritePlan> {
+    if (audienceSharingWrites.has(op.tool)) return this.audienceSharing.plan(op);
+    if (['tiktok_create_rule_audience', 'tiktok_create_lookalike_audience', 'tiktok_refresh_lookalike_audiences'].includes(op.tool)) return this.audienceAuthoring.plan(op);
+    if (['tiktok_upload_audience_file', 'tiktok_create_customer_audience', 'tiktok_update_customer_audience_users', 'tiktok_rename_custom_audience', 'tiktok_delete_custom_audiences'].includes(op.tool)) return this.customAudiences.plan(op);
     const payload = op.payload as never;
     switch (op.tool) {
+      case 'tiktok_create_catalog':
+      case 'tiktok_delete_catalog':
+      case 'tiktok_bind_catalog_event_sources':
+      case 'tiktok_unbind_catalog_event_sources':
+      case 'tiktok_upload_catalog_videos':
+      case 'tiktok_delete_catalog_video':
+      case 'tiktok_upsert_catalog_products':
+      case 'tiktok_update_catalog_products':
+      case 'tiktok_delete_catalog_products':
+      case 'tiktok_create_catalog_feed':
+      case 'tiktok_import_catalog_file':
+      case 'tiktok_update_catalog_feed':
+      case 'tiktok_set_catalog_feed_schedule_status':
+      case 'tiktok_delete_catalog_feed':
+      case 'tiktok_rename_product_set':
+      case 'tiktok_create_product_set':
+      case 'tiktok_upload_product_set':
+      case 'tiktok_update_product_set_conditions':
+      case 'tiktok_delete_product_sets':
+      case 'tiktok_update_catalog':
+      case 'tiktok_set_catalog_access':
+        return this.catalogs.plan(op);
+      case 'tiktok_create_pixel':
+      case 'tiktok_update_pixel':
+        return this.measurement.plan(op);
+      case 'tiktok_create_saved_audience':
+      case 'tiktok_delete_saved_audiences':
+        return this.audiences.plan(op);
+      case 'tiktok_create_ad_group':
+      case 'tiktok_create_ads':
+      case 'tiktok_set_ad_group_status':
+      case 'tiktok_set_ad_status':
+      case 'tiktok_update_ad':
+      case 'tiktok_update_targeting':
+      case 'tiktok_set_ad_group_budget':
+      case 'tiktok_set_ad_group_bidding':
+      case 'tiktok_upload_image':
+      case 'tiktok_upload_video':
+        return this.creatives.plan(op, guard);
       case 'tiktok_create_campaign':
         return this.planCreateCampaign(op.accountId, payload, guard);
       case 'tiktok_set_campaign_status':
@@ -267,9 +352,14 @@ export class TikTokAdsProvider implements AdProvider {
     const coercions: string[] = [];
     if (guard.forcePausedCreation) {
       coerceTikTokCreatedStatuses(body, coercions);
-      if (path === 'campaign/create' && body.operation_status !== 'DISABLE') {
+      if (['campaign/create', 'adgroup/create'].includes(path) && body.operation_status !== 'DISABLE') {
         body.operation_status = 'DISABLE';
         coercions.push('operation_status set to DISABLE by policy (paused_creation)');
+      }
+      if (path === 'ad/create' && Array.isArray(body.creatives)) {
+        for (const [index, creative] of body.creatives.entries()) if (isRecord(creative) && creative.operation_status !== 'DISABLE') {
+          creative.operation_status = 'DISABLE'; coercions.push(`creatives[${index}].operation_status set to DISABLE by policy (paused_creation)`);
+        }
       }
     }
     return {
@@ -364,6 +454,7 @@ export class TikTokAdsProvider implements AdProvider {
     payload: { campaign_ids: string[]; operation_status: 'ENABLE' | 'DISABLE' },
   ): Promise<WritePlan> {
     const campaigns = await this.listCampaigns(accountId, payload.campaign_ids);
+    if (payload.campaign_ids.some(id => !campaigns.some(campaign => campaign.campaign_id === id && (campaign.advertiser_id === undefined || campaign.advertiser_id === accountId)))) throw new AdportError('INVALID_INPUT', 'tiktok: campaign was not found in the selected advertiser');
     const changes = payload.campaign_ids.map((id) => {
       const campaign = campaigns.find((c) => c.campaign_id === id);
       return `~ campaign ${id} ("${campaign?.campaign_name ?? '?'}") operation_status ${campaign?.operation_status ?? '?'} → ${payload.operation_status}`;
@@ -389,8 +480,8 @@ export class TikTokAdsProvider implements AdProvider {
     payload: { campaign_id: string; budget: number },
   ): Promise<WritePlan> {
     const campaigns = await this.listCampaigns(accountId, [payload.campaign_id]);
-    const campaign = campaigns[0];
-    if (!campaign) {
+    const campaign = campaigns.find(campaign => campaign.campaign_id === payload.campaign_id);
+    if (!campaign || (campaign.advertiser_id !== undefined && campaign.advertiser_id !== accountId)) {
       throw new AdportError('PROVIDER_ERROR', `tiktok: campaign ${payload.campaign_id} not found in advertiser ${accountId}`);
     }
     if (campaign.budget_mode === 'BUDGET_MODE_INFINITE') {
@@ -444,6 +535,9 @@ function validateTikTokPath(path: string): string {
 
 function validateTikTokMutationPath(path: string, kind: 'create' | 'update' | 'delete'): string {
   const normalized = validateTikTokPath(path);
+  if (normalized.startsWith('optimizer/rule/')) {
+    throw new AdportError('INVALID_INPUT', 'tiktok: automated-rule mutations require a verified direct-advertiser workflow with scheduled-action budget and account checks; raw dispatch cannot enforce these limits');
+  }
   if (!normalized.endsWith(`/${kind}`)) {
     throw new AdportError('INVALID_INPUT', `tiktok: ${kind} tool requires an endpoint ending in /${kind}`);
   }
@@ -470,7 +564,7 @@ function coerceTikTokCreatedStatuses(value: unknown, coercions: string[], path =
 function containsTikTokBudget(value: unknown): boolean {
   if (Array.isArray(value)) return value.some(containsTikTokBudget);
   if (!isRecord(value)) return false;
-  return Object.entries(value).some(([key, child]) => /budget/i.test(key) || containsTikTokBudget(child));
+  return Object.entries(value).some(([key, child]) => /budget|^(?:bid_price|conversion_bid_price|deep_cpa_bid|roas_bid)$/i.test(key) || containsTikTokBudget(child));
 }
 
 function collectTikTokBudgets(value: unknown, path = 'body'): WritePreview['budgetDeltas'] {
@@ -482,7 +576,7 @@ function collectTikTokBudgets(value: unknown, path = 'body'): WritePreview['budg
   if (!isRecord(value)) return deltas;
   for (const [key, child] of Object.entries(value)) {
     const childPath = `${path}.${key}`;
-    if (/budget/i.test(key)) {
+    if (/budget|^(?:bid_price|conversion_bid_price|deep_cpa_bid)$/i.test(key)) {
       const amount = Number(child);
       if (Number.isFinite(amount) && amount > 0) {
         deltas.push({ target: childPath, toMicros: Math.round(amount * UNITS_TO_MICROS) });
