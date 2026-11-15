@@ -218,7 +218,7 @@ describe('Meta E2E over MCP with doc-faithful Graph mocks', () => {
       });
       const writes = graphCalls.filter((call) => call.body);
       expect(writes).toHaveLength(1);
-      expect(new URLSearchParams(writes[0].body).get('execution_options')).toBe('["validate_only"]');
+      expect(new URLSearchParams(writes[0]?.body).get('execution_options')).toBe('["validate_only"]');
     } finally {
       await hostedClient.close();
     }
