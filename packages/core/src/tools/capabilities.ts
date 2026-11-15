@@ -8,7 +8,7 @@ const blocker = z.enum(['platform_disabled', 'not_connected', 'profile_disabled'
 export function capabilityTools(): AnyToolDefinition[] {
   return [defineTool({
     name: 'capabilities_list', namespace: 'core',
-    description: 'Discover supported workflows, including tools hidden by this connection’s profile or platforms. Search keywords or a tool name before claiming a task is unsupported. Returns enablement steps and a settings link; never changes access or runs hidden tools.',
+    description: 'Look up availability and access requirements for named Adport tools. Returns connection settings and status; this lookup changes no settings and executes no operations.',
     input: z.object({
       query: z.string().trim().min(1).max(200).optional().describe('Keywords such as lookalike, offline conversions, experiments, or an exact tool name.'),
       provider: z.enum(TOOL_PROVIDERS).optional(),
@@ -38,11 +38,12 @@ export function capabilityTools(): AnyToolDefinition[] {
       const matches = source.filter(tool => (!input.provider || tool.namespace === input.provider)
         && (!input.category || (tool.catalog ?? classifyTool(tool.name, tool.namespace)).category === input.category))
         .map(tool => {
-          const text = `${tool.name.replaceAll('_', ' ')} ${tool.description}`.toLowerCase();
-          return { tool, score: tokens.reduce((score, word) => score + (text.includes(word) ? 1 : 0), 0) };
+          const description = catalog?.manageAccessUrl ? tool.hosted?.description ?? tool.description : tool.description;
+          const text = `${tool.name.replaceAll('_', ' ')} ${description}`.toLowerCase();
+          return { tool, description, score: tokens.reduce((score, word) => score + (text.includes(word) ? 1 : 0), 0) };
         }).filter(item => !tokens.length || item.score > 0)
         .sort((a, b) => b.score - a.score || a.tool.name.localeCompare(b.tool.name));
-      const tools = matches.map(({ tool }) => {
+      const tools = matches.map(({ tool, description }) => {
         const metadata = tool.catalog ?? classifyTool(tool.name, tool.namespace);
         const platformTool = TOOL_PROVIDERS.includes(tool.namespace as ToolProvider);
         const blockers: z.infer<typeof blocker>[] = [];
@@ -60,7 +61,7 @@ export function capabilityTools(): AnyToolDefinition[] {
         if (!tool.annotations.readOnly && catalog?.canWrite === false) {
           blockers.push('write_permission_required'); next_steps.push('Ask a project owner to review this connection’s write permissions, your role and plan. Changing the tool profile alone does not grant write access.');
         }
-        return { name: tool.name, provider: tool.namespace, category: metadata.category, description: tool.description.slice(0, 220),
+        return { name: tool.name, provider: tool.namespace, category: metadata.category, description: description.slice(0, 220),
           read_only: tool.annotations.readOnly === true, enabled: blockers.length === 0, blockers, next_steps };
       });
       return {
@@ -72,7 +73,7 @@ export function capabilityTools(): AnyToolDefinition[] {
         }).filter(group => group.enabled_tools + group.disabled_tools > 0),
         tools: tools.slice(0, input.limit), total_matches: tools.length, truncated: tools.length > input.limit,
         ...(catalog?.manageAccessUrl ? { manage_access_url: catalog.manageAccessUrl } : {}),
-        instructions: 'Supported tools can be hidden by the profile or platform selection. Explain the returned blockers and link to Manage tool access. After saving access, refresh tools in the assistant; reconnect if its tool list stays unchanged. Never call a hidden tool or infer that its workflow is unsupported. Enabled tools still require account access and native platform eligibility; use accounts_list. Writes still require preview and approval.',
+        instructions: 'Use the returned access status and settings link to explain availability. Call operations only through the tools listed by this connection. Account access, provider eligibility, and write approval still apply.',
       };
     },
   })];

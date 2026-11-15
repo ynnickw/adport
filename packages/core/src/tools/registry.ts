@@ -45,6 +45,8 @@ export interface AnyToolDefinition {
   catalog?: ToolCatalogMetadata;
   description: string;
   input: z.ZodObject<z.ZodRawShape>;
+  /** A narrower input contract for hosted MCP clients. */
+  hosted?: Pick<AnyToolDefinition, 'description' | 'input'>;
   /** Successful result contract, shared by all transports. Errors use their own envelope. */
   output?: z.ZodType;
   annotations: ToolAnnotations;
@@ -66,6 +68,7 @@ export function defineTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   namespace: string;
   description: string;
   input: S;
+  hosted?: AnyToolDefinition['hosted'];
   output?: z.ZodType;
   annotations?: ToolAnnotations;
   presentation?: AnyToolDefinition['presentation'];
