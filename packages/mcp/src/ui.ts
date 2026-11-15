@@ -13,6 +13,7 @@ import { NATIVE_REPORT_UI_SCRIPT, NATIVE_REPORT_UI_STYLES } from './native-repor
 import { REPORT_CHART_SCRIPT, REPORT_CHART_STYLES } from './report-chart-ui.js';
 
 export const ADPORT_UI_URI = 'ui://adport/insight-card-v30.html';
+export const ADPORT_SUMMARY_UI_URI = 'ui://adport/summary-card-v30.html';
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
 export const ADPORT_UI_RESOURCE_DOMAINS = [
   ADPORT_UI_DOMAIN,

@@ -6,8 +6,7 @@ import { reviewWrite } from './review.js';
 import { MEDIA_UPLOAD_TOOLS } from './media-distribution.js';
 
 const TWO_STEP_NOTE =
-  'Two-step write: call WITHOUT pending_operation_id to get a dry-run preview and a pending_operation_id; ' +
-  'call again with IDENTICAL arguments plus that id to apply.';
+  'Omit pending_operation_id to preview. To apply, repeat the same arguments with the returned ID.';
 
 /**
  * Wrap a provider mutation as a two-step (validate → apply) tool.

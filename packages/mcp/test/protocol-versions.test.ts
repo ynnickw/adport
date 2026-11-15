@@ -8,7 +8,7 @@ import { createMcpHandler } from '@modelcontextprotocol/server';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { describe, expect, it } from 'vitest';
 import { createMcpServer, createMcpUiServer } from '../src/index.js';
-import { ADPORT_UI_URI } from '../src/ui.js';
+import { ADPORT_SUMMARY_UI_URI, ADPORT_UI_URI } from '../src/ui.js';
 
 describe('official MCP HTTP protocol entries', () => {
   it('serves the UI resource without a runtime or any callable business tools', async () => {
@@ -59,7 +59,12 @@ describe('official MCP HTTP protocol entries', () => {
       const resource = await client.readResource({ uri: ADPORT_UI_URI });
       expect(resource.contents[0]).toMatchObject({ mimeType: 'text/html;profile=mcp-app' });
       expect(resource.contents[0]).toHaveProperty('text');
-      expect((await client.listResources()).resources.map(value => value.uri)).toEqual([ADPORT_UI_URI, 'ui://adport/insight-card-v29.html', 'ui://adport/insight-card-v28.html', 'ui://adport/insight-card-v27.html', 'ui://adport/insight-card-v26.html', 'ui://adport/insight-card-v25.html', 'ui://adport/insight-card-v24.html', 'ui://adport/insight-card-v23.html', 'ui://adport/insight-card-v22.html', 'ui://adport/insight-card-v21.html', 'ui://adport/insight-card-v20.html', 'ui://adport/insight-card-v19.html', 'ui://adport/insight-card-v18.html', 'ui://adport/insight-card-v17.html', 'ui://adport/insight-card-v16.html', 'ui://adport/insight-card-v15.html', 'ui://adport/insight-card-v14.html', 'ui://adport/insight-card-v13.html', 'ui://adport/insight-card-v12.html', 'ui://adport/insight-card-v11.html', 'ui://adport/insight-card-v10.html', 'ui://adport/insight-card-v9.html', 'ui://adport/insight-card-v8.html', 'ui://adport/insight-card-v7.html', 'ui://adport/insight-card-v6.html', 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html']);
+      expect((await client.listResources()).resources.map(value => value.uri)).toEqual([ADPORT_UI_URI, 'ui://adport/insight-card-v29.html', 'ui://adport/insight-card-v28.html', 'ui://adport/insight-card-v27.html', 'ui://adport/insight-card-v26.html', 'ui://adport/insight-card-v25.html', 'ui://adport/insight-card-v24.html', 'ui://adport/insight-card-v23.html', 'ui://adport/insight-card-v22.html', 'ui://adport/insight-card-v21.html', 'ui://adport/insight-card-v20.html', 'ui://adport/insight-card-v19.html', 'ui://adport/insight-card-v18.html', 'ui://adport/insight-card-v17.html', 'ui://adport/insight-card-v16.html', 'ui://adport/insight-card-v15.html', 'ui://adport/insight-card-v14.html', 'ui://adport/insight-card-v13.html', 'ui://adport/insight-card-v12.html', 'ui://adport/insight-card-v11.html', 'ui://adport/insight-card-v10.html', 'ui://adport/insight-card-v9.html', 'ui://adport/insight-card-v8.html', 'ui://adport/insight-card-v7.html', 'ui://adport/insight-card-v6.html', 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html', ADPORT_SUMMARY_UI_URI]);
+      const summary = await client.readResource({ uri: ADPORT_SUMMARY_UI_URI });
+      expect(summary.contents[0]).toMatchObject({
+        mimeType: 'text/html;profile=mcp-app',
+        _meta: { ui: { csp: { connectDomains: [], resourceDomains: ['https://app.adport.dev'] } } },
+      });
       expect((await client.listResourceTemplates()).resourceTemplates).toEqual([]);
       const input = { account_id: 'mock-1', campaign_id: 'c1', status: 'PAUSED' };
       const preview = await client.callTool({ name: 'mock_set_campaign_status', arguments: input });

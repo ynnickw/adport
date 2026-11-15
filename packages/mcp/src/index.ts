@@ -18,6 +18,7 @@ import { createLinkedInModule } from '@adport/provider-linkedin';
 import { createXModule } from '@adport/provider-x';
 import packageJson from '../package.json';
 import {
+  ADPORT_SUMMARY_UI_URI,
   ADPORT_UI_HTML,
   ADPORT_UI_DOMAIN,
   ADPORT_UI_RESOURCE_DOMAINS,
@@ -30,7 +31,7 @@ import {
 
 export const PROVIDER_IDS = ['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const;
 export { ADPORT_UI_RESOURCE_DOMAINS };
-export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v29.html', 'ui://adport/insight-card-v28.html', 'ui://adport/insight-card-v27.html', 'ui://adport/insight-card-v26.html', 'ui://adport/insight-card-v25.html', 'ui://adport/insight-card-v24.html', 'ui://adport/insight-card-v23.html', 'ui://adport/insight-card-v22.html', 'ui://adport/insight-card-v21.html', 'ui://adport/insight-card-v20.html', 'ui://adport/insight-card-v19.html', 'ui://adport/insight-card-v18.html', 'ui://adport/insight-card-v17.html', 'ui://adport/insight-card-v16.html', 'ui://adport/insight-card-v15.html', 'ui://adport/insight-card-v14.html', 'ui://adport/insight-card-v13.html', 'ui://adport/insight-card-v12.html', 'ui://adport/insight-card-v11.html', 'ui://adport/insight-card-v10.html', 'ui://adport/insight-card-v9.html', 'ui://adport/insight-card-v8.html', 'ui://adport/insight-card-v7.html', 'ui://adport/insight-card-v6.html', 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html'];
+export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v29.html', 'ui://adport/insight-card-v28.html', 'ui://adport/insight-card-v27.html', 'ui://adport/insight-card-v26.html', 'ui://adport/insight-card-v25.html', 'ui://adport/insight-card-v24.html', 'ui://adport/insight-card-v23.html', 'ui://adport/insight-card-v22.html', 'ui://adport/insight-card-v21.html', 'ui://adport/insight-card-v20.html', 'ui://adport/insight-card-v19.html', 'ui://adport/insight-card-v18.html', 'ui://adport/insight-card-v17.html', 'ui://adport/insight-card-v16.html', 'ui://adport/insight-card-v15.html', 'ui://adport/insight-card-v14.html', 'ui://adport/insight-card-v13.html', 'ui://adport/insight-card-v12.html', 'ui://adport/insight-card-v11.html', 'ui://adport/insight-card-v10.html', 'ui://adport/insight-card-v9.html', 'ui://adport/insight-card-v8.html', 'ui://adport/insight-card-v7.html', 'ui://adport/insight-card-v6.html', 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html', ADPORT_SUMMARY_UI_URI];
 
 const DEFAULT_MCP_ICONS = [{
   src: 'https://app.adport.dev/icon.svg?brand=orange-dot-v2',
@@ -106,23 +107,37 @@ export function createMcpUiServer({ name = 'adport', version = packageJson.versi
 }
 
 function registerUiResources(server: McpServer, uiDomain: string | null, uiResourceDomains: readonly string[], uiConnectDomains: readonly string[]): void {
-  const resourceMeta = {
-    ui: { ...(uiDomain ? { domain: uiDomain } : {}), prefersBorder: false, csp: { connectDomains: [...uiConnectDomains], resourceDomains: [...uiResourceDomains] } },
-    ...(uiDomain?.startsWith('https://') ? { 'openai/widgetDomain': uiDomain } : {}),
-  };
-  for (const uri of ADPORT_UI_RESOURCE_URIS) registerAppResource(
-    server,
-    uri === ADPORT_UI_URI ? 'Adport insight card' : 'Adport insight card (previous URI)',
-    uri,
-    { description: 'Responsive Adport accounts, performance, planning estimates, creatives, recommendations, and guarded-change view.', _meta: resourceMeta },
-    async () => ({ contents: [{ uri, mimeType: RESOURCE_MIME_TYPE, text: ADPORT_UI_HTML, _meta: resourceMeta }] }),
-  );
+  // Only creative galleries make direct upload requests or render provider media.
+  // Summary cards can still display project logos from the hosted storage origin.
+  const summaryDomains = uiResourceDomains.filter(domain => domain === ADPORT_UI_DOMAIN || uiConnectDomains.includes(domain));
+  for (const uri of ADPORT_UI_RESOURCE_URIS) {
+    const summary = uri === ADPORT_SUMMARY_UI_URI;
+    const resourceMeta = {
+      ui: {
+        ...(uiDomain ? { domain: uiDomain } : {}),
+        prefersBorder: false,
+        csp: { connectDomains: summary ? [] : [...uiConnectDomains], resourceDomains: summary ? summaryDomains : [...uiResourceDomains] },
+      },
+      ...(uiDomain?.startsWith('https://') ? { 'openai/widgetDomain': uiDomain } : {}),
+    };
+    const title = uri === ADPORT_UI_URI ? 'Adport insight card' : 'Adport insight card (previous URI)';
+    registerAppResource(
+      server, summary ? 'Adport summary card' : title, uri,
+      { description: summary ? 'Adport results.' : 'Adport cards and creative previews.', _meta: resourceMeta },
+      async () => ({ contents: [{ uri, mimeType: RESOURCE_MIME_TYPE, text: ADPORT_UI_HTML, _meta: resourceMeta }] }),
+    );
+  }
 }
 
-// Hosted discovery repeats these nested schemas for hundreds of tools.
-// Advertise the stable fields and allow the full result through unchanged.
-const hostedWriteOutput = writeOutput.extend({
+// Describe the fields needed to distinguish preview from apply. The full
+// provider result and widget payload still travel in structuredContent.
+const hostedWriteOutput = z.looseObject({
+  status: writeOutput.shape.status,
+  applied: writeOutput.shape.applied,
   preview: z.looseObject(writeOutput.shape.preview.pick({ summary: true, serverValidated: true }).shape),
+  pending_operation_id: z.string().optional(),
+  expires_at: writeOutput.shape.expires_at.describe('Preview expiration.'),
+  result: z.looseObject({}).optional(),
 });
 
 /**
@@ -150,7 +165,7 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
     const scopeDenial = scopes && !scopes.includes(requiredScope) ? scopeDenials?.[requiredScope] : undefined;
     if (scopes && !scopes.includes(requiredScope) && !scopeDenial) continue;
     const view = tool.presentation ?? viewForTool(tool.name, tool.annotations.readOnly ?? false);
-    const labels = view ? toolInvocationLabels(view) : undefined;
+    const resourceUri = productionOnly && view !== 'creatives' ? ADPORT_SUMMARY_UI_URI : ADPORT_UI_URI;
     const canRefresh = (view === 'creatives' || view === 'records') && tool.annotations.readOnly;
     const canPage = canRefresh && tool.pagination !== undefined;
     // MCP structuredContent must be an object. Preserve legacy raw arrays in
@@ -167,9 +182,7 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
         : tool.description,
       inputSchema: tool.input,
       ...(objectOutput ? { outputSchema: objectOutput.extend({
-        ...(view ? { _adport: productionOnly ? z.looseObject({
-          tool: z.string(), view: z.literal(view),
-        }) : z.object({
+        ...(view ? { _adport: productionOnly ? z.looseObject({}) : z.object({
           tool: z.literal(tool.name), view: z.literal(view), providerNames: z.record(z.string(), z.string()),
           provider: z.string().optional(), accountId: z.string().optional(),
           ...(tool.pagination ? { pagination: z.object({ cursorInput: z.string() }).optional() } : {}),
@@ -187,7 +200,10 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
         destructiveHint: tool.annotations.destructive ?? false,
         openWorldHint: tool.annotations.openWorld ?? false,
       },
-      _meta: { 'adport/catalog': tool.catalog ?? {}, ...(tool.fileInputs?.length ? { 'openai/fileParams': [...tool.fileInputs] } : {}) },
+      _meta: {
+        ...(!productionOnly ? { 'adport/catalog': tool.catalog ?? {} } : {}),
+        ...(tool.fileInputs?.length ? { 'openai/fileParams': [...tool.fileInputs] } : {}),
+      },
     };
     const callback = async (args: Record<string, unknown>) => {
       const descriptor = {
@@ -261,15 +277,18 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
       }
     };
     if (view) {
+      const labels = toolInvocationLabels(view);
       registerAppTool(server, tool.name, {
         ...config,
         _meta: {
           ...config._meta,
-          ui: { resourceUri: ADPORT_UI_URI, visibility: ['model', 'app'] },
+          ui: { resourceUri, visibility: ['model', 'app'] },
           'openai/widgetAccessible': true,
-          'openai/outputTemplate': ADPORT_UI_URI,
-          'openai/toolInvocation/invoking': labels!.invoking,
-          'openai/toolInvocation/invoked': labels!.invoked,
+          'openai/outputTemplate': resourceUri,
+          ...(!productionOnly ? {
+            'openai/toolInvocation/invoking': labels.invoking,
+            'openai/toolInvocation/invoked': labels.invoked,
+          } : {}),
         },
       }, callback);
     } else {
