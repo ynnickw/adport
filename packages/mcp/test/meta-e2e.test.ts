@@ -191,6 +191,39 @@ describe('Meta E2E over MCP with doc-faithful Graph mocks', () => {
     expect(result.structuredContent).toBeUndefined();
   });
 
+  it('preserves the hosted write preview and widget approval with compact discovery', async () => {
+    const runtime = await assembleRuntime();
+    const server = createMcpServer({ runtime, productionOnly: true });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const hostedClient = new Client({ name: 'hosted-e2e-client', version: '0.0.0' });
+    try {
+      await Promise.all([server.connect(serverTransport), hostedClient.connect(clientTransport)]);
+      await hostedClient.listTools();
+      const args = {
+        account_id: '426197654150180', name: 'August Sale', objective: 'OUTCOME_SALES', status: 'ACTIVE',
+      };
+      const result = await hostedClient.callTool({ name: 'meta_create_campaign', arguments: args });
+
+      expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toMatchObject({
+        status: 'pending_validation',
+        applied: false,
+        pending_operation_id: expect.any(String),
+        preview: {
+          summary: expect.any(String),
+          serverValidated: true,
+          coercions: ['status coerced to PAUSED by policy (paused_creation)'],
+        },
+        _adport: { tool: 'meta_create_campaign', view: 'operation', approval: { arguments: args } },
+      });
+      const writes = graphCalls.filter((call) => call.body);
+      expect(writes).toHaveLength(1);
+      expect(new URLSearchParams(writes[0].body).get('execution_options')).toBe('["validate_only"]');
+    } finally {
+      await hostedClient.close();
+    }
+  });
+
   it('runs the full two-step campaign creation: validate_only dry run, then apply', async () => {
     await client.listTools(); // Enable SDK validation for both preview and apply.
     const args = {

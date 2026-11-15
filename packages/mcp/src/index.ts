@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod';
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
-import { AdportError, CredentialStore, createContext, selectRuntimeCatalog, nextPageArguments, type ToolSelection, type AdportRuntime, type ProviderModule } from '@adport/core';
+import { AdportError, CredentialStore, createContext, selectRuntimeCatalog, nextPageArguments, writeOutput, type ToolSelection, type AdportRuntime, type ProviderModule } from '@adport/core';
 import { createGa4Module, createGscModule } from '@adport/provider-analytics';
 import { createGtmModule } from '@adport/provider-gtm';
 import { createGoogleModule } from '@adport/provider-google';
@@ -119,6 +119,12 @@ function registerUiResources(server: McpServer, uiDomain: string | null, uiResou
   );
 }
 
+// Hosted discovery repeats these nested schemas for hundreds of tools.
+// Advertise the stable fields and allow the full result through unchanged.
+const hostedWriteOutput = writeOutput.extend({
+  preview: z.looseObject(writeOutput.shape.preview.pick({ summary: true, serverValidated: true }).shape),
+});
+
 /**
  * Thin adapter: every tool in the shared registry becomes an MCP tool.
  * No tool logic lives here — see the "one tool-definition layer" principle.
@@ -145,14 +151,14 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
     if (scopes && !scopes.includes(requiredScope) && !scopeDenial) continue;
     const view = tool.presentation ?? viewForTool(tool.name, tool.annotations.readOnly ?? false);
     const labels = view ? toolInvocationLabels(view) : undefined;
-    // Only advertise widget fields this tool can emit. Large hosted catalogs share a response size budget.
     const canRefresh = (view === 'creatives' || view === 'records') && tool.annotations.readOnly;
     const canPage = canRefresh && tool.pagination !== undefined;
     // MCP structuredContent must be an object. Preserve legacy raw arrays in
     // text/CLI results, exposing their declared schema under a value envelope.
     const wrapOutput = !!tool.output && !(tool.output instanceof z.ZodObject);
-    const objectOutput = tool.output
-      ? tool.output instanceof z.ZodObject ? tool.output : z.object({ value: tool.output })
+    const output = productionOnly && tool.output === writeOutput ? hostedWriteOutput : tool.output;
+    const objectOutput = output
+      ? output instanceof z.ZodObject ? output : z.object({ value: output })
       : undefined;
     const config = {
       title: toolTitle(tool.name),
@@ -161,7 +167,9 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
         : tool.description,
       inputSchema: tool.input,
       ...(objectOutput ? { outputSchema: objectOutput.extend({
-        ...(view ? { _adport: z.object({
+        ...(view ? { _adport: productionOnly ? z.looseObject({
+          tool: z.string(), view: z.literal(view),
+        }) : z.object({
           tool: z.literal(tool.name), view: z.literal(view), providerNames: z.record(z.string(), z.string()),
           provider: z.string().optional(), accountId: z.string().optional(),
           ...(tool.pagination ? { pagination: z.object({ cursorInput: z.string() }).optional() } : {}),
