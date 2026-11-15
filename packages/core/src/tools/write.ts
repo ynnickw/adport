@@ -6,7 +6,7 @@ import { reviewWrite } from './review.js';
 import { MEDIA_UPLOAD_TOOLS } from './media-distribution.js';
 
 const TWO_STEP_NOTE =
-  'Omit pending_operation_id to preview. To apply, repeat the same arguments with the returned ID.';
+  'Omit pending_operation_id to preview. To apply, repeat IDENTICAL arguments with the returned ID.';
 
 /**
  * Wrap a provider mutation as a two-step (validate → apply) tool.
