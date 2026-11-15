@@ -54,7 +54,7 @@ async function listCatalog(selection: ToolSelection, modern: boolean) {
   } finally { await client.close(); }
 }
 
-it('serves the full hosted catalog below the Claude reviewer limit on both transports', async () => {
+it('serves the full hosted catalog with room below the OpenAI metadata limit on both transports', async () => {
   for (const key of ['GA4_OAUTH_ENABLED', 'GSC_OAUTH_ENABLED', 'GTM_OAUTH_ENABLED']) vi.stubEnv(key, 'true');
   resetEnvForTests();
   const providerFetch = vi.fn(() => { throw new Error('Catalog discovery must not call providers'); });
@@ -64,8 +64,8 @@ it('serves the full hosted catalog below the Claude reviewer limit on both trans
     const modern = await listCatalog(selection, true);
     const legacy = await listCatalog(selection, false);
     for (const [transport, result] of Object.entries({ modern, legacy })) {
-      // Anthropic limits the wire answer to 4 MiB. Leave room for small catalog changes.
-      expect(result.wireBytes).toBeLessThan(4 * 1024 * 1024 - 64 * 1024);
+      // OpenAI Support reported a 3 MB metadata limit. Budget the full wire answer conservatively.
+      expect(result.wireBytes).toBeLessThan(2_850_000);
       const names = result.tools.map(tool => tool.name);
       expect(new Set(names).size).toBe(names.length);
       for (const [prefix, count] of [['ga4', 4], ['gsc', 4], ['gtm', 24]] as const) {
@@ -73,6 +73,13 @@ it('serves the full hosted catalog below the Claude reviewer limit on both trans
       }
       expect(names).toContain('projects_list');
       expect(names.length).toBeGreaterThanOrEqual(871);
+      expect(result.tools.find(tool => tool.name === 'google_set_budget')?.outputSchema).toMatchObject({
+        required: expect.arrayContaining(['status', 'applied', 'preview', '_adport']),
+        properties: {
+          preview: { type: 'object', properties: { summary: { type: 'string' } }, additionalProperties: {} },
+          _adport: { type: 'object', properties: { view: { const: 'operation' } }, additionalProperties: {} },
+        },
+      });
       console.info(`Hosted catalog ${transport}: ${names.length} tools, ${result.wireBytes} bytes`);
     }
     expect(modern.tools).toEqual(legacy.tools);
