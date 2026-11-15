@@ -142,10 +142,8 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
       name: 'meta_create_campaign',
       namespace: 'meta',
       description:
-        'Create a Meta campaign. Budget is optional at campaign level (Advantage/CBO) — otherwise set it on ad sets. ' +
-        'special_ad_categories is required by Meta for regulated verticals; defaults to none. ' +
-        'For app campaigns discover the Meta application ID first; SKAdNetwork requires promoted_object at campaign creation. ' +
-        'Creates only a campaign, not ad sets, ads or creatives. The first call previews; an identical call with the pending token applies. Workspace policy can force paused creation. No ad is published by this tool.',
+        'Create one campaign in an authorized Meta ad account. Confirm the objective, applicable special ad categories, and any campaign budget. ' +
+        'For SKAdNetwork, provide the Meta application ID and store URL in promoted_object. The workspace may require paused creation. This creates the campaign record only.',
       provider: 'meta',
       kind: 'create',
       payload: z.object({

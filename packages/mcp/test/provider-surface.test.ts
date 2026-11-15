@@ -1,4 +1,4 @@
-import { createContext, selectRuntimeCatalog } from '@adport/core';
+import { createContext, selectRuntimeCatalog, withProjectRouting } from '@adport/core';
 import { AppleAdsClient, AppleAdsProvider, appleTools } from '@adport/provider-apple';
 import { GoogleAdsProvider, GoogleAdsRestClient, googleTools } from '@adport/provider-google';
 import { MetaAdsProvider, MetaGraphClient, metaTools } from '@adport/provider-meta';
@@ -10,7 +10,7 @@ import { SpotifyAdsClient, SpotifyAdsProvider, spotifyTools } from '@adport/prov
 import { PinterestAdsClient, PinterestAdsProvider, pinterestTools } from '@adport/provider-pinterest';
 import { LinkedInAdsClient, LinkedInAdsProvider, linkedinTools } from '@adport/provider-linkedin';
 import { XAdsClient, XAdsProvider, xTools } from '@adport/provider-x';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { Client, InMemoryTransport, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { createMcpHandler } from '@modelcontextprotocol/server';
 import { createMcpServer } from '../src/index.js';
@@ -196,6 +196,58 @@ describe('all-provider shared tool surface', () => {
       expect(modernTools.map(tool => tool.name).sort()).toEqual(names.filter(name => name !== 'recommendation_apply' && !/_api_(read|create|update|delete|remove)$/.test(name)).sort());
       expect(modernTools.find(tool => tool.name === 'google_assets')?._meta).toMatchObject({ ui: { resourceUri: ADPORT_UI_URI } });
     } finally { await modernClient.close(); await modern.close(); }
+  });
+
+  it('exposes public feed inputs and rejects authentication before hosted project routing', async () => {
+    const hash = 'a'.repeat(64);
+    const project_id = '11111111-1111-4111-8111-111111111111';
+    const scope = { project_id, account_id: '1' };
+    const source = 'https://example.test/feed.csv';
+    const acknowledgments = { acknowledge_shared_effects: true, acknowledge_automatic_processing: true };
+    const tiktok = { ...scope, ...acknowledgments, bc_id: '1', catalog_id: '2', update_mode: 'INCREMENTAL' };
+    const schedule = { source: { uri: source }, timezone: 'UTC', interval_type: 'DAILY' };
+    const reddit = { ...scope, ...acknowledgments, business_id: '1e200a0b-4e98-32cc-dd47-3006e4c85bb2', catalog_id: 'catalog_1', mode: 'UPDATE', url: source };
+    const pinterest = { ...scope, confirm_source_access: true };
+    const feed = { catalog_type: 'RETAIL', catalog_id: '1', name: 'Catalog', format: 'CSV', location: source, default_country: 'US', default_locale: 'en-US' };
+    const credentials = { username: 'fixture', password: 'fixture-only' };
+    const cases = [
+      { name: 'tiktok_create_catalog_feed', args: { ...tiktok, feed_name: 'Catalog', expected_catalog_hash: hash, schedule_param: schedule }, privateFields: { schedule_param: { ...schedule, source: { uri: source, ...credentials } } } },
+      { name: 'tiktok_update_catalog_feed', args: { ...tiktok, feed_id: '3', expected_configuration_hash: hash, schedule_param: schedule }, privateFields: { schedule_param: { ...schedule, source: { uri: source, ...credentials } } } },
+      { name: 'reddit_create_catalog_feed', args: { ...reddit, expected_catalog_configuration_hash: hash, schedule: null }, privateFields: credentials },
+      { name: 'reddit_update_catalog_feed', args: { ...reddit, feed_id: 'feed_1', expected_configuration_hash: hash }, privateFields: credentials },
+      { name: 'pinterest_create_feed', args: { ...pinterest, expected_context_hash: hash, feed }, privateFields: { feed: { ...feed, credentials } } },
+      { name: 'pinterest_update_feed', args: { ...pinterest, catalog_id: '1', feed_id: '2', expected_snapshot_hash: hash, changes: { location: source } }, privateFields: { changes: { location: source, credentials } } },
+    ];
+    const resolve = vi.fn(async () => { throw new Error('Fixture stops at project routing'); });
+    const routed = withProjectRouting(runtime, { list: async () => [], resolve });
+    const server = createMcpServer({ runtime: routed, productionOnly: true });
+    const client = new Client({ name: 'hosted-feed-test', version: '1' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      const { tools } = await client.listTools();
+      for (const { name, args, privateFields } of cases) {
+        const schema = tools.find(tool => tool.name === name)?.inputSchema;
+        expect(schema?.properties).toHaveProperty('project_id');
+        expect(JSON.stringify(schema)).not.toMatch(/"(username|password|credentials)":/);
+        const local = runtime.registry.get(name).input;
+        const { project_id: _projectId, ...localArgs } = { ...args, ...privateFields };
+        expect(local.safeParse(localArgs).success, name).toBe(true);
+        resolve.mockClear();
+        const rejected = await client.callTool({ name, arguments: { ...args, ...privateFields } });
+        expect(rejected).toMatchObject({ isError: true, content: [expect.objectContaining({ text: expect.stringMatching(/unrecognized key/i) })] });
+        expect(resolve).not.toHaveBeenCalled();
+        await client.callTool({ name, arguments: args });
+        expect(resolve).toHaveBeenCalledWith(project_id, expect.objectContaining({ name }));
+      }
+      resolve.mockClear();
+      const rejectedUrl = await client.callTool({
+        name: 'reddit_create_catalog_feed',
+        arguments: { ...cases[2]!.args, url: source + '?token=fixture-only' },
+      });
+      expect(rejectedUrl).toMatchObject({ isError: true, content: [expect.objectContaining({ text: expect.stringMatching(/public HTTPS feed URL/i) })] });
+      expect(resolve).not.toHaveBeenCalled();
+    } finally { await client.close(); await server.close(); }
   });
   it('defaults to typed tools, filters profiles and platforms, and rejects excluded calls', async () => {
     async function unavailable(client: Client, name: string) {

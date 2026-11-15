@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { AdportError, type WriteOperation, type WritePreview, type ReviewField } from '@adport/core';
+import { AdportError, hostedFeedUrl, type WriteOperation, type WritePreview, type ReviewField } from '@adport/core';
 import { z } from 'zod';
 import type { TikTokClient } from './client.js';
 import { catalogId, catalogInput } from './catalog-schema.js';
@@ -36,6 +36,9 @@ export const catalogFeedUpdate = payload.extend({
   feed_id: catalogId, update_mode: mode, schedule_param: schedule.optional(), expected_configuration_hash: hash,
   acknowledge_shared_effects: z.literal(true), acknowledge_automatic_processing: z.literal(true),
 }).strict();
+const hostedSchedule = schedule.safeExtend({ source: z.strictObject({ uri: hostedFeedUrl }) });
+export const hostedCatalogFeedCreate = catalogFeedCreate.extend({ schedule_param: hostedSchedule.optional() });
+export const hostedCatalogFeedUpdate = catalogFeedUpdate.extend({ schedule_param: hostedSchedule.optional() });
 export const catalogFeedSwitch = payload.extend({ feed_id: catalogId, status: z.enum(['ON', 'OFF']), expected_configuration_hash: hash, acknowledge_shared_effects: z.literal(true), acknowledge_automatic_processing: z.literal(true) }).strict();
 export const catalogFeedDelete = payload.extend({ feed_id: catalogId, expected_configuration_hash: hash, acknowledge_shared_effects: z.literal(true) }).strict();
 

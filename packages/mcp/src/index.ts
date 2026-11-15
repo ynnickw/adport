@@ -175,12 +175,13 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
     const objectOutput = output
       ? output instanceof z.ZodObject ? output : z.object({ value: output })
       : undefined;
+    const definition = productionOnly ? tool.hosted ?? tool : tool;
     const config = {
       title: toolTitle(tool.name),
       description: scopeDenial
-        ? `${tool.description}\n\nUnavailable on the current plan: ${scopeDenial.message}`
-        : tool.description,
-      inputSchema: tool.input,
+        ? `${definition.description}\n\nUnavailable on the current plan: ${scopeDenial.message}`
+        : definition.description,
+      inputSchema: definition.input,
       ...(objectOutput ? { outputSchema: objectOutput.extend({
         ...(view ? { _adport: productionOnly ? z.looseObject({}) : z.object({
           tool: z.literal(tool.name), view: z.literal(view), providerNames: z.record(z.string(), z.string()),

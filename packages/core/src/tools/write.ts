@@ -20,6 +20,7 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   provider: string;
   kind: WriteKind;
   payload: S;
+  hosted?: { description: string; payload: z.ZodObject<z.ZodRawShape> };
   destructive?: boolean;
   openWorld?: boolean;
   fileInputs?: AnyToolDefinition['fileInputs'];
@@ -29,19 +30,23 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   /** Project resources use the same policy gate without inventing an ad account. */
   contextTarget?: (ctx: ToolContext) => { provider: AdProvider; accountId: string };
 }): AnyToolDefinition {
-  const input = def.payload.safeExtend({
+  const approvalFields = {
     ...(def.contextTarget ? {} : { account_id: z.string().min(1).describe('Target account id') }),
     pending_operation_id: z
       .string()
       .optional()
       .describe('Omit to get a dry-run preview; pass the returned id to apply.'),
-  });
+  };
 
   return defineTool({
     name: def.name,
     namespace: def.namespace,
     description: `${def.description}\n\n${TWO_STEP_NOTE}`,
-    input,
+    input: def.payload.safeExtend(approvalFields),
+    ...(def.hosted ? { hosted: {
+      description: `${def.hosted.description}\n\n${TWO_STEP_NOTE}`,
+      input: def.hosted.payload.safeExtend(approvalFields),
+    } } : {}),
     output: writeOutput,
     ...(def.catalog ? { catalog: def.catalog } : {}),
     ...(def.fileInputs ? { fileInputs: def.fileInputs } : {}),

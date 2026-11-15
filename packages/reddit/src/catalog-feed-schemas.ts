@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { hostedFeedUrl } from '@adport/core';
 import { catalogInput, hash } from './catalog-schemas.js';
 import { redditCatalogId } from './catalog-access.js';
 import { REDDIT_CATALOG_TIMEZONES } from './catalog-feed-timezones.js';
@@ -25,10 +26,13 @@ export const feedCreate = catalogInput.omit({ account_id: true }).extend({
   name: name.optional(), url: sourceUrl, mode: feedMode, schedule: feedSchedule.nullable(), ...authentication,
   expected_catalog_configuration_hash: hash, acknowledge_shared_effects: z.literal(true), acknowledge_automatic_processing: z.literal(true),
 }).strict();
-export const feedUpdate = selected.extend({
+const feedUpdateFields = selected.extend({
   name: name.optional(), url: sourceUrl.optional(), mode: feedMode.optional(), schedule: feedSchedule.nullable().optional(), ...authentication,
   expected_configuration_hash: hash, acknowledge_shared_effects: z.literal(true), acknowledge_automatic_processing: z.literal(true).optional(),
-}).strict().refine(input => ['name', 'url', 'mode', 'schedule', 'username', 'password'].some(key => Object.hasOwn(input, key)), 'Provide a feed field')
+}).strict();
+export const feedUpdate = feedUpdateFields.refine(input => ['name', 'url', 'mode', 'schedule', 'username', 'password'].some(key => Object.hasOwn(input, key)), 'Provide a feed field')
   .refine(input => !['url', 'mode', 'schedule', 'username', 'password'].some(key => Object.hasOwn(input, key)) || input.acknowledge_automatic_processing === true, 'Source/mode/schedule/authentication changes require automatic-processing acknowledgement');
+export const hostedFeedCreate = feedCreate.omit({ username: true, password: true }).extend({ url: hostedFeedUrl });
+export const hostedFeedUpdate = feedUpdateFields.omit({ username: true, password: true }).extend({ url: hostedFeedUrl.optional() });
 export const feedStatus = selected.extend({ is_paused: z.boolean(), expected_configuration_hash: hash, acknowledge_shared_effects: z.literal(true), acknowledge_automatic_processing: z.literal(true) }).strict();
 export const feedDelete = selected.extend({ expected_configuration_hash: hash, acknowledge_shared_effects: z.literal(true), acknowledge_delete_feed: z.literal(true) }).strict();
