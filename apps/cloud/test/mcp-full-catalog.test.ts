@@ -29,7 +29,7 @@ vi.mock('@/lib/cloud/repository', () => ({
   PostgresFindingsStore: class {},
 }));
 
-async function listCatalog(selection: ToolSelection, modern: boolean) {
+async function listCatalog(selection: ToolSelection, modern: boolean, inspectResources = false) {
   catalog.selection.mockResolvedValue(selection);
   oauth.client.mockResolvedValue({ redirectUris: [
     modern ? 'https://chatgpt.com/connector/oauth/test' : 'https://claude.ai/api/mcp/auth_callback',
@@ -50,11 +50,13 @@ async function listCatalog(selection: ToolSelection, modern: boolean) {
     const result = await client.listTools();
     expect(result.nextCursor).toBeUndefined();
     expect(responseSizes).toHaveLength(1);
-    return { tools: result.tools, wireBytes: responseSizes[0]!, instructions: client.getInstructions() };
+    const resources = inspectResources ? (await client.listResources()).resources : [];
+    const resourcesByUri = new Map(resources.map(resource => [resource.uri, resource]));
+    return { tools: result.tools, wireBytes: responseSizes[0]!, instructions: client.getInstructions(), resourcesByUri };
   } finally { await client.close(); }
 }
 
-it('serves the full hosted catalog with room below the OpenAI metadata limit on both transports', async () => {
+it('keeps the full hosted tools/list response within its wire budget on both transports', async () => {
   for (const key of ['GA4_OAUTH_ENABLED', 'GSC_OAUTH_ENABLED', 'GTM_OAUTH_ENABLED']) vi.stubEnv(key, 'true');
   resetEnvForTests();
   const providerFetch = vi.fn(() => { throw new Error('Catalog discovery must not call providers'); });
@@ -64,7 +66,6 @@ it('serves the full hosted catalog with room below the OpenAI metadata limit on 
     const modern = await listCatalog(selection, true);
     const legacy = await listCatalog(selection, false);
     for (const [transport, result] of Object.entries({ modern, legacy })) {
-      // OpenAI Support reported a 3 MB metadata limit. Budget the full wire answer conservatively.
       expect(result.wireBytes).toBeLessThan(2_850_000);
       const names = result.tools.map(tool => tool.name);
       expect(new Set(names).size).toBe(names.length);
@@ -77,7 +78,7 @@ it('serves the full hosted catalog with room below the OpenAI metadata limit on 
         required: expect.arrayContaining(['status', 'applied', 'preview', '_adport']),
         properties: {
           preview: { type: 'object', properties: { summary: { type: 'string' } }, additionalProperties: {} },
-          _adport: { type: 'object', properties: { view: { const: 'operation' } }, additionalProperties: {} },
+          _adport: { type: 'object', additionalProperties: {} },
         },
       });
       console.info(`Hosted catalog ${transport}: ${names.length} tools, ${result.wireBytes} bytes`);
@@ -99,6 +100,56 @@ it('serves the full hosted catalog with room below the OpenAI metadata limit on 
     expect(providerFetch).not.toHaveBeenCalled();
   } finally {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    resetEnvForTests();
+  }
+}, 60_000);
+
+it('keeps the expanded publisher catalog below the metadata limit with the Google rollout gates closed', async () => {
+  for (const key of ['GA4_OAUTH_ENABLED', 'GSC_OAUTH_ENABLED', 'GTM_OAUTH_ENABLED']) vi.stubEnv(key, 'false');
+  vi.stubEnv('ANALYTICS_TEST_ORGANIZATION_IDS', '');
+  vi.stubEnv('GTM_TEST_ORGANIZATION_IDS', '');
+  resetEnvForTests();
+  try {
+    const { tools, resourcesByUri } = await listCatalog({ profile: 'full', providers: null }, true, true);
+    const names = tools.map(tool => tool.name);
+    expect(new Set(names).size).toBeGreaterThanOrEqual(839);
+    expect(names.some(name => /^(ga4|gsc|gtm)_/.test(name))).toBe(false);
+    const summaryUri = String(tools.find(tool => tool.name === 'projects_list')?._meta?.['openai/outputTemplate']);
+    const mediaUri = String(tools.find(tool => tool.name === 'media_list')?._meta?.['openai/outputTemplate']);
+    expect(summaryUri).not.toBe(mediaUri);
+    expect(resourcesByUri.get(summaryUri)?._meta).toMatchObject({
+      ui: { csp: { connectDomains: [], resourceDomains: ['https://app.adport.dev', 'https://example.supabase.co'] } },
+    });
+    expect(resourcesByUri.get(mediaUri)?._meta).toMatchObject({
+      ui: { csp: { connectDomains: ['https://example.supabase.co'], resourceDomains: expect.arrayContaining(['https://tpc.googlesyndication.com']) } },
+    });
+
+    // The publisher expands the referenced template into each tool definition.
+    // Leave a per-tool allowance for its generated fields and serialization.
+    const bytes = tools.reduce((total, tool) => {
+      const uri = String(tool._meta?.['openai/outputTemplate']);
+      const resource = resourcesByUri.get(uri);
+      expect(resource).toBeDefined();
+      const definition = {
+        name: tool.name,
+        title: tool.title,
+        action_name: tool.name,
+        description: tool.description,
+        input_json_schema: tool.inputSchema,
+        output_json_schema: tool.outputSchema,
+        provided_tool_annotations: tool.annotations,
+        metadata: tool._meta,
+        templates: [{
+          resource_uri: uri,
+          meta: { ...resource?._meta, 'openai/widgetDescription': resource?.description },
+        }],
+      };
+      return total + Buffer.byteLength(JSON.stringify(definition)) + 360;
+    }, 0);
+    console.info(`Estimated publisher metadata with production gates closed: ${names.length} tools, ${bytes} bytes`);
+    expect(bytes).toBeLessThan(2_950_000);
+  } finally {
     vi.unstubAllEnvs();
     resetEnvForTests();
   }

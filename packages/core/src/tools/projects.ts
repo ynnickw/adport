@@ -37,7 +37,7 @@ export function withProjectRouting(runtime: AdportRuntime, router: ProjectRouter
     registry.register({
       ...tool,
       input: tool.input.safeExtend({
-        project_id: z.string().uuid().optional().describe('Project id from projects_list. Required when this connection has access to multiple projects.'),
+        project_id: z.string().uuid().optional().describe('From projects_list; required with multiple projects.'),
       }),
       async handler(input) {
         const { project_id, ...args } = input as Record<string, unknown>;
