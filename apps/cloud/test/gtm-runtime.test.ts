@@ -17,7 +17,6 @@ vi.mock('@/lib/cloud/repository', () => ({
 beforeEach(() => {
   loadCredentials.mockResolvedValue({ gtm: { refreshToken: 'tenant-grant', connectionId: 'gtm-connection' } });
   vi.mocked(rejectUnavailableGtm).mockClear();
-  vi.stubEnv('GTM_OAUTH_ENABLED', 'true');
   vi.stubEnv('GOOGLE_ADS_CLIENT_ID', 'test-client.apps.googleusercontent.com');
   vi.stubEnv('GOOGLE_ADS_CLIENT_SECRET', 'test-secret'); resetEnvForTests();
   vi.stubGlobal('fetch', vi.fn(() => { throw new Error('Unexpected provider request'); }));

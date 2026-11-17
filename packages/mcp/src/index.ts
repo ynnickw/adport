@@ -283,7 +283,8 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
         ...config,
         _meta: {
           ...config._meta,
-          ui: { resourceUri, visibility: ['model', 'app'] },
+          // MCP Apps defaults to both audiences when visibility is omitted.
+          ui: productionOnly ? { resourceUri } : { resourceUri, visibility: ['model', 'app'] },
           'openai/widgetAccessible': true,
           'openai/outputTemplate': resourceUri,
           ...(!productionOnly ? {
