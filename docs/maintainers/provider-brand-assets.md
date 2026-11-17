@@ -19,6 +19,7 @@ on the artwork rather than inheriting surrounding text color.
 - Pinterest: Simple Icons geometry, Pinterest red (#E60023).
   [Branding reference](https://business.pinterest.com/en-us/brand-guidelines/).
 - LinkedIn: Font Awesome LinkedIn mark, LinkedIn blue (#0A66C2).
+- OpenAI: Simple Icons geometry, white on black.
 - X and Apple remain black because their marks are monochrome.
 - The existing Google, Meta, TikTok, Microsoft and Reddit brand colors remain.
 
