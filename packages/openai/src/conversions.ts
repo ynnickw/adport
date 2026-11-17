@@ -63,7 +63,7 @@ export function openaiConversionTools(provider: OpenAIAdsProvider): AnyToolDefin
       input: z.object({ account_id: openaiId }), annotations: { readOnly: true },
       handler: async input => { await provider.accountMetadata(input.account_id); return provider.api.list('conversions/event_settings', eventSettingSchema, { limit: '500' }); } }),
     defineTool({ name: 'openai_conversion_events', namespace: 'openai', description: 'Show the latest events received by one conversion source (type, channel, event and receipt times) to check that browser or server tracking arrives. Event payloads are not returned.',
-      input: z.object({ account_id: openaiId, pixel_id: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/), limit: z.number().int().min(1).max(50).default(50) }), annotations: { readOnly: true },
+      input: z.object({ account_id: openaiId, pixel_id: z.string().min(1).max(256).describe('pixel_id from openai_conversion_sources'), limit: z.number().int().min(1).max(50).default(50) }), annotations: { readOnly: true },
       handler: async input => {
         await provider.accountMetadata(input.account_id);
         const result = await provider.api.get('conversions/events', z.looseObject({ data: z.array(receivedEventSchema) }), { pid: input.pixel_id, limit: String(input.limit) });
