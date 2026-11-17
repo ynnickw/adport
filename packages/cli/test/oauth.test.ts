@@ -133,6 +133,11 @@ describe('Reddit OAuth', () => {
     expect(url.searchParams.get('scope')).toBe('adsread,adsedit,adsdatadeletion');
     expect(url.searchParams.get('state')).toBe('reddit-state');
   });
+  it('adds adsconversions to the Reddit authorization only when requested', () => {
+    const url = new URL(buildRedditAuthUrl('client', 'http://localhost:53682', 'state', true));
+    expect(url.searchParams.get('scope')).toBe('adsread,adsedit,adsdatadeletion,adsconversions');
+  });
+
 
   it('exchanges the code using Basic auth, exact redirect URI, and User-Agent', async () => {
     const fetchImpl = vi.fn(async (_url: string | URL, init?: RequestInit) => {

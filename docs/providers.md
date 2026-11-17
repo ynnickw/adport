@@ -197,7 +197,7 @@ Reddit uses OAuth 2.0 with a confidential developer application and requires an 
 1. Create a **web app** at [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps) under the Reddit user that can access the intended Ads businesses.
 2. Register an exact local redirect URI such as `http://localhost:53682`.
 3. Run `adport connect reddit` and provide the app/client ID, app secret, the exact redirect URI, and a truthful User-Agent such as `desktop:dev.adport.local:v0.4.0 (by /u/yourname)`.
-4. Approve the requested `adsread`, `adsedit`, and `adsdatadeletion` scopes. Adport requests `duration=permanent` and stores the refresh token locally.
+4. Approve the requested `adsread`, `adsedit`, and `adsdatadeletion` scopes. Adport requests `duration=permanent` and stores the refresh token locally. Add `--conversions` to also request `adsconversions`, needed only by `reddit_send_conversion_events`.
 5. Verify discovery with `adport accounts --provider reddit` and reporting with `adport report --provider reddit`.
 
 Reddit Ads API v3 campaign budget, bid, spend, CPC, and CPM fields use integer micros. Conversion total-value report fields use cents. Adport preserves native micros for policy checks and converts reports to whole account-currency units without fabricating missing conversions. Report pagination repeats the original POST body and remains bound to the selected account. Reddit requires `conversion_pixel_id` for CBO campaigns; campaign budget type is immutable. The current objective enums are enforced, with `CLICKS` as the default. Transport, pagination and campaign receipts were checked against the [official v3 OpenAPI](https://ads-api.reddit.com/api/v3/openapi.json) on 2026-11-03. These contract checks are separate from live account verification.

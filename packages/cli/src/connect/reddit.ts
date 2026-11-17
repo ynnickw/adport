@@ -11,7 +11,7 @@ import {
   startLoopbackServer,
 } from './oauth.js';
 
-export async function connectReddit(input: { openBrowser: boolean; io: ProgramIO }): Promise<void> {
+export async function connectReddit(input: { openBrowser: boolean; conversions?: boolean; io: ProgramIO }): Promise<void> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const store = new CredentialStore();
   try {
@@ -45,8 +45,8 @@ export async function connectReddit(input: { openBrowser: boolean; io: ProgramIO
       Number(redirect.port),
       redirect.pathname === '/' ? '' : redirect.pathname,
     );
-    const authUrl = buildRedditAuthUrl(clientId, redirectUri, state);
-    input.io.out('Authorizing scopes: adsread, adsedit, adsdatadeletion (permanent refresh token).');
+    const authUrl = buildRedditAuthUrl(clientId, redirectUri, state, input.conversions === true);
+    input.io.out(`Authorizing scopes: adsread, adsedit, adsdatadeletion${input.conversions ? ', adsconversions' : ''} (permanent refresh token).`);
     if (input.openBrowser) {
       openInBrowser(authUrl);
       input.io.out(`If the browser did not open, visit:\n  ${authUrl}`);

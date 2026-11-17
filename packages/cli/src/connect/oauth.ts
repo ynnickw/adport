@@ -135,15 +135,16 @@ export async function startLoopbackServer(
 const REDDIT_AUTHORIZE = 'https://www.reddit.com/api/v1/authorize';
 const REDDIT_TOKEN = 'https://www.reddit.com/api/v1/access_token';
 export const REDDIT_ADS_SCOPES = 'adsread,adsedit,adsdatadeletion';
+export const REDDIT_CONVERSIONS_SCOPE = 'adsconversions';
 
-export function buildRedditAuthUrl(clientId: string, redirectUri: string, state: string): string {
+export function buildRedditAuthUrl(clientId: string, redirectUri: string, state: string, conversions = false): string {
   const params = new URLSearchParams({
     client_id: clientId,
     response_type: 'code',
     state,
     redirect_uri: redirectUri,
     duration: 'permanent',
-    scope: REDDIT_ADS_SCOPES,
+    scope: conversions ? `${REDDIT_ADS_SCOPES},${REDDIT_CONVERSIONS_SCOPE}` : REDDIT_ADS_SCOPES,
   });
   return `${REDDIT_AUTHORIZE}?${params}`;
 }

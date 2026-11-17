@@ -1,6 +1,6 @@
 import { PageHeader } from '@/components/ui';
 import { canAdminister, requireDashboardTenant } from '@/lib/cloud/dashboard';
-import { oauthAvailability } from '@/lib/cloud/provider-oauth';
+import { oauthAvailability, REDDIT_CONVERSIONS_SCOPE } from '@/lib/cloud/provider-oauth';
 import { providerLabel, usesAdAccountSlot } from '@/lib/cloud/providers';
 import { listConnections } from '@/lib/cloud/repository';
 import { OAUTH_PROVIDERS } from '@/lib/cloud/types';
@@ -37,6 +37,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
           accountSelectionId: connection.accountSelectionId,
           accountSelectionUnavailable: connection.accountSelectionUnavailable,
           dataManagerEnabled: connection.provider === 'google' && connection.scopes.includes(GOOGLE_DATA_MANAGER_SCOPE),
+          redditConversionsEnabled: connection.provider === 'reddit' && connection.scopes.includes(REDDIT_CONVERSIONS_SCOPE),
           pinManagementEnabled: connection.provider === 'pinterest' && PINTEREST_PIN_SCOPES.every(scope => connection.scopes.includes(scope)),
           secretPinsEnabled: connection.provider === 'pinterest' && PINTEREST_SECRET_PIN_SCOPES.every(scope => connection.scopes.includes(scope)),
           catalogManagementEnabled: connection.provider === 'pinterest' && PINTEREST_CATALOG_SCOPES.every(scope => connection.scopes.includes(scope)),

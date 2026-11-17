@@ -21,6 +21,7 @@ export interface ConnectionView {
   accountSelectionId?: string | null;
   accountSelectionUnavailable?: boolean;
   dataManagerEnabled?: boolean;
+  redditConversionsEnabled?: boolean;
   pinManagementEnabled?: boolean;
   secretPinsEnabled?: boolean;
   catalogManagementEnabled?: boolean;
@@ -84,7 +85,7 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
       {visibleProviders.map((provider, index) => {
         const connection = find(provider.id);
         const message = notice[provider.id];
-        const startHref = `/api/oauth/${provider.id}/start?organization_id=${organizationId}${returnTo ? `&return_to=${encodeURIComponent(returnTo)}` : ''}${provider.id === 'google' && connection?.dataManagerEnabled ? '&data_manager=1' : ''}${provider.id === 'pinterest' ? `${connection?.secretPinsEnabled ? '&secret_pins=1' : connection?.pinManagementEnabled ? '&pin_management=1' : ''}${connection?.catalogManagementEnabled ? '&catalog_management=1' : ''}` : ''}`;
+        const startHref = `/api/oauth/${provider.id}/start?organization_id=${organizationId}${returnTo ? `&return_to=${encodeURIComponent(returnTo)}` : ''}${provider.id === 'google' && connection?.dataManagerEnabled ? '&data_manager=1' : ''}${provider.id === 'reddit' && connection?.redditConversionsEnabled ? '&conversions=1' : ''}${provider.id === 'pinterest' ? `${connection?.secretPinsEnabled ? '&secret_pins=1' : connection?.pinManagementEnabled ? '&pin_management=1' : ''}${connection?.catalogManagementEnabled ? '&catalog_management=1' : ''}` : ''}`;
         return (
           <Fragment key={provider.id}>
           {visibleProviders.some(item => !usesAdAccountSlot(item.id)) && visibleProviders.some(item => usesAdAccountSlot(item.id))
@@ -113,6 +114,7 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
                   {connection?.accountSelectionId && connection.status === 'connected' && !connection.accountSelectionUnavailable ? <a className="button secondary" href={'/account-selection?selection_id=' + connection.accountSelectionId}>Choose accounts</a>
                     : connection && provider.available ? <OAuthPopupLink className="button secondary" label={`${connection.status !== 'connected' ? 'Reconnect' : connection.accountSelectionUnavailable ? 'Restart selection for' : 'Change accounts for'} ${providerLabel(provider.id)}`} href={startHref}>{connection.status !== 'connected' ? 'Reconnect' : connection.accountSelectionUnavailable ? 'Restart selection' : 'Change accounts'}</OAuthPopupLink> : null}
                   {provider.id === 'google' && provider.available && connection?.status === 'connected' && !connection.accountSelectionId && !connection.dataManagerEnabled && variant === 'settings' ? <OAuthPopupLink className="button secondary" label="Authorize Google conversion imports with additional Data Manager permission" href={`${startHref}&data_manager=1`}>Enable conversion imports</OAuthPopupLink> : null}
+                  {provider.id === 'reddit' && provider.available && connection?.status === 'connected' && !connection.accountSelectionId && !connection.redditConversionsEnabled && variant === 'settings' ? <OAuthPopupLink className="button secondary" label="Authorize Reddit conversion events with the additional adsconversions permission" href={`${startHref}&conversions=1`}>Enable conversion events</OAuthPopupLink> : null}
                   {provider.id === 'pinterest' && provider.available && connection && !connection.accountSelectionId && !connection.pinManagementEnabled && !connection.secretPinsEnabled && variant === 'settings' ? <OAuthPopupLink className="button secondary" label="Authorize Pinterest public board, Pin and media management with additional permissions" href={`${startHref}&pin_management=1`}>Enable Pin management</OAuthPopupLink> : null}
                   {provider.id === 'pinterest' && provider.available && connection?.pinManagementEnabled && !connection.accountSelectionId && !connection.secretPinsEnabled && variant === 'settings' ? <OAuthPopupLink className="button secondary" label="Authorize Pinterest secret board and Pin management with four additional private-content permissions" href={`${startHref}&secret_pins=1`}>Enable secret Pin management</OAuthPopupLink> : null}
                   {provider.id === 'pinterest' && provider.available && connection?.status === 'connected' && !connection.accountSelectionId && !connection.catalogManagementEnabled && variant === 'settings' ? <OAuthPopupLink className="button secondary" label="Authorize Pinterest catalogs and feeds with two additional catalog permissions" href={`${startHref}&catalog_management=1`}>Enable catalogs</OAuthPopupLink> : null}
