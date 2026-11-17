@@ -46,9 +46,6 @@ const schema = z.object({
   GA4_OAUTH_ENABLED: z.enum(['true', 'false']).default('false'),
   GSC_OAUTH_ENABLED: z.enum(['true', 'false']).default('false'),
   ANALYTICS_TEST_ORGANIZATION_IDS: z.string().optional(),
-  // Enable only when the GTM scopes are approved for external users.
-  GTM_OAUTH_ENABLED: z.enum(['true', 'false']).default('false'),
-  GTM_TEST_ORGANIZATION_IDS: z.string().optional(),
   GOOGLE_ADS_LOGIN_CUSTOMER_ID: z.string().regex(/^\d{10}$/).optional(),
   GOOGLE_OAUTH_TOKEN_URL: z.string().url().default('https://oauth2.googleapis.com/token'),
   GOOGLE_OAUTH_REVOKE_URL: z.string().url().default('https://oauth2.googleapis.com/revoke'),

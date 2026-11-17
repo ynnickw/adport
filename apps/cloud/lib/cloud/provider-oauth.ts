@@ -384,7 +384,7 @@ const reddit: OAuthAdapter<'reddit'> = {
 const gtm: OAuthAdapter<'gtm'> = {
   provider: 'gtm', flowLabel: 'Google Tag Manager OAuth 2.0', scopes: GTM_SCOPES,
   pkce: true, codeParam: 'code', manualRevocationUrl: 'https://myaccount.google.com/permissions',
-  configured: () => googleConfigured() && (env().GTM_OAUTH_ENABLED === 'true' || Boolean(env().GTM_TEST_ORGANIZATION_IDS?.trim())),
+  configured: () => googleConfigured(),
   authorizationUrl(input) {
     if (!this.configured()) throw new Error('Google Tag Manager authorization is not enabled.');
     return buildGoogleAuthorizationUrl(input, { provider: 'gtm', scopes: GTM_SCOPES });
