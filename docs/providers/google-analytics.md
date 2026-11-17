@@ -19,6 +19,8 @@ Set `GOOGLE_ANALYTICS_CLIENT_ID` and `GOOGLE_ANALYTICS_CLIENT_SECRET` together i
 
 Only `https://www.googleapis.com/auth/analytics.readonly` and `https://www.googleapis.com/auth/webmasters.readonly` are requested, independently. State, PKCE, granular-consent checks and the existing one-time OAuth transaction flow apply. Disconnect removes the local grant; provider-wide revocation remains a manual Google account action because it can affect other services.
 
-Keep `GA4_OAUTH_ENABLED=false` and `GSC_OAUTH_ENABLED=false` until the application's required Google approval is complete. `ANALYTICS_TEST_ORGANIZATION_IDS` permits only explicitly listed internal projects during verification; it does not authorize broader tenant data access. Public release requires live OAuth and selected-property read checks as well as provider approval.
+Search Console is available to every project using its non-sensitive read-only scope. Publish the Google OAuth application for external users before connecting customer properties.
+
+Keep `GA4_OAUTH_ENABLED=false` until the application's required Google approval is complete. `ANALYTICS_TEST_ORGANIZATION_IDS` permits explicitly listed internal projects to use GA4 during verification. Each connection still requires users to select the properties Adport can read.
 
 For local BYO setup, see [the analytics package](../../packages/analytics/README.md).

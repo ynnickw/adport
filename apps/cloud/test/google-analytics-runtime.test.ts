@@ -12,7 +12,7 @@ vi.mock('@/lib/cloud/repository', () => ({
 }));
 beforeEach(() => {
   vi.stubEnv('ANALYTICS_TEST_ORGANIZATION_IDS', 'internal');
-  vi.stubEnv('GA4_OAUTH_ENABLED', 'false'); vi.stubEnv('GSC_OAUTH_ENABLED', 'false');
+  vi.stubEnv('GA4_OAUTH_ENABLED', 'false');
   vi.stubEnv('GOOGLE_ANALYTICS_CLIENT_ID', 'analytics-client.apps.googleusercontent.com');
   vi.stubEnv('GOOGLE_ANALYTICS_CLIENT_SECRET', 'analytics-secret'); resetEnvForTests();
   vi.stubGlobal('fetch', vi.fn(() => { throw new Error('Unexpected provider request'); }));
@@ -33,9 +33,10 @@ describe('selected analytics properties', () => {
     await expect(runtime.registry.call('gsc_get_site', { account_id: 'sc-domain:other.test' }, runtime.ctx)).rejects.toMatchObject({ code: 'POLICY_VIOLATION' });
     expect(fetch).not.toHaveBeenCalled();
   });
-  it('does not expose unreleased analytics to an unrelated customer project', async () => {
+  it('offers Search Console and keeps GA4 restricted in an unrelated customer project', async () => {
     const runtime = await createTenantRuntime({ organizationId: 'customer', scopes: ['tools:read'] }, { surface: 'mcp' });
-    expect(runtime.registry.list().filter(tool => ['ga4', 'gsc'].includes(tool.namespace))).toHaveLength(0);
+    expect(runtime.registry.list().filter(tool => tool.namespace === 'ga4')).toHaveLength(0);
+    expect(runtime.registry.list().filter(tool => tool.namespace === 'gsc')).toHaveLength(4);
     expect(fetch).not.toHaveBeenCalled();
   });
 });

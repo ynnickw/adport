@@ -106,7 +106,7 @@ advertising account slots. See [provider details](../../packages/gtm/README.md).
 These read-only connections use independent `ga4` and `gsc` grants and exact
 callbacks at `/api/oauth/ga4/callback` and `/api/oauth/gsc/callback`. Configure
 the dedicated server-owned analytics OAuth client and the three required APIs
-as described in [the analytics setup guide](google-analytics.md). Public rollout
-flags default to false; only explicit internal projects may authorize them
-during verification. Both sources use selected-property access and do not
+as described in [the analytics setup guide](google-analytics.md). Search Console
+is available to every project. GA4 remains limited to explicit internal projects
+during Google verification. Both sources use selected-property access and do not
 consume advertising account capacity.
