@@ -112,6 +112,7 @@ describe('Microsoft conversion goal setup', () => {
 
   it('sends enhanced conversions on creation only when requested', async () => {
     const f = fixture();
+    expect((await f.provider.previewWrite(op('microsoft_create_conversion_goal', { goal: { ...offline, enhanced_conversions_enabled: true } }, 'create'), guard)).fieldChanges).toContainEqual({ field: 'IsEnhancedConversionsEnabled', before: '(new)', after: 'true' });
     await f.provider.applyWrite(op('microsoft_create_conversion_goal', { goal: { ...offline, enhanced_conversions_enabled: true } }, 'create'), guard);
     expect((writes(f.calls)[0]!.body as { ConversionGoals: Array<Record<string, unknown>> }).ConversionGoals[0]).toMatchObject({ IsEnhancedConversionsEnabled: true });
     const plain = fixture();
