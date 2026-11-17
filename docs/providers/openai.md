@@ -32,6 +32,11 @@ supported yet.
 | `openai_set_ad_status` | guarded update | Same, for ads |
 | `openai_set_budget` | guarded update | Daily or lifetime spend limit in integer micros (minimum 1,000,000); reads the current value for the policy delta and resends the other limit unchanged |
 
+| `openai_conversion_sources` | read | Pixel and Conversions API sources with their `pixel_id` |
+| `openai_conversion_event_settings` | read | Conversion goals: event type, window, sources and the campaigns using each |
+| `openai_conversion_events` | read | Latest events received by one source (type, channel, event and receipt times), to check that tracking arrives; payloads are dropped |
+| `openai_conversion_insights` | read | `POST /v1/conversions/insights`: goal conversions (click and view), attributed sales, optional per-event counts, per entity or account-wide |
+
 `report` and `accounts_list` work across providers as usual. Every write goes
 through the preview → pending operation → apply flow. Previews are local: the API
 has no dry-run endpoint for these operations. Writes compare the API receipt with
@@ -76,5 +81,5 @@ Reviewed 2026-11-17.
 
 ## Not covered yet
 
-Ad group and ad creation, uploads, custom audiences, conversion pixels and
-events, product feeds, the Bulk API, spend-limit windows, and the cloud runtime.
+Ad group and ad creation, uploads, custom audiences, pixel and event-setting
+writes, product feeds, the Bulk API, spend-limit windows, and the cloud runtime.

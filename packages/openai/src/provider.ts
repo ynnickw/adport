@@ -27,6 +27,8 @@ export class OpenAIAdsProvider implements AdProvider {
   readonly id = 'openai';
   private account?: Promise<OpenAIAccount>;
   constructor(private readonly client: OpenAIAdsClient) {}
+  /** Read-only API access for tool modules; account checks stay with the caller. */
+  get api(): OpenAIAdsClient { return this.client; }
 
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions {

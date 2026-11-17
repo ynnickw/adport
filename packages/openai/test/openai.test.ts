@@ -146,7 +146,7 @@ describe('OpenAI Ads module', () => {
   it('registers guarded write tools with pending operation ids', () => {
     const { provider } = fixture([]);
     const tools = openaiTools(provider);
-    expect(tools.map(t => t.name)).toEqual(['openai_list_campaigns', 'openai_ad_groups', 'openai_ads', 'openai_create_campaign', 'openai_set_campaign_status', 'openai_set_ad_group_status', 'openai_set_ad_status', 'openai_set_budget']);
+    expect(tools.map(t => t.name)).toEqual(['openai_conversion_sources', 'openai_conversion_event_settings', 'openai_conversion_events', 'openai_conversion_insights', 'openai_list_campaigns', 'openai_ad_groups', 'openai_ads', 'openai_create_campaign', 'openai_set_campaign_status', 'openai_set_ad_group_status', 'openai_set_ad_status', 'openai_set_budget']);
     for (const tool of tools.filter(t => !t.annotations.readOnly)) expect(tool.input.shape.pending_operation_id).toBeDefined();
   });
   it('loads from stored credentials or OPENAI_ADS_API_KEY', async () => {
@@ -156,5 +156,30 @@ describe('OpenAI Ads module', () => {
     expect(await createOpenAIModule(new CredentialStore())).toBeUndefined();
     vi.stubEnv('OPENAI_ADS_API_KEY', 'sk-env');
     expect((await createOpenAIModule(new CredentialStore()))?.provider.id).toBe('openai');
+  });
+});
+
+describe('OpenAI Ads conversion reads', () => {
+  const tool = (provider: OpenAIAdsProvider, name: string) => openaiTools(provider).find(t => t.name === name)! as unknown as { input: { safeParse: (value: unknown) => { success: boolean } }; handler: (input: unknown, ctx: never) => Promise<unknown> };
+  const ctx = {} as never;
+  it('lists received events without their payloads', async () => {
+    const { provider, calls } = fixture([accountRoute, { path: 'conversions/events', reply: { object: 'list', data: [
+      { data_source_id: 'src_1', event_type: 'registration_completed', custom_event_name: null, action_source: 'website', event_timestamp_ms: 1795996800000, received_at_ms: 1795996860000, api_channel: 'conversions_api', event_data_json: '{"user":{"email":"hashed"}}' },
+    ] } }]);
+    const result = await tool(provider, 'openai_conversion_events').handler({ account_id: 'adacct_123', pixel_id: 'px_1', limit: 50 }, ctx) as { events: Array<Record<string, unknown>> };
+    expect(calls.at(-1)!.url.search).toBe('?pid=px_1&limit=50');
+    expect(result.events[0]).toMatchObject({ event_type: 'registration_completed', api_channel: 'conversions_api', received_at: '2026-11-30T00:01:00.000Z' });
+    expect(result.events[0]).not.toHaveProperty('event_data_json');
+  });
+  it('posts account-level conversion insights for an inclusive date range', async () => {
+    const { provider, calls } = fixture([accountRoute, { method: 'POST', path: 'conversions/insights', reply: { object: 'list', count: 1, account_currency: 'USD', data: [{ entity_id: 'adacct_123', conversions: 12, click_through_conversions: 10, view_through_conversions: 2, order_created_attributed_sales: '120.5', order_created_attributed_sales_currency: 'USD' }] } }]);
+    const result = await tool(provider, 'openai_conversion_insights').handler({ account_id: 'adacct_123', since: '2026-11-01', until: '2026-11-07', aggregation_level: 'campaign', time_granularity: 'none', include_events: false }, ctx) as { data: Array<{ conversions: number }> };
+    expect(JSON.parse(String(calls.at(-1)!.init.body))).toEqual({ aggregation_level: 'campaign', time_granularity: 'none', time_ranges: ['{"type":"date_range","since":"2026-11-01","until":"2026-11-07"}'], group_by_entity: false });
+    expect(result.data[0]!.conversions).toBe(12);
+  });
+  it('rejects event names without the event expansion and checks the account first', async () => {
+    const { provider } = fixture([accountRoute]);
+    expect(tool(provider, 'openai_conversion_insights').input.safeParse({ account_id: 'adacct_123', since: '2026-11-01', until: '2026-11-07', event_names: ['Signup'] }).success).toBe(false);
+    await expect(tool(provider, 'openai_conversion_sources').handler({ account_id: 'adacct_other' }, ctx)).rejects.toThrow(/does not match/);
   });
 });

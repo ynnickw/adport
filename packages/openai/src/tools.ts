@@ -4,9 +4,11 @@ import {
   setAdGroupStatusSchema, setAdStatusSchema, setBudgetSchema, setCampaignStatusSchema,
 } from './schemas.js';
 import type { OpenAIAdsProvider } from './provider.js';
+import { openaiConversionTools } from './conversions.js';
 
 export function openaiTools(provider: OpenAIAdsProvider): AnyToolDefinition[] {
   return [
+    ...openaiConversionTools(provider),
     defineTool({ name: 'openai_list_campaigns', namespace: 'openai', description: 'List OpenAI Ads (ChatGPT ads) campaigns in the connected ad account, with status and budgets in micros.',
       input: listCampaignsSchema, annotations: { readOnly: true }, handler: input => provider.listCampaigns(input.account_id) }),
     defineTool({ name: 'openai_ad_groups', namespace: 'openai', description: 'List OpenAI Ads ad groups, optionally for one campaign.',

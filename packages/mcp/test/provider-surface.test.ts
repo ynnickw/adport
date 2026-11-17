@@ -93,6 +93,7 @@ describe('all-provider shared tool surface', () => {
       'microsoft_api_read', 'microsoft_api_create', 'microsoft_api_update', 'microsoft_api_delete',
       'reddit_api_read', 'reddit_api_create', 'reddit_api_update', 'reddit_api_delete',
       'snapchat_list_campaigns', 'snapchat_create_campaign', 'snapchat_set_campaign_status', 'snapchat_set_budget',
+      'openai_conversion_sources', 'openai_conversion_event_settings', 'openai_conversion_events', 'openai_conversion_insights',
       'openai_list_campaigns', 'openai_ad_groups', 'openai_ads', 'openai_create_campaign', 'openai_set_campaign_status', 'openai_set_ad_group_status', 'openai_set_ad_status', 'openai_set_budget',
       'spotify_list_campaigns', 'spotify_get_ad_set', 'spotify_create_campaign_draft', 'spotify_set_campaign_status', 'spotify_set_budget', 'spotify_set_ad_set_delivery',
       'pinterest_list_campaigns', 'pinterest_create_campaign', 'pinterest_set_campaign_status', 'pinterest_set_budget',
