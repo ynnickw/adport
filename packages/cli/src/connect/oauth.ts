@@ -150,7 +150,7 @@ export function buildRedditAuthUrl(clientId: string, redirectUri: string, state:
 }
 
 export async function exchangeRedditCode(
-  input: { clientId: string; clientSecret: string; code: string; redirectUri: string; userAgent: string },
+  input: { clientId: string; clientSecret: string; code: string; redirectUri: string; userAgent: string; conversions?: boolean },
   fetchImpl: typeof fetch = fetch,
 ): Promise<{ refreshToken: string }> {
   const response = await fetchImpl(REDDIT_TOKEN, {
@@ -166,13 +166,16 @@ export async function exchangeRedditCode(
       redirect_uri: input.redirectUri,
     }),
   });
-  const data = (await response.json()) as { refresh_token?: string; error?: string; message?: string };
+  const data = (await response.json()) as { refresh_token?: string; error?: string; message?: string; scope?: string };
   if (!response.ok || !data.refresh_token) {
     throw new AdportError(
       'PROVIDER_ERROR',
       `Reddit OAuth exchange failed${data.error ? ` (${data.error})` : ''}: ${data.message ?? 'no refresh token returned'}`,
       data,
     );
+  }
+  if (input.conversions && !String(data.scope ?? '').split(/[\s,]+/).includes(REDDIT_CONVERSIONS_SCOPE)) {
+    throw new AdportError('PROVIDER_ERROR', 'Reddit did not grant adsconversions. Check that your Reddit app may request it; the previous connection was kept.');
   }
   return { refreshToken: data.refresh_token };
 }

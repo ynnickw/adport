@@ -47,6 +47,7 @@ export async function connectReddit(input: { openBrowser: boolean; conversions?:
     );
     const authUrl = buildRedditAuthUrl(clientId, redirectUri, state, input.conversions === true);
     input.io.out(`Authorizing scopes: adsread, adsedit, adsdatadeletion${input.conversions ? ', adsconversions' : ''} (permanent refresh token).`);
+    if (!input.conversions && existing) input.io.out('This replaces the stored grant. Add --conversions to keep conversion-event access.');
     if (input.openBrowser) {
       openInBrowser(authUrl);
       input.io.out(`If the browser did not open, visit:\n  ${authUrl}`);
@@ -57,7 +58,7 @@ export async function connectReddit(input: { openBrowser: boolean; conversions?:
     let refreshToken: string;
     try {
       const code = await loopback.waitForCode;
-      ({ refreshToken } = await exchangeRedditCode({ clientId, clientSecret, code, redirectUri, userAgent }));
+      ({ refreshToken } = await exchangeRedditCode({ clientId, clientSecret, code, redirectUri, userAgent, conversions: input.conversions === true }));
     } finally {
       loopback.close();
     }

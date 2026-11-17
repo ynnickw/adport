@@ -133,6 +133,12 @@ describe('Reddit OAuth', () => {
     expect(url.searchParams.get('scope')).toBe('adsread,adsedit,adsdatadeletion');
     expect(url.searchParams.get('state')).toBe('reddit-state');
   });
+  it('refuses a Reddit grant without adsconversions when conversions were requested', async () => {
+    const fetchImpl = (async () => Response.json({ refresh_token: 'refresh', scope: 'adsread adsedit adsdatadeletion' })) as unknown as typeof fetch;
+    const input = { clientId: 'c', clientSecret: 's', code: 'code', redirectUri: 'http://localhost:53682', userAgent: 'ua' };
+    await expect(exchangeRedditCode({ ...input, conversions: true }, fetchImpl)).rejects.toThrow('did not grant adsconversions');
+    await expect(exchangeRedditCode(input, fetchImpl)).resolves.toEqual({ refreshToken: 'refresh' });
+  });
   it('adds adsconversions to the Reddit authorization only when requested', () => {
     const url = new URL(buildRedditAuthUrl('client', 'http://localhost:53682', 'state', true));
     expect(url.searchParams.get('scope')).toBe('adsread,adsedit,adsdatadeletion,adsconversions');

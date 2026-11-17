@@ -60,6 +60,16 @@ describe('compact provider connection list', () => {
     expect(enabled).toContain('/api/oauth/google/start?organization_id=org&amp;data_manager=1');
     expect(render({ canManage: false })).not.toContain('Enable conversion imports');
   });
+  it('offers Reddit conversion events separately and keeps the permission on later reconnection', () => {
+    const reddit = { ...connection, provider: 'reddit' };
+    const basic = render({ connections: [reddit] });
+    expect(basic).toContain('Authorize Reddit conversion events with the additional adsconversions permission');
+    expect(basic).toContain('/api/oauth/reddit/start?organization_id=org&amp;conversions=1');
+    const enabled = render({ connections: [{ ...reddit, redditConversionsEnabled: true }] });
+    expect(enabled).not.toContain('Enable conversion events');
+    expect(enabled).toContain('/api/oauth/reddit/start?organization_id=org&amp;conversions=1');
+    expect(render({ connections: [reddit], canManage: false })).not.toContain('Enable conversion events');
+  });
   it('renders every provider as a list row without card descriptions or OAuth flow details', () => {
     const html = render();
     expect(html.match(/class="connection-row"/g)).toHaveLength(OAUTH_PROVIDERS.length);
