@@ -100,6 +100,25 @@ describe('Microsoft conversion goal setup', () => {
     expect(f.state.goals[0]).toMatchObject({ ActionExpression: null, ActionOperator: null, CategoryExpression: null, CategoryOperator: null, LabelExpression: 'new-label', LabelOperator: 'Equals', Value: null, ValueOperator: null, ExcludeFromBidding: true });
   });
 
+  it('turns enhanced conversions on for an existing goal and confirms it on readback', async () => {
+    const f = fixture(); f.state.goals.push(existing('Event', { ActionExpression: 'submit', ActionOperator: 'Equals', TagId: '200', IsEnhancedConversionsEnabled: false }));
+    const current = await f.provider.conversions.get(account, '100', 'Event');
+    const operation = op('microsoft_update_conversion_goal', { goal_id: '100', goal_type: 'Event', expected_snapshot_hash: current.snapshot_hash, enhanced_conversions_enabled: true });
+    expect((await f.provider.previewWrite(operation, guard)).fieldChanges).toContainEqual({ field: 'IsEnhancedConversionsEnabled', before: 'false', after: 'true' });
+    await f.provider.applyWrite(operation, guard);
+    expect(writes(f.calls)[0]!.body).toMatchObject({ ConversionGoals: [{ Id: '100', Type: 'Event', IsEnhancedConversionsEnabled: true, ActionExpression: 'submit', ActionOperator: 'Equals' }] });
+    expect(f.state.goals[0]).toMatchObject({ IsEnhancedConversionsEnabled: true, ActionExpression: 'submit' });
+  });
+
+  it('sends enhanced conversions on creation only when requested', async () => {
+    const f = fixture();
+    await f.provider.applyWrite(op('microsoft_create_conversion_goal', { goal: { ...offline, enhanced_conversions_enabled: true } }, 'create'), guard);
+    expect((writes(f.calls)[0]!.body as { ConversionGoals: Array<Record<string, unknown>> }).ConversionGoals[0]).toMatchObject({ IsEnhancedConversionsEnabled: true });
+    const plain = fixture();
+    await plain.provider.applyWrite(op('microsoft_create_conversion_goal', { goal: offline }, 'create'), guard);
+    expect((writes(plain.calls)[0]!.body as { ConversionGoals: Array<Record<string, unknown>> }).ConversionGoals[0]).not.toHaveProperty('IsEnhancedConversionsEnabled');
+  });
+
   it('binds configuration and auto-tagging but tolerates unrelated native tracking-status changes', async () => {
     const f = fixture(); f.state.goals.push(existing());
     const current = await f.provider.conversions.get(account, '100', 'OfflineConversion'); f.state.goals[0]!.TrackingStatus = 'RecordingConversions';
