@@ -124,6 +124,9 @@ it('keeps the expanded publisher catalog below the metadata limit with GTM and S
     for (const name of ['meta_create_campaign', 'google_create_performance_max_campaign', 'linkedin_get_sponsored_post']) {
       expect(toolsByName.get(name)?._meta?.ui, name).toMatchObject({ visibility: ['model', 'app'] });
     }
+    expect(toolsByName.get('meta_create_campaign')?.title).toBe('Meta Create Campaign');
+    expect(toolsByName.get('google_create_performance_max_campaign')?.title).toBe('Google Create Performance Max Campaign');
+    expect(toolsByName.get('projects_list')?.title).toBeUndefined();
     expect(toolsByName.get('projects_list')?._meta?.ui).not.toHaveProperty('visibility');
     const summaryUri = String(tools.find(tool => tool.name === 'projects_list')?._meta?.['openai/outputTemplate']);
     const mediaUri = String(tools.find(tool => tool.name === 'media_list')?._meta?.['openai/outputTemplate']);
