@@ -115,14 +115,14 @@ describe('OpenAI Ads guarded writes', () => {
     const { provider } = fixture([accountRoute]);
     await expect(provider.previewWrite({ provider: 'openai', accountId: 'adacct_123', tool: 'openai_create_campaign', kind: 'create', payload: { name: 'New' } }, guard)).rejects.toThrow();
   });
-  it.each(['description', 'bidding_type', 'objective', 'start_time', 'end_time', 'targeting', 'conversion_event_setting_ids'])(
+  it.each(['description', 'bidding_type', 'objective', 'billing_event_type', 'start_time', 'end_time', 'targeting', 'conversion_event_setting_ids'])(
     'rejects a creation receipt that drops the requested %s', async field => {
       const { provider } = fixture([accountRoute, { method: 'POST', path: 'campaigns', reply: (_url: URL, init: RequestInit) => {
         const body = JSON.parse(String(init.body)); delete body[field];
         return { id: 'cmpn_new', ...body };
       } }]);
       await expect(provider.applyWrite({ provider: 'openai', accountId: 'adacct_123', tool: 'openai_create_campaign', kind: 'create', payload: {
-        name: 'Conversion launch', lifetime_spend_limit_micros: 10_000_000, description: 'Approved description', bidding_type: 'conversions', objective: 'conversions',
+        name: 'Conversion launch', lifetime_spend_limit_micros: 10_000_000, description: 'Approved description', bidding_type: 'conversions', objective: 'conversions', billing_event_type: 'click',
         conversion_event_setting_ids: ['ces_123'], start_time: '2026-12-01T00:00:00Z', end_time: '2026-12-08T00:00:00Z', target_location_ids: ['1000001'],
       } }, guard)).rejects.toThrow(/receipt mismatch/);
     });
@@ -137,9 +137,41 @@ describe('OpenAI Ads guarded writes', () => {
   it('preserves OpenAPI-supported daily-only caps, objectives and country targeting', async () => {
     const { provider, calls } = fixture([accountRoute, { method: 'POST', path: 'campaigns', reply: (_url: URL, init: RequestInit) => ({ id: 'cmpn_new', ...JSON.parse(String(init.body)) }) }]);
     await provider.applyWrite({ provider: 'openai', accountId: 'adacct_123', tool: 'openai_create_campaign', kind: 'create', payload: {
-      name: 'Daily launch', daily_spend_limit_micros: 10_000_000, objective: 'clicks', target_countries: ['US'],
+      name: 'Daily launch', daily_spend_limit_micros: 10_000_000, objective: 'clicks', billing_event_type: 'click', target_countries: ['US'],
     } }, guard);
-    expect(JSON.parse(String(calls.at(-1)!.init.body))).toMatchObject({ budget: { daily_spend_limit_micros: 10_000_000 }, objective: 'clicks', targeting: { locations: { countries: ['US'] } } });
+    expect(JSON.parse(String(calls.at(-1)!.init.body))).toMatchObject({ budget: { daily_spend_limit_micros: 10_000_000 }, objective: 'clicks', billing_event_type: 'click', targeting: { locations: { countries: ['US'] } } });
+  });
+  it.each([{ objective: 'clicks' }, { billing_event_type: 'click' }])('rejects an incomplete objective/billing pair before sending a write (%j)', async fields => {
+    const { provider, calls } = fixture([accountRoute]);
+    await expect(provider.previewWrite({ provider: 'openai', accountId: account.id, tool: 'openai_create_campaign', kind: 'create', payload: {
+      name: 'Incomplete billing', daily_spend_limit_micros: 1_000_000, ...fields,
+    } }, guard)).rejects.toThrow(/objective and billing_event_type together/);
+    expect(calls.some(call => call.init.method === 'POST')).toBe(false);
+  });
+  it('accepts country targeting expanded into native country records alongside explicit location IDs', async () => {
+    const { provider } = fixture([accountRoute, { method: 'POST', path: 'campaigns', reply: (_url: URL, init: RequestInit) => ({
+      id: 'cmpn_new', ...JSON.parse(String(init.body)), targeting: { locations: { include: [
+        { id: '2000043', type: 'region', country_code: 'US' },
+        { id: '1000056', type: 'country', country_code: 'DE', name: 'Germany' },
+      ] } },
+    }) }]);
+    expect(await provider.applyWrite({ provider: 'openai', accountId: account.id, tool: 'openai_create_campaign', kind: 'create', payload: {
+      name: 'Country launch', daily_spend_limit_micros: 15_000_000, bidding_type: 'clicks', target_countries: ['DE'], target_location_ids: ['2000043'],
+    } }, guard)).toEqual({ applied: true, resourceIds: ['cmpn_new'] });
+  });
+  it.each([
+    { include: [] },
+    { include: [{ id: '1000001', type: 'country', country_code: 'US' }] },
+    { include: [{ id: '2000001', type: 'region', country_code: 'DE' }] },
+    { include: [{ id: '1000056', type: 'country', country_code: 'DE' }, { id: '1000001', type: 'country', country_code: 'US' }] },
+    { include: [{ id: '1000056', type: 'country', country_code: 'DE' }, { id: '1000056', type: 'country', country_code: 'DE' }] },
+  ])('rejects expanded targeting that changes the approved country (%j)', async ({ include }) => {
+    const { provider } = fixture([accountRoute, { method: 'POST', path: 'campaigns', reply: (_url: URL, init: RequestInit) => ({
+      id: 'cmpn_new', ...JSON.parse(String(init.body)), targeting: { locations: { include } },
+    }) }]);
+    await expect(provider.applyWrite({ provider: 'openai', accountId: account.id, tool: 'openai_create_campaign', kind: 'create', payload: {
+      name: 'Country launch', daily_spend_limit_micros: 15_000_000, target_countries: ['DE'],
+    } }, guard)).rejects.toThrow(/receipt mismatch/);
   });
   it('rejects creation with both budget types before sending a write', async () => {
     const { provider, calls } = fixture([accountRoute]);
@@ -147,6 +179,15 @@ describe('OpenAI Ads guarded writes', () => {
       name: 'Two budgets', daily_spend_limit_micros: 10_000_000, lifetime_spend_limit_micros: 100_000_000,
     } }, guard)).rejects.toThrow(/exactly one/);
     expect(calls.some(call => call.init.method === 'POST')).toBe(false);
+  });
+  it('rejects a creation receipt that adds an unapproved budget type', async () => {
+    const { provider } = fixture([accountRoute, { method: 'POST', path: 'campaigns', reply: (_url: URL, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      return { id: 'cmpn_new', ...body, budget: { ...body.budget, lifetime_spend_limit_micros: 100_000_000 } };
+    } }]);
+    await expect(provider.applyWrite({ provider: 'openai', accountId: account.id, tool: 'openai_create_campaign', kind: 'create', payload: {
+      name: 'Daily launch', daily_spend_limit_micros: 15_000_000,
+    } }, guard)).rejects.toThrow(/receipt mismatch/);
   });
   it.each([{}, { daily_spend_limit_micros: 1_000_000 }, { daily_spend_limit_micros: 70_000_000, lifetime_spend_limit_micros: 100_000_000 }])(
     'rejects a receipt with a missing, changed or additional budget limit (%j)', async budget => {

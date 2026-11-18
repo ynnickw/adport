@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
 import {
   AdportError, resolveDateRange, type Account, type AdProvider, type EntityLevel, type MetricName,
   type NormalizedQuery, type Report, type ReportRow, type StandardActions,
@@ -8,7 +9,7 @@ import type { OpenAIAdsClient } from './client.js';
 import {
   accountSchema, adGroupSchema, adSchema, campaignSchema, createCampaignSchema, insightRowSchema,
   openaiId, setAdGroupStatusSchema, setAdStatusSchema, setBudgetSchema, setCampaignStatusSchema,
-  type OpenAIAccount, type OpenAIInsightRow,
+  type OpenAIAccount, type OpenAICampaign, type OpenAIInsightRow,
 } from './schemas.js';
 
 const LEVEL = { account: 'ad_account', campaign: 'campaign', ad_group: 'ad_group', ad: 'ad' } as const;
@@ -141,6 +142,7 @@ export class OpenAIAdsProvider implements AdProvider {
       ...(input.description !== undefined ? { description: input.description } : {}),
       ...(input.bidding_type ? { bidding_type: input.bidding_type } : {}),
       ...(input.objective ? { objective: input.objective } : {}),
+      ...(input.billing_event_type ? { billing_event_type: input.billing_event_type } : {}),
       ...(input.conversion_event_setting_ids ? { conversion_event_setting_ids: input.conversion_event_setting_ids } : {}),
       ...(start !== undefined ? { start_time: start } : {}),
       ...(end !== undefined ? { end_time: end } : {}),
@@ -156,7 +158,7 @@ export class OpenAIAdsProvider implements AdProvider {
       budgetDeltas: Object.entries(budget).map(([field, value]) => ({ target: `new campaign ${field}`, toMicros: value })),
       execute: async () => {
         const created = await this.client.post('campaigns', campaignSchema, body, randomUUID());
-        const mismatch = !matchesRequested(created, body);
+        const mismatch = !matchesCampaignReceipt(created, body);
         if (mismatch) throw new AdportError('PROVIDER_ERROR', 'openai: campaign creation receipt mismatch; reconcile before retrying', { resource_ids: [created.id] });
         return { applied: true, resourceIds: [created.id] };
       },
@@ -203,6 +205,31 @@ export class OpenAIAdsProvider implements AdProvider {
       },
     };
   }
+}
+
+function matchesCampaignReceipt(actual: OpenAICampaign, expected: Record<string, unknown>): boolean {
+  const expectedBudget = expected.budget as Record<string, number>;
+  const actualBudget = pickBudget(actual.budget);
+  if (Object.keys(actualBudget).length !== Object.keys(expectedBudget).length || !matchesRequested(actualBudget, expectedBudget)) return false;
+  const requestedTargeting = expected.targeting as { locations: { countries?: string[]; include?: { id: string }[] } } | undefined;
+  if (!requestedTargeting?.locations.countries) return matchesRequested(actual, expected);
+  const { targeting: _targeting, ...otherFields } = expected;
+  if (!matchesRequested(actual, otherFields)) return false;
+  const targeting = actual.targeting as { locations?: { countries?: unknown; include?: unknown } } | undefined;
+  if (!targeting || Object.keys(targeting).some(key => key !== 'locations')) return false;
+  const locations = targeting.locations;
+  if (!locations) return false;
+  const requested = requestedTargeting.locations;
+  if (locations.countries !== undefined) return matchesRequested(locations.countries, requested.countries)
+    && matchesRequested(locations.include ?? [], requested.include ?? []);
+  // The live API expands country codes into country location records in its receipt.
+  const parsed = z.array(z.object({ id: z.string(), type: z.string().optional(), country_code: z.string().nullable().optional() })).safeParse(locations.include);
+  if (!parsed.success) return false;
+  const included = parsed.data, ids = requested.include?.map(location => location.id) ?? [], countries = requested.countries!;
+  return new Set(included.map(location => location.id)).size === included.length
+    && ids.every(id => included.some(location => location.id === id))
+    && countries.every(code => included.filter(location => location.type === 'country' && location.country_code === code).length === 1)
+    && included.every(location => ids.includes(location.id) || location.type === 'country' && countries.includes(location.country_code ?? ''));
 }
 
 function matchesRequested(actual: unknown, expected: unknown): boolean {

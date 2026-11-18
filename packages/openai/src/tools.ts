@@ -16,7 +16,7 @@ export function openaiTools(provider: OpenAIAdsProvider): AnyToolDefinition[] {
     defineTool({ name: 'openai_ads', namespace: 'openai', description: 'List OpenAI Ads ads with status and review status, optionally for one ad group.',
       input: listAdsSchema, annotations: { readOnly: true }, handler: input => provider.listAds(input.account_id, input.ad_group_id) }),
     guardedWriteTool({ name: 'openai_create_campaign', namespace: 'openai', provider: 'openai', kind: 'create',
-      description: 'Create an OpenAI Ads campaign, paused by default. Spend limits use integer micros (minimum 1,000,000); targeting accepts countries or location IDs. Conversion bidding requires one event setting. Preview is local, not server validation.', payload: createCampaignSchema }),
+      description: 'Create a paused OpenAI Ads campaign. Spend limits use integer micros; platform currency minimums apply. Target countries or location IDs. Conversion bidding needs one event setting. Supply objective with billing_event_type, or use bidding_type. Preview is local.', payload: createCampaignSchema }),
     guardedWriteTool({ name: 'openai_set_campaign_status', namespace: 'openai', provider: 'openai', kind: 'update',
       description: 'Pause or activate an OpenAI Ads campaign; reads its current status first.', payload: setCampaignStatusSchema }),
     guardedWriteTool({ name: 'openai_set_ad_group_status', namespace: 'openai', provider: 'openai', kind: 'update',

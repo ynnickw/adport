@@ -36,7 +36,7 @@ supported yet.
 | `openai_list_campaigns` | read | Every campaign, with status and budgets in micros |
 | `openai_ad_groups` | read | Optional `campaign_id` filter |
 | `openai_ads` | read | Optional `ad_group_id` filter; includes review status |
-| `openai_create_campaign` | guarded create | Paused by default and forced paused by policy; exactly one spend limit; optional bidding type, objective, schedule, countries or location IDs; conversion bidding requires one event setting; sends an `Idempotency-Key` |
+| `openai_create_campaign` | guarded create | Paused by default and forced paused by policy; exactly one spend limit; optional bidding type or an objective/billing-event pair, schedule, countries or location IDs; conversion bidding requires one event setting; sends an `Idempotency-Key` |
 | `openai_set_campaign_status` | guarded update | `active` or `paused` through the native activate/pause actions |
 | `openai_set_ad_group_status` | guarded update | Same, for ad groups |
 | `openai_set_ad_status` | guarded update | Same, for ads |
@@ -75,9 +75,13 @@ ID when they differ. Budget changes also reject receipts that introduce a second
 
 ## Contract sources
 
-Reviewed 2026-11-18. The OpenAPI schema supports daily-only caps, objectives and
-country codes, although the prose campaign guide shows a narrower lifetime-cap
-and location-ID workflow. These supported inputs are retained pending live verification.
+Reviewed and live-verified 2026-11-18. The API supports daily-only caps, objectives
+and country codes. An explicit `objective` requires `billing_event_type`; omit
+both to use `bidding_type` alone. The creation receipt expands country codes into
+country location records. Adport compares those records with the approved countries
+and location IDs, rejecting missing, changed or additional locations. Budget
+minimums depend on account currency; a local preview does not validate them with
+OpenAI. The verified EUR account required a daily limit of at least 15,000,000 micros.
 
 | Area | Source |
 | --- | --- |
@@ -94,11 +98,19 @@ insights and reporting at all four entity levels passed against a real account.
 `today` and `last_7_days` report ranges also passed. The CLI connection flow and
 built MCP stdio account/campaign/report calls passed with the same credential.
 
-The account was empty: event diagnostics, status and budget tools were checked
-only for their native missing-resource rejection. No campaign, ad group, ad or
-tracking source was created. Campaign creation was previewed through the policy
-engine; no live ad or measurement write was applied. Populated metric
-normalization and successful write receipts still need real-resource verification.
+Paused QA campaigns, an ad group and an ad were created, alongside an uninstalled
+conversion source. All twelve provider tools have successful live coverage:
+campaign creation, all three pause actions and a budget increase/restore passed
+the normal preview/apply gate and native receipt checks. Source event diagnostics
+returned an empty event list for the real source. Country targeting and schedule
+were checked on the accepted campaign. All serving resources remained paused;
+no activation call, tracking installation or conversion-event transmission occurred.
+
+The private fixture setup also used the normal policy engine; it does not add
+ad-group/ad/upload/source creation tools to the shipped catalog. Account-level
+lists can lag recent writes, so budget verification uses a direct campaign read.
+Populated delivery/conversion metrics and activation remain untested; no spend
+was enabled to obtain them.
 
 When a targeted spend limit was unset, its preview has no `fromMicros`, so only
 the absolute caps apply (same as other providers).
