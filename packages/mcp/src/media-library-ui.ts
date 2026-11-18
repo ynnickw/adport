@@ -128,6 +128,8 @@ export const MEDIA_LIBRARY_UI = String.raw`
         const response=await callTool('media_list',args,60000),value=resultData(response);
         if(response?.isError || value.error || !Array.isArray(value.creatives) || value._adport?.tool!=='media_list' || mediaLibraryProject(value,value._adport)!==library.project) throw new Error('The next page could not be confirmed. Try Load more again.');
         if(mediaLibrary!==library) return;
+        // A host can deliver a nested page again after the bridge has resolved.
+        rememberHostResult(JSON.stringify(value));
         library.seen.add(args.cursor);
         const byId=new Map(arr(library.data.creatives).map(item=>[item.id,item]));
         for(const item of value.creatives) byId.set(item.id,item);
