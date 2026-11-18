@@ -135,21 +135,22 @@ export async function startLoopbackServer(
 const REDDIT_AUTHORIZE = 'https://www.reddit.com/api/v1/authorize';
 const REDDIT_TOKEN = 'https://www.reddit.com/api/v1/access_token';
 export const REDDIT_ADS_SCOPES = 'adsread,adsedit,adsdatadeletion';
+export const REDDIT_CONVERSIONS_SCOPE = 'adsconversions';
 
-export function buildRedditAuthUrl(clientId: string, redirectUri: string, state: string): string {
+export function buildRedditAuthUrl(clientId: string, redirectUri: string, state: string, conversions = false): string {
   const params = new URLSearchParams({
     client_id: clientId,
     response_type: 'code',
     state,
     redirect_uri: redirectUri,
     duration: 'permanent',
-    scope: REDDIT_ADS_SCOPES,
+    scope: conversions ? `${REDDIT_ADS_SCOPES},${REDDIT_CONVERSIONS_SCOPE}` : REDDIT_ADS_SCOPES,
   });
   return `${REDDIT_AUTHORIZE}?${params}`;
 }
 
 export async function exchangeRedditCode(
-  input: { clientId: string; clientSecret: string; code: string; redirectUri: string; userAgent: string },
+  input: { clientId: string; clientSecret: string; code: string; redirectUri: string; userAgent: string; conversions?: boolean },
   fetchImpl: typeof fetch = fetch,
 ): Promise<{ refreshToken: string }> {
   const response = await fetchImpl(REDDIT_TOKEN, {
@@ -165,13 +166,15 @@ export async function exchangeRedditCode(
       redirect_uri: input.redirectUri,
     }),
   });
-  const data = (await response.json()) as { refresh_token?: string; error?: string; message?: string };
+  const data = (await response.json()) as { refresh_token?: string; error?: string; message?: string; scope?: string };
   if (!response.ok || !data.refresh_token) {
     throw new AdportError(
       'PROVIDER_ERROR',
-      `Reddit OAuth exchange failed${data.error ? ` (${data.error})` : ''}: ${data.message ?? 'no refresh token returned'}`,
-      data,
+      `Reddit OAuth exchange failed (HTTP ${response.status}): no usable refresh token. The previous connection was kept.`,
     );
+  }
+  if (input.conversions && !String(data.scope ?? '').split(/[\s,]+/).includes(REDDIT_CONVERSIONS_SCOPE)) {
+    throw new AdportError('PROVIDER_ERROR', 'Reddit did not grant adsconversions. Check that your Reddit app may request it; the previous connection was kept.');
   }
   return { refreshToken: data.refresh_token };
 }

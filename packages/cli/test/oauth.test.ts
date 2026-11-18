@@ -133,6 +133,25 @@ describe('Reddit OAuth', () => {
     expect(url.searchParams.get('scope')).toBe('adsread,adsedit,adsdatadeletion');
     expect(url.searchParams.get('state')).toBe('reddit-state');
   });
+  it('refuses a Reddit grant without adsconversions when conversions were requested', async () => {
+    const fetchImpl = (async () => Response.json({ refresh_token: 'refresh', scope: 'adsread adsedit adsdatadeletion' })) as unknown as typeof fetch;
+    const input = { clientId: 'c', clientSecret: 's', code: 'code', redirectUri: 'http://localhost:53682', userAgent: 'ua' };
+    await expect(exchangeRedditCode({ ...input, conversions: true }, fetchImpl)).rejects.toThrow('did not grant adsconversions');
+    await expect(exchangeRedditCode(input, fetchImpl)).resolves.toEqual({ refreshToken: 'refresh' });
+  });
+  it('adds adsconversions to the Reddit authorization only when requested', () => {
+    const url = new URL(buildRedditAuthUrl('client', 'http://localhost:53682', 'state', true));
+    expect(url.searchParams.get('scope')).toBe('adsread,adsedit,adsdatadeletion,adsconversions');
+  });
+  it('does not expose Reddit token response bodies on a failed exchange', async () => {
+    const input = { clientId: 'client', clientSecret: 'secret', code: 'code', redirectUri: 'http://localhost:53682', userAgent: 'adport-test' };
+    const fetchImpl = vi.fn(async () => Response.json({ error: 'invalid_grant', message: 'echoed secret', refresh_token: 'sensitive-refresh' }, { status: 400 })) as unknown as typeof fetch;
+    const error: unknown = await exchangeRedditCode(input, fetchImpl).catch(error => error);
+    expect(error).toBeInstanceOf(Error);
+    expect(JSON.stringify(error)).not.toContain('sensitive-refresh');
+    expect((error as Error).message).not.toContain('echoed secret');
+  });
+
 
   it('exchanges the code using Basic auth, exact redirect URI, and User-Agent', async () => {
     const fetchImpl = vi.fn(async (_url: string | URL, init?: RequestInit) => {

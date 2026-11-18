@@ -105,6 +105,7 @@ All 11 providers have local connection commands, normalized reports, and guarded
 | Pinterest Ads | `pinterest` | [Discovery, reports, campaigns, budgets, status](docs/providers/pinterest.md) |
 | LinkedIn Ads | `linkedin` | [Campaigns/groups, targeting, bids, text creatives and image library](docs/providers/linkedin.md) |
 | X Ads | `x` | [Campaigns, line items, targeting, draft creatives, cards/media and analytics](docs/providers/x.md) |
+| OpenAI Ads | `openai` | [Ads in ChatGPT: reports, campaigns, ad groups, ads, status, spend limits](docs/providers/openai.md) |
 
 Provider application approval, account access, and available metrics depend on the platform. The [connection guides](docs/providers.md) record prerequisites and testing limits. Reports preserve currency and attribution differences; see [reporting semantics](docs/reporting-semantics.md) before comparing providers.
 

@@ -21,7 +21,7 @@ beforeEach(() => {
   mocks.consume.mockResolvedValue({ organizationId: 'org', verifier: 'secret', returnPath: popupReturnPath(id, '/onboarding') });
   mocks.exchange.mockResolvedValue({ accessToken: 'secret' }); mocks.list.mockResolvedValue([]);
   mocks.upsert.mockResolvedValue('connection');
-  mocks.adapter.mockImplementation((_provider, options) => ({ configured: () => true, codeParam: 'code', scopes: options?.googleDataManager ? ['https://www.googleapis.com/auth/adwords', 'https://www.googleapis.com/auth/datamanager'] : options?.pinterestSecretPins || options?.pinterestPinManagement || options?.pinterestCatalogManagement ? [...pinterestAuthorizationScopes({ secretPins: options?.pinterestSecretPins, pinManagement: options?.pinterestPinManagement, catalogManagement: options?.pinterestCatalogManagement })] : [], authorizationUrl: () => 'https://provider.test/authorize', exchange: mocks.exchange }));
+  mocks.adapter.mockImplementation((_provider, options) => ({ configured: () => true, codeParam: 'code', scopes: options?.redditConversions ? ['adsread', 'adsedit', 'adsdatadeletion', 'adsconversions'] : options?.googleDataManager ? ['https://www.googleapis.com/auth/adwords', 'https://www.googleapis.com/auth/datamanager'] : options?.pinterestSecretPins || options?.pinterestPinManagement || options?.pinterestCatalogManagement ? [...pinterestAuthorizationScopes({ secretPins: options?.pinterestSecretPins, pinManagement: options?.pinterestPinManagement, catalogManagement: options?.pinterestCatalogManagement })] : [], authorizationUrl: () => 'https://provider.test/authorize', exchange: mocks.exchange }));
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); resetEnvForTests(); });
@@ -89,6 +89,18 @@ describe('shared popup OAuth routes', () => {
     mocks.consume.mockResolvedValue({ organizationId: 'org', verifier: 'secret', returnPath: '/dashboard/connections', googleDataManager: true });
     await callback(new Request('https://app.adport.test/api/oauth/google/callback?code=code&state=verified'), context);
     expect(mocks.upsert).toHaveBeenCalledWith(expect.objectContaining({ scopes: ['https://www.googleapis.com/auth/adwords', 'https://www.googleapis.com/auth/datamanager'] }));
+  });
+  it('binds the Reddit conversion-events opt-in to the server-side transaction and uses it on callback', async () => {
+    const context = { params: Promise.resolve({ provider: 'reddit' }) };
+    await start(new Request('https://app.adport.test/api/oauth/reddit/start?conversions=1'), context);
+    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ provider: 'reddit', redditConversions: true }));
+    mocks.consume.mockResolvedValue({ organizationId: 'org', verifier: 'secret', returnPath: '/dashboard/connections', redditConversions: true });
+    await callback(new Request('https://app.adport.test/api/oauth/reddit/callback?code=code&state=verified'), context);
+    expect(mocks.upsert).toHaveBeenCalledWith(expect.objectContaining({ scopes: expect.arrayContaining(['adsconversions']) }));
+  });
+  it.each(['reddit/start?conversions=0', 'reddit/start?conversions=1&conversions=1', 'meta/start?conversions=1'])('rejects an ambiguous or non-Reddit conversion-events request: %s', async suffix => {
+    const response = await start(new Request(`https://app.adport.test/api/oauth/${suffix}`), { params: Promise.resolve({ provider: suffix.startsWith('meta') ? 'meta' : 'reddit' }) });
+    expect(response.status).toBe(400); expect(mocks.create).not.toHaveBeenCalled();
   });
   it('ignores forged callback scope options and preserves the old connection when exchange fails', async () => {
     const context = { params: Promise.resolve({ provider: 'google' }) };

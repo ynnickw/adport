@@ -30,6 +30,8 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
     if (!isOAuthProvider(provider)) return failure(new Error('Unknown OAuth provider.'), 404);
     const dataManager = url.searchParams.get('data_manager') === '1';
     if (url.searchParams.has('data_manager') && (provider !== 'google' || url.searchParams.getAll('data_manager').length !== 1 || !dataManager)) return failure(new Error('Invalid Google Data Manager authorization option.'), 400);
+    const redditConversions = url.searchParams.get('conversions') === '1';
+    if (url.searchParams.has('conversions') && (provider !== 'reddit' || url.searchParams.getAll('conversions').length !== 1 || !redditConversions)) return failure(new Error('Invalid Reddit conversion-events authorization option.'), 400);
     const pinManagement = url.searchParams.get('pin_management') === '1';
     if (url.searchParams.has('pin_management') && (provider !== 'pinterest' || url.searchParams.getAll('pin_management').length !== 1 || !pinManagement)) return failure(new Error('Invalid Pinterest Pin management authorization option.'), 400);
     const secretPins = url.searchParams.get('secret_pins') === '1';
@@ -39,7 +41,7 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
     const principal = await sessionPrincipal(url.searchParams.get('organization_id') ?? undefined);
     if (!['owner', 'admin'].includes(principal.role ?? '')) throw new Error('Owner or admin access is required.');
     if (!providerAllowedForOrganization(provider, principal.organizationId)) return failure(new Error('This provider is not enabled for this organization.'), 403);
-    const adapter = oauthAdapter(provider, { googleDataManager: dataManager, pinterestPinManagement: pinManagement, pinterestSecretPins: secretPins, pinterestCatalogManagement: catalogManagement });
+    const adapter = oauthAdapter(provider, { googleDataManager: dataManager, redditConversions, pinterestPinManagement: pinManagement, pinterestSecretPins: secretPins, pinterestCatalogManagement: catalogManagement });
     if (!adapter.configured()) return failure(new Error(`The hosted ${provider} application is not available yet.`), 503);
     const prepared = await adapter.prepare?.();
     const state = prepared?.state ?? randomBytes(32).toString('base64url');
@@ -54,6 +56,7 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
       state,
       verifier: prepared?.verifier ?? pkce.verifier,
       ...(dataManager ? { googleDataManager: true } : {}),
+      ...(redditConversions ? { redditConversions: true } : {}),
       ...(pinManagement ? { pinterestPinManagement: true } : {}),
       ...(secretPins ? { pinterestSecretPins: true } : {}),
       ...(catalogManagement ? { pinterestCatalogManagement: true } : {}),

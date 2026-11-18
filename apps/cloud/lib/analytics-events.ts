@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { ANALYTICS_PAGES } from './analytics-pages';
+import { CLOUD_PROVIDERS } from './cloud/types';
 
-const provider = z.enum(['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'microsoft', 'reddit', 'apple', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x']);
+const provider = z.enum(CLOUD_PROVIDERS);
 const plan = z.enum(['reader', 'operator', 'premium', 'agency', 'enterprise']);
 export const productEventSchema = z.discriminatedUnion('event', [
   z.object({ event: z.literal('analytics_enabled') }).strict(),

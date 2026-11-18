@@ -38,6 +38,22 @@ describe('compact central media library',()=>{
     } finally {f.dom.window.close();}
   });
 
+  it('keeps earlier cards when the host delivers a nested page again after the bridge resolves',async()=>{
+    const f=fixture();
+    try {
+      const first=f.document.querySelector('video');
+      const secondPage=page([video('third'),video('fourth')]);
+      f.callTool.mockResolvedValueOnce(secondPage);
+      f.more().click();
+      await vi.waitFor(()=>expect(f.document.querySelectorAll('article')).toHaveLength(4));
+
+      f.notify(secondPage);
+
+      expect(f.document.querySelectorAll('article')).toHaveLength(4);
+      expect(f.document.querySelector('video')).toBe(first);
+    } finally {f.dom.window.close();}
+  });
+
   it('rejects a foreign-project page and allows a failed read to be retried without losing loaded cards',async()=>{
     const f=fixture();
     try {

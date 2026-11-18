@@ -17,6 +17,12 @@ function render(options: { canManage?: boolean; available?: boolean; connections
 }
 
 describe('compact provider connection list', () => {
+  it('connects OpenAI through the key dialog and keeps account selection separate', () => {
+    const html = renderToStaticMarkup(<ProviderConnections organizationId="org" canManage connections={[]}
+      oauthProviders={[{ id: 'openai', available: true }]} />);
+    expect(html).toContain('Connect OpenAI Ads');
+    expect(html).not.toContain('/api/oauth/openai/');
+  });
   it('offers Pin management separately and preserves an enabled opt-in on reconnection', () => {
     const pinterest = { ...connection, provider: 'pinterest', status: 'error' as const };
     const basic = render({ connections: [pinterest] });
@@ -59,6 +65,16 @@ describe('compact provider connection list', () => {
     expect(enabled).not.toContain('Enable conversion imports');
     expect(enabled).toContain('/api/oauth/google/start?organization_id=org&amp;data_manager=1');
     expect(render({ canManage: false })).not.toContain('Enable conversion imports');
+  });
+  it('offers Reddit conversion events separately and keeps the permission on later reconnection', () => {
+    const reddit = { ...connection, provider: 'reddit' };
+    const basic = render({ connections: [reddit] });
+    expect(basic).toContain('Authorize Reddit conversion events with the additional adsconversions permission');
+    expect(basic).toContain('/api/oauth/reddit/start?organization_id=org&amp;conversions=1');
+    const enabled = render({ connections: [{ ...reddit, redditConversionsEnabled: true }] });
+    expect(enabled).not.toContain('Enable conversion events');
+    expect(enabled).toContain('/api/oauth/reddit/start?organization_id=org&amp;conversions=1');
+    expect(render({ connections: [reddit], canManage: false })).not.toContain('Enable conversion events');
   });
   it('renders every provider as a list row without card descriptions or OAuth flow details', () => {
     const html = render();

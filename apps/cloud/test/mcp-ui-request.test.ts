@@ -37,7 +37,7 @@ describe('bounded static MCP UI request classification', () => {
     for (const method of ['resources/list', 'resources/templates/list']) expect(await isMcpUiResourceRequest(request(body({ method, params: {} })))).toBe(true);
   });
 
-  it.each(['ui://adport/insight-card-v28.html', 'ui://adport/insight-card-v29.html'])('keeps current and cached host resources on the static path (%s)', async uri => {
+  it.each(['ui://adport/insight-card-v28.html', 'ui://adport/insight-card-v29.html', 'ui://adport/insight-card-v30.html', 'ui://adport/insight-card-v31.html'])('keeps current and cached host resources on the static path (%s)', async uri => {
     const input = body({ params: { uri } }), req = request(input);
     expect(await inspectMcpRequest(req)).toEqual({ uiOnly: true, discoveryMethod: 'resources/read' });
     expect(await req.json()).toEqual(input);

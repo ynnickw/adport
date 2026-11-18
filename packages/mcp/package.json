@@ -37,6 +37,7 @@
     "@adport/provider-snapchat": "workspace:*",
     "@adport/provider-spotify": "workspace:*",
     "@adport/provider-tiktok": "workspace:*",
+    "@adport/provider-openai": "workspace:*",
     "@adport/provider-x": "workspace:*",
     "@modelcontextprotocol/ext-apps": "^2.0.4",
     "zod": "^4.4.3",

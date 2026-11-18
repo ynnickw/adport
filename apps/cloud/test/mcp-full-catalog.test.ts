@@ -68,6 +68,7 @@ it('keeps the full hosted tools/list response within its wire budget on both tra
     for (const [transport, result] of Object.entries({ modern, legacy })) {
       expect(result.wireBytes).toBeLessThan(2_850_000);
       const names = result.tools.map(tool => tool.name);
+      for (const tool of result.tools) expect(tool.annotations?.title).toEqual(expect.any(String));
       expect(new Set(names).size).toBe(names.length);
       for (const [prefix, count] of [['ga4', 4], ['gsc', 4], ['gtm', 24]] as const) {
         expect(names.filter(name => name.startsWith(prefix + '_'))).toHaveLength(count);
