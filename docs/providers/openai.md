@@ -3,8 +3,8 @@
 Provider for the [OpenAI Ads API](https://developers.openai.com/ads), which manages
 ads shown in ChatGPT. The local CLI, MCP and hosted Cloud runtime share the same
 provider and tools. Tests use synthetic responses shaped after the official
-OpenAPI 2.3.0 contract and guide examples. Live reads and campaign previews were
-verified on 2026-11-18 against a real account; write application remains unverified.
+OpenAPI 2.3.0 contract and guide examples. Selected live reads and paused write
+workflows were verified on 2026-11-18; coverage and remaining limits are detailed below.
 
 ## Connect in Cloud
 
