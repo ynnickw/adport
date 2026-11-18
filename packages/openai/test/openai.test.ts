@@ -11,7 +11,7 @@ import { createOpenAIModule } from '../src/index.js';
 // Synthetic fixtures shaped after the official OpenAI Ads API v1 OpenAPI 2.3.0
 // schemas and guide examples, reviewed 2026-11-17. See docs/providers/openai.md.
 const account = { id: 'adacct_123', name: 'Example', status: 'active', timezone: 'Europe/Paris', currency_code: 'EUR', url: 'https://example.com', preview_url: null, review: { status: 'approved' } };
-const campaign = { id: 'cmpn_123', name: 'Launch', status: 'active', description: null, created_at: 1, updated_at: 1, product_feed_id: null, start_time: null, end_time: null, budget: { lifetime_spend_limit_micros: 500_000_000, daily_spend_limit_micros: 50_000_000 }, bidding_type: 'clicks' };
+const campaign = { id: 'cmpn_123', name: 'Launch', status: 'active', description: null, created_at: 1, updated_at: 1, product_feed_id: null, start_time: null, end_time: null, budget: { daily_spend_limit_micros: 50_000_000 }, bidding_type: 'clicks' };
 const list = (data: unknown[], hasMore = false, lastId: string | null = null) => ({ object: 'list', data, first_id: null, last_id: lastId, has_more: hasMore });
 
 type Route = { method?: string; path: string; reply: unknown | ((url: URL, init: RequestInit) => unknown); status?: number };
@@ -141,18 +141,35 @@ describe('OpenAI Ads guarded writes', () => {
     } }, guard);
     expect(JSON.parse(String(calls.at(-1)!.init.body))).toMatchObject({ budget: { daily_spend_limit_micros: 10_000_000 }, objective: 'clicks', targeting: { locations: { countries: ['US'] } } });
   });
-  it.each([undefined, 1_000_000])('rejects a budget receipt with a dropped or changed preserved cap (%s)', async lifetime => {
-    const { provider } = fixture([accountRoute, { path: 'campaigns/cmpn_123', reply: campaign },
-      { method: 'POST', path: 'campaigns/cmpn_123', reply: { ...campaign, budget: { daily_spend_limit_micros: 70_000_000, ...(lifetime === undefined ? {} : { lifetime_spend_limit_micros: lifetime }) } } }]);
-    await expect(provider.applyWrite({ provider: 'openai', accountId: 'adacct_123', tool: 'openai_set_budget', kind: 'update', payload: { campaign_id: 'cmpn_123', budget_micros: 70_000_000 } }, guard)).rejects.toThrow(/budget receipt mismatch/);
+  it('rejects creation with both budget types before sending a write', async () => {
+    const { provider, calls } = fixture([accountRoute]);
+    await expect(provider.previewWrite({ provider: 'openai', accountId: account.id, tool: 'openai_create_campaign', kind: 'create', payload: {
+      name: 'Two budgets', daily_spend_limit_micros: 10_000_000, lifetime_spend_limit_micros: 100_000_000,
+    } }, guard)).rejects.toThrow(/exactly one/);
+    expect(calls.some(call => call.init.method === 'POST')).toBe(false);
   });
-  it('updates one spend limit, keeps the other and reports the delta', async () => {
-    const { provider, calls } = fixture([accountRoute, { path: 'campaigns/cmpn_123', reply: campaign },
+  it.each([{}, { daily_spend_limit_micros: 1_000_000 }, { daily_spend_limit_micros: 70_000_000, lifetime_spend_limit_micros: 100_000_000 }])(
+    'rejects a receipt with a missing, changed or additional budget limit (%j)', async budget => {
+      const { provider } = fixture([accountRoute, { path: 'campaigns/cmpn_123', reply: campaign },
+        { method: 'POST', path: 'campaigns/cmpn_123', reply: { ...campaign, budget } }]);
+      await expect(provider.applyWrite({ provider: 'openai', accountId: account.id, tool: 'openai_set_budget', kind: 'update', payload: { campaign_id: campaign.id, budget_micros: 70_000_000 } }, guard)).rejects.toThrow(/budget receipt mismatch/);
+    });
+  it.each([
+    { budget: { lifetime_spend_limit_micros: 500_000_000 }, field: 'daily_spend_limit_micros' },
+    { budget: { daily_spend_limit_micros: 50_000_000 }, field: 'lifetime_spend_limit_micros' },
+    { budget: { daily_spend_limit_micros: 50_000_000, lifetime_spend_limit_micros: 500_000_000 }, field: 'daily_spend_limit_micros' },
+  ])('refuses budget-type replacement and ambiguous native caps before a write (%j)', async ({ budget, field }) => {
+    const { provider, calls } = fixture([accountRoute, { path: 'campaigns/cmpn_123', reply: { ...campaign, budget } }]);
+    await expect(provider.previewWrite({ provider: 'openai', accountId: account.id, tool: 'openai_set_budget', kind: 'update', payload: { campaign_id: campaign.id, field, budget_micros: 70_000_000 } }, guard)).rejects.toThrow(/mutually exclusive/);
+    expect(calls.some(call => call.init.method === 'POST')).toBe(false);
+  });
+  it.each(['daily_spend_limit_micros', 'lifetime_spend_limit_micros'])('updates the existing %s and reports its policy delta', async field => {
+    const { provider, calls } = fixture([accountRoute, { path: 'campaigns/cmpn_123', reply: { ...campaign, budget: { [field]: 50_000_000 } } },
       { method: 'POST', path: 'campaigns/cmpn_123', reply: (_u: URL, init: RequestInit) => ({ ...campaign, ...JSON.parse(String(init.body)) }) }]);
-    const op = { provider: 'openai', accountId: 'adacct_123', tool: 'openai_set_budget', kind: 'update' as const, payload: { campaign_id: 'cmpn_123', budget_micros: 70_000_000 } };
-    expect((await provider.previewWrite(op, guard)).budgetDeltas).toEqual([{ target: 'campaign cmpn_123 daily_spend_limit_micros', fromMicros: 50_000_000, toMicros: 70_000_000 }]);
+    const op = { provider: 'openai', accountId: account.id, tool: 'openai_set_budget', kind: 'update' as const, payload: { campaign_id: campaign.id, field, budget_micros: 70_000_000 } };
+    expect((await provider.previewWrite(op, guard)).budgetDeltas).toEqual([{ target: `campaign cmpn_123 ${field}`, fromMicros: 50_000_000, toMicros: 70_000_000 }]);
     await provider.applyWrite(op, guard);
-    expect(JSON.parse(String(calls.find(c => c.init.method === 'POST')!.init.body))).toEqual({ budget: { lifetime_spend_limit_micros: 500_000_000, daily_spend_limit_micros: 70_000_000 } });
+    expect(JSON.parse(String(calls.find(call => call.init.method === 'POST')!.init.body))).toEqual({ budget: { [field]: 70_000_000 } });
   });
   it.each([
     ['openai_set_campaign_status', 'campaigns', { campaign_id: 'cmpn_123' }],

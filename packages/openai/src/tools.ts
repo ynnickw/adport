@@ -24,6 +24,6 @@ export function openaiTools(provider: OpenAIAdsProvider): AnyToolDefinition[] {
     guardedWriteTool({ name: 'openai_set_ad_status', namespace: 'openai', provider: 'openai', kind: 'update',
       description: 'Pause or activate an OpenAI Ads ad; reads its current status first.', payload: setAdStatusSchema }),
     guardedWriteTool({ name: 'openai_set_budget', namespace: 'openai', provider: 'openai', kind: 'update',
-      description: 'Set an OpenAI Ads campaign daily or lifetime spend limit in integer micros; reads the existing value for policy checks and keeps the other limit.', payload: setBudgetSchema }),
+      description: 'Update an OpenAI Ads campaign’s existing daily or lifetime spend limit in integer micros; reads the current value for policy checks. Budget-type changes are not supported.', payload: setBudgetSchema }),
   ];
 }

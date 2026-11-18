@@ -36,11 +36,11 @@ supported yet.
 | `openai_list_campaigns` | read | Every campaign, with status and budgets in micros |
 | `openai_ad_groups` | read | Optional `campaign_id` filter |
 | `openai_ads` | read | Optional `ad_group_id` filter; includes review status |
-| `openai_create_campaign` | guarded create | Paused by default and forced paused by policy; at least one spend limit; optional bidding type, objective, schedule, countries or location IDs; conversion bidding requires one event setting; sends an `Idempotency-Key` |
+| `openai_create_campaign` | guarded create | Paused by default and forced paused by policy; exactly one spend limit; optional bidding type, objective, schedule, countries or location IDs; conversion bidding requires one event setting; sends an `Idempotency-Key` |
 | `openai_set_campaign_status` | guarded update | `active` or `paused` through the native activate/pause actions |
 | `openai_set_ad_group_status` | guarded update | Same, for ad groups |
 | `openai_set_ad_status` | guarded update | Same, for ads |
-| `openai_set_budget` | guarded update | Daily or lifetime spend limit in integer micros (minimum 1,000,000); reads the current value for the policy delta and resends the other limit unchanged |
+| `openai_set_budget` | guarded update | Daily or lifetime spend limit in integer micros (minimum 1,000,000); updates the existing budget type, reads its current value for the policy delta, and refuses budget-type changes |
 
 | `openai_conversion_sources` | read | Pixel and Conversions API sources with their `pixel_id` |
 | `openai_conversion_event_settings` | read | Conversion goals: event type, window, sources and the campaigns using each |
@@ -51,7 +51,7 @@ supported yet.
 through the preview → pending operation → apply flow. Previews are local: the API
 has no dry-run endpoint for these operations. Writes compare the API receipt with
 every submitted field, including targeting and schedules, and fail with the resource
-ID when they differ. Budget changes also verify the preserved spend limit.
+ID when they differ. Budget changes also reject receipts that introduce a second spend limit. The [budget guide](https://developers.openai.com/ads/bidding-and-budgets) requires exactly one daily or lifetime limit. This tool updates the existing type; it does not remove or replace a lifetime cap.
 
 ## Reporting semantics
 

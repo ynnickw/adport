@@ -168,7 +168,8 @@ export class OpenAIAdsProvider implements AdProvider {
     const current = await this.client.get(`campaigns/${input.campaign_id}`, campaignSchema);
     if (current.id !== input.campaign_id) throw new AdportError('PROVIDER_ERROR', 'openai: campaign response does not match the requested campaign');
     const previous = current.budget[input.field];
-    // Send the complete budget so the other spend limit is preserved.
+    const otherField = input.field === 'daily_spend_limit_micros' ? 'lifetime_spend_limit_micros' : 'daily_spend_limit_micros';
+    if (current.budget[otherField] !== undefined) throw new AdportError('INVALID_INPUT', 'openai: daily and lifetime campaign budgets are mutually exclusive; update the existing budget type instead of adding or replacing the other limit');
     const budget = { ...pickBudget(current.budget), [input.field]: input.budget_micros };
     return {
       summary: `Change OpenAI Ads campaign "${current.name}" ${input.field}`,
@@ -178,7 +179,7 @@ export class OpenAIAdsProvider implements AdProvider {
       budgetDeltas: [{ target: `campaign ${current.id} ${input.field}`, ...(previous !== undefined ? { fromMicros: previous } : {}), toMicros: input.budget_micros }],
       execute: async () => {
         const updated = await this.client.post(`campaigns/${current.id}`, campaignSchema, { budget });
-        if (updated.id !== current.id || !matchesRequested(updated.budget, budget)) throw new AdportError('PROVIDER_ERROR', 'openai: campaign budget receipt mismatch; reconcile before retrying', { resource_ids: [current.id] });
+        if (updated.id !== current.id || updated.budget[otherField] !== undefined || !matchesRequested(updated.budget, budget)) throw new AdportError('PROVIDER_ERROR', 'openai: campaign budget receipt mismatch; reconcile before retrying', { resource_ids: [current.id] });
         return { applied: true, resourceIds: [current.id] };
       },
     };

@@ -62,7 +62,7 @@ export const createCampaignSchema = z.object({
   end_time: schedule.optional(),
   target_countries: z.array(z.string().regex(/^[A-Z]{2}$/)).min(1).max(250).refine(ids => new Set(ids).size === ids.length, 'Use unique countries').optional(),
   target_location_ids: z.array(z.string().regex(/^\d+$/)).min(1).max(250).refine(ids => new Set(ids).size === ids.length, 'Use unique location IDs').optional(),
-}).strict().refine(input => input.lifetime_spend_limit_micros !== undefined || input.daily_spend_limit_micros !== undefined, 'Set a lifetime or daily spend limit')
+}).strict().refine(input => Number(input.lifetime_spend_limit_micros !== undefined) + Number(input.daily_spend_limit_micros !== undefined) === 1, 'Set exactly one lifetime or daily spend limit')
   .refine(input => input.bidding_type === 'conversions' || input.objective === 'conversions' ? Boolean(input.conversion_event_setting_ids) : !input.conversion_event_setting_ids, {
   message: 'Conversion bidding requires exactly one conversion_event_setting_id; other bidding types must omit it',
 });
