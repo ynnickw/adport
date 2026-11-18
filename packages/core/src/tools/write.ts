@@ -6,8 +6,7 @@ import { reviewWrite } from './review.js';
 import { MEDIA_UPLOAD_TOOLS } from './media-distribution.js';
 
 const TWO_STEP_NOTE =
-  'Two-step write: call WITHOUT pending_operation_id to get a dry-run preview and a pending_operation_id; ' +
-  'call again with IDENTICAL arguments plus that id to apply.';
+  'Omit pending_operation_id to preview. To apply, repeat IDENTICAL arguments with the returned ID.';
 
 /**
  * Wrap a provider mutation as a two-step (validate → apply) tool.
@@ -21,6 +20,7 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   provider: string;
   kind: WriteKind;
   payload: S;
+  hosted?: { description: string; payload: z.ZodObject<z.ZodRawShape> };
   destructive?: boolean;
   openWorld?: boolean;
   fileInputs?: AnyToolDefinition['fileInputs'];
@@ -30,19 +30,23 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   /** Project resources use the same policy gate without inventing an ad account. */
   contextTarget?: (ctx: ToolContext) => { provider: AdProvider; accountId: string };
 }): AnyToolDefinition {
-  const input = def.payload.safeExtend({
+  const approvalFields = {
     ...(def.contextTarget ? {} : { account_id: z.string().min(1).describe('Target account id') }),
     pending_operation_id: z
       .string()
       .optional()
       .describe('Omit to get a dry-run preview; pass the returned id to apply.'),
-  });
+  };
 
   return defineTool({
     name: def.name,
     namespace: def.namespace,
     description: `${def.description}\n\n${TWO_STEP_NOTE}`,
-    input,
+    input: def.payload.safeExtend(approvalFields),
+    ...(def.hosted ? { hosted: {
+      description: `${def.hosted.description}\n\n${TWO_STEP_NOTE}`,
+      input: def.hosted.payload.safeExtend(approvalFields),
+    } } : {}),
     output: writeOutput,
     ...(def.catalog ? { catalog: def.catalog } : {}),
     ...(def.fileInputs ? { fileInputs: def.fileInputs } : {}),

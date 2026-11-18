@@ -97,19 +97,16 @@ Enable Tag Manager API and configure the three scopes documented in
 [the Google verification runbook](../maintainers/google-oauth-verification.md).
 Apply the GTM provider migration before connecting.
 
-Keep `GTM_OAUTH_ENABLED=false` until Google approves external use. A comma-separated
-`GTM_TEST_ORGANIZATION_IDS` allowlist enables the hidden connection only for named
-internal test projects, including start/callback, availability and runtime checks.
-This supports Google's hidden-test-route review workflow without exposing
-unverified consent to public users. GTM account selection uses the existing tenant inventory. Analytics and tracking
-connections have their own dashboard tab and do not use advertising account slots. See [provider details](../../packages/gtm/README.md).
+Project owners and admins can connect GTM from **Accounts → Analytics & tracking**
+and select which accounts Adport can access. These connections do not use
+advertising account slots. See [provider details](../../packages/gtm/README.md).
 
 ## Google Analytics 4 and Search Console
 
 These read-only connections use independent `ga4` and `gsc` grants and exact
 callbacks at `/api/oauth/ga4/callback` and `/api/oauth/gsc/callback`. Configure
 the dedicated server-owned analytics OAuth client and the three required APIs
-as described in [the analytics setup guide](google-analytics.md). Public rollout
-flags default to false; only explicit internal projects may authorize them
-during verification. Both sources use selected-property access and do not
+as described in [the analytics setup guide](google-analytics.md). Search Console
+is available to every project. GA4 remains limited to explicit internal projects
+during Google verification. Both sources use selected-property access and do not
 consume advertising account capacity.
