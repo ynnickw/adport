@@ -51,7 +51,7 @@ export class OpenAIAdsClient {
     const url = new URL(path, OPENAI_ADS_API_BASE);
     if (url.origin !== ORIGIN || !url.pathname.startsWith('/v1/') || url.username || url.password || url.hash) throw new AdportError('INVALID_INPUT', 'openai: invalid API URL');
     for (const [key, value] of Object.entries(params)) {
-      if (Array.isArray(value)) for (const entry of value) url.searchParams.append(key, entry);
+      if (Array.isArray(value)) for (const entry of value) url.searchParams.append(`${key}[]`, entry);
       else url.searchParams.set(key, value);
     }
     return url;

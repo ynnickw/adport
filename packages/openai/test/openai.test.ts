@@ -76,8 +76,10 @@ describe('OpenAI Ads reporting', () => {
     const params = calls.find(c => c.url.pathname === '/v1/ad_account/insights')!.url.searchParams;
     expect(params.get('aggregation_level')).toBe('campaign');
     expect(params.get('time_granularity')).toBe('none');
-    expect(JSON.parse(params.getAll('time_ranges')[0]!)).toEqual({ type: 'date_range', since: '2026-11-01', until: '2026-11-07' });
-    expect(params.getAll('fields')).toEqual(['campaign.id', 'campaign.name', 'campaign.status', 'campaign.impressions', 'campaign.clicks', 'campaign.spend', 'conversions', 'order_created_attributed_sales']);
+    expect(JSON.parse(params.getAll('time_ranges[]')[0]!)).toEqual({ type: 'date_range', since: '2026-11-01', until: '2026-11-07' });
+    expect(params.getAll('fields[]')).toEqual(['campaign.id', 'campaign.name', 'campaign.status', 'campaign.impressions', 'campaign.clicks', 'campaign.spend', 'conversions', 'order_created_attributed_sales']);
+    expect(params.has('fields')).toBe(false);
+    expect(params.has('time_ranges')).toBe(false);
     expect(report.rows[0]).toEqual({ provider: 'openai', accountId: 'adacct_123', currency: 'EUR', entity: { level: 'campaign', id: 'cmpn_123', name: 'Launch', status: 'active' }, metrics: { spend: 20, clicks: 40, ctr: 4, cpc: 0.5, conversions: 4, roas: 4 } });
     expect(report.rows[1]!.metrics).toEqual({ spend: 0, clicks: 0 });
   });
@@ -91,7 +93,7 @@ describe('OpenAI Ads reporting', () => {
     const { provider, calls } = fixture([accountRoute, { path: 'ad_account/insights', reply: list([{ id: 'r', start_time: 1, end_time: 2, impressions: 5, spend: 1 }]) }]);
     const report = await provider.report({ level: 'account', metrics: ['impressions'], dateRange: { start: '2026-11-01', end: '2026-11-01' } });
     expect(calls.at(-1)!.url.searchParams.get('aggregation_level')).toBe('ad_account');
-    expect(calls.at(-1)!.url.searchParams.getAll('fields').slice(0, 3)).toEqual(['ad_account.id', 'ad_account.name', 'ad_account.impressions']);
+    expect(calls.at(-1)!.url.searchParams.getAll('fields[]').slice(0, 3)).toEqual(['ad_account.id', 'ad_account.name', 'ad_account.impressions']);
     expect(report.rows[0]!.entity).toEqual({ level: 'account', id: 'adacct_123', name: 'Example', status: 'active' });
   });
 });
