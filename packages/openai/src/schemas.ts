@@ -57,12 +57,14 @@ export const createCampaignSchema = z.object({
   daily_spend_limit_micros: openaiBudgetMicros.optional(),
   bidding_type: z.enum(['impressions', 'clicks', 'conversions']).optional(),
   objective: z.enum(['reach', 'clicks', 'conversions']).optional(),
+  billing_event_type: z.enum(['impression', 'click']).optional(),
   conversion_event_setting_ids: z.array(openaiId).length(1).optional(),
   start_time: schedule.optional(),
   end_time: schedule.optional(),
   target_countries: z.array(z.string().regex(/^[A-Z]{2}$/)).min(1).max(250).refine(ids => new Set(ids).size === ids.length, 'Use unique countries').optional(),
   target_location_ids: z.array(z.string().regex(/^\d+$/)).min(1).max(250).refine(ids => new Set(ids).size === ids.length, 'Use unique location IDs').optional(),
 }).strict().refine(input => Number(input.lifetime_spend_limit_micros !== undefined) + Number(input.daily_spend_limit_micros !== undefined) === 1, 'Set exactly one lifetime or daily spend limit')
+  .refine(input => (input.objective !== undefined) === (input.billing_event_type !== undefined), 'Supply objective and billing_event_type together, or omit both and use bidding_type')
   .refine(input => input.bidding_type === 'conversions' || input.objective === 'conversions' ? Boolean(input.conversion_event_setting_ids) : !input.conversion_event_setting_ids, {
   message: 'Conversion bidding requires exactly one conversion_event_setting_id; other bidding types must omit it',
 });
