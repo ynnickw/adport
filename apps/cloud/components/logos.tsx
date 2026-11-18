@@ -21,7 +21,7 @@ export { providerLabel } from '@/lib/cloud/providers';
 export function ProviderLogo({ name }: { name: string }) {
   switch (name) {
     case 'openai':
-      return <RiOpenaiFill aria-hidden="true" />;
+      return <RiOpenaiFill color="#111" aria-hidden="true" />;
     case 'ga4':
       return <SiGoogleanalytics color="#e37400" aria-hidden="true" />;
     case 'gsc':
