@@ -141,11 +141,14 @@ const hostedWriteOutput = z.looseObject({
   result: z.looseObject({}).optional(),
 });
 
-// Preserve the published UI metadata for tools whose visibility-only update was held for review.
-// Other hosted tools use the identical MCP Apps default to stay within the catalog size budget.
-const explicitHostedUiVisibility = new Set([
+// Preserve the title and widget visibility fields on previously reviewed definitions.
+// Other hosted tools use annotation titles and default visibility to fit the catalog budget.
+const explicitHostedTitle = new Set([
   'meta_create_campaign',
   'google_create_performance_max_campaign',
+]);
+const explicitHostedUiVisibility = new Set([
+  ...explicitHostedTitle,
   'linkedin_get_sponsored_post',
 ]);
 
@@ -185,8 +188,9 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
       ? output instanceof z.ZodObject ? output : z.object({ value: output })
       : undefined;
     const definition = productionOnly ? tool.hosted ?? tool : tool;
+    const title = toolTitle(tool.name);
     const config = {
-      ...(!productionOnly ? { title: toolTitle(tool.name) } : {}),
+      ...(!productionOnly || explicitHostedTitle.has(tool.name) ? { title } : {}),
       description: scopeDenial
         ? `${definition.description}\n\nUnavailable on the current plan: ${scopeDenial.message}`
         : definition.description,
@@ -205,7 +209,7 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
         ...(runtime.dataSource === 'synthetic' ? { data_source: z.literal('synthetic') } : {}),
       }) } : {}),
       annotations: {
-        title: toolTitle(tool.name),
+        title,
         readOnlyHint: tool.annotations.readOnly ?? false,
         destructiveHint: tool.annotations.destructive ?? false,
         openWorldHint: tool.annotations.openWorld ?? false,
