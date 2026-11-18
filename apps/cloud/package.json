@@ -18,6 +18,7 @@
     "@adport/provider-google": "workspace:*",
     "@adport/provider-meta": "workspace:*",
     "@adport/provider-microsoft": "workspace:*",
+    "@adport/provider-openai": "workspace:*",
     "@adport/provider-reddit": "workspace:*",
     "@adport/provider-tiktok": "workspace:*",
     "@adport/provider-snapchat": "workspace:*",

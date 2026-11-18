@@ -324,6 +324,7 @@ const REDDIT_AUTHORIZE = 'https://www.reddit.com/api/v1/authorize';
 const REDDIT_TOKEN = 'https://www.reddit.com/api/v1/access_token';
 const REDDIT_REVOKE = 'https://www.reddit.com/api/v1/revoke_token';
 const REDDIT_SCOPES = 'adsread,adsedit,adsdatadeletion';
+export const REDDIT_CONVERSIONS_SCOPE = 'adsconversions';
 
 function redditApp(): { clientId: string; clientSecret: string; userAgent: string } {
   const value = env();
@@ -331,6 +332,15 @@ function redditApp(): { clientId: string; clientSecret: string; userAgent: strin
     throw new Error('Reddit OAuth is not configured. Set REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, and REDDIT_USER_AGENT.');
   }
   return { clientId: value.REDDIT_CLIENT_ID, clientSecret: value.REDDIT_CLIENT_SECRET, userAgent: value.REDDIT_USER_AGENT };
+}
+
+function redditAuthorizationUrl(state: string, scope: string): string {
+  const url = new URL(REDDIT_AUTHORIZE);
+  url.search = new URLSearchParams({
+    client_id: redditApp().clientId, response_type: 'code', state,
+    redirect_uri: oauthRedirectUri('reddit'), duration: 'permanent', scope,
+  }).toString();
+  return url.toString();
 }
 
 function redditHeaders(): Record<string, string> {
@@ -351,12 +361,7 @@ const reddit: OAuthAdapter<'reddit'> = {
   manualRevocationUrl: 'https://www.reddit.com/prefs/apps',
   configured: () => Boolean(env().REDDIT_CLIENT_ID && env().REDDIT_CLIENT_SECRET && env().REDDIT_USER_AGENT),
   authorizationUrl({ state }) {
-    const url = new URL(REDDIT_AUTHORIZE);
-    url.search = new URLSearchParams({
-      client_id: redditApp().clientId, response_type: 'code', state,
-      redirect_uri: oauthRedirectUri('reddit'), duration: 'permanent', scope: REDDIT_SCOPES,
-    }).toString();
-    return url.toString();
+    return redditAuthorizationUrl(state, REDDIT_SCOPES);
   },
   async exchange({ code }) {
     const response = await fetch(REDDIT_TOKEN, {
@@ -365,8 +370,9 @@ const reddit: OAuthAdapter<'reddit'> = {
       body: new URLSearchParams({ grant_type: 'authorization_code', code: code.replace(/#_$/, ''), redirect_uri: oauthRedirectUri('reddit') }),
       cache: 'no-store',
     });
-    const body = (await response.json().catch(() => ({}))) as { refresh_token?: string; error?: string };
+    const body = (await response.json().catch(() => ({}))) as { refresh_token?: string; error?: string; scope?: string };
     if (!response.ok || !body.refresh_token) throw providerMessage('Reddit', 'token exchange', body.error);
+    if (this.scopes.includes(REDDIT_CONVERSIONS_SCOPE) && !String(body.scope ?? '').split(/[\s,]+/).includes(REDDIT_CONVERSIONS_SCOPE)) throw new Error('Reddit did not confirm the conversion-events permission. The previous connection was preserved.');
     return { refreshToken: body.refresh_token };
   },
   async revoke(credential) {
@@ -425,10 +431,15 @@ const ga4 = analyticsAdapter('ga4', GA4_SCOPES), gsc = analyticsAdapter('gsc', G
 
 const adapters = { ga4, gsc, gtm, google, meta, tiktok, microsoft, reddit, apple, ...extraOAuthAdapters, x: xOAuthAdapter } satisfies { [P in OAuthProvider]: OAuthAdapter<P> };
 
-export function oauthAdapter<P extends OAuthProvider>(provider: P, options: { googleDataManager?: boolean; pinterestPinManagement?: boolean; pinterestSecretPins?: boolean; pinterestCatalogManagement?: boolean } = {}): OAuthAdapter<P> {
+export function oauthAdapter<P extends OAuthProvider>(provider: P, options: { googleDataManager?: boolean; redditConversions?: boolean; pinterestPinManagement?: boolean; pinterestSecretPins?: boolean; pinterestCatalogManagement?: boolean } = {}): OAuthAdapter<P> {
   if (options.pinterestPinManagement || options.pinterestSecretPins || options.pinterestCatalogManagement) {
     if (provider !== 'pinterest' || options.googleDataManager) throw new Error('Pin management authorization is supported only for Pinterest.');
     return pinterestManagementAdapter({ pinManagement: options.pinterestPinManagement === true, secretPins: options.pinterestSecretPins === true, catalogManagement: options.pinterestCatalogManagement === true }) as OAuthAdapter<P>;
+  }
+  if (options.redditConversions) {
+    if (provider !== 'reddit' || options.googleDataManager) throw new Error('Conversion-events authorization is supported only for Reddit.');
+    const scopes = [...REDDIT_SCOPES.split(','), REDDIT_CONVERSIONS_SCOPE];
+    return { ...reddit, flowLabel: 'Reddit OAuth 2.0 with additional conversion-events permission', scopes, authorizationUrl: ({ state }) => redditAuthorizationUrl(state, scopes.join(',')) } as OAuthAdapter<P>;
   }
   if (options.googleDataManager) {
     if (provider !== 'google') throw new Error('Data Manager authorization is supported only for Google.');
