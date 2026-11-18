@@ -9,19 +9,18 @@ beforeEach(() => {
   vi.stubEnv('GOOGLE_ADS_CLIENT_SECRET', 'ads-secret');
   vi.stubEnv('GOOGLE_ANALYTICS_CLIENT_ID', 'analytics-client.apps.googleusercontent.com');
   vi.stubEnv('GOOGLE_ANALYTICS_CLIENT_SECRET', 'analytics-secret');
-  vi.stubEnv('GA4_OAUTH_ENABLED', 'false'); vi.stubEnv('GSC_OAUTH_ENABLED', 'false');
+  vi.stubEnv('GA4_OAUTH_ENABLED', 'false');
   vi.stubEnv('ANALYTICS_TEST_ORGANIZATION_IDS', ''); resetEnvForTests();
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); resetEnvForTests(); });
 
 describe.each([['ga4', GA4_SCOPES], ['gsc', GSC_SCOPES]] as const)('%s cloud OAuth', (provider, scopes) => {
-  it('requires approved public rollout or the exact internal project', () => {
-    expect(oauthAvailability()[provider]).toBe(false);
-    expect(() => oauthAdapter(provider).authorizationUrl({ state: 'state', challenge: 'challenge' })).toThrow(/not enabled/);
+  it('offers Search Console publicly and limits GA4 to its review projects', () => {
+    expect(oauthAvailability()[provider]).toBe(provider === 'gsc');
     vi.stubEnv('ANALYTICS_TEST_ORGANIZATION_IDS', 'internal'); resetEnvForTests();
     expect(oauthAvailability('internal')[provider]).toBe(true);
-    expect(oauthAvailability('customer')[provider]).toBe(false);
-    expect(oauthAvailability()[provider]).toBe(false);
+    expect(oauthAvailability('customer')[provider]).toBe(provider === 'gsc');
+    expect(oauthAvailability()[provider]).toBe(provider === 'gsc');
     expect(usesAdAccountSlot(provider)).toBe(false);
     expect(providerAccountsPath(provider)).toBe(`/dashboard/analytics?select_provider=${provider}`);
   });

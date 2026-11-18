@@ -33,12 +33,12 @@ export function withProjectRouting(runtime: AdportRuntime, router: ProjectRouter
     annotations: { readOnly: true, openWorld: false },
     async handler() { return { projects: router.listForDisplay ? await router.listForDisplay() : await router.list() }; },
   }));
+  const projectField = { project_id: z.string().uuid().optional().describe('From projects_list; required with multiple projects.') };
   for (const tool of runtime.registry.list()) {
     registry.register({
       ...tool,
-      input: tool.input.safeExtend({
-        project_id: z.string().uuid().optional().describe('Project id from projects_list. Required when this connection has access to multiple projects.'),
-      }),
+      input: tool.input.safeExtend(projectField),
+      ...(tool.hosted ? { hosted: { ...tool.hosted, input: tool.hosted.input.safeExtend(projectField) } } : {}),
       async handler(input) {
         const { project_id, ...args } = input as Record<string, unknown>;
         let projectId = project_id as string | undefined;
