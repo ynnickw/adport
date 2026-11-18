@@ -384,7 +384,7 @@ const reddit: OAuthAdapter<'reddit'> = {
 const gtm: OAuthAdapter<'gtm'> = {
   provider: 'gtm', flowLabel: 'Google Tag Manager OAuth 2.0', scopes: GTM_SCOPES,
   pkce: true, codeParam: 'code', manualRevocationUrl: 'https://myaccount.google.com/permissions',
-  configured: () => googleConfigured() && (env().GTM_OAUTH_ENABLED === 'true' || Boolean(env().GTM_TEST_ORGANIZATION_IDS?.trim())),
+  configured: () => googleConfigured(),
   authorizationUrl(input) {
     if (!this.configured()) throw new Error('Google Tag Manager authorization is not enabled.');
     return buildGoogleAuthorizationUrl(input, { provider: 'gtm', scopes: GTM_SCOPES });
@@ -406,7 +406,7 @@ function analyticsAdapter<P extends 'ga4' | 'gsc'>(provider: P, scopes: string[]
   return {
     provider, flowLabel: provider === 'ga4' ? 'Google Analytics 4 OAuth 2.0 (read-only)' : 'Google Search Console OAuth 2.0 (read-only)',
     scopes, pkce: true, codeParam: 'code', manualRevocationUrl: 'https://myaccount.google.com/permissions',
-    configured: () => googleConfigured(provider) && (env()[provider === 'ga4' ? 'GA4_OAUTH_ENABLED' : 'GSC_OAUTH_ENABLED'] === 'true' || Boolean(env().ANALYTICS_TEST_ORGANIZATION_IDS?.trim())),
+    configured: () => googleConfigured(provider) && (provider === 'gsc' || env().GA4_OAUTH_ENABLED === 'true' || Boolean(env().ANALYTICS_TEST_ORGANIZATION_IDS?.trim())),
     authorizationUrl(input) {
       if (!this.configured()) throw new Error('This analytics authorization is not enabled.');
       return buildGoogleAuthorizationUrl(input, { provider, scopes });

@@ -57,7 +57,7 @@ async function listCatalog(selection: ToolSelection, modern: boolean, inspectRes
 }
 
 it('keeps the full hosted tools/list response within its wire budget on both transports', async () => {
-  for (const key of ['GA4_OAUTH_ENABLED', 'GSC_OAUTH_ENABLED', 'GTM_OAUTH_ENABLED']) vi.stubEnv(key, 'true');
+  vi.stubEnv('GA4_OAUTH_ENABLED', 'true');
   resetEnvForTests();
   const providerFetch = vi.fn(() => { throw new Error('Catalog discovery must not call providers'); });
   vi.stubGlobal('fetch', providerFetch);
@@ -105,16 +105,17 @@ it('keeps the full hosted tools/list response within its wire budget on both tra
   }
 }, 60_000);
 
-it('keeps the expanded publisher catalog below the metadata limit with the Google rollout gates closed', async () => {
-  for (const key of ['GA4_OAUTH_ENABLED', 'GSC_OAUTH_ENABLED', 'GTM_OAUTH_ENABLED']) vi.stubEnv(key, 'false');
+it('keeps the expanded publisher catalog below the metadata limit with GTM and Search Console available', async () => {
+  vi.stubEnv('GA4_OAUTH_ENABLED', 'false');
   vi.stubEnv('ANALYTICS_TEST_ORGANIZATION_IDS', '');
-  vi.stubEnv('GTM_TEST_ORGANIZATION_IDS', '');
   resetEnvForTests();
   try {
     const { tools, resourcesByUri } = await listCatalog({ profile: 'full', providers: null }, true, true);
     const names = tools.map(tool => tool.name);
-    expect(new Set(names).size).toBeGreaterThanOrEqual(839);
-    expect(names.some(name => /^(ga4|gsc|gtm)_/.test(name))).toBe(false);
+    expect(new Set(names).size).toBeGreaterThanOrEqual(867);
+    expect(names.filter(name => name.startsWith('gtm_'))).toHaveLength(24);
+    expect(names.filter(name => name.startsWith('gsc_'))).toHaveLength(4);
+    expect(names.some(name => name.startsWith('ga4_'))).toBe(false);
     const summaryUri = String(tools.find(tool => tool.name === 'projects_list')?._meta?.['openai/outputTemplate']);
     const mediaUri = String(tools.find(tool => tool.name === 'media_list')?._meta?.['openai/outputTemplate']);
     expect(summaryUri).not.toBe(mediaUri);
@@ -147,7 +148,7 @@ it('keeps the expanded publisher catalog below the metadata limit with the Googl
       };
       return total + Buffer.byteLength(JSON.stringify(definition)) + 360;
     }, 0);
-    console.info(`Estimated publisher metadata with production gates closed: ${names.length} tools, ${bytes} bytes`);
+    console.info(`Estimated publisher metadata with GTM and Search Console available: ${names.length} tools, ${bytes} bytes`);
     expect(bytes).toBeLessThan(2_950_000);
   } finally {
     vi.unstubAllEnvs();

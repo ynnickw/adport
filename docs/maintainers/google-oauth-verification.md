@@ -115,9 +115,9 @@ only `adwords`; GTM requests exactly these scopes with PKCE and offline access:
 
 The edit scope includes reads. No redundant readonly, user-management,
 account-management or container-deletion scopes are requested. Validate the
-returned granular grant before storing it. Keep `GTM_OAUTH_ENABLED=false` for
-public traffic until Google approves the additional sensitive scopes. Test and
-record the complete flow in a protected staging deployment first.
+returned granular grant before storing it. Google has approved these three
+scopes for Adport's production OAuth app. Verify the scopes in Google Auth
+Platform when configuring a different Google Cloud project.
 
 Justification:
 
