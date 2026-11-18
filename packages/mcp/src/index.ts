@@ -141,6 +141,14 @@ const hostedWriteOutput = z.looseObject({
   result: z.looseObject({}).optional(),
 });
 
+// Preserve the published UI metadata for tools whose visibility-only update was held for review.
+// Other hosted tools use the identical MCP Apps default to stay within the catalog size budget.
+const explicitHostedUiVisibility = new Set([
+  'meta_create_campaign',
+  'google_create_performance_max_campaign',
+  'linkedin_get_sponsored_post',
+]);
+
 /**
  * Thin adapter: every tool in the shared registry becomes an MCP tool.
  * No tool logic lives here — see the "one tool-definition layer" principle.
@@ -284,8 +292,9 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
         ...config,
         _meta: {
           ...config._meta,
-          // MCP Apps defaults to both audiences when visibility is omitted.
-          ui: productionOnly ? { resourceUri } : { resourceUri, visibility: ['model', 'app'] },
+          ui: !productionOnly || explicitHostedUiVisibility.has(tool.name)
+            ? { resourceUri, visibility: ['model', 'app'] }
+            : { resourceUri },
           'openai/widgetAccessible': true,
           'openai/outputTemplate': resourceUri,
           ...(!productionOnly ? {

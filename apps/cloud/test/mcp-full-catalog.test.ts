@@ -113,10 +113,18 @@ it('keeps the expanded publisher catalog below the metadata limit with GTM and S
   try {
     const { tools, resourcesByUri } = await listCatalog({ profile: 'full', providers: null }, true, true);
     const names = tools.map(tool => tool.name);
+    const toolsByName = new Map(tools.map(tool => [tool.name, tool]));
     expect(new Set(names).size).toBeGreaterThanOrEqual(867);
     expect(names.filter(name => name.startsWith('gtm_'))).toHaveLength(24);
     expect(names.filter(name => name.startsWith('gsc_'))).toHaveLength(4);
     expect(names.some(name => name.startsWith('ga4_'))).toBe(false);
+    for (const name of ['spotify_update_pixel', 'spotify_update_capi_integration', 'spotify_update_dataset', 'spotify_update_mobile_app']) {
+      expect(toolsByName.get(name)?.annotations, name).toMatchObject({ readOnlyHint: false, destructiveHint: true });
+    }
+    for (const name of ['meta_create_campaign', 'google_create_performance_max_campaign', 'linkedin_get_sponsored_post']) {
+      expect(toolsByName.get(name)?._meta?.ui, name).toMatchObject({ visibility: ['model', 'app'] });
+    }
+    expect(toolsByName.get('projects_list')?._meta?.ui).not.toHaveProperty('visibility');
     const summaryUri = String(tools.find(tool => tool.name === 'projects_list')?._meta?.['openai/outputTemplate']);
     const mediaUri = String(tools.find(tool => tool.name === 'media_list')?._meta?.['openai/outputTemplate']);
     expect(summaryUri).not.toBe(mediaUri);
