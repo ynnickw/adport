@@ -3,7 +3,8 @@
 Provider for the [OpenAI Ads API](https://developers.openai.com/ads), which manages
 ads shown in ChatGPT. The local CLI, MCP and hosted Cloud runtime share the same
 provider and tools. Tests use synthetic responses shaped after the official
-OpenAPI 2.3.0 contract and guide examples. Live account verification is still required.
+OpenAPI 2.3.0 contract and guide examples. Live reads and campaign previews were
+verified on 2026-11-18 against a real account; write application remains unverified.
 
 ## Connect in Cloud
 
@@ -67,6 +68,9 @@ ID when they differ. Budget changes also verify the preserved spend limit.
 - Requests use canonical field names (`campaign.id`, `campaign.spend`); responses
   come back as flat keys (`campaign_id`, `spend`). Conversions and attributed sales
   are requested by their bare names, as in the official examples.
+- Query arrays require bracket syntax: `fields[]=campaign.id` and
+  `time_ranges[]=...`. Repeating plain `fields` keys returns HTTP 400. This was
+  reproduced against the live API and is covered by wire-format assertions.
 - `null` metrics mean unavailable and stay absent; they are never reported as zero.
 
 ## Contract sources
@@ -83,13 +87,21 @@ and location-ID workflow. These supported inputs are retained pending live verif
 | Insights | [Insights reference](https://developers.openai.com/ads/api-reference/insights) |
 | Full contract | [OpenAPI spec](https://developers.openai.com/ads/openapi.json) |
 
-## To verify against a live account
+## Live verification and remaining coverage
 
-- Canonical field names on every aggregation level, including `ad_account`.
-- Ranges that end today: the API rejects future bounds and normalizes `date_range`
-  to the next local midnight.
-- Budget-change policy: when the targeted spend limit was unset, the preview has
-  no `fromMicros`, so only the absolute caps apply (same as other providers).
+Account discovery, campaign/ad-group/ad/source/event-setting lists, conversion
+insights and reporting at all four entity levels passed against a real account.
+`today` and `last_7_days` report ranges also passed. The CLI connection flow and
+built MCP stdio account/campaign/report calls passed with the same credential.
+
+The account was empty: event diagnostics, status and budget tools were checked
+only for their native missing-resource rejection. No campaign, ad group, ad or
+tracking source was created. Campaign creation was previewed through the policy
+engine; no live ad or measurement write was applied. Populated metric
+normalization and successful write receipts still need real-resource verification.
+
+When a targeted spend limit was unset, its preview has no `fromMicros`, so only
+the absolute caps apply (same as other providers).
 
 ## Not covered yet
 
