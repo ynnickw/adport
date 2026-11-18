@@ -8,6 +8,7 @@ import { GtmClient, GtmProvider, gtmTools } from '@adport/provider-gtm';
 import { GoogleAdsProvider, GoogleAdsRestClient, googleTools } from '@adport/provider-google';
 import { MetaAdsProvider, MetaGraphClient, metaTools } from '@adport/provider-meta';
 import { MicrosoftAdsClient, MicrosoftAdsProvider, microsoftTools } from '@adport/provider-microsoft';
+import { OpenAIAdsClient, OpenAIAdsProvider, openaiTools } from '@adport/provider-openai';
 import { RedditAdsClient, RedditAdsProvider, redditTools } from '@adport/provider-reddit';
 import { TikTokAdsProvider, TikTokClient, tiktokTools } from '@adport/provider-tiktok';
 import { SnapchatAdsClient, SnapchatAdsProvider, snapchatTools } from '@adport/provider-snapchat';
@@ -145,6 +146,10 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     const provider = new AppleAdsProvider(new AppleAdsClient(hydrateApple(credentials.apple)), media);
     modules.push({ provider: scopeProvider(provider), tools: appleTools(provider) });
   }
+  if (credentials.openai) {
+    const provider = new OpenAIAdsProvider(new OpenAIAdsClient(credentials.openai));
+    modules.push({ provider: scopeProvider(provider), tools: openaiTools(provider) });
+  }
   if (credentials.microsoft) {
     const stored = credentials.microsoft;
     const client = new MicrosoftAdsClient(hydrateMicrosoft(stored), async (refreshToken) => {
@@ -209,6 +214,7 @@ function completeMcpCatalog(runtime: AdportRuntime, organizationId: string): voi
     ...unavailableTools('google', googleTools), ...unavailableTools('meta', metaTools),
     ...unavailableTools('tiktok', tiktokTools), ...unavailableTools('apple', appleTools),
     ...unavailableTools('microsoft', microsoftTools), ...unavailableTools('reddit', redditTools),
+    ...unavailableTools('openai', openaiTools),
     ...unavailableTools('snapchat', snapchatTools), ...unavailableTools('spotify', spotifyTools),
     ...unavailableTools('pinterest', pinterestTools), ...unavailableTools('linkedin', linkedinTools),
     ...unavailableTools('x', xTools),

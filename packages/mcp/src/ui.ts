@@ -53,6 +53,7 @@ const providerNames: Record<string, string> = {
   pinterest: 'Pinterest Ads',
   linkedin: 'LinkedIn Ads',
   x: 'X Ads',
+  openai: 'OpenAI Ads',
   mock: 'Demo',
   demo: 'Synthetic demo',
 };
@@ -178,7 +179,7 @@ export const ADPORT_UI_HTML = String.raw`<!doctype html>
     .identity { display:flex; align-items:center; gap:10px; min-width:0 }
     .logo { display:grid; place-items:center; flex:0 0 auto; width:29px; height:29px; padding:6px; border:1px solid var(--line); border-radius:9px; color:var(--ink); background:var(--paper); font-weight:800; font-size:10px }
     .logo svg { display:block; width:100%; height:100% }
-    .logo.reddit { background:#ff4500 }.logo.linkedin { background:#0a66c2 }.logo.spotify { background:#1db954 }.logo.pinterest { background:#e60023 }.logo.x { background:#111 }.logo.snapchat { background:#fffc00;color:#111 }
+    .logo.reddit { background:#ff4500 }.logo.linkedin { background:#0a66c2 }.logo.spotify { background:#1db954 }.logo.pinterest { background:#e60023 }.logo.x { background:#111 }.logo.openai { background:#000 }.logo.snapchat { background:#fffc00;color:#111 }
     .identity-copy { min-width:0 }
     .identity-copy b, .identity-copy span { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis }
     .identity-copy b { font-size:12px }.identity-copy span { margin-top:3px; color:var(--muted); font-size:10px }
@@ -293,7 +294,7 @@ ${TREND_UI_STYLES}
     const noticeText=(value,fallback)=>typeof value==='string'?value:typeof value?.message==='string'?value.message:typeof value?.reason==='string'?value.reason:fallback;
     const notices = data => [...arr(data.errors).map(error=>(error?.provider || 'Provider')+': '+noticeText(error,'Read failed')), ...arr(data.warnings).map(warning=>noticeText(warning,'Some metadata is unavailable')), ...arr(data.notes).filter(note=>typeof note==='string'), ...(typeof data.note==='string'?[data.note]:[]), ...(data.truncated ? ['Partial result: row limit reached. Totals and charts cover returned rows only.'] : [])].map(text => '<p class="notice">'+esc(text)+'</p>').join('');
     const providerName = (id, names) => names?.[id] || String(id || 'Provider');
-    const initials = (id) => ({snapchat:'S',spotify:'S',pinterest:'P',linkedin:'in',x:'X'}[id] || String(id || '?').slice(0,2).toUpperCase());
+    const initials = (id) => ({snapchat:'S',spotify:'S',pinterest:'P',linkedin:'in',x:'X',openai:'AI'}[id] || String(id || '?').slice(0,2).toUpperCase());
     const providerSvg = ${JSON.stringify(PROVIDER_LOGOS)};
     const logo = (id) => '<span class="logo '+esc(id)+'" aria-hidden="true">'+(providerSvg[id] || esc(initials(id)))+'</span>';
     let syntheticResult = false;

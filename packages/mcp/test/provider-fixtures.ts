@@ -9,6 +9,7 @@ import { SpotifyAdsClient, SpotifyAdsProvider, spotifyTools } from '@adport/prov
 import { PinterestAdsClient, PinterestAdsProvider, pinterestTools } from '@adport/provider-pinterest';
 import { LinkedInAdsClient, LinkedInAdsProvider, linkedinTools } from '@adport/provider-linkedin';
 import { XAdsClient, XAdsProvider, xTools } from '@adport/provider-x';
+import { OpenAIAdsClient, OpenAIAdsProvider, openaiTools } from '@adport/provider-openai';
 
 export function providerModules() {
   const google = new GoogleAdsProvider(new GoogleAdsRestClient({
@@ -30,6 +31,7 @@ export function providerModules() {
   const pinterest = new PinterestAdsProvider(new PinterestAdsClient({ clientId: 'x', clientSecret: 'x', refreshToken: 'x' }));
   const linkedin = new LinkedInAdsProvider(new LinkedInAdsClient({ accessToken: 'x' }));
   const x = new XAdsProvider(new XAdsClient({ consumerKey: 'x', consumerSecret: 'x', accessToken: 'x', accessTokenSecret: 'x' }));
+  const openai = new OpenAIAdsProvider(new OpenAIAdsClient({ apiKey: 'x' }));
 
   return [
       { provider: google, tools: googleTools(google) },
@@ -43,5 +45,6 @@ export function providerModules() {
       { provider: pinterest, tools: pinterestTools(pinterest) },
       { provider: linkedin, tools: linkedinTools(linkedin) },
       { provider: x, tools: xTools(x) },
+      { provider: openai, tools: openaiTools(openai) },
   ];
 }

@@ -42,7 +42,7 @@ suite('one-time provider account selection (local database)', () => {
     await closeDbForTests(); await admin.end();
   });
   beforeEach(async () => {
-    await db()`delete from public.connections where organization_id = ${principal.organizationId} and provider in ('google', 'gtm')`;
+    await db()`delete from public.connections where organization_id = ${principal.organizationId} and provider in ('google', 'gtm', 'openai')`;
     id = randomUUID();
     connectionId = await upsertProviderConnection({ organizationId: principal.organizationId, userId: principal.userId!, provider: 'google', credential: { refreshToken: 'fixture-only' }, selectionId: id });
     await stageAccountSelection({ principal, id, connectionId, provider: 'google', accounts, returnPath: '/dashboard/accounts?select_provider=google' });
@@ -72,6 +72,23 @@ suite('one-time provider account selection (local database)', () => {
     expect((await loadProviderCredentials(other.organizationId)).gtm).toBeUndefined();
     const [credential] = await admin`select ciphertext from private.provider_credentials where connection_id = ${connectionId}`;
     expect(credential!.ciphertext).not.toContain('gtm-fixture-only');
+  });
+
+  it('encrypts OpenAI keys, isolates tenants, and requires selection before runtime access', async () => {
+    const selectionId = randomUUID();
+    const connectionId = await upsertProviderConnection({ organizationId: principal.organizationId, userId: principal.userId!,
+      provider: 'openai', credential: { apiKey: 'openai-fixture-only' }, selectionId });
+    await stageAccountSelection({ principal, id: selectionId, connectionId, provider: 'openai',
+      accounts: [{ provider: 'openai', id: 'adacct_selected', name: 'Advertiser account' }], returnPath: '/dashboard/connections' });
+    expect((await loadProviderCredentials(principal.organizationId)).openai).toBeUndefined();
+    await expect(getAccountSelection(other, selectionId)).resolves.toBeUndefined();
+    await saveAccountSelection(principal, selectionId, ['adacct_selected'], undefined,
+      { maxActiveAccounts: 3, currentPlan: 'Reader', currentPlanId: 'reader' });
+    expect((await loadEnabledAccountIds(principal.organizationId)).openai).toEqual(new Set(['adacct_selected']));
+    expect((await loadProviderCredentials(principal.organizationId)).openai).toMatchObject({ apiKey: 'openai-fixture-only' });
+    expect((await loadProviderCredentials(other.organizationId)).openai).toBeUndefined();
+    const [credential] = await admin`select ciphertext from private.provider_credentials where connection_id = ${connectionId}`;
+    expect(credential!.ciphertext).not.toContain('openai-fixture-only');
   });
 
   it('saves only the selected subset, removes the snapshot and rejects replay', async () => {

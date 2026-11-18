@@ -1,9 +1,10 @@
-import { TOOL_PROVIDERS, type ToolSelection } from '@adport/core/tool-catalog';
+import { type ToolSelection } from '@adport/core/tool-catalog';
+import { CLOUD_PROVIDERS } from './cloud/types';
 import { z } from 'zod';
 
 export const toolSelectionSchema = z.object({
   profile: z.enum(['standard', 'reporting', 'full']),
-  providers: z.array(z.enum(TOOL_PROVIDERS)).max(TOOL_PROVIDERS.length).transform(values => [...new Set(values)]).nullable(),
+  providers: z.array(z.enum(CLOUD_PROVIDERS)).max(CLOUD_PROVIDERS.length).transform(values => [...new Set(values)]).nullable(),
 });
 export const LEGACY_TOOL_SELECTION: ToolSelection = { profile: 'full', providers: null };
 export const TOOL_PROFILE_OPTIONS = [

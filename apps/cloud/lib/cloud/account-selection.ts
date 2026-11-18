@@ -32,7 +32,7 @@ function discovery(ciphertext: string, organizationId: string, id: string): Disc
   return Array.isArray(value) ? { accounts: value } : value;
 }
 
-/** Only the OAuth callback may create a discovery snapshot; it is never inventory. */
+/** Connection verification creates this discovery snapshot; it is never inventory. */
 export async function stageAccountSelection(input: {
   principal: TenantPrincipal;
   id: string;

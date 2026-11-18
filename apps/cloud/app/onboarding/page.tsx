@@ -38,7 +38,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
   const selection = selectionId.success ? await getAccountSelection({ ...tenant, scopes: [] }, selectionId.data) : undefined;
   const selectionUnavailable = params.selection_unavailable || (params.selection_id && !selection);
   const availability = oauthAvailability(tenant.organizationId);
-  const providers: OAuthProviderView[] = OAUTH_PROVIDERS.map((id) => ({ id, available: availability[id] }));
+  const providers: OAuthProviderView[] = [...OAUTH_PROVIDERS.map((id) => ({ id, available: availability[id] })), { id: 'openai', available: true }];
   return (
     <UpgradeProvider value={{ planId: entitlement.plan.id, canManageBilling: tenant.organizationRole === 'owner', projectId: tenant.organizationId, billingOptions: upgradeBillingOptions(entitlement) }}>
     <main className="onboarding-page">
