@@ -56,6 +56,15 @@ For a new source, `microsoft_create_uet_tag` creates one uninstalled tag in that
 
 `microsoft_update_conversion_goal` edits supported Account-scoped goals using `expected_snapshot_hash`. Omitted status and optional settings are preserved. Event goals have a native exception: omitted action/category/label/value conditions are deleted by the API. Adport resends their complete existing pairs for metadata/status edits. Supplying `event_conditions` explicitly replaces the whole condition set. The hash excludes system-owned `TrackingStatus`, so a tag-verification or recording-status transition does not invalidate an otherwise unchanged configuration.
 
+Both tools accept `enhanced_conversions_enabled` (`IsEnhancedConversionsEnabled`), so goals fed with hashed email or phone can use enhanced conversions without the web UI. Microsoft accepts `true` only after at least one goal in the account has enhanced conversions enabled in the web UI, which also records the customer-data terms. The update reads the value back to confirm it.
+
+Live-verified 2026-11-18 on the existing connection: enabling and disabling enhanced
+conversions passed for paused Account-scoped URL, Event and OfflineConversion QA
+goals, including preservation of Event criteria. Creating a paused, excluded-from-bidding
+OfflineConversion goal with enhanced conversions enabled also passed. Existing goals
+were restored; the new QA goal was left paused with enhanced conversions disabled.
+No tracking installation, event transmission or campaign activation was performed.
+
 Every native goal add or update automatically enables account `MSCLKIDAutoTaggingEnabled`, including edits to a paused goal. Previews show this setting before and after; snapshots bind its prior state. Updating conversion settings can also change reporting and automated bidding. No atomic native compare-and-set is available. Microsoft’s Deleted goal status is internal-only and there is no supported permanent goal-deletion operation here; pause an unused goal to stop its tracking.
 
 `microsoft_offline_conversion_reports` reads daily upload success/failure aggregates in an explicit `date_range` with `start_utc` and `end_utc`. The tool bounds intervals to seven days. Native upload dates and missing counts are preserved; signed report-file URLs and pilot event/customer fields are omitted. It does not download raw conversion files.

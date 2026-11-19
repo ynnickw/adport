@@ -6,6 +6,8 @@ The CLI connection commands below are bring-your-own (BYO): you own the provider
 
 New in v0.6.0: [Snapchat](./providers/snapchat.md), [Spotify](./providers/spotify.md), [Pinterest](./providers/pinterest.md), [LinkedIn](./providers/linkedin.md) and [X Ads](./providers/x.md). Each guide documents its BYO connection command, typed operations, reporting semantics and testing boundaries. These providers expose the documented typed surface, not unrestricted generic API writes.
 
+New: [OpenAI Ads](./providers/openai.md) (ads in ChatGPT), connected with an Advertiser API key.
+
 For a source checkout, replace `adport` below with `node packages/cli/dist/index.js` after `pnpm build`.
 
 ## API versions and native coverage

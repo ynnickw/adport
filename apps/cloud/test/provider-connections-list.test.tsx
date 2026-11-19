@@ -17,6 +17,12 @@ function render(options: { canManage?: boolean; available?: boolean; connections
 }
 
 describe('compact provider connection list', () => {
+  it('connects OpenAI through the key dialog and keeps account selection separate', () => {
+    const html = renderToStaticMarkup(<ProviderConnections organizationId="org" canManage connections={[]}
+      oauthProviders={[{ id: 'openai', available: true }]} />);
+    expect(html).toContain('Connect OpenAI Ads');
+    expect(html).not.toContain('/api/oauth/openai/');
+  });
   it('offers Pin management separately and preserves an enabled opt-in on reconnection', () => {
     const pinterest = { ...connection, provider: 'pinterest', status: 'error' as const };
     const basic = render({ connections: [pinterest] });

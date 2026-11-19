@@ -143,6 +143,14 @@ describe('Reddit OAuth', () => {
     const url = new URL(buildRedditAuthUrl('client', 'http://localhost:53682', 'state', true));
     expect(url.searchParams.get('scope')).toBe('adsread,adsedit,adsdatadeletion,adsconversions');
   });
+  it('does not expose Reddit token response bodies on a failed exchange', async () => {
+    const input = { clientId: 'client', clientSecret: 'secret', code: 'code', redirectUri: 'http://localhost:53682', userAgent: 'adport-test' };
+    const fetchImpl = vi.fn(async () => Response.json({ error: 'invalid_grant', message: 'echoed secret', refresh_token: 'sensitive-refresh' }, { status: 400 })) as unknown as typeof fetch;
+    const error: unknown = await exchangeRedditCode(input, fetchImpl).catch(error => error);
+    expect(error).toBeInstanceOf(Error);
+    expect(JSON.stringify(error)).not.toContain('sensitive-refresh');
+    expect((error as Error).message).not.toContain('echoed secret');
+  });
 
 
   it('exchanges the code using Basic auth, exact redirect URI, and User-Agent', async () => {

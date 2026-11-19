@@ -3,10 +3,10 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { ProviderLogo } from './logos';
 import { AgentLogo } from '@/app/dashboard/agents/agent-setup-guide';
-import { OAUTH_PROVIDERS } from '@/lib/cloud/types';
+import { CLOUD_PROVIDERS } from '@/lib/cloud/types';
 import { providerLabel, usesAdAccountSlot } from '@/lib/cloud/providers';
 
-const AD_PROVIDERS = OAUTH_PROVIDERS.filter(usesAdAccountSlot);
+const AD_PROVIDERS = CLOUD_PROVIDERS.filter(usesAdAccountSlot);
 
 export function PricingProviderStack({ planName }: { planName?: string }) {
   const id = useId();

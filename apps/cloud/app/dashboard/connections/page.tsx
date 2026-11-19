@@ -17,7 +17,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   if (isSyntheticReviewer(tenant.organizationId)) return <SyntheticReviewer tenant={tenant} />;
   const [connections, params] = await Promise.all([listConnections(tenant.organizationId, tenant.userId), searchParams]);
   const availability = oauthAvailability(tenant.organizationId);
-  const oauthProviders: OAuthProviderView[] = OAUTH_PROVIDERS.filter(usesAdAccountSlot).map((id) => ({ id, available: availability[id] }));
+  const oauthProviders: OAuthProviderView[] = [...OAUTH_PROVIDERS.filter(usesAdAccountSlot).map((id) => ({ id, available: availability[id] })), { id: 'openai', available: true }];
   return (
     <main className="page">
       <PageHeader

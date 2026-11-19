@@ -170,8 +170,7 @@ export async function exchangeRedditCode(
   if (!response.ok || !data.refresh_token) {
     throw new AdportError(
       'PROVIDER_ERROR',
-      `Reddit OAuth exchange failed${data.error ? ` (${data.error})` : ''}: ${data.message ?? 'no refresh token returned'}`,
-      data,
+      `Reddit OAuth exchange failed (HTTP ${response.status}): no usable refresh token. The previous connection was kept.`,
     );
   }
   if (input.conversions && !String(data.scope ?? '').split(/[\s,]+/).includes(REDDIT_CONVERSIONS_SCOPE)) {

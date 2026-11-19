@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import { Fragment, useState } from 'react';
 import { Provider, StatusPill, formatDate } from '@/components/ui';
 import { providerLabel, providerAccountsPath, usesAdAccountSlot } from '@/lib/cloud/providers';
-import type { OAuthProvider } from '@/lib/cloud/types';
+import type { CloudProvider } from '@/lib/cloud/types';
+import { OpenAIConnectButton } from './openai-connect-button';
 import { OAuthPopupLink } from '@/components/oauth-popup-link';
 import { useConfirm } from '@/components/use-confirm';
 import { InfoTooltip } from '@/components/info-tooltip';
@@ -28,7 +29,7 @@ export interface ConnectionView {
 }
 
 export interface OAuthProviderView {
-  id: OAuthProvider;
+  id: CloudProvider;
   available: boolean;
 }
 
@@ -110,9 +111,9 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
             {canManage ? (
               connection || provider.available ? (
                 <>
-                  {!connection && provider.available ? <OAuthPopupLink className="button" label={`Connect ${providerLabel(provider.id)}`} href={startHref}>Connect</OAuthPopupLink> : null}
+                  {provider.id === 'openai' && provider.available ? <OpenAIConnectButton organizationId={organizationId} connected={Boolean(connection)} /> : !connection && provider.available ? <OAuthPopupLink className="button" label={`Connect ${providerLabel(provider.id)}`} href={startHref}>Connect</OAuthPopupLink> : null}
                   {connection?.accountSelectionId && connection.status === 'connected' && !connection.accountSelectionUnavailable ? <a className="button secondary" href={'/account-selection?selection_id=' + connection.accountSelectionId}>Choose accounts</a>
-                    : connection && provider.available ? <OAuthPopupLink className="button secondary" label={`${connection.status !== 'connected' ? 'Reconnect' : connection.accountSelectionUnavailable ? 'Restart selection for' : 'Change accounts for'} ${providerLabel(provider.id)}`} href={startHref}>{connection.status !== 'connected' ? 'Reconnect' : connection.accountSelectionUnavailable ? 'Restart selection' : 'Change accounts'}</OAuthPopupLink> : null}
+                    : connection && provider.available && provider.id !== 'openai' ? <OAuthPopupLink className="button secondary" label={`${connection.status !== 'connected' ? 'Reconnect' : connection.accountSelectionUnavailable ? 'Restart selection for' : 'Change accounts for'} ${providerLabel(provider.id)}`} href={startHref}>{connection.status !== 'connected' ? 'Reconnect' : connection.accountSelectionUnavailable ? 'Restart selection' : 'Change accounts'}</OAuthPopupLink> : null}
                   {provider.id === 'google' && provider.available && connection?.status === 'connected' && !connection.accountSelectionId && !connection.dataManagerEnabled && variant === 'settings' ? <OAuthPopupLink className="button secondary" label="Authorize Google conversion imports with additional Data Manager permission" href={`${startHref}&data_manager=1`}>Enable conversion imports</OAuthPopupLink> : null}
                   {provider.id === 'reddit' && provider.available && connection?.status === 'connected' && !connection.accountSelectionId && !connection.redditConversionsEnabled && variant === 'settings' ? <OAuthPopupLink className="button secondary" label="Authorize Reddit conversion events with the additional adsconversions permission" href={`${startHref}&conversions=1`}>Enable conversion events</OAuthPopupLink> : null}
                   {provider.id === 'pinterest' && provider.available && connection && !connection.accountSelectionId && !connection.pinManagementEnabled && !connection.secretPinsEnabled && variant === 'settings' ? <OAuthPopupLink className="button secondary" label="Authorize Pinterest public board, Pin and media management with additional permissions" href={`${startHref}&pin_management=1`}>Enable Pin management</OAuthPopupLink> : null}

@@ -10,6 +10,7 @@ import { SpotifyAdsClient, SpotifyAdsProvider, spotifyTools } from '@adport/prov
 import { PinterestAdsClient, PinterestAdsProvider, pinterestTools } from '@adport/provider-pinterest';
 import { LinkedInAdsClient, LinkedInAdsProvider, linkedinTools } from '@adport/provider-linkedin';
 import { XAdsClient, XAdsProvider, xTools } from '@adport/provider-x';
+import { OpenAIAdsClient, OpenAIAdsProvider, openaiTools } from '@adport/provider-openai';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { Client, InMemoryTransport, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { createMcpHandler } from '@modelcontextprotocol/server';
@@ -39,6 +40,7 @@ describe('all-provider shared tool surface', () => {
     const pinterest = new PinterestAdsProvider(new PinterestAdsClient({ clientId: 'x', clientSecret: 'x', refreshToken: 'x' }));
     const linkedin = new LinkedInAdsProvider(new LinkedInAdsClient({ accessToken: 'x' }));
     const x = new XAdsProvider(new XAdsClient({ consumerKey: 'x', consumerSecret: 'x', accessToken: 'x', accessTokenSecret: 'x' }));
+    const openai = new OpenAIAdsProvider(new OpenAIAdsClient({ apiKey: 'x' }));
 
     runtime = await createContext({
       providerModules: [
@@ -53,6 +55,7 @@ describe('all-provider shared tool surface', () => {
         { provider: pinterest, tools: pinterestTools(pinterest) },
         { provider: linkedin, tools: linkedinTools(linkedin) },
         { provider: x, tools: xTools(x) },
+        { provider: openai, tools: openaiTools(openai) },
       ],
     });
     names = runtime.registry.list().map((tool) => tool.name);
@@ -90,6 +93,8 @@ describe('all-provider shared tool surface', () => {
       'microsoft_api_read', 'microsoft_api_create', 'microsoft_api_update', 'microsoft_api_delete',
       'reddit_api_read', 'reddit_api_create', 'reddit_api_update', 'reddit_api_delete',
       'snapchat_list_campaigns', 'snapchat_create_campaign', 'snapchat_set_campaign_status', 'snapchat_set_budget',
+      'openai_conversion_sources', 'openai_conversion_event_settings', 'openai_conversion_events', 'openai_conversion_insights',
+      'openai_list_campaigns', 'openai_ad_groups', 'openai_ads', 'openai_create_campaign', 'openai_set_campaign_status', 'openai_set_ad_group_status', 'openai_set_ad_status', 'openai_set_budget',
       'spotify_list_campaigns', 'spotify_get_ad_set', 'spotify_create_campaign_draft', 'spotify_set_campaign_status', 'spotify_set_budget', 'spotify_set_ad_set_delivery',
       'pinterest_list_campaigns', 'pinterest_create_campaign', 'pinterest_set_campaign_status', 'pinterest_set_budget',
       'pinterest_measurement_context', 'pinterest_conversion_tags', 'pinterest_get_conversion_tag', 'pinterest_create_conversion_tag', 'pinterest_conversion_tag_eligible_events', 'pinterest_conversion_tag_page_visits', 'pinterest_event_quality', 'pinterest_send_conversion_events',
@@ -271,7 +276,7 @@ describe('all-provider shared tool surface', () => {
         catalogs[label] = tools.length;
         expect(listed.some(name => /_api_/.test(name))).toBe(false);
         if (label !== 'full') {
-          expect(listed.some(name => /^(apple|tiktok|microsoft|reddit|snapchat|spotify|pinterest|linkedin|x)_/.test(name))).toBe(false);
+          expect(listed.some(name => /^(apple|tiktok|microsoft|reddit|snapchat|spotify|pinterest|linkedin|x|openai)_/.test(name))).toBe(false);
           await unavailable(client, 'apple_create_campaign');
         }
         if (label === 'standard') {

@@ -1,11 +1,11 @@
 import catalog from '@/lib/cloud/plan-catalog.json';
 import type { PlanDefinition } from '@/lib/cloud/plans';
-import { OAUTH_PROVIDERS } from '@/lib/cloud/types';
+import { CLOUD_PROVIDERS } from '@/lib/cloud/types';
 import { providerLabel, usesAdAccountSlot } from '@/lib/cloud/providers';
 import { ProviderLogo } from './logos';
 import { PricingConnectors } from './pricing-integrations';
 
-const AD_PROVIDERS = OAUTH_PROVIDERS.filter(usesAdAccountSlot);
+const AD_PROVIDERS = CLOUD_PROVIDERS.filter(usesAdAccountSlot);
 
 const PLAN_IDS = ['reader', 'operator', 'premium', 'agency'] as const;
 const GROUPS: Array<{ name: string; theme: string; rows: Array<[string, (plan: Omit<PlanDefinition, 'id'>) => string | number | boolean | null]> }> = [
