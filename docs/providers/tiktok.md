@@ -1,5 +1,20 @@
 # TikTok Ads
 
+## Pixel permission recovery
+
+If campaigns work but `tiktok_pixels`, `tiktok_get_pixel`, audience Pixel
+discovery or catalog Pixel context fails at `pixel/list` with code `40001`,
+check both the developer app's approved Pixel/measurement permission and the
+selected advertiser's native resource grant. This error does not establish
+which layer denied access. It is not an empty Pixel inventory.
+
+After a newly approved app permission is available, reconnect TikTok in Adport
+Cloud (or run `adport connect tiktok`) and select the same intended advertiser.
+Reconnecting alone cannot grant an unapproved developer-app permission. Adport
+does not retry the denied read automatically, expand access, install tracking
+or send measurement events as part of recovery. Hosted app permission updates
+require the app owner's action in TikTok's developer portal.
+
 ## Rule and lookalike audiences
 
 Agents can discover event sources for all nine documented audience families,

@@ -4,9 +4,9 @@ import path from 'node:path';
 import { AdportError, adportHome } from '@adport/core';
 import { z } from 'zod';
 
-export const catalogScope = z.object({ accountId: z.string().regex(/^\d{1,30}$/), businessId: z.string().regex(/^\d{1,30}$/), resourceId: z.string().regex(/^\d{1,30}$/), kind: z.enum(['catalog', 'catalog_creation']) }).strict();
+export const catalogScope = z.object({ accountId: z.string().regex(/^\d{1,30}$/), businessId: z.string().regex(/^\d{1,30}$/), resourceId: z.string().regex(/^\d{1,30}$/), kind: z.enum(['catalog', 'catalog_creation', 'catalog_migration']) }).strict();
 export type TikTokCatalogScope = z.infer<typeof catalogScope>;
-export const catalogAccessMode = z.enum(['none', 'read', 'write', 'create']);
+export const catalogAccessMode = z.enum(['none', 'read', 'write', 'create', 'migrate']);
 export type TikTokCatalogAccessMode = z.infer<typeof catalogAccessMode>;
 export interface TikTokCatalogGrant { scope: TikTokCatalogScope; mode: TikTokCatalogAccessMode; revision: number; hash: string }
 export interface TikTokCatalogAccessStore {
@@ -23,7 +23,7 @@ export interface TikTokCatalogAccessStore {
 }
 export function catalogGrant(scope: TikTokCatalogScope, mode: TikTokCatalogAccessMode = 'none', revision = 0): TikTokCatalogGrant {
   const parsed = catalogScope.parse(scope);catalogAccessMode.parse(mode);
-  if (!Number.isSafeInteger(revision) || revision < 0 || parsed.kind === 'catalog_creation' && (parsed.resourceId !== parsed.businessId || !['none', 'create'].includes(mode)) || parsed.kind === 'catalog' && mode === 'create') throw new AdportError('INVALID_INPUT', 'Invalid TikTok catalog access configuration.');
+  if (!Number.isSafeInteger(revision) || revision < 0 || parsed.kind === 'catalog_creation' && (parsed.resourceId !== parsed.businessId || !['none', 'create'].includes(mode)) || parsed.kind === 'catalog' && !['none', 'read', 'write'].includes(mode) || parsed.kind === 'catalog_migration' && !['none', 'migrate'].includes(mode)) throw new AdportError('INVALID_INPUT', 'Invalid TikTok catalog access configuration.');
   return { scope: parsed, mode, revision, hash: createHash('sha256').update(JSON.stringify([parsed.accountId, parsed.businessId, parsed.kind, parsed.resourceId, mode, revision])).digest('hex') };
 }
 export function catalogScopeKey(scope: TikTokCatalogScope) { return catalogGrant(scope).hash; }
@@ -37,6 +37,13 @@ export async function requireCatalogAccess(store: TikTokCatalogAccessStore | und
 }
 
 export const creationScope = (accountId: string, businessId: string): TikTokCatalogScope => catalogScope.parse({ accountId, businessId, resourceId: businessId, kind: 'catalog_creation' });
+export const migrationScope = (accountId: string, businessId: string, resourceId: string): TikTokCatalogScope => catalogScope.parse({ accountId, businessId, resourceId, kind: 'catalog_migration' });
+export async function requireCatalogMigrationAccess(store: TikTokCatalogAccessStore | undefined, scope: TikTokCatalogScope, write = false) {
+  if (!store || scope.kind !== 'catalog_migration' || write && !store.canWrite) throw new AdportError('POLICY_VIOLATION', 'Catalog migration requires a separate exact owner delegation and a writable connection.');
+  const grant = await store.authorize(scope, write);
+  if (catalogScopeKey(grant.scope) !== catalogScopeKey(scope) || grant.mode !== 'migrate') throw new AdportError('POLICY_VIOLATION', 'An owner must attest source ownership and delegate this exact catalog transfer to this Business Center. Creation and catalog read/write grants do not authorize transfers.');
+  return grant;
+}
 export async function requireCatalogCreationAccess(store: TikTokCatalogAccessStore | undefined, scope: TikTokCatalogScope, write = false) {
   if (!store || scope.kind !== 'catalog_creation' || scope.resourceId !== scope.businessId || write && !store.canWrite) throw new AdportError('POLICY_VIOLATION', 'Catalog creation requires owner-delegated creation access and a writable connection.');
   const grant = await store.authorize(scope, write);

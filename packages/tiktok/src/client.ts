@@ -90,7 +90,10 @@ export class TikTokClient {
     }
     const envelope = JSON.parse(raw) as { code: number; message: string; request_id?: string; data?: T };
     if (envelope.code !== 0) {
-      const hint = CODE_HINTS[envelope.code];
+      const pixelPermission = ['pixel/list', 'pixel/event/stats'].includes(path?.replace(/^\/|\/$/g, '') ?? '') && envelope.code === 40001;
+      const hint = pixelPermission
+        ? 'Pixel access was denied. Check the developer app’s Pixel/measurement permission and this advertiser’s grant. After the app gains approval, reconnect TikTok in Adport Cloud (or run `adport connect tiktok`) and select the same advertiser. Reconnecting alone cannot add an unapproved app permission.'
+        : CODE_HINTS[envelope.code];
       throw new AdportError(
         'PROVIDER_ERROR',
         `TikTok API error ${envelope.code}: ${envelope.message}${hint ? `\n  ${hint}` : ''}` +
