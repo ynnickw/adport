@@ -11,7 +11,7 @@ import {
   startLoopbackServer,
 } from './oauth.js';
 
-export async function connectReddit(input: { openBrowser: boolean; io: ProgramIO }): Promise<void> {
+export async function connectReddit(input: { openBrowser: boolean; conversions?: boolean; io: ProgramIO }): Promise<void> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const store = new CredentialStore();
   try {
@@ -22,6 +22,7 @@ export async function connectReddit(input: { openBrowser: boolean; io: ProgramIO
     input.io.out('');
 
     const existing = await store.get('reddit');
+    const conversions = input.conversions === true || existing?.data.scopes?.split(/[\s,]+/).includes('adsconversions') === true;
     const clientId = (await rl.question(`App/client ID${existing?.data.client_id ? ' (Enter to reuse stored)' : ''}: `)).trim()
       || existing?.data.client_id || '';
     const clientSecret = (await rl.question(`App secret${existing?.data.client_secret ? ' (Enter to reuse stored)' : ''}: `)).trim()
@@ -45,8 +46,9 @@ export async function connectReddit(input: { openBrowser: boolean; io: ProgramIO
       Number(redirect.port),
       redirect.pathname === '/' ? '' : redirect.pathname,
     );
-    const authUrl = buildRedditAuthUrl(clientId, redirectUri, state);
-    input.io.out('Authorizing scopes: adsread, adsedit, adsdatadeletion (permanent refresh token).');
+    const authUrl = buildRedditAuthUrl(clientId, redirectUri, state, conversions);
+    input.io.out(`Authorizing scopes: adsread, adsedit, adsdatadeletion${conversions ? ', adsconversions' : ''} (permanent refresh token).`);
+    if (!conversions && existing && !existing.data.scopes) input.io.out('The old grant has no stored scope metadata. Add --conversions if it had conversion-event access.');
     if (input.openBrowser) {
       openInBrowser(authUrl);
       input.io.out(`If the browser did not open, visit:\n  ${authUrl}`);
@@ -57,7 +59,7 @@ export async function connectReddit(input: { openBrowser: boolean; io: ProgramIO
     let refreshToken: string;
     try {
       const code = await loopback.waitForCode;
-      ({ refreshToken } = await exchangeRedditCode({ clientId, clientSecret, code, redirectUri, userAgent }));
+      ({ refreshToken } = await exchangeRedditCode({ clientId, clientSecret, code, redirectUri, userAgent, conversions }));
     } finally {
       loopback.close();
     }
@@ -66,7 +68,8 @@ export async function connectReddit(input: { openBrowser: boolean; io: ProgramIO
     const accounts = await new RedditAdsProvider(new RedditAdsClient(credentials)).listAccounts();
     await store.set({
       provider: 'reddit', source: 'byo',
-      data: { client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken, user_agent: userAgent },
+      data: { client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken, user_agent: userAgent,
+        scopes: `adsread,adsedit,adsdatadeletion${conversions ? ',adsconversions' : ''}` },
     });
     input.io.out(`✓ Connected. ${accounts.length} accessible Reddit ad account(s).`);
     for (const account of accounts) input.io.out(`  ${account.id}  ${account.name}${account.currency ? `  ${account.currency}` : ''}`);

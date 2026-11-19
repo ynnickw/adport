@@ -4,7 +4,7 @@ import { getAccountSelection } from '@/lib/cloud/account-selection';
 import { canAdminister, requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { getOnboardingState } from '@/lib/cloud/onboarding';
 import { getOrganizationEntitlement } from '@/lib/cloud/plans';
-import { oauthAvailability } from '@/lib/cloud/provider-oauth';
+import { oauthAvailability, REDDIT_CONVERSIONS_SCOPE } from '@/lib/cloud/provider-oauth';
 import { listConnections, listOrganizationAdAccounts } from '@/lib/cloud/repository';
 import { OAUTH_PROVIDERS } from '@/lib/cloud/types';
 import { env } from '@/lib/env';
@@ -38,7 +38,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
   const selection = selectionId.success ? await getAccountSelection({ ...tenant, scopes: [] }, selectionId.data) : undefined;
   const selectionUnavailable = params.selection_unavailable || (params.selection_id && !selection);
   const availability = oauthAvailability(tenant.organizationId);
-  const providers: OAuthProviderView[] = OAUTH_PROVIDERS.map((id) => ({ id, available: availability[id] }));
+  const providers: OAuthProviderView[] = [...OAUTH_PROVIDERS.map((id) => ({ id, available: availability[id] })), { id: 'openai', available: true }];
   return (
     <UpgradeProvider value={{ planId: entitlement.plan.id, canManageBilling: tenant.organizationRole === 'owner', projectId: tenant.organizationId, billingOptions: upgradeBillingOptions(entitlement) }}>
     <main className="onboarding-page">
@@ -64,6 +64,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
           provider: connection.provider, status: connection.status, externalLabel: connection.externalLabel,
           accountSelectionId: connection.accountSelectionId,
           accountSelectionUnavailable: connection.accountSelectionUnavailable,
+          redditConversionsEnabled: connection.provider === 'reddit' && connection.scopes.includes(REDDIT_CONVERSIONS_SCOPE),
           lastError: connection.lastError, connectedAt: connection.connectedAt.toISOString(),
           lastVerifiedAt: connection.lastVerifiedAt?.toISOString() ?? null,
         }))}

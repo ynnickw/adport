@@ -11,7 +11,7 @@ import { createOpenAIModule } from '../src/index.js';
 // Synthetic fixtures shaped after the official OpenAI Ads API v1 OpenAPI 2.3.0
 // schemas and guide examples, reviewed 2026-11-17. See docs/providers/openai.md.
 const account = { id: 'adacct_123', name: 'Example', status: 'active', timezone: 'Europe/Paris', currency_code: 'EUR', url: 'https://example.com', preview_url: null, review: { status: 'approved' } };
-const campaign = { id: 'cmpn_123', name: 'Launch', status: 'active', description: null, created_at: 1, updated_at: 1, product_feed_id: null, start_time: null, end_time: null, budget: { lifetime_spend_limit_micros: 500_000_000, daily_spend_limit_micros: 50_000_000 }, bidding_type: 'clicks' };
+const campaign = { id: 'cmpn_123', name: 'Launch', status: 'active', description: null, created_at: 1, updated_at: 1, product_feed_id: null, start_time: null, end_time: null, budget: { daily_spend_limit_micros: 50_000_000 }, bidding_type: 'clicks' };
 const list = (data: unknown[], hasMore = false, lastId: string | null = null) => ({ object: 'list', data, first_id: null, last_id: lastId, has_more: hasMore });
 
 type Route = { method?: string; path: string; reply: unknown | ((url: URL, init: RequestInit) => unknown); status?: number };
@@ -76,8 +76,10 @@ describe('OpenAI Ads reporting', () => {
     const params = calls.find(c => c.url.pathname === '/v1/ad_account/insights')!.url.searchParams;
     expect(params.get('aggregation_level')).toBe('campaign');
     expect(params.get('time_granularity')).toBe('none');
-    expect(JSON.parse(params.getAll('time_ranges')[0]!)).toEqual({ type: 'date_range', since: '2026-11-01', until: '2026-11-07' });
-    expect(params.getAll('fields')).toEqual(['campaign.id', 'campaign.name', 'campaign.status', 'campaign.impressions', 'campaign.clicks', 'campaign.spend', 'conversions', 'order_created_attributed_sales']);
+    expect(JSON.parse(params.getAll('time_ranges[]')[0]!)).toEqual({ type: 'date_range', since: '2026-11-01', until: '2026-11-07' });
+    expect(params.getAll('fields[]')).toEqual(['campaign.id', 'campaign.name', 'campaign.status', 'campaign.impressions', 'campaign.clicks', 'campaign.spend', 'conversions', 'order_created_attributed_sales']);
+    expect(params.has('fields')).toBe(false);
+    expect(params.has('time_ranges')).toBe(false);
     expect(report.rows[0]).toEqual({ provider: 'openai', accountId: 'adacct_123', currency: 'EUR', entity: { level: 'campaign', id: 'cmpn_123', name: 'Launch', status: 'active' }, metrics: { spend: 20, clicks: 40, ctr: 4, cpc: 0.5, conversions: 4, roas: 4 } });
     expect(report.rows[1]!.metrics).toEqual({ spend: 0, clicks: 0 });
   });
@@ -91,7 +93,7 @@ describe('OpenAI Ads reporting', () => {
     const { provider, calls } = fixture([accountRoute, { path: 'ad_account/insights', reply: list([{ id: 'r', start_time: 1, end_time: 2, impressions: 5, spend: 1 }]) }]);
     const report = await provider.report({ level: 'account', metrics: ['impressions'], dateRange: { start: '2026-11-01', end: '2026-11-01' } });
     expect(calls.at(-1)!.url.searchParams.get('aggregation_level')).toBe('ad_account');
-    expect(calls.at(-1)!.url.searchParams.getAll('fields').slice(0, 3)).toEqual(['ad_account.id', 'ad_account.name', 'ad_account.impressions']);
+    expect(calls.at(-1)!.url.searchParams.getAll('fields[]').slice(0, 3)).toEqual(['ad_account.id', 'ad_account.name', 'ad_account.impressions']);
     expect(report.rows[0]!.entity).toEqual({ level: 'account', id: 'adacct_123', name: 'Example', status: 'active' });
   });
 });
@@ -99,27 +101,116 @@ describe('OpenAI Ads reporting', () => {
 describe('OpenAI Ads guarded writes', () => {
   it('forces paused creation, sends an idempotency key and checks the receipt', async () => {
     const { provider, calls } = fixture([accountRoute, { method: 'POST', path: 'campaigns', reply: (_url: URL, init: RequestInit) => ({ ...campaign, id: 'cmpn_new', ...JSON.parse(String(init.body)) }) }]);
-    const op = { provider: 'openai', accountId: 'adacct_123', tool: 'openai_create_campaign', kind: 'create' as const, payload: { name: 'New', status: 'active', daily_spend_limit_micros: 10_000_000, target_countries: ['FR'], start_time: '2026-12-01T00:00:00Z' } };
+    const op = { provider: 'openai', accountId: 'adacct_123', tool: 'openai_create_campaign', kind: 'create' as const, payload: { name: 'New', status: 'active', lifetime_spend_limit_micros: 10_000_000, target_location_ids: ['1000001'], start_time: '2026-12-01T00:00:00Z' } };
     const preview = await provider.previewWrite(op, guard);
     expect(preview.coercions).toEqual(['status coerced to paused by policy (paused_creation)']);
-    expect(preview.budgetDeltas).toEqual([{ target: 'new campaign daily_spend_limit_micros', toMicros: 10_000_000 }]);
+    expect(preview.budgetDeltas).toEqual([{ target: 'new campaign lifetime_spend_limit_micros', toMicros: 10_000_000 }]);
     expect(calls.some(c => c.init.method === 'POST')).toBe(false);
     expect(await provider.applyWrite(op, guard)).toEqual({ applied: true, resourceIds: ['cmpn_new'] });
     const post = calls.find(c => c.init.method === 'POST')!;
-    expect(JSON.parse(String(post.init.body))).toEqual({ name: 'New', status: 'paused', budget: { daily_spend_limit_micros: 10_000_000 }, start_time: 1796083200, targeting: { locations: { countries: ['FR'] } } });
+    expect(JSON.parse(String(post.init.body))).toEqual({ name: 'New', status: 'paused', budget: { lifetime_spend_limit_micros: 10_000_000 }, start_time: 1796083200, targeting: { locations: { include: [{ id: '1000001' }] } } });
     expect((post.init.headers as Record<string, string>)['idempotency-key']).toMatch(/^[0-9a-f-]{36}$/);
   });
   it('requires a spend limit on creation', async () => {
     const { provider } = fixture([accountRoute]);
     await expect(provider.previewWrite({ provider: 'openai', accountId: 'adacct_123', tool: 'openai_create_campaign', kind: 'create', payload: { name: 'New' } }, guard)).rejects.toThrow();
   });
-  it('updates one spend limit, keeps the other and reports the delta', async () => {
-    const { provider, calls } = fixture([accountRoute, { path: 'campaigns/cmpn_123', reply: campaign },
+  it.each(['description', 'bidding_type', 'objective', 'billing_event_type', 'start_time', 'end_time', 'targeting', 'conversion_event_setting_ids'])(
+    'rejects a creation receipt that drops the requested %s', async field => {
+      const { provider } = fixture([accountRoute, { method: 'POST', path: 'campaigns', reply: (_url: URL, init: RequestInit) => {
+        const body = JSON.parse(String(init.body)); delete body[field];
+        return { id: 'cmpn_new', ...body };
+      } }]);
+      await expect(provider.applyWrite({ provider: 'openai', accountId: 'adacct_123', tool: 'openai_create_campaign', kind: 'create', payload: {
+        name: 'Conversion launch', lifetime_spend_limit_micros: 10_000_000, description: 'Approved description', bidding_type: 'conversions', objective: 'conversions', billing_event_type: 'click',
+        conversion_event_setting_ids: ['ces_123'], start_time: '2026-12-01T00:00:00Z', end_time: '2026-12-08T00:00:00Z', target_location_ids: ['1000001'],
+      } }, guard)).rejects.toThrow(/receipt mismatch/);
+    });
+  it('rejects blank names, unsupported fields and conversion bidding without a goal', async () => {
+    const { provider } = fixture([accountRoute]);
+    for (const payload of [
+      { name: '   ', daily_spend_limit_micros: 10_000_000 },
+      { name: 'New', lifetime_spend_limit_micros: 10_000_000, target_countris: ['US'] },
+      { name: 'New', lifetime_spend_limit_micros: 10_000_000, bidding_type: 'conversions' },
+    ]) await expect(provider.previewWrite({ provider: 'openai', accountId: 'adacct_123', tool: 'openai_create_campaign', kind: 'create', payload }, guard)).rejects.toThrow();
+  });
+  it('preserves OpenAPI-supported daily-only caps, objectives and country targeting', async () => {
+    const { provider, calls } = fixture([accountRoute, { method: 'POST', path: 'campaigns', reply: (_url: URL, init: RequestInit) => ({ id: 'cmpn_new', ...JSON.parse(String(init.body)) }) }]);
+    await provider.applyWrite({ provider: 'openai', accountId: 'adacct_123', tool: 'openai_create_campaign', kind: 'create', payload: {
+      name: 'Daily launch', daily_spend_limit_micros: 10_000_000, objective: 'clicks', billing_event_type: 'click', target_countries: ['US'],
+    } }, guard);
+    expect(JSON.parse(String(calls.at(-1)!.init.body))).toMatchObject({ budget: { daily_spend_limit_micros: 10_000_000 }, objective: 'clicks', billing_event_type: 'click', targeting: { locations: { countries: ['US'] } } });
+  });
+  it.each([{ objective: 'clicks' }, { billing_event_type: 'click' }])('rejects an incomplete objective/billing pair before sending a write (%j)', async fields => {
+    const { provider, calls } = fixture([accountRoute]);
+    await expect(provider.previewWrite({ provider: 'openai', accountId: account.id, tool: 'openai_create_campaign', kind: 'create', payload: {
+      name: 'Incomplete billing', daily_spend_limit_micros: 1_000_000, ...fields,
+    } }, guard)).rejects.toThrow(/objective and billing_event_type together/);
+    expect(calls.some(call => call.init.method === 'POST')).toBe(false);
+  });
+  it('accepts country targeting expanded into native country records alongside explicit location IDs', async () => {
+    const { provider } = fixture([accountRoute, { method: 'POST', path: 'campaigns', reply: (_url: URL, init: RequestInit) => ({
+      id: 'cmpn_new', ...JSON.parse(String(init.body)), targeting: { locations: { include: [
+        { id: '2000043', type: 'region', country_code: 'US' },
+        { id: '1000056', type: 'country', country_code: 'DE', name: 'Germany' },
+      ] } },
+    }) }]);
+    expect(await provider.applyWrite({ provider: 'openai', accountId: account.id, tool: 'openai_create_campaign', kind: 'create', payload: {
+      name: 'Country launch', daily_spend_limit_micros: 15_000_000, bidding_type: 'clicks', target_countries: ['DE'], target_location_ids: ['2000043'],
+    } }, guard)).toEqual({ applied: true, resourceIds: ['cmpn_new'] });
+  });
+  it.each([
+    { include: [] },
+    { include: [{ id: '1000001', type: 'country', country_code: 'US' }] },
+    { include: [{ id: '2000001', type: 'region', country_code: 'DE' }] },
+    { include: [{ id: '1000056', type: 'country', country_code: 'DE' }, { id: '1000001', type: 'country', country_code: 'US' }] },
+    { include: [{ id: '1000056', type: 'country', country_code: 'DE' }, { id: '1000056', type: 'country', country_code: 'DE' }] },
+  ])('rejects expanded targeting that changes the approved country (%j)', async ({ include }) => {
+    const { provider } = fixture([accountRoute, { method: 'POST', path: 'campaigns', reply: (_url: URL, init: RequestInit) => ({
+      id: 'cmpn_new', ...JSON.parse(String(init.body)), targeting: { locations: { include } },
+    }) }]);
+    await expect(provider.applyWrite({ provider: 'openai', accountId: account.id, tool: 'openai_create_campaign', kind: 'create', payload: {
+      name: 'Country launch', daily_spend_limit_micros: 15_000_000, target_countries: ['DE'],
+    } }, guard)).rejects.toThrow(/receipt mismatch/);
+  });
+  it('rejects creation with both budget types before sending a write', async () => {
+    const { provider, calls } = fixture([accountRoute]);
+    await expect(provider.previewWrite({ provider: 'openai', accountId: account.id, tool: 'openai_create_campaign', kind: 'create', payload: {
+      name: 'Two budgets', daily_spend_limit_micros: 10_000_000, lifetime_spend_limit_micros: 100_000_000,
+    } }, guard)).rejects.toThrow(/exactly one/);
+    expect(calls.some(call => call.init.method === 'POST')).toBe(false);
+  });
+  it('rejects a creation receipt that adds an unapproved budget type', async () => {
+    const { provider } = fixture([accountRoute, { method: 'POST', path: 'campaigns', reply: (_url: URL, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      return { id: 'cmpn_new', ...body, budget: { ...body.budget, lifetime_spend_limit_micros: 100_000_000 } };
+    } }]);
+    await expect(provider.applyWrite({ provider: 'openai', accountId: account.id, tool: 'openai_create_campaign', kind: 'create', payload: {
+      name: 'Daily launch', daily_spend_limit_micros: 15_000_000,
+    } }, guard)).rejects.toThrow(/receipt mismatch/);
+  });
+  it.each([{}, { daily_spend_limit_micros: 1_000_000 }, { daily_spend_limit_micros: 70_000_000, lifetime_spend_limit_micros: 100_000_000 }])(
+    'rejects a receipt with a missing, changed or additional budget limit (%j)', async budget => {
+      const { provider } = fixture([accountRoute, { path: 'campaigns/cmpn_123', reply: campaign },
+        { method: 'POST', path: 'campaigns/cmpn_123', reply: { ...campaign, budget } }]);
+      await expect(provider.applyWrite({ provider: 'openai', accountId: account.id, tool: 'openai_set_budget', kind: 'update', payload: { campaign_id: campaign.id, budget_micros: 70_000_000 } }, guard)).rejects.toThrow(/budget receipt mismatch/);
+    });
+  it.each([
+    { budget: { lifetime_spend_limit_micros: 500_000_000 }, field: 'daily_spend_limit_micros' },
+    { budget: { daily_spend_limit_micros: 50_000_000 }, field: 'lifetime_spend_limit_micros' },
+    { budget: { daily_spend_limit_micros: 50_000_000, lifetime_spend_limit_micros: 500_000_000 }, field: 'daily_spend_limit_micros' },
+  ])('refuses budget-type replacement and ambiguous native caps before a write (%j)', async ({ budget, field }) => {
+    const { provider, calls } = fixture([accountRoute, { path: 'campaigns/cmpn_123', reply: { ...campaign, budget } }]);
+    await expect(provider.previewWrite({ provider: 'openai', accountId: account.id, tool: 'openai_set_budget', kind: 'update', payload: { campaign_id: campaign.id, field, budget_micros: 70_000_000 } }, guard)).rejects.toThrow(/mutually exclusive/);
+    expect(calls.some(call => call.init.method === 'POST')).toBe(false);
+  });
+  it.each(['daily_spend_limit_micros', 'lifetime_spend_limit_micros'])('updates the existing %s and reports its policy delta', async field => {
+    const { provider, calls } = fixture([accountRoute, { path: 'campaigns/cmpn_123', reply: { ...campaign, budget: { [field]: 50_000_000 } } },
       { method: 'POST', path: 'campaigns/cmpn_123', reply: (_u: URL, init: RequestInit) => ({ ...campaign, ...JSON.parse(String(init.body)) }) }]);
-    const op = { provider: 'openai', accountId: 'adacct_123', tool: 'openai_set_budget', kind: 'update' as const, payload: { campaign_id: 'cmpn_123', budget_micros: 70_000_000 } };
-    expect((await provider.previewWrite(op, guard)).budgetDeltas).toEqual([{ target: 'campaign cmpn_123 daily_spend_limit_micros', fromMicros: 50_000_000, toMicros: 70_000_000 }]);
+    const op = { provider: 'openai', accountId: account.id, tool: 'openai_set_budget', kind: 'update' as const, payload: { campaign_id: campaign.id, field, budget_micros: 70_000_000 } };
+    expect((await provider.previewWrite(op, guard)).budgetDeltas).toEqual([{ target: `campaign cmpn_123 ${field}`, fromMicros: 50_000_000, toMicros: 70_000_000 }]);
     await provider.applyWrite(op, guard);
-    expect(JSON.parse(String(calls.find(c => c.init.method === 'POST')!.init.body))).toEqual({ budget: { lifetime_spend_limit_micros: 500_000_000, daily_spend_limit_micros: 70_000_000 } });
+    expect(JSON.parse(String(calls.find(call => call.init.method === 'POST')!.init.body))).toEqual({ budget: { [field]: 70_000_000 } });
   });
   it.each([
     ['openai_set_campaign_status', 'campaigns', { campaign_id: 'cmpn_123' }],
@@ -164,12 +255,13 @@ describe('OpenAI Ads conversion reads', () => {
   const ctx = {} as never;
   it('lists received events without their payloads', async () => {
     const { provider, calls } = fixture([accountRoute, { path: 'conversions/events', reply: { object: 'list', data: [
-      { data_source_id: 'src_1', event_type: 'registration_completed', custom_event_name: null, action_source: 'website', event_timestamp_ms: 1795996800000, received_at_ms: 1795996860000, api_channel: 'conversions_api', event_data_json: '{"user":{"email":"hashed"}}' },
+      { data_source_id: 'src_1', event_type: 'registration_completed', custom_event_name: null, action_source: 'website', event_timestamp_ms: 1795996800000, received_at_ms: 1795996860000, api_channel: 'conversions_api', event_data_json: '{"user":{"email":"hashed"}}', user_data: { email: 'private' } },
     ] } }]);
     const result = await tool(provider, 'openai_conversion_events').handler({ account_id: 'adacct_123', pixel_id: 'px_1', limit: 50 }, ctx) as { events: Array<Record<string, unknown>> };
     expect(calls.at(-1)!.url.search).toBe('?pid=px_1&limit=50');
     expect(result.events[0]).toMatchObject({ event_type: 'registration_completed', api_channel: 'conversions_api', received_at: '2026-11-30T00:01:00.000Z' });
     expect(result.events[0]).not.toHaveProperty('event_data_json');
+    expect(result.events[0]).not.toHaveProperty('user_data');
   });
   it('posts account-level conversion insights for an inclusive date range', async () => {
     const { provider, calls } = fixture([accountRoute, { method: 'POST', path: 'conversions/insights', reply: { object: 'list', count: 1, account_currency: 'USD', data: [{ entity_id: 'adacct_123', conversions: 12, click_through_conversions: 10, view_through_conversions: 2, order_created_attributed_sales: '120.5', order_created_attributed_sales_currency: 'USD' }] } }]);

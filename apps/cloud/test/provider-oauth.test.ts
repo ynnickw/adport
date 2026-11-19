@@ -86,6 +86,11 @@ describe('hosted provider OAuth broker', () => {
     expect(reddit.searchParams.get('duration')).toBe('permanent');
     expect(reddit.searchParams.get('scope')).toBe('adsread,adsedit,adsdatadeletion');
     expect(reddit.searchParams.get('client_id')).toBe('reddit-client');
+    const conversions = oauthAdapter('reddit', { redditConversions: true });
+    expect(conversions.scopes).toEqual(['adsread', 'adsedit', 'adsdatadeletion', 'adsconversions']);
+    expect(new URL(conversions.authorizationUrl(input)).searchParams.get('scope')).toBe('adsread,adsedit,adsdatadeletion,adsconversions');
+    expect(oauthAdapter('reddit').scopes).not.toContain('adsconversions');
+    expect(() => oauthAdapter('google', { redditConversions: true })).toThrow('only for Reddit');
 
     const google = new URL(oauthAdapter('google').authorizationUrl(input));
     expect(google.searchParams.get('scope')).toBe('https://www.googleapis.com/auth/adwords');
@@ -119,6 +124,8 @@ describe('hosted provider OAuth broker', () => {
     expect(await adapter.exchange({ code: 'code', verifier: 'verifier' })).toEqual({ refreshToken: 'refresh' });
     expect(request).toHaveBeenCalledTimes(2);
   });
+
+
 
   it('keeps Pinterest ads-only by default and verifies an explicitly requested Pin-management grant', async () => {
     vi.stubEnv('PINTEREST_CLIENT_ID', 'pinterest-client'); vi.stubEnv('PINTEREST_CLIENT_SECRET', 'pinterest-secret'); vi.stubEnv('PINTEREST_OAUTH_ENABLED', 'true'); resetEnvForTests();

@@ -32,7 +32,7 @@ export class OpenAIAdsClient {
     while (true) {
       const page = await this.get(path, envelope, { ...params, ...(after ? { after } : {}) });
       items.push(...page.data);
-      if (!page.has_more) return { items, truncated: false };
+      if (!page.has_more) return { items: items.slice(0, max), truncated: items.length > max };
       if (items.length >= max) return { items: items.slice(0, max), truncated: true };
       const next = page.last_id ?? undefined;
       if (!next || seen.has(next) || seen.size >= 1000) throw new AdportError('PROVIDER_ERROR', 'openai: pagination did not terminate; refusing incomplete results');
@@ -51,7 +51,7 @@ export class OpenAIAdsClient {
     const url = new URL(path, OPENAI_ADS_API_BASE);
     if (url.origin !== ORIGIN || !url.pathname.startsWith('/v1/') || url.username || url.password || url.hash) throw new AdportError('INVALID_INPUT', 'openai: invalid API URL');
     for (const [key, value] of Object.entries(params)) {
-      if (Array.isArray(value)) for (const entry of value) url.searchParams.append(key, entry);
+      if (Array.isArray(value)) for (const entry of value) url.searchParams.append(`${key}[]`, entry);
       else url.searchParams.set(key, value);
     }
     return url;

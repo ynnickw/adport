@@ -7,6 +7,10 @@ export const openaiStatus = z.enum(['active', 'paused']);
 /** Campaign budgets are integer micros with a documented floor of one currency unit. */
 export const openaiBudgetMicros = z.number().int().min(1_000_000).max(Number.MAX_SAFE_INTEGER);
 const unixSeconds = z.number().int().nonnegative();
+const schedule = z.iso.datetime({ offset: true }).refine(value => {
+  const seconds = Date.parse(value) / 1000;
+  return seconds >= 946684800 && seconds <= 4102444800;
+}, 'Schedule must be between 2000-01-01 and 2100-01-01');
 const metric = z.number().finite().nullable().optional();
 
 export const accountSchema = z.looseObject({
@@ -46,18 +50,23 @@ export const listAdGroupsSchema = z.object({ account_id: openaiId, campaign_id: 
 export const listAdsSchema = z.object({ account_id: openaiId, ad_group_id: openaiId.optional() });
 
 export const createCampaignSchema = z.object({
-  name: z.string().min(1).max(1000),
+  name: z.string().min(3).max(1000).refine(value => value.trim().length > 0, 'Name cannot be blank'),
   description: z.string().max(1000).optional(),
   status: openaiStatus.default('paused'),
   lifetime_spend_limit_micros: openaiBudgetMicros.optional(),
   daily_spend_limit_micros: openaiBudgetMicros.optional(),
   bidding_type: z.enum(['impressions', 'clicks', 'conversions']).optional(),
   objective: z.enum(['reach', 'clicks', 'conversions']).optional(),
-  start_time: z.iso.datetime({ offset: true }).optional(),
-  end_time: z.iso.datetime({ offset: true }).optional(),
-  target_countries: z.array(z.string().regex(/^[A-Z]{2}$/)).min(1).max(250).optional(),
-}).refine(input => input.lifetime_spend_limit_micros !== undefined || input.daily_spend_limit_micros !== undefined, {
-  message: 'Set lifetime_spend_limit_micros or daily_spend_limit_micros',
+  billing_event_type: z.enum(['impression', 'click']).optional(),
+  conversion_event_setting_ids: z.array(openaiId).length(1).optional(),
+  start_time: schedule.optional(),
+  end_time: schedule.optional(),
+  target_countries: z.array(z.string().regex(/^[A-Z]{2}$/)).min(1).max(250).refine(ids => new Set(ids).size === ids.length, 'Use unique countries').optional(),
+  target_location_ids: z.array(z.string().regex(/^\d+$/)).min(1).max(250).refine(ids => new Set(ids).size === ids.length, 'Use unique location IDs').optional(),
+}).strict().refine(input => Number(input.lifetime_spend_limit_micros !== undefined) + Number(input.daily_spend_limit_micros !== undefined) === 1, 'Set exactly one lifetime or daily spend limit')
+  .refine(input => (input.objective !== undefined) === (input.billing_event_type !== undefined), 'Supply objective and billing_event_type together, or omit both and use bidding_type')
+  .refine(input => input.bidding_type === 'conversions' || input.objective === 'conversions' ? Boolean(input.conversion_event_setting_ids) : !input.conversion_event_setting_ids, {
+  message: 'Conversion bidding requires exactly one conversion_event_setting_id; other bidding types must omit it',
 });
 export const setCampaignStatusSchema = z.object({ campaign_id: openaiId, status: openaiStatus });
 export const setAdGroupStatusSchema = z.object({ ad_group_id: openaiId, status: openaiStatus });

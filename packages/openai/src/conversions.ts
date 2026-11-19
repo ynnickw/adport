@@ -10,7 +10,7 @@ export const eventSettingSchema = z.looseObject({
   id: z.string(), name: z.string(), event_type: z.string(), custom_event_name: z.string().nullable(), attribution_window_days: z.number().int(),
   source_ids: z.array(z.string()), campaigns: z.array(z.looseObject({ id: z.string(), name: z.string() })), archived: z.boolean(),
 });
-export const receivedEventSchema = z.looseObject({
+export const receivedEventSchema = z.object({
   data_source_id: z.string(), event_type: z.string(), custom_event_name: z.string().nullable(), action_source: z.string().nullable(),
   event_timestamp_ms: z.number().int(), received_at_ms: z.number().int(), api_channel: z.string(),
 });
@@ -67,7 +67,7 @@ export function openaiConversionTools(provider: OpenAIAdsProvider): AnyToolDefin
       handler: async input => {
         await provider.accountMetadata(input.account_id);
         const result = await provider.api.get('conversions/events', z.looseObject({ data: z.array(receivedEventSchema) }), { pid: input.pixel_id, limit: String(input.limit) });
-        return { pixel_id: input.pixel_id, events: result.data.map(({ event_data_json: _payload, ...event }) => ({
+        return { pixel_id: input.pixel_id, events: result.data.map(event => ({
           ...event, event_time: new Date(event.event_timestamp_ms).toISOString(), received_at: new Date(event.received_at_ms).toISOString(),
         })) };
       } }),
