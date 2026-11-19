@@ -5,6 +5,7 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import { expect, it, vi } from 'vitest';
 import { POST } from '@/app/mcp/route';
 import { resetEnvForTests } from '@/lib/env';
+import mcpPackage from '../../../packages/mcp/package.json';
 
 const projectId = '11111111-1111-4111-8111-111111111111';
 const oauth = vi.hoisted(() => ({ client: vi.fn() }));
@@ -52,7 +53,7 @@ async function listCatalog(selection: ToolSelection, modern: boolean, inspectRes
     expect(responseSizes).toHaveLength(1);
     const resources = inspectResources ? (await client.listResources()).resources : [];
     const resourcesByUri = new Map(resources.map(resource => [resource.uri, resource]));
-    return { tools: result.tools, wireBytes: responseSizes[0]!, instructions: client.getInstructions(), resourcesByUri };
+    return { tools: result.tools, wireBytes: responseSizes[0]!, instructions: client.getInstructions(), resourcesByUri, serverVersion: client.getServerVersion()?.version };
   } finally { await client.close(); }
 }
 
@@ -66,6 +67,7 @@ it('keeps the full hosted tools/list response within its wire budget on both tra
     const modern = await listCatalog(selection, true);
     const legacy = await listCatalog(selection, false);
     for (const [transport, result] of Object.entries({ modern, legacy })) {
+      expect(result.serverVersion).toBe(mcpPackage.version);
       expect(result.wireBytes).toBeLessThan(2_850_000);
       const names = result.tools.map(tool => tool.name);
       for (const tool of result.tools) expect(tool.annotations?.title).toEqual(expect.any(String));
@@ -74,6 +76,14 @@ it('keeps the full hosted tools/list response within its wire budget on both tra
         expect(names.filter(name => name.startsWith(prefix + '_'))).toHaveLength(count);
       }
       expect(names).toContain('projects_list');
+      for (const name of ['media_inspect_file', 'media_import_file']) {
+        const definition = result.tools.find(tool => tool.name === name)!;
+        expect(definition._meta?.['openai/fileParams']).toEqual(['file']);
+        expect(definition.inputSchema).toMatchObject({ properties: { file: { type: 'object', required: expect.arrayContaining(['download_url', 'file_id']) }, project_id: { type: 'string' } } });
+      }
+      expect(result.tools.find(tool => tool.name === 'media_import_file')?.inputSchema).toMatchObject({ properties: { content_type: { enum: expect.arrayContaining(['text/csv']) } } });
+      expect(result.tools.find(tool => tool.name === 'media_upload')?.inputSchema).toMatchObject({ properties: { content_type: { enum: expect.arrayContaining(['text/csv']) } } });
+      expect(result.tools.find(tool => tool.name === 'media_inspect_file')?.outputSchema).toMatchObject({ properties: { metadata: { properties: { content_type: { enum: expect.arrayContaining(['text/csv']) } } } } });
       expect(names.length).toBeGreaterThanOrEqual(871);
       expect(result.tools.find(tool => tool.name === 'google_set_budget')?.outputSchema).toMatchObject({
         required: expect.arrayContaining(['status', 'applied', 'preview', '_adport']),

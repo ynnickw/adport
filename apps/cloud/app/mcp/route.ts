@@ -40,7 +40,6 @@ async function handle(request: Request): Promise<Response> {
       uiDomain: mcpUiDomain(oauthClient?.redirectUris ?? []),
       uiResourceDomains: [...ADPORT_UI_RESOURCE_DOMAINS, new URL(env().NEXT_PUBLIC_SUPABASE_URL).origin],
       uiConnectDomains: [new URL(env().NEXT_PUBLIC_SUPABASE_URL).origin],
-      version: '0.1.0',
       icons: [{
         src: `${oauthIssuerUrl()}/icon.svg?brand=orange-dot-v2`,
         mimeType: 'image/svg+xml',
