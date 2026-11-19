@@ -16,6 +16,7 @@ import { createSpotifyModule } from '@adport/provider-spotify';
 import { createPinterestModule } from '@adport/provider-pinterest';
 import { createLinkedInModule } from '@adport/provider-linkedin';
 import { createXModule } from '@adport/provider-x';
+import { createOpenAIModule } from '@adport/provider-openai';
 import packageJson from '../package.json';
 import {
   ADPORT_SUMMARY_UI_URI,
@@ -29,9 +30,9 @@ import {
   viewForTool,
 } from './ui.js';
 
-export const PROVIDER_IDS = ['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const;
+export const PROVIDER_IDS = ['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai'] as const;
 export { ADPORT_UI_RESOURCE_DOMAINS };
-export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v29.html', 'ui://adport/insight-card-v28.html', 'ui://adport/insight-card-v27.html', 'ui://adport/insight-card-v26.html', 'ui://adport/insight-card-v25.html', 'ui://adport/insight-card-v24.html', 'ui://adport/insight-card-v23.html', 'ui://adport/insight-card-v22.html', 'ui://adport/insight-card-v21.html', 'ui://adport/insight-card-v20.html', 'ui://adport/insight-card-v19.html', 'ui://adport/insight-card-v18.html', 'ui://adport/insight-card-v17.html', 'ui://adport/insight-card-v16.html', 'ui://adport/insight-card-v15.html', 'ui://adport/insight-card-v14.html', 'ui://adport/insight-card-v13.html', 'ui://adport/insight-card-v12.html', 'ui://adport/insight-card-v11.html', 'ui://adport/insight-card-v10.html', 'ui://adport/insight-card-v9.html', 'ui://adport/insight-card-v8.html', 'ui://adport/insight-card-v7.html', 'ui://adport/insight-card-v6.html', 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html', ADPORT_SUMMARY_UI_URI];
+export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v30.html', 'ui://adport/insight-card-v29.html', 'ui://adport/insight-card-v28.html', 'ui://adport/insight-card-v27.html', 'ui://adport/insight-card-v26.html', 'ui://adport/insight-card-v25.html', 'ui://adport/insight-card-v24.html', 'ui://adport/insight-card-v23.html', 'ui://adport/insight-card-v22.html', 'ui://adport/insight-card-v21.html', 'ui://adport/insight-card-v20.html', 'ui://adport/insight-card-v19.html', 'ui://adport/insight-card-v18.html', 'ui://adport/insight-card-v17.html', 'ui://adport/insight-card-v16.html', 'ui://adport/insight-card-v15.html', 'ui://adport/insight-card-v14.html', 'ui://adport/insight-card-v13.html', 'ui://adport/insight-card-v12.html', 'ui://adport/insight-card-v11.html', 'ui://adport/insight-card-v10.html', 'ui://adport/insight-card-v9.html', 'ui://adport/insight-card-v8.html', 'ui://adport/insight-card-v7.html', 'ui://adport/insight-card-v6.html', 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html', ADPORT_SUMMARY_UI_URI];
 
 const DEFAULT_MCP_ICONS = [{
   src: 'https://app.adport.dev/icon.svg?brand=orange-dot-v2',
@@ -53,7 +54,7 @@ export async function assembleRuntime(options: AssembleRuntimeOptions = {}): Pro
   const modules: ProviderModule[] = [];
   const includeMock = options.includeMock ?? process.env.ADPORT_DEMO === 'true';
   if (!includeMock) {
-    for (const factory of [createGa4Module, createGscModule, createGtmModule, createGoogleModule, createMetaModule, createTikTokModule, createAppleModule, createMicrosoftModule, createRedditModule, createSnapchatModule, createSpotifyModule, createPinterestModule, createLinkedInModule, createXModule]) {
+    for (const factory of [createGa4Module, createGscModule, createGtmModule, createGoogleModule, createMetaModule, createTikTokModule, createAppleModule, createMicrosoftModule, createRedditModule, createSnapchatModule, createSpotifyModule, createPinterestModule, createLinkedInModule, createXModule, createOpenAIModule]) {
       const module = await factory(store);
       if (module) modules.push(module);
     }
@@ -140,6 +141,17 @@ const hostedWriteOutput = z.looseObject({
   result: z.looseObject({}).optional(),
 });
 
+// Preserve the title and widget visibility fields on previously reviewed definitions.
+// Other hosted tools use annotation titles and default visibility to fit the catalog budget.
+const explicitHostedTitle = new Set([
+  'meta_create_campaign',
+  'google_create_performance_max_campaign',
+]);
+const explicitHostedUiVisibility = new Set([
+  ...explicitHostedTitle,
+  'linkedin_get_sponsored_post',
+]);
+
 /**
  * Thin adapter: every tool in the shared registry becomes an MCP tool.
  * No tool logic lives here — see the "one tool-definition layer" principle.
@@ -176,8 +188,9 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
       ? output instanceof z.ZodObject ? output : z.object({ value: output })
       : undefined;
     const definition = productionOnly ? tool.hosted ?? tool : tool;
+    const title = toolTitle(tool.name);
     const config = {
-      title: toolTitle(tool.name),
+      ...(!productionOnly || explicitHostedTitle.has(tool.name) ? { title } : {}),
       description: scopeDenial
         ? `${definition.description}\n\nUnavailable on the current plan: ${scopeDenial.message}`
         : definition.description,
@@ -196,7 +209,7 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
         ...(runtime.dataSource === 'synthetic' ? { data_source: z.literal('synthetic') } : {}),
       }) } : {}),
       annotations: {
-        title: toolTitle(tool.name),
+        title,
         readOnlyHint: tool.annotations.readOnly ?? false,
         destructiveHint: tool.annotations.destructive ?? false,
         openWorldHint: tool.annotations.openWorld ?? false,
@@ -283,8 +296,9 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
         ...config,
         _meta: {
           ...config._meta,
-          // MCP Apps defaults to both audiences when visibility is omitted.
-          ui: productionOnly ? { resourceUri } : { resourceUri, visibility: ['model', 'app'] },
+          ui: !productionOnly || explicitHostedUiVisibility.has(tool.name)
+            ? { resourceUri, visibility: ['model', 'app'] }
+            : { resourceUri },
           'openai/widgetAccessible': true,
           'openai/outputTemplate': resourceUri,
           ...(!productionOnly ? {

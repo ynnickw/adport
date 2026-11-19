@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { TOOL_PROVIDERS, type ToolSelection, type ToolProvider } from '@adport/core/tool-catalog';
+import { type ToolSelection, type ToolProvider } from '@adport/core/tool-catalog';
+import { CLOUD_PROVIDERS } from '@/lib/cloud/types';
 import { Checkbox, Disclosure } from './controls';
 import { Select } from './select';
 import { providerLabel } from '@/lib/cloud/providers';
@@ -37,7 +38,7 @@ export function ToolCatalogFields({ initialSelection, disabled = false }: { init
         onChange={event => setProviders(event.target.checked ? null : chosen)} /><span>Include all current and future platforms</span></label>
       <fieldset className="tool-platform-options" disabled={disabled || providers === null}>
         <legend className="sr-only">Platforms available to this assistant</legend>
-        {TOOL_PROVIDERS.map(provider => <label className="tool-platform-option" key={provider}>
+        {CLOUD_PROVIDERS.map(provider => <label className="tool-platform-option" key={provider}>
           <Checkbox name="tool_providers" value={provider} checked={providers === null || chosen.includes(provider)}
             onChange={event => toggle(provider, event.target.checked)} /><span>{providerLabel(provider)}</span>
         </label>)}

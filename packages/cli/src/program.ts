@@ -240,11 +240,13 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .description('Connect an ad account (guided wizard)')
     .option('--no-browser', 'Print auth URLs instead of opening a browser')
     .option('--data-manager', 'Google only: explicitly request the additional Data Manager OAuth scope')
+    .option('--conversions', 'Reddit only: also request the adsconversions scope needed to send conversion events')
     .option('--pin-management', 'Pinterest only: explicitly request public board, Pin and native media permissions')
     .option('--secret-pins', 'Pinterest only: additionally authorize secret boards and Pins (includes --pin-management permissions)')
     .option('--catalog-management', 'Pinterest only: explicitly request catalog and feed management permissions')
-    .action(async (provider: string, opts: { browser: boolean; dataManager?: boolean; pinManagement?: boolean; secretPins?: boolean; catalogManagement?: boolean }) => {
+    .action(async (provider: string, opts: { browser: boolean; dataManager?: boolean; conversions?: boolean; pinManagement?: boolean; secretPins?: boolean; catalogManagement?: boolean }) => {
       if (opts.dataManager && provider !== 'google') throw new Error('--data-manager is supported only for Google');
+      if (opts.conversions && provider !== 'reddit') throw new Error('--conversions is supported only for Reddit');
       if (opts.pinManagement && provider !== 'pinterest') throw new Error('--pin-management is supported only for Pinterest');
       if (opts.secretPins && provider !== 'pinterest') throw new Error('--secret-pins is supported only for Pinterest');
       if (opts.catalogManagement && provider !== 'pinterest') throw new Error('--catalog-management is supported only for Pinterest');
@@ -285,7 +287,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
       }
       if (provider === 'reddit') {
         const { connectReddit } = await import('./connect/reddit.js');
-        await connectReddit({ openBrowser: opts.browser, io });
+        await connectReddit({ openBrowser: opts.browser, conversions: opts.conversions, io });
         return;
       }
       if (provider === 'snapchat') {
@@ -317,7 +319,12 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
         await connectX({ openBrowser: opts.browser, io });
         return;
       }
-      io.err(`Provider "${provider}" is not supported. Available: ga4, gsc, gtm, google, meta, tiktok, apple, microsoft, reddit, snapchat, spotify, pinterest, linkedin, x, mock.`);
+      if (provider === 'openai') {
+        const { connectOpenAI } = await import('./connect/openai.js');
+        await connectOpenAI({ io });
+        return;
+      }
+      io.err(`Provider "${provider}" is not supported. Available: ga4, gsc, gtm, google, meta, tiktok, apple, microsoft, reddit, snapchat, spotify, pinterest, linkedin, x, openai, mock.`);
       process.exitCode = 1;
     });
 
@@ -325,8 +332,8 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .command('disconnect <provider>')
     .description('Remove a provider connection from this machine')
     .action(async (provider: string) => {
-      if (!['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'].includes(provider)) {
-        io.err(`Provider "${provider}" is not supported. Available: ga4, gsc, gtm, google, meta, tiktok, apple, microsoft, reddit, snapchat, spotify, pinterest, linkedin, x.`);
+      if (!['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai'].includes(provider)) {
+        io.err(`Provider "${provider}" is not supported. Available: ga4, gsc, gtm, google, meta, tiktok, apple, microsoft, reddit, snapchat, spotify, pinterest, linkedin, x, openai.`);
         process.exitCode = 1;
         return;
       }
@@ -401,7 +408,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
       for (const record of records) {
         io.out(`${record.provider}: credentials stored (source: ${record.source}, updated ${record.updatedAt})`);
       }
-      for (const id of ['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const) {
+      for (const id of ['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai'] as const) {
         const provider = rt.ctx.providers.list().find((p) => p.id === id);
         if (!provider) {
           io.out(`${id}: not connected (run \`adport connect ${id}\`)`);

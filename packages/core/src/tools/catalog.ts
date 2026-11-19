@@ -1,6 +1,6 @@
 import type { AnyToolDefinition } from './registry.js';
 
-export const TOOL_PROVIDERS = ['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const;
+export const TOOL_PROVIDERS = ['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai'] as const;
 export type ToolProvider = (typeof TOOL_PROVIDERS)[number];
 export type ToolProfile = 'standard' | 'reporting' | 'full';
 export const TOOL_CATEGORIES = {

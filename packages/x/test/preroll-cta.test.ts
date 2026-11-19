@@ -57,6 +57,12 @@ describe('preroll CTA scope and native read contracts', () => {
     expect(createPrerollCta.safeParse({ ...selection, expected_context_hash: 'a'.repeat(64), acknowledge_ad_group_scope: false }).success).toBe(false);
     expect(updatePrerollCta.safeParse({ preroll_call_to_action_id: I, expected_context_hash: 'a'.repeat(64), acknowledge_ad_group_scope: true }).success).toBe(false);
   });
+  it.each(['\t', '\n', '\r'])('rejects raw URL control characters before normalization (%j)', control => {
+    for (const call_to_action_url of [`https://exa${control}mple.test/path`, `https://example.test/${control}next`, `https://example.test/path${control}`]) {
+      expect(prerollCtaSelection.safeParse({ ...selection, call_to_action_url }).success).toBe(false);
+      expect(updatePrerollCta.safeParse({ preroll_call_to_action_id: I, expected_context_hash: 'a'.repeat(64), acknowledge_ad_group_scope: true, call_to_action_url }).success).toBe(false);
+    }
+  });
   it('pages one scoped group and gives guarded button/destination edits bound to complete context', async () => {
     const f = fixture({ rows: [cta, { ...cta, id: 'cta2' }] }), result = await f.provider.prerollCtas.list({ account_id: A, line_item_id: L, count: 1 });
     expect(creativesOutput.safeParse(result).success).toBe(true);expect(result).toMatchObject({ truncated: true, next_cursor: 'p2', creatives: [{ id: I, status: 'PRESENT', headlines: ['Visit site'], landing_urls: [cta.call_to_action_url], actions: [{ tool: 'x_update_preroll_cta', arguments: { account_id: A, preroll_call_to_action_id: I, acknowledge_ad_group_scope: true }, fields: [{ key: 'call_to_action', type: 'select', options: expect.arrayContaining([{ label: 'Watch now', value: 'WATCH_NOW' }]) }, { key: 'call_to_action_url', value: cta.call_to_action_url }] }, { tool: 'x_delete_preroll_cta' }] }] });
