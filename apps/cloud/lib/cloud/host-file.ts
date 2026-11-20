@@ -2,7 +2,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { AdportError, hostFileSchema, MAX_PROJECT_MEDIA_BYTES, PROJECT_MEDIA_TYPES, verifyMedia, type HostFile } from '@adport/core';
 
-/** ChatGPT fileParams contract reviewed against OpenAI's reference 2026-11-04. */
+/** ChatGPT fileParams contract reviewed against OpenAI's reference 2026-11-20. */
 export async function readHostFile(input: HostFile, fetchImpl: typeof fetch = fetch) {
   const file = hostFileSchema.parse(input);
   let target: URL;

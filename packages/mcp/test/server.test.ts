@@ -76,7 +76,7 @@ describe('adport MCP server', () => {
     const [ct, st] = InMemoryTransport.createLinkedPair();
     await server.connect(st);await host.connect(ct);
     const metadata = { name: 'private.csv', content_type: 'text/csv', byte_length: 12, sha256 };
-    const file = { file_id: 'file_synthetic', download_url: 'https://files.oaiusercontent.com/synthetic?sig=PRIVATE_CAPABILITY', file_name: 'private.csv' };
+    const file = { file_id: 'file-service://uploads/Attachment (1).csv', download_url: 'https://files.oaiusercontent.com/synthetic?sig=PRIVATE_CAPABILITY', file_name: 'private.csv' };
     const bytes = Buffer.from('PRIVATE_FILE_BYTES').toString('base64');
     const args = name === 'media_import_file' ? { ...metadata, file } : name === 'media_upload' ? { ...metadata, data_base64: bytes } : { media_id: project, expected_sha256: sha256, part_index: 0, part_sha256: sha256, data_base64: bytes };
     try {
@@ -114,6 +114,7 @@ describe('adport MCP server', () => {
       expect(Object.keys(schema.properties).sort()).toEqual(['download_url', 'file_id', 'file_name', 'mime_type']);
       expect(schema.required.sort()).toEqual(['download_url', 'file_id']);
       expect(schema.additionalProperties).toBe(false);
+      expect(schema.properties.file_id).not.toHaveProperty('pattern');
     }
     const imported = tools.find(tool => tool.name === 'media_import_file')!;
     expect(imported.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });

@@ -23,7 +23,8 @@ export const mediaWidgetUploadSchema = z.object({
 });
 /** Host-injected file references; bytes stay outside the model's tool arguments. */
 export const hostFileSchema = z.object({
-  download_url: z.string().min(1).max(16_384), file_id: z.string().min(1).max(200).regex(/^[A-Za-z0-9_-]+$/),
+  // Host IDs are opaque; only download_url determines the byte source.
+  download_url: z.string().min(1).max(16_384), file_id: z.string().min(1).max(16_384),
   mime_type: z.string().max(100).optional(), file_name: z.string().max(240).optional(),
 }).strict();
 export type HostFile = z.infer<typeof hostFileSchema>;
