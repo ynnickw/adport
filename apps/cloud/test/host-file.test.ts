@@ -9,6 +9,15 @@ const source = { file_id: 'file_fixture', download_url: 'https://files.oaiuserco
 afterEach(() => vi.unstubAllGlobals());
 
 describe('host-provided attachment byte transport', () => {
+  it('reads the signed ChatGPT attachment route observed in native file delivery without forwarding session credentials', async () => {
+    // Native ChatGPT file-download response, verified 2026-11-20; capability values are synthetic.
+    const download_url = 'https://chatgpt.com/backend-api/estuary/content?id=file_fixture&ts=1&p=fs&cid=fixture&sig=private-capability&v=0';
+    const fetcher = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => new Response(bytes));
+    const result = await readHostFile({ ...source, download_url }, fetcher);
+    expect(Buffer.from(result.bytes)).toEqual(bytes);
+    expect(fetcher).toHaveBeenCalledExactlyOnceWith(download_url, expect.objectContaining({ method: 'GET', redirect: 'error', cache: 'no-store', credentials: 'omit' }));
+    expect(fetcher.mock.calls[0]?.[1]).not.toHaveProperty('headers');
+  });
   it('round-trips an opaque host file ID without treating it as a URL or local path', async () => {
     const file_id = 'file-service://uploads/Attachment (1).pdf';
     const download = vi.fn(async () => new Response(bytes));vi.stubGlobal('fetch', download);
@@ -36,7 +45,19 @@ describe('host-provided attachment byte transport', () => {
     expect(Buffer.from(file.bytes)).toEqual(bytes);
   });
 
-  it.each(['http://files.oaiusercontent.com/file', 'https://files.oaiusercontent.com.attacker.test/file', 'https://attacker.files.oaiusercontent.com/file', 'https://files.oaiusercontent.com:8443/file', 'https://user:secret@files.oaiusercontent.com/file', 'https://127.0.0.1/file', 'file:///etc/passwd', 'https://files.oaiusercontent.com/file#fragment'])('rejects non-native origins before a network request: %s', async download_url => {
+  it.each(['http://files.oaiusercontent.com/file', 'https://files.oaiusercontent.com.attacker.test/file', 'https://attacker.files.oaiusercontent.com/file', 'https://files.oaiusercontent.com:8443/file', 'https://user:secret@files.oaiusercontent.com/file', 'https://127.0.0.1/file', 'file:///etc/passwd', 'https://files.oaiusercontent.com/file#fragment',
+    'http://chatgpt.com/backend-api/estuary/content?id=file&sig=fixture',
+    'https://chatgpt.com.attacker.test/backend-api/estuary/content?id=file&sig=fixture',
+    'https://attacker.chatgpt.com/backend-api/estuary/content?id=file&sig=fixture',
+    'https://chatgpt.com:8443/backend-api/estuary/content?id=file&sig=fixture',
+    'https://user:secret@chatgpt.com/backend-api/estuary/content?id=file&sig=fixture',
+    'https://chatgpt.com/backend-api/estuary/content?id=file&sig=fixture#fragment',
+    'https://chatgpt.com/backend-api/me?id=file&sig=fixture',
+    'https://chatgpt.com/backend-api/estuary/content/other?id=file&sig=fixture',
+    'https://chatgpt.com/backend-api/estuary/content?sig=fixture',
+    'https://chatgpt.com/backend-api/estuary/content?id=file',
+    'https://chatgpt.com/backend-api/estuary/content?id=file&sig=',
+  ])('rejects non-native origins and non-capability routes before a network request: %s', async download_url => {
     const fetcher = vi.fn();
     await expect(readHostFile({ ...source, download_url }, fetcher)).rejects.toMatchObject({ code: 'INVALID_INPUT' });
     expect(fetcher).not.toHaveBeenCalled();

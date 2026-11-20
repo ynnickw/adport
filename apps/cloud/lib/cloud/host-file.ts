@@ -9,7 +9,9 @@ export async function readHostFile(input: HostFile, fetchImpl: typeof fetch = fe
   try { target = new URL(file.download_url); }
   catch { throw new AdportError('INVALID_INPUT', 'A valid host attachment download URL is required.'); }
   // This is a file-capability reader, not a general URL fetcher or API proxy.
-  if (target.protocol !== 'https:' || target.hostname !== 'files.oaiusercontent.com' || target.port || target.username || target.password || target.hash) throw new AdportError('INVALID_INPUT', 'Only HTTPS files.oaiusercontent.com attachment URLs without credentials, ports or fragments are supported.');
+  const nativeAttachment = target.hostname === 'files.oaiusercontent.com'
+    || (target.hostname === 'chatgpt.com' && target.pathname === '/backend-api/estuary/content' && !!target.searchParams.get('id') && !!target.searchParams.get('sig'));
+  if (target.protocol !== 'https:' || !nativeAttachment || target.port || target.username || target.password || target.hash) throw new AdportError('INVALID_INPUT', 'Only direct HTTPS ChatGPT attachment capabilities without credentials, ports or fragments are supported.');
   let response: Response;
   try { response = await fetchImpl(target.href, { method: 'GET', redirect: 'error', cache: 'no-store', credentials: 'omit', signal: AbortSignal.timeout(60_000) }); }
   catch { throw new AdportError('PROVIDER_ERROR', 'The host attachment download was not available. Refresh the file reference; no project import was started.'); }
