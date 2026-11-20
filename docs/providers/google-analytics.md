@@ -21,6 +21,8 @@ Only `https://www.googleapis.com/auth/analytics.readonly` and `https://www.googl
 
 Search Console is available to every project using its non-sensitive read-only scope. Publish the Google OAuth application for external users before connecting customer properties.
 
-Keep `GA4_OAUTH_ENABLED=false` until the application's required Google approval is complete. `ANALYTICS_TEST_ORGANIZATION_IDS` permits explicitly listed internal projects to use GA4 during verification. Each connection still requires users to select the properties Adport can read.
+Adport Cloud's `analytics.readonly` application is verified, and GA4 connections are available to all Cloud projects. Each connection still requires Google consent and selection of the properties Adport can read. This approval does not cover Google Ads, Tag Manager or additional Analytics scopes.
+
+Self-hosters must keep `GA4_OAUTH_ENABLED=false` until their own application's required Google approval is complete, then set it to `true`. `ANALYTICS_TEST_ORGANIZATION_IDS` permits explicitly listed internal projects to use GA4 during verification; Adport's approval does not transfer to another application.
 
 For local BYO setup, see [the analytics package](../../packages/analytics/README.md).

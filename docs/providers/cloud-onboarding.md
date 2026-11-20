@@ -107,6 +107,7 @@ These read-only connections use independent `ga4` and `gsc` grants and exact
 callbacks at `/api/oauth/ga4/callback` and `/api/oauth/gsc/callback`. Configure
 the dedicated server-owned analytics OAuth client and the three required APIs
 as described in [the analytics setup guide](google-analytics.md). Search Console
-is available to every project. GA4 remains limited to explicit internal projects
-during Google verification. Both sources use selected-property access and do not
+and GA4 are available to every Adport Cloud project; the Analytics read-only
+application is verified. Self-hosters need their own application approval and
+must configure the GA4 rollout flag as described in that guide. Both sources use selected-property access and do not
 consume advertising account capacity.

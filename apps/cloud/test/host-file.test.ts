@@ -9,6 +9,14 @@ const source = { file_id: 'file_fixture', download_url: 'https://files.oaiuserco
 afterEach(() => vi.unstubAllGlobals());
 
 describe('host-provided attachment byte transport', () => {
+  it('round-trips an opaque host file ID without treating it as a URL or local path', async () => {
+    const file_id = 'file-service://uploads/Attachment (1).pdf';
+    const download = vi.fn(async () => new Response(bytes));vi.stubGlobal('fetch', download);
+    const reader = new ProjectMediaLibrary({ organizationId: '00000000-0000-4000-8000-000000000001', role: 'owner', scopes: ['tools:read'] });
+    const result = await reader.inspectFile({ ...source, file_id });
+    expect(result).toMatchObject({ file_id, metadata: { content_type: 'application/pdf', byte_length: bytes.length } });
+    expect(download).toHaveBeenCalledExactlyOnceWith(source.download_url, expect.objectContaining({ redirect: 'error', credentials: 'omit' }));
+  });
   it('validates CSV host attachments by name or declared type without exposing the download capability', async () => {
     const csv = Buffer.from('sku_id\n00001\n');
     const fetcher = vi.fn(async () => new Response(csv));
