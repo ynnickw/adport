@@ -58,6 +58,45 @@ afterEach(async () => {
 });
 
 describe('adport MCP server', () => {
+  it.each(['media_import_file', 'media_upload', 'media_upload_part'] as const)('keeps private %s arguments out of widget approval while preserving guarded apply', async name => {
+    const project = '11111111-1111-4111-8111-111111111111', sha256 = 'a'.repeat(64);
+    const applied: unknown[] = [];
+    const media: ManagedMediaLibrary = {
+      scopeId: project,
+      list: async () => ({ assets: [], truncated: false }),
+      get: async () => { throw new Error('No metadata read expected'); },
+      read: async () => { throw new Error('No byte read expected'); },
+      previewWrite: async () => ({ summary: 'Upload private file', changes: [], coercions: [], budgetDeltas: [], serverValidated: false,
+        review: { provider: 'media', accountId: project, kind: 'create', title: 'Upload file', fields: [{ label: 'SHA-256', after: sha256 }], notices: [] } }),
+      applyWrite: async op => { applied.push(op.payload); return { applied: true, resourceIds: [project] }; },
+    };
+    const runtime = await createContext({ providerModules: [], media });
+    const server = createMcpServer({ runtime, productionOnly: true });
+    const host = new Client({ name: 'private-media-test', version: '1' });
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    await server.connect(st);await host.connect(ct);
+    const metadata = { name: 'private.csv', content_type: 'text/csv', byte_length: 12, sha256 };
+    const file = { file_id: 'file_synthetic', download_url: 'https://files.oaiusercontent.com/synthetic?sig=PRIVATE_CAPABILITY', file_name: 'private.csv' };
+    const bytes = Buffer.from('PRIVATE_FILE_BYTES').toString('base64');
+    const args = name === 'media_import_file' ? { ...metadata, file } : name === 'media_upload' ? { ...metadata, data_base64: bytes } : { media_id: project, expected_sha256: sha256, part_index: 0, part_sha256: sha256, data_base64: bytes };
+    try {
+      const preview = await host.callTool({ name, arguments: args });
+      expect(preview.isError).not.toBe(true);
+      expect(applied).toHaveLength(0);
+      expect(preview.structuredContent).toMatchObject({ status: 'pending_validation', applied: false, preview: { summary: 'Upload private file' } });
+      expect(preview.structuredContent).not.toHaveProperty('_adport.approval');
+      expect(JSON.stringify(preview)).not.toContain('PRIVATE_CAPABILITY');
+      expect(JSON.stringify(preview)).not.toContain(bytes);
+      const pending = (preview.structuredContent as { pending_operation_id: string }).pending_operation_id;
+      const changed = await host.callTool({ name, arguments: { ...args, ...(name === 'media_import_file' ? { file: { ...file, file_id: 'file_changed' } } : { data_base64: 'YQ==' }), pending_operation_id: pending } });
+      expect(changed.isError).toBe(true);expect(applied).toHaveLength(0);
+      const receipt = await host.callTool({ name, arguments: { ...args, pending_operation_id: pending } });
+      expect(receipt.isError).not.toBe(true);expect(receipt.structuredContent).toMatchObject({ status: 'applied', applied: true });
+      expect(applied).toEqual([args]);
+      expect(JSON.stringify(receipt)).not.toContain('PRIVATE_CAPABILITY');
+      expect(JSON.stringify(receipt)).not.toContain(bytes);
+    } finally { await host.close();await server.close(); }
+  });
   it('keeps sensitive read arguments out of refresh/continuation metadata while preserving ordinary paging', async () => {
     const runtime = await createContext({ providerModules: [] });runtime.registry.register(defineTool({ name: 'private_records', namespace: 'core', description: 'Synthetic private read', annotations: { readOnly: true }, presentation: 'records', pagination: { cursorInput: 'cursor' }, sensitiveInputs: ['source'], input: z.object({ source: z.string().optional(), cursor: z.string().optional() }), output: z.object({ records: z.array(z.object({ id: z.string() })), next_cursor: z.string() }), handler: async () => ({ records: [{ id: 'safe' }], next_cursor: 'next' }) }));
     const server = createMcpServer({ runtime }), host = new Client({ name: 'private-read-metadata-test', version: '1' }), [ct, st] = InMemoryTransport.createLinkedPair();await server.connect(st);await host.connect(ct);

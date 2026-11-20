@@ -253,7 +253,7 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
         const nestedResult = rawObject.result && typeof rawObject.result === 'object' && !Array.isArray(rawObject.result)
           ? rawObject.result as Record<string, unknown> : {};
         const pending = rawObject.pending_operation_id ?? nestedResult.pending_operation_id;
-        const privateArguments = tool.sensitiveInputs?.some(path => {
+        const privateArguments = [...(tool.sensitiveInputs ?? []), ...(tool.fileInputs ?? [])].some(path => {
           let current: unknown = args;
           for (const key of path.split('.')) {
             if (!current || typeof current !== 'object' || !Object.hasOwn(current, key)) return false;
