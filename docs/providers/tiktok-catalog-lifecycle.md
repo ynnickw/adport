@@ -10,6 +10,49 @@ products, tracking events or spend.
 | `tiktok_catalog_creation_context` | Read the exact creation delegation and `GET /catalog/available_country/get/` |
 | `tiktok_create_catalog` | `POST /catalog/create/`, exact-ID configuration readback, then adoption of that new ID |
 | `tiktok_delete_catalog` | `POST /catalog/delete/`, followed by exact filtered catalog absence |
+| `tiktok_catalog_migration_context` | Exact transfer delegation, `GET /bc/get/` Admin role and destination absence |
+| `tiktok_migrate_catalog` | `POST /catalog/capitalize/`, followed by exact destination catalog readback |
+
+## Transfer an advertiser-owned catalog
+
+Transfer authorization is separate from catalog read/write and creation grants.
+In **Accounts → TikTok catalog access**, an owner/admin chooses **Transfer a
+catalog**, supplies the source advertiser's catalog ID and destination Business
+Center ID, and explicitly attests source ownership and whole-catalog/shared
+effects. The normal preview/apply flow saves only this exact transfer delegation.
+An agent cannot grant itself this access. Existing grants keep their meanings.
+
+TikTok's public catalog read endpoint requires a Business Center ID. Adport does
+not claim an independent pre-transfer source lookup: ownership is **owner
+attested**, and TikTok enforces source-advertiser ownership on apply. Destination
+Admin is checked independently using the exact `bc/get` response. Do not use a
+destination role, arbitrary catalog ID or creation grant as proof of source
+ownership. If source ownership is uncertain, do not attest or apply a transfer.
+
+1. Read `tiktok_catalog_migration_context` with `account_id`, destination `bc_id`
+   and source `catalog_id`. It rejects catalogs already in that destination.
+2. Preview `tiktok_migrate_catalog` using both returned hashes, the same IDs,
+   `confirm_catalog_id`, `acknowledge_shared_effects: true` and
+   `acknowledge_source_ownership_not_independently_verified: true`.
+3. After reviewing the whole-catalog effects and verification limits, apply the
+   identical arguments with the pending token. The grant, destination role and
+   absence are rechecked before one native transfer attempt.
+4. Inspect the returned destination catalog. If ongoing access is wanted, the
+   owner separately grants read/write access to that exact catalog. Migration
+   neither adopts the catalog nor broadens other project grants.
+
+The transfer includes the current products, product sets and video templates;
+shared consumers may be affected. Native transfer and readback are not atomic.
+Unconfirmed outcomes retain the exact catalog ID and are never automatically
+retried or rolled back. No ad activation, budget change or event submission is
+part of this operation. Source attestation is not provider certification.
+
+Contracts refreshed 2026-11-19 from TikTok's official
+[migration reference](https://business-api.tiktok.com/portal/docs/migrate-a-catalog-to-a-bc/v1.3)
+and [Business Center SDK contract](https://github.com/tiktok/tiktok-business-api-sdk/blob/main/yml_files/bc_get.yml).
+Wire, policy, owner-route/UI and disposable database checks cover this flow;
+a native transfer requires an identified owner-controlled source catalog and
+separate exact delegation, and is not claimed by those tests.
 
 ## Owner delegation
 

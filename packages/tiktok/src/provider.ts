@@ -263,6 +263,7 @@ export class TikTokAdsProvider implements AdProvider {
     const resourceIds = await plan.execute();
     if (!Array.isArray(resourceIds)) return resourceIds;
     if (op.tool === 'tiktok_create_catalog') return { applied: true, resourceIds, details: { configuration_readback: 'VERIFIED', project_catalog_access: 'write', products_created: false, ads_created: false } };
+    if (op.tool === 'tiktok_migrate_catalog') return { applied: true, resourceIds, details: { destination_catalog_readback: 'VERIFIED', source_ownership: 'OWNER_ATTESTED_NATIVE_ENFORCED', project_catalog_access: 'UNCHANGED' } };
     if (op.tool === 'tiktok_delete_catalog') return { applied: true, resourceIds, details: { deletion_readback: 'ABSENT_FROM_FILTERED_CATALOG_VIEW', resource_grant_retained: true } };
     if (op.tool === 'tiktok_upload_catalog_videos') {
       const payload = op.payload as { bc_id: string; catalog_id: string; media_id: string; expected_sha256: string; sync_to_selected_account?: boolean };
@@ -285,6 +286,7 @@ export class TikTokAdsProvider implements AdProvider {
     if (['tiktok_upload_audience_file', 'tiktok_create_customer_audience', 'tiktok_update_customer_audience_users', 'tiktok_rename_custom_audience', 'tiktok_delete_custom_audiences'].includes(op.tool)) return this.customAudiences.plan(op);
     const payload = op.payload as never;
     switch (op.tool) {
+      case 'tiktok_migrate_catalog':
       case 'tiktok_create_catalog':
       case 'tiktok_delete_catalog':
       case 'tiktok_bind_catalog_event_sources':

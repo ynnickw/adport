@@ -18,6 +18,18 @@ beforeEach(() => {
 afterEach(() => { cleanup();vi.unstubAllGlobals(); });
 async function open() { const summary = screen.getByText('TikTok catalog access').closest('summary')!;if (!summary.closest('details')!.open) fireEvent.click(summary);fireEvent.click(screen.getByRole('button', { name: 'Manage catalog access' }));await screen.findByText('Catalog 700'); }
 describe('compact owner catalog access UI', () => {
+  it('requires exact-source ownership and whole-transfer acknowledgements before reviewing migration', async () => {
+    render(<CatalogAccessManager organizationId={project} projectName="Adport" accounts={[account]} />);await open();
+    fireEvent.change(screen.getByLabelText('Resource'), { target: { value: 'catalog_migration' } });
+    fireEvent.change(screen.getByLabelText('Business Center ID'), { target: { value: '456' } });fireEvent.change(screen.getByLabelText('Catalog ID'), { target: { value: '789' } });
+    expect((screen.getByText('Review access') as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('checkbox', { name: /I own catalog/ }));fireEvent.click(screen.getByRole('checkbox', { name: /I authorize transferring/ }));fireEvent.click(screen.getByText('Review access'));
+    await screen.findByText('Confirm access');
+    const request = JSON.parse(fetchMock.mock.calls.find(call => call[1]?.method === 'POST')![1].body);
+    expect(request).toMatchObject({ catalog_id: '789', bc_id: '456', resource_kind: 'catalog_migration', mode: 'migrate', acknowledge_source_ownership: true, acknowledge_shared_effects: true });
+    fireEvent.change(screen.getByLabelText('Catalog ID'), { target: { value: '790' } });
+    expect(screen.queryByText('Confirm access')).toBeNull();expect((screen.getByRole('checkbox', { name: /I own catalog/ }) as HTMLInputElement).checked).toBe(false);
+  });
   it('defers reads until opened and expands its local list without remounting existing rows', async () => {
     render(<CatalogAccessManager organizationId={project} projectName="Adport" accounts={[account]} />);expect(fetchMock).not.toHaveBeenCalled();expect(screen.queryByRole('dialog')).toBeNull();await open();
     const first = screen.getByText('Catalog 700');expect(screen.queryByText('Catalog 713')).toBeNull();fireEvent.click(screen.getByText('Load more'));expect(screen.getByText('Catalog 713')).toBeDefined();expect(screen.getByText('Catalog 700')).toBe(first);expect(fetchMock).toHaveBeenCalledTimes(1);

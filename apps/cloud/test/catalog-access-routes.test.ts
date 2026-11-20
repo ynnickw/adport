@@ -13,6 +13,15 @@ beforeEach(() => {
   mocks.call.mockImplementation(async (name: string) => name.endsWith('_catalog_access_snapshot') ? { grant: { hash } } : ['tiktok_catalog_access', 'reddit_catalog_access'].includes(name) ? { grants: [] } : { pending_operation_id: 'pending-access', preview: { review: { fields: [] } } });
 });
 describe('owner-only project catalog access route', () => {
+  it('requires separate owner-attested TikTok transfer delegation and rejects Reddit or omitted acknowledgements', async () => {
+    const selected = { ...args, resource_kind: 'catalog_migration', mode: 'migrate', acknowledge_source_ownership: true, acknowledge_shared_effects: true };
+    expect((await POST(request(selected))).status).toBe(200);
+    expect(mocks.call).toHaveBeenLastCalledWith('tiktok_set_catalog_access', expect.objectContaining({ resource_kind: 'catalog_migration', mode: 'migrate', catalog_id: '789', acknowledge_source_ownership: true, acknowledge_shared_effects: true }), {});
+    mocks.runtime.mockClear();
+    for (const patch of [{ acknowledge_source_ownership: undefined }, { acknowledge_shared_effects: undefined }, { mode: 'write' }, { provider: 'reddit', bc_id: undefined, business_id: '1e200a0b-4e98-32cc-dd47-3006e4c85bb2' }]) expect((await POST(request({ ...selected, ...patch }))).status).toBe(400);
+    expect(mocks.runtime).not.toHaveBeenCalled();
+    expect((await POST(request({ ...selected, mode: 'none', acknowledge_source_ownership: undefined, acknowledge_shared_effects: undefined }))).status).toBe(200);
+  });
   it('previews through the shared registry, binds current hash and returns exact arguments without applying', async () => {
     const response = await POST(request(args));expect(response.status).toBe(200);expect(await response.json()).toMatchObject({ arguments: { ...args, expected_access_hash: hash }, result: { pending_operation_id: 'pending-access' } });
     expect(mocks.runtime).toHaveBeenCalledWith(expect.objectContaining({ organizationId: project }), '123');expect(mocks.call).toHaveBeenLastCalledWith('tiktok_set_catalog_access', { account_id: '123', bc_id: '456', catalog_id: '789', mode: 'read', expected_access_hash: hash }, {});expect(mocks.call.mock.calls.some(call => call[1].pending_operation_id)).toBe(false);

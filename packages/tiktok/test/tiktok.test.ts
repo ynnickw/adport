@@ -72,6 +72,13 @@ const campaignGetReply = {
 };
 
 describe('TikTokClient', () => {
+  it.each(['pixel/list', '/pixel/list/', 'pixel/event/stats'])('explains denied %s reads without retrying or claiming the app permission is approved', async path => {
+    const { impl, calls } = fakeFetch([{ match: () => true, reply: { code: 40001, message: 'No permission', request_id: 'pixel-qa' } }]);
+    await expect(new TikTokClient(CREDS, impl).get(path, { advertiser_id: '1' })).rejects.toThrow(/Pixel\/measurement permission.*reconnect TikTok.*cannot add an unapproved/s);
+    expect(calls).toHaveLength(1);
+    await expect(new TikTokClient(CREDS, impl).get('campaign/get', { advertiser_id: '1' })).rejects.not.toThrow(/Pixel access/);
+    expect(calls).toHaveLength(2);
+  });
   it('sends the Access-Token header, keeps the trailing slash, and JSON-encodes array params', async () => {
     const { impl, calls } = fakeFetch([{ match: (url) => url.includes('/advertiser/info/'), reply: advertiserInfoReply }]);
     const client = new TikTokClient(CREDS, impl);

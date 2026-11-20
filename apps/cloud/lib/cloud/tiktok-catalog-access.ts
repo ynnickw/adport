@@ -4,7 +4,7 @@ import { catalogGrant, catalogScope, creationScope, type TikTokCatalogAccessMode
 import { db } from '@/lib/db';
 import type { TenantPrincipal } from './types';
 
-type Stored = { accountId: string; businessId: string; resourceKind: 'catalog' | 'catalog_creation'; resourceId: string; accessMode: TikTokCatalogAccessMode; revision: string | number };
+type Stored = { accountId: string; businessId: string; resourceKind: 'catalog' | 'catalog_creation' | 'catalog_migration'; resourceId: string; accessMode: TikTokCatalogAccessMode; revision: string | number };
 const grant = (row: Stored) => catalogGrant({ accountId: row.accountId, businessId: row.businessId, resourceId: row.resourceId, kind: row.resourceKind }, row.accessMode, Number(row.revision));
 
 export class PostgresTikTokCatalogAccessStore implements TikTokCatalogAccessStore {

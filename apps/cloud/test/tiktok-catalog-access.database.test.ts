@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import postgres from 'postgres';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { catalogGrant, creationScope, requireCatalogAccess } from '@adport/provider-tiktok';
+import { catalogGrant, creationScope, migrationScope, requireCatalogAccess, requireCatalogMigrationAccess } from '@adport/provider-tiktok';
 import { PostgresTikTokCatalogAccessStore } from '@/lib/cloud/tiktok-catalog-access';
 
 const mocks = vi.hoisted(() => ({ backend: undefined as unknown }));
@@ -29,7 +29,7 @@ describeDatabase('disposable Postgres catalog authorization', () => {
       create table public.organization_ad_accounts(organization_id uuid not null references public.organizations(id), provider text not null, account_id text not null, connection_id uuid not null references public.connections(id), enabled boolean not null, primary key(organization_id, provider, account_id));
       grant usage on schema private, public to adport_backend;
       grant select, update on public.organizations, public.connections, public.organization_ad_accounts to adport_backend;`);
-    const migration = await readFile(resolve(import.meta.dirname, '../../../supabase/migrations/20261105103646_tiktok_catalog_project_access.sql'), 'utf8');await admin.unsafe(migration);
+    for (const filename of ['20261105103646_tiktok_catalog_project_access.sql', '20261119135249_tiktok_catalog_migration_access.sql']) await admin.unsafe(await readFile(resolve(import.meta.dirname, '../../../supabase/migrations', filename), 'utf8'));
     for (let index = 0; index < projects.length; index++) {
       await admin`insert into public.organizations(id) values(${projects[index]!})`;
       await admin`insert into public.connections(id, status) values(${connections[index]!}, 'connected')`;
@@ -74,6 +74,15 @@ describeDatabase('disposable Postgres catalog authorization', () => {
     await expect(admin`insert into private.tiktok_catalog_access(organization_id, account_id, business_id, resource_kind, resource_id, access_mode) values(${projects[0]!}, '999', '111', 'catalog', '999', 'read')`).rejects.toMatchObject({ code: '23503' });
   });
   const agent = (scopes = ['tools:read', 'tools:write']) => new PostgresTikTokCatalogAccessStore({ organizationId: projects[0]!, apiKeyId: randomUUID(), role: 'member', scopes }, new Set([scope.accountId]));
+  it('stores transfer delegation separately and rechecks project, write access, revocation and valid mode constraints', async () => {
+    const transfer = migrationScope(scope.accountId, '400', '401'), current = await owner.get(transfer);
+    const delegated = await owner.compareAndSet(transfer, current.hash, 'migrate');expect(await requireCatalogMigrationAccess(agent(), transfer, true)).toEqual(delegated);
+    await expect(agent().compareAndSet(transfer, delegated.hash, 'none')).rejects.toThrow('signed-in');
+    await expect(requireCatalogMigrationAccess(agent(['tools:read']), transfer, true)).rejects.toThrow('writable');
+    expect((await other.get(transfer)).mode).toBe('none');expect((await agent().get({ ...transfer, kind: 'catalog' })).mode).toBe('none');
+    await expect(admin`insert into private.tiktok_catalog_access(organization_id, account_id, business_id, resource_kind, resource_id, access_mode) values(${projects[0]!}, ${scope.accountId}, '400', 'catalog_migration', '402', 'write')`).rejects.toMatchObject({ code: '23514' });
+    await owner.compareAndSet(transfer, delegated.hash, 'none');await expect(requireCatalogMigrationAccess(agent(), transfer, true)).rejects.toThrow('attest');
+  });
   it('adopts an exact new catalog under creation delegation without granting the agent permission administration', async () => {
     const parent = creationScope(scope.accountId, '301'), current = await owner.get(parent), delegated = await owner.compareAndSet(parent, current.hash, 'create'), target = { ...scope, businessId: '301', resourceId: '302' };
     expect(agent().canManage).toBe(false);const result = await agent().adoptCreated(target, delegated.hash);expect(result).toMatchObject({ mode: 'write', revision: 1 });expect(await owner.get(target)).toEqual(result);expect((await other.get(target)).mode).toBe('none');
