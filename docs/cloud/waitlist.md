@@ -1,7 +1,8 @@
-# Cloud waitlist
+# Legacy Cloud waitlist
 
-The static landing page submits JSON to `/api/waitlist`. Its Vercel rewrite
-forwards requests to `https://app.adport.dev/api/waitlist` in `apps/cloud`.
+Before public early access, the landing page collected emails through
+`/api/waitlist`. Visitors now use [Cloud signup](https://app.adport.dev/login?mode=signup).
+The existing Vercel rewrite forwards legacy requests to `https://app.adport.dev/api/waitlist` in `apps/cloud`.
 The endpoint requires an exact Adport origin, explicit early-access consent,
 a valid email, an empty honeypot, and a body of at most 2 KiB. It uses the
 existing database-backed rate limiter (five requests/client/minute and 100
@@ -18,19 +19,6 @@ enabled; only `adport_backend` has select/insert policies and grants. Anonymous
 and authenticated browser roles have no table access. Deletion requests must
 be handled by an authorized database administrator, not a public endpoint.
 
-## Deployment order
-
-1. Apply `20260831140245_cloud_waitlist.sql` to the Adport production database
-   through the normal migration process. Do not push unrelated pending migrations.
-2. Deploy `apps/cloud` with the existing database and encryption/pepper settings.
-   No new secret or frontend database key is required.
-3. Deploy `website`, including its `/api/waitlist` rewrite.
-4. Verify a consented signup and its stored row on the production deployment.
-
-The landing page retains local npm setup and advertises hosted MCP at
-`https://app.adport.dev/mcp`. The five new provider logos refer to implemented
-integrations, not guaranteed platform approval or access for every workspace.
-
 ## Local checks
 
 ```sh
@@ -39,7 +27,5 @@ pnpm --filter @adport/cloud typecheck
 docker exec -i supabase_db_adport psql -U postgres -d postgres -v ON_ERROR_STOP=1 < apps/cloud/scripts/check-waitlist.sql
 ```
 
-For browser testing, serve `website` with the same security headers as
-`website/vercel.json` and proxy `/api/waitlist` to the local cloud server.
-Use only synthetic addresses under `example.invalid`; do not send test signups
-to the production endpoint. The SQL check rolls back all of its fixture data.
+Test the endpoint against a local Cloud server with synthetic addresses under
+`example.invalid`. The SQL check rolls back all of its fixture data.

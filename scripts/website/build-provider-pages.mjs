@@ -3,7 +3,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { providers } from './website-providers.mjs';
-import { agentSetups, mcpBaseUrl, cursorInstallUrl } from './website-agent-setups.mjs';
+import { agentSetups, cloudSignInUrl, cloudSignupUrl, mcpBaseUrl, cursorInstallUrl } from './website-agent-setups.mjs';
 import { claudeGuideForProvider } from './resource-content/claude-connections.mjs';
 import { chatgptGuideForProvider } from './resource-content/chatgpt-connections.mjs';
 
@@ -19,9 +19,9 @@ const get = pattern => {
 };
 const header = get(/<header class="site-header">[\s\S]*?<\/header>/);
 const footer = get(/<footer class="site-footer">[\s\S]*?<\/footer>/);
-const signup = get(/<div class="hero-signup">[\s\S]*?<\/form>\s*<\/div>/);
+const signup = `<a class="primary-action" href="${cloudSignupUrl}">Start free</a>`;
 const github = get(/<a class="text-action github-link"[\s\S]*?<\/a>/);
-const waitlist = get(/<section class="waitlist"[\s\S]*?<\/section>/);
+const cloudCta = get(/<section class="cloud-cta"[\s\S]*?<\/section>/);
 const logo = provider => get(new RegExp(`<svg[^>]*class="${provider.id}-logo"[\\s\\S]*?<\\/svg>`));
 const agentLogo = id => {
   // Official Model Context Protocol mark (Simple Icons), same as the Cloud app's SiModelcontextprotocol.
@@ -37,7 +37,7 @@ const cmd = (text, label = 'Copy') => `<div class="cmd${text.includes('\n') ? ' 
 // the provider pages carry the full guide.
 const homePanel = agent => `<div class="agent-instructions" id="agent-panel-${agent.id}" role="tabpanel" aria-labelledby="agent-tab-${agent.id}" tabindex="0"><p>${escape(agent.instructions)}${agent.open ? ` <a class="text-link" href="${escape(agent.open.href)}">${escape(agent.open.label)} ↗</a>` : agent.id === 'cursor' ? ` <a class="text-link" href="${escape(cursorInstallUrl(mcpBaseUrl))}">Add to Cursor ↗</a>` : ''}</p>${cmd(agent.command(mcpBaseUrl), 'Copy')}<p class="agent-next">${escape(agent.nextStep)}</p>${agent.id === 'codex' ? cmd('codex mcp login adport', 'Copy') : ''}</div>`;
 const setupTabs = (context = 'your ads', { home = false } = {}) => `<div class="agent-setup" data-agent-tabs>${home ? '' : `
-  <p class="agent-setup-intro">Adport Cloud is currently invite-only. <a href="/#waitlist">Join the Cloud waitlist</a> for access.</p>
+  <p class="agent-setup-intro">Adport Cloud is in public early access. <a href="${cloudSignupUrl}">Create a free account</a> to connect your ad accounts.</p>
   <p class="agent-setup-intro">Use the same Adport MCP endpoint and OAuth sign-in in each client. First connect your ad accounts in your Adport workspace. No platform secrets belong in chat.</p>`}
   <div class="agent-tab-list" role="tablist" aria-label="AI tool setup instructions" hidden>${agentSetups.map((agent, i) => `<button class="agent-tab" type="button" role="tab" id="agent-tab-${agent.id}" aria-controls="agent-panel-${agent.id}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}">${agent.logo ? agentLogo(agent.logo) : ''}<span>${agent.name}</span></button>`).join('')}</div>
   ${agentSetups.map(agent => home ? homePanel(agent) : `<div class="agent-instructions" id="agent-panel-${agent.id}" role="tabpanel" aria-labelledby="agent-tab-${agent.id}" tabindex="0"><h3>Use ${escape(context)} in ${agent.id === 'mcp' ? 'any MCP client' : agent.name}</h3><p>${escape(agent.instructions)}</p>${agent.open ? `<p><a class="text-link" href="${escape(agent.open.href)}">${escape(agent.open.label)} ↗</a></p>` : agent.id === 'cursor' ? `<p><a class="text-link" href="${escape(cursorInstallUrl(mcpBaseUrl))}">Add to Cursor ↗</a></p><p>Or add this configuration to ~/.cursor/mcp.json:</p>` : ''}${cmd(agent.command(mcpBaseUrl), `Copy ${agent.name} setup`)}<p class="agent-next">${escape(agent.nextStep)}</p>${agent.id === 'codex' ? cmd('codex mcp login adport', 'Copy sign-in command') : ''}${agent.id === 'chatgpt' ? '<p class="agent-note">Your ChatGPT workspace must allow custom MCP plugins. ChatGPT connects over HTTP; the local stdio command is for clients that can launch a process.</p><p><a class="text-link" href="https://developers.openai.com/api/docs/guides/custom-mcp-server">ChatGPT custom MCP documentation</a></p>' : ''}</div>`).join('')}${home ? '' : '\n  <p class="local-option">Use the MCP URL from AI assistants if you run your own Adport deployment. Client settings, workspace permissions, and advertising-platform approvals still apply.</p>'}
@@ -58,19 +58,21 @@ const homeSetup = () => `<!-- agent-setup:start -->
         </div>
         <div class="setup-layout">
           <div class="setup-card setup-cloud">
-            <div class="setup-card-head"><h3>Adport Cloud</h3><span class="setup-badge">Invite-only</span></div>
+            <div class="setup-card-head"><h3>Adport Cloud</h3><span class="setup-badge">Early access</span></div>
             <p class="setup-sub">Hosted MCP with OAuth sign-in. Connect your ad accounts in Adport, then add one URL to your assistant.</p>
             ${setupTabs('your ads', { home: true })}
-            <p class="setup-foot">Adport Cloud is currently invite-only. <a class="text-link" href="/#waitlist">Join the waitlist</a></p>
+            <p class="setup-foot"><a class="text-link" href="${cloudSignupUrl}">Create a free account</a> or <a class="text-link" href="${cloudSignInUrl}">sign in</a>.</p>
           </div>
-          <aside class="setup-card setup-local" aria-labelledby="local-title">
+          <aside class="setup-card setup-local" id="local" aria-labelledby="local-title">
             <div class="setup-card-head"><h3 id="local-title">Run it locally</h3><span class="setup-badge setup-badge-go">Open source</span></div>
             <p class="setup-sub">Apache-2.0 and free. Bring your own credentials; Node.js 22.13 or newer.</p>
             <ol class="steps">
               <li><span class="step-title">Install the CLI</span>${cmd('npm install -g adport')}</li>
+              <li><span class="step-title">Try a report with demo data</span>${cmd('adport --demo report --range last_7_days')}</li>
               <li><span class="step-title">Connect a platform</span>${cmd('adport connect google')}</li>
               <li data-agent-tabs><span class="step-title">Add it to your agent</span>${localTabs()}</li>
             </ol>
+            <p class="setup-foot">${github}</p>
           </aside>
         </div>
       </section>
@@ -100,14 +102,14 @@ function document({ title, description, pathname, content, name }) {
   <meta property="og:title" content="${escape(title)}" />
   <meta property="og:description" content="${escape(description)}" />
   <meta property="og:url" content="${canonical}" />
-  <meta property="og:image" content="https://www.adport.dev/og-image.png?v=7" />
+  <meta property="og:image" content="https://www.adport.dev/og-image.png?v=8" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="og:image:alt" content="Adport — Your agent proposes. You see the diff. Then it runs." />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="${escape(title)}" />
   <meta name="twitter:description" content="${escape(description)}" />
-  <meta name="twitter:image" content="https://www.adport.dev/og-image.png?v=7" />
+  <meta name="twitter:image" content="https://www.adport.dev/og-image.png?v=8" />
   <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" />
   <link rel="preload" href="/fonts/overpass-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/site.css" />
@@ -119,7 +121,7 @@ function document({ title, description, pathname, content, name }) {
   <a class="skip-link" href="#main">Skip to content</a>
   ${header}
   ${content}
-  ${waitlist}
+  ${cloudCta}
   ${footer}
 </body>
 </html>
@@ -204,11 +206,11 @@ function providerPage(p) {
 }
 
 const output = new Map(providers.map(p => [`providers/${p.slug}.html`, providerPage(p)]));
-output.set('providers.html', document({ title: 'Ads MCP integrations for Claude, Cursor & ChatGPT | Adport', description: 'Explore 11 ad platform MCP integrations. Connect ad accounts to ChatGPT, Claude, Codex, Cursor, or any MCP client with Adport MCP.', pathname: '/providers', name: 'Ad integrations', content: `<main class="provider" id="main">
+output.set('providers.html', document({ title: 'Ads MCP integrations for Claude, Cursor & ChatGPT | Adport', description: 'Explore ad platform integrations for ChatGPT, Claude, Codex, Cursor, and local MCP clients. Check the setup and permissions for each platform.', pathname: '/providers', name: 'Ad integrations', content: `<main class="provider" id="main">
     <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/">Adport</a><span aria-hidden="true">/</span><span aria-current="page">Integrations</span></nav>
     <section class="p-directory-hero" aria-labelledby="directory-title">
-      <h1 id="directory-title">Every ad platform. One agent.</h1>
-      <p class="lede">Eleven providers behind one open-source MCP server. Find the setup, capabilities, and reporting details for your platform. Connect ChatGPT, Claude, Codex, Cursor, or any MCP client with MCP and OAuth, or run locally with npm for stdio-compatible clients.</p>
+      <h1 id="directory-title">Ad platform integrations</h1>
+      <p class="lede">Find setup instructions, supported changes, and reporting details for ${providers.length} advertising integrations. Start free with Adport Cloud or use your own provider credentials with the open-source CLI. Connection requirements vary by platform.</p>
     </section>
     <section aria-label="Advertising integrations"><ul class="platform-grid p-directory p-directory-all">${providers.map(card).join('')}<li class="platform-request"><a href="https://github.com/ynnickw/adport/issues" rel="noreferrer"><span class="request-plus" aria-hidden="true"></span><span class="pg-text"><span class="pg-name">Request a platform</span><span class="pg-label">Tell us which ad platform your agent should reach next.</span></span></a></li></ul></section>
     <section class="p-section p-boundary" aria-labelledby="boundary-title">

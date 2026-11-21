@@ -24,7 +24,7 @@
 
 ## Run or develop Cloud
 
-Hosted access is currently offered through the [waitlist](https://adport.dev/#waitlist). Source availability and provider module implementation do not imply public access or provider-app approval.
+[Create a free account](https://app.adport.dev/login?mode=signup) to try Adport Cloud in early access. Connection requirements vary by provider.
 
 - [Local Cloud development](cloud/local-development.md)
 - [Deployment model](cloud/deployment-model.md)

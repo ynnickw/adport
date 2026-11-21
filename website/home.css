@@ -41,20 +41,6 @@
 /* Illustrations mount into slots; the semantic figure stays in the document for readers without them. */
 .stage-slot.is-live > figure { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 
-/* Hero sign-up: the pill becomes the submit button, then the confirmation. */
-/* Beside the scene the copy is centered, so opening the form must not change its height:
-   the notes hang under the field and the GitHub link steps aside until it closes. */
-@media (min-width: 64.01rem) {
-  .hero-signup { position: relative; }
-  .hero-signup-meta { position: absolute; top: calc(100% + 0.4rem); left: 0.5rem; right: 0; margin-top: 0; }
-  .hero-signup .waitlist-status { position: absolute; top: calc(100% + 3.4rem); left: 0.5rem; margin: 0; }
-  .hero-actions:has(.hero-signup.is-open) > .github-link { display: none; }
-}
-.hero-signup .waitlist-form[data-joined] input,
-.hero-signup .waitlist-form[data-joined] .hero-signup-close { display: none; }
-.hero-signup .waitlist-form[data-joined] button[type=submit] { flex: 1; background: var(--go); color: #fff; pointer-events: none; }
-.hero-signup .waitlist-form[data-joined] .waitlist-button-label::before { content: "✓"; margin-right: 0.45rem; }
-
 /* Local setup: one command per agent, behind tabs with the agents' marks. */
 .local-tab-list { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.6rem; }
 .local-tab-list[hidden] { display: none; }
@@ -64,7 +50,7 @@
 .local-tab[aria-selected="true"] { border-color: var(--ink); background: var(--ink); color: #fff; }
 .local-panel[hidden] { display: none; }
 
-/* Platforms under the hero: one quiet pill, the partner claim and the marks. */
+/* Platforms under the hero: one quiet pill, the integration label and marks. */
 .hero-platforms { display: flex; justify-content: center; margin-top: clamp(2.25rem, 4vw, 3.25rem); }
 .partner-strip { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.5rem 1.1rem; padding: 0.55rem 0.7rem 0.55rem 1.3rem; border: 1px solid var(--rule); border-radius: 999px; background: var(--raised); }
 .partner-label { color: var(--ink); font-size: 0.9375rem; font-weight: 700; white-space: nowrap; }

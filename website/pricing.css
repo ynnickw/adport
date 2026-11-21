@@ -108,7 +108,6 @@
 .pricing-next a { color: var(--ink); font-size: .875rem; font-weight: 650; text-decoration-color: var(--rule-strong); text-underline-offset: .25rem; }
 .pricing-next a:hover { text-decoration-color: var(--signal); }
 .pricing-compare-link span { display: inline-block; margin-left: .3rem; }
-.pricing-waitlist-link { color: var(--ink-soft) !important; }
 .pricing-shared-note { max-width: 51rem; margin: 1.5rem auto 0; color: var(--muted); font-size: .8125rem; line-height: 1.8; text-align: center; }
 
 /* A real feature table; headers stay with the comparison while scrolling. */

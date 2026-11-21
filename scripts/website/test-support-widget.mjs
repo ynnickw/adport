@@ -4,6 +4,7 @@ import { readFile, readdir, access } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { withSupport } from './website-support.mjs';
+import { cloudSignInUrl, cloudSignupUrl } from './website-agent-setups.mjs';
 
 const site = fileURLToPath(new URL('../../website/', import.meta.url));
 const files = (await readdir(site, { recursive: true })).filter(file => file.endsWith('.html'));
@@ -43,22 +44,26 @@ test('the public form uses a same-origin endpoint and a documented reply email',
   assert(privacy.includes('Resend'));
 });
 
-test('public pages send Cloud visitors to the waitlist until launch', async () => {
+test('public pages send Cloud visitors to signup and sign-in', async () => {
+  assert.equal(cloudSignupUrl, 'https://app.adport.dev/login?mode=signup');
   for (const file of files) {
     const html = await readFile(path.join(site, file), 'utf8');
+    assert(!/invite-only|early access by invitation|join (?:the )?(?:cloud )?waitlist|action="\/api\/waitlist"/i.test(html), file);
     for (const [, href] of html.matchAll(/href="([^"]+)"/g)) {
       const target = new URL(href.replaceAll('&amp;', '&'), 'https://www.adport.dev');
-      assert.notEqual(target.hostname, 'app.adport.dev', `${file}: private Cloud link ${href}`);
+      if (target.hostname === 'app.adport.dev') {
+        assert([cloudSignInUrl, cloudSignupUrl].includes(target.href), `${file}: unexpected Cloud link ${href}`);
+      }
     }
     if (file === 'index.html' || file === 'pricing.html') {
       const actions = [...html.matchAll(/<a class="pricing-action\b[^"]*" href="([^"]+)"[^>]*>([^<]+)<\/a>/g)]
         .filter(([, href]) => !href.startsWith('mailto:'));
       assert.equal(actions.length, file === 'index.html' ? 4 : 8, file);
       for (const [, href, label] of actions) {
-        assert.equal(href, '/#waitlist', file);
-        assert.equal(label, 'Join the waitlist', file);
+        assert.equal(href, cloudSignupUrl, file);
+        assert(['Start free', 'Get started'].includes(label), file);
       }
-      assert(!html.includes('data-plan='), `${file}: pricing must not rewrite waitlist links`);
+      assert.equal(actions.filter(([, , label]) => label === 'Start free').length, file === 'index.html' ? 1 : 2, file);
     }
   }
 });

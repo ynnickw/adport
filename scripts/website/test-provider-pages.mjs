@@ -6,7 +6,7 @@ import test from 'node:test';
 import { runInNewContext } from 'node:vm';
 import { providers } from './website-providers.mjs';
 import { AGENT_SETUPS } from '../../apps/cloud/lib/agent-setups.mjs';
-import { agentSetups, mcpBaseUrl } from './website-agent-setups.mjs';
+import { agentSetups, cloudSignupUrl, mcpBaseUrl } from './website-agent-setups.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const site = path.join(root, 'website');
@@ -68,6 +68,9 @@ test('provider instruction tabs have matching labels and panels with no-JavaScri
 });
 
 test('local setup offers Claude Code, Codex and Cursor, each with its mark and command', () => {
+  assert(home.includes('href="#local">Try the open-source CLI</a>'));
+  assert(home.includes('id="local" aria-labelledby="local-title"'));
+  assert(home.includes('data-copy-command="adport --demo report --range last_7_days"'));
   for (const [id, command] of [['claude-code', 'claude mcp add --transport stdio adport -- adport mcp'], ['codex', 'codex mcp add adport -- adport mcp'], ['cursor', '&quot;command&quot;: &quot;adport&quot;']]) {
     const tab = home.match(new RegExp(`<button class="local-tab"[^>]*id="local-tab-${id}"[\\s\\S]*?</button>`))?.[0];
     assert(tab?.includes(`agent-brand-${id}`), `local ${id} tab is missing its mark`);
@@ -89,17 +92,17 @@ test('all six public setup guides match the Cloud app instructions and commands'
   }
 });
 
-test('public Cloud access links lead to the waitlist and setup requires an invitation', () => {
+test('homepage and provider pages link directly to public Cloud signup', () => {
   for (const [file, html] of [['index.html', home], ...pages]) {
-    assert(!/href="https:\/\/app\.adport\.dev/i.test(html), file);
-    assert(html.includes('Cloud is currently invite-only'), file);
-    assert(html.includes('href="/#waitlist"') || html.includes('href="#waitlist"'), file);
+    assert(html.includes(`class="header-cta" href="${cloudSignupUrl}">Start free</a>`), file);
+    assert(html.includes(`class="primary-action" href="${cloudSignupUrl}">Start free</a>`), file);
     if (file !== 'providers.html') {
       const panel = html.match(/id="agent-panel-chatgpt"[\s\S]*?<\/div>/)?.[0];
       assert(panel && /choose OAuth/i.test(panel), file);
       assert(panel.includes(`${mcpBaseUrl}/mcp`), file);
     }
   }
+  assert(home.includes('id="waitlist" aria-labelledby="cloud-cta-title"'), 'existing waitlist links should reach the Cloud signup section');
 });
 
 test('tabs switch by click and keyboard, wrap, and keep exactly one active panel', async () => {
@@ -132,9 +135,9 @@ test('tabs switch by click and keyboard, wrap, and keep exactly one active panel
   key(2, 'Home', 0); key(0, 'End', 2);
 });
 
-test('covers all eleven advertising providers exactly once', () => {
-  assert.deepEqual(providers.map(p => p.id).sort(), ['apple', 'google', 'linkedin', 'meta', 'microsoft', 'pinterest', 'reddit', 'snapchat', 'spotify', 'tiktok', 'x']);
-  assert.equal(new Set(providers.map(p => p.slug)).size, 11);
+test('covers all twelve advertising providers exactly once', () => {
+  assert.deepEqual(providers.map(p => p.id).sort(), ['apple', 'google', 'linkedin', 'meta', 'microsoft', 'openai', 'pinterest', 'reddit', 'snapchat', 'spotify', 'tiktok', 'x']);
+  assert.equal(new Set(providers.map(p => p.slug)).size, 12);
 });
 
 test('titles, descriptions, editorial introductions, and workflow text are distinct', () => {
@@ -159,12 +162,12 @@ for (const p of providers) {
     assert(html.includes(`adport connect ${p.id}`));
     assert(html.includes(`adport accounts --provider ${p.id}`));
     assert(html.includes('claude mcp add --transport stdio adport -- adport mcp'));
-    assert(html.includes('Cloud waitlist'));
+    assert(html.includes('Cloud is in public early access'));
     assert(html.includes('Use the same Adport MCP endpoint and OAuth sign-in'));
     assert(html.includes('Provider access and approval are separate'));
     assert(html.includes('pending-operation token'));
     assert(html.includes('aria-live="polite"'));
-    assert(html.includes('action="/api/waitlist"'));
+    assert(html.includes(`href="${cloudSignupUrl}">Create a free account</a>`));
     assert.equal(p.workflows.length, 3);
     assert.equal(p.prompts.length, 3);
     assert.equal(p.prerequisites.length, 3);
