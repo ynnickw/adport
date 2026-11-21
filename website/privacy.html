@@ -22,7 +22,7 @@
     <main class="legal-content">
       <p class="eyebrow">Legal</p>
       <h1>Privacy Policy</h1>
-      <p class="updated">Updated November 18, 2026</p>
+      <p class="updated">Updated November 21, 2026</p>
 
       <p>Adport is a paid-media control plane operated by Yannick Westermann, trading as Yannick Westermann Labs. It can be used as self-hosted open-source software or through the managed Adport Cloud service. This policy explains both modes and, in particular, how Adport Cloud accesses, uses, stores, protects, retains, and shares Google user data.</p>
 
@@ -38,6 +38,12 @@
 
       <h2>Google user data</h2>
       <p>The Google Ads connection requests the OAuth scope <code>https://www.googleapis.com/auth/adwords</code>. Google Ads offers one OAuth scope for its read and management functionality, so there is no narrower Google Ads scope that can provide Adport's user-facing reporting, preview, create, update, and remove features. Adport does not request access to Gmail, Google Drive, Google Calendar, Google Photos, contacts, general Google Account profile data, or other unrelated Google services.</p>
+
+      <h3 id="google-conversion-imports">Optional Google Ads conversion imports</h3>
+      <p>An organization owner or administrator can separately choose <strong>Enable conversion imports</strong> to authorize <code>https://www.googleapis.com/auth/datamanager</code> alongside Google Ads access. Ordinary Google Ads connections do not request this additional scope. Adport uses it to validate and, only after explicit approval, send user-supplied first-party conversion events to the selected Google Ads conversion destination and inspect processing diagnostics. This feature does not manage audiences, use data-partner links, or send events to Google Analytics destinations.</p>
+      <p>Depending on the fields the user supplies, event data can include the selected account and conversion-action identifiers; event timestamps, source and transaction identifiers; conversion values and currency; captured Google click identifiers and session attributes; device, cart, custom-variable and user-property data; supported event or landing-page IP addresses; and normalized, SHA-256-hashed first-party email, phone or address identifiers. Adport does not infer consent or hash raw personal identifiers on the user's behalf. User identifiers require explicit user-data consent and already accepted Google customer-data terms.</p>
+      <p>The first request is a native Google <code>validateOnly</code> preview and imports no events. Applying the exact approved batch is a separate action that can affect conversion reporting and automated bidding. Initial validation or request acceptance does not prove that events were processed, matched or attributed. Full supplied inputs are held in the normal access-controlled pending-operation record to bind approval to the exact batch; preview and audit summaries omit event and user identifiers. The storage, retention, revocation and deletion controls described below also apply to these records. Conversion inputs are sent to Google only for the user's requested validation or approved import, and are not used for unrelated profiling, resale or shared AI-model training.
+      </p>
 
       <h3>Raw and derived data Adport accesses</h3>
       <p>Raw Google Ads data may include OAuth access and refresh tokens; accessible customer, manager, and account identifiers; account names, status, currency, and time zone; campaigns and campaign budgets; bidding settings; ad groups; ads, assets, and responsive-ad text; keywords and other targeting criteria; conversion and attribution fields; change history; and performance fields such as impressions, clicks, cost, conversions, conversion value, and return on ad spend.</p>
@@ -57,7 +63,7 @@
       <h3>Sharing and transfer of Google user data</h3>
       <p>Adport Cloud transfers Google user data only as necessary to provide or improve the prominent user-facing features described above, with the user's consent or direction:</p>
       <ul>
-        <li>to Google OAuth, Google Ads, Google Tag Manager, Google Analytics and Google Search Console API endpoints to authenticate and perform the user's requested reads or permitted changes;</li>
+        <li>to Google OAuth, Google Ads, Google Data Manager, Google Tag Manager, Google Analytics and Google Search Console API endpoints to authenticate and perform the user's requested reads or permitted changes, including optional conversion-event validation and approved imports;</li>
         <li>to contracted cloud infrastructure providers, including the managed database and authentication service used by Adport Cloud, solely to host, secure, and operate Adport on our behalf;</li>
         <li>to the user's selected MCP client, AI client, or other integration when the user asks that client to retrieve or act on Adport data; and</li>
         <li>when required by law, or when necessary to investigate fraud, abuse, or a security threat.</li>
