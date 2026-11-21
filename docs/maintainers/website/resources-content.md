@@ -1,6 +1,6 @@
 # Resources content and dashboard UI
 
-The Resources hub, five topic hubs, twenty-two articles, and landing section are generated from `scripts/website/website-resources.mjs` and `scripts/website/resource-content/`. The articles contain original operating guidance, with provider documentation linked beside platform-specific claims and listed at the end.
+The Resources hub, topic hubs, articles, and landing section are generated from `scripts/website/website-resources.mjs` and `scripts/website/resource-content/`. The articles contain original operating guidance, with provider documentation linked beside platform-specific claims and listed at the end.
 
 | Cluster | Search intent | Initial articles |
 | --- | --- | --- |
@@ -8,9 +8,10 @@ The Resources hub, five topic hubs, twenty-two articles, and landing section are
 | Connect ads to ChatGPT | Install a ChatGPT MCP plugin and review a specific provider | Shared plugin/OAuth setup; Google; Meta; TikTok; Snapchat; LinkedIn; Microsoft |
 | AI ad management | Connect an AI client to real Google Ads data | Google Ads MCP server; Claude; ChatGPT; Codex |
 | Google Ads optimization | Investigate a concrete account issue | Audit checklist; negative keywords; budget pacing |
+| Marketing analytics with MCP | Connect marketing data and verify what each source measures | Search Console setup and SEO reports, GA4 setup and acquisition reports, Google Ads and GA4 conversion checks |
 | Agency operations | Organize clients, permissions, and reporting | Multi-client management; client viewers; CPA vs ROAS |
 
-These are intent-led priorities. Ahrefs keyword-metric requests returned `Insufficient plan` in both available connections, so no volume, difficulty, traffic forecast, or ranking claims were used. Review Search Console data after publication to choose subsequent articles. Publication and sitemap inclusion do not establish indexing or traffic gains.
+Google Ads Keyword Planner data informed the November 21 analytics and integration updates. English-language Google Search estimates for the United States, United Kingdom, Canada, and Australia showed demand for Google Ads MCP, Meta Ads MCP, Google Analytics MCP, and Search Console MCP. These estimates describe market searches. Use the Adport Search Console property for site impressions, clicks, and query coverage when choosing subsequent updates.
 
 The ChatGPT cluster targets connection and reporting intent, rather than buying ad placements inside ChatGPT. The shared setup guide covers plugin installation, project-scoped OAuth, selection in a conversation, and connection troubleshooting. Provider articles add their own reporting questions, measurement context, and verification workflow; they are not Claude articles with the assistant name replaced.
 

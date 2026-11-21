@@ -2,8 +2,18 @@
 export const providers = [
   {
     id: 'google', slug: 'google-ads', name: 'Google Ads', label: 'Search, without the tab switching.',
-    description: 'Connect Google Ads to Claude Code or Cursor with Adport MCP. Query campaign performance, inspect search terms, and preview budget changes. Connect ChatGPT with MCP and OAuth.',
-    intro: 'Bring Google Ads reporting and campaign operations into the AI agent you already use. Ask questions across your accounts, investigate search traffic, and review the exact changes before anything is applied.',
+    headline: 'Google Ads MCP for reporting and campaign changes',
+    description: 'Connect Google Ads to Claude, ChatGPT, or Codex with Adport MCP. Review campaign performance and search terms, then preview budget changes.',
+    intro: 'Connect Google Ads to your assistant to review campaigns, inspect paid search terms, and preview supported changes. Use the free Cloud plan for read-only reporting or run the open-source Google Ads MCP server with your own API credentials.',
+    cloudSetup: [
+      'Open Ad platforms in the Adport Cloud project for the advertiser. Connect Google Ads with a Google account that can access the intended account.',
+      'Save the advertiser account selection and enable agent access. If you sign in through a manager account, check the child account ID your reports should use.',
+      'Authorize your assistant for the same Adport project. Ask it to confirm the Google Ads customer ID and account currency before requesting a campaign report.',
+    ],
+    guides: [
+      ['/resources/google-ads-mcp-server', 'Google Ads MCP setup guide'],
+      ['/resources/google-ads-ga4-conversion-check', 'Compare Google Ads and GA4 conversions'],
+    ],
     keywords: ['Google Ads MCP', 'Google Ads Claude Code', 'Google Ads Cursor', 'connect Google Ads to ChatGPT'],
     workflows: [
       ['Find the search terms behind the spend', 'Use GAQL to inspect search-term and keyword data available to your account. Ask your agent to separate queries that convert from those that consume budget, then explain its findings.'],
@@ -20,8 +30,18 @@ export const providers = [
   },
   {
     id: 'meta', slug: 'meta-ads', name: 'Meta Ads', label: 'Facebook and Instagram. One conversation.',
-    description: 'Connect Meta and Facebook Ads to Claude Code or Cursor through Adport MCP. Read Insights and preview campaign or ad-set changes. Connect ChatGPT with MCP and OAuth.',
-    intro: 'Work with Facebook and Instagram advertising accounts from your AI agent. Pull Meta Insights, compare campaigns and ad sets, and turn a proposed adjustment into a reviewable action.',
+    headline: 'Meta Ads MCP for Facebook and Instagram',
+    description: 'Connect Meta, Facebook, and Instagram ads to Claude, ChatGPT, or Codex. Review Insights by campaign or ad set and preview changes with Adport MCP.',
+    intro: 'Connect a Meta ad account to your assistant to review Facebook and Instagram ads in one place. Compare campaigns and ad sets with Meta Insights, then preview supported changes against the right account and budget.',
+    cloudSetup: [
+      'Open Ad platforms in the Adport Cloud project for the advertiser. Connect Meta with a Facebook account that has permission to the business and ad account.',
+      'Select the ad account and enable access. If you manage several clients, confirm the business and ad account IDs before saving the selection.',
+      'Authorize your assistant for that project. Start with a read-only campaign or ad set report and ask it to show the date range and attribution window.',
+    ],
+    guides: [
+      ['/resources/meta-ads-with-claude', 'Connect Meta Ads to Claude'],
+      ['/resources/meta-ads-with-chatgpt', 'Connect Meta Ads to ChatGPT'],
+    ],
     keywords: ['Meta Ads MCP', 'Facebook Ads MCP', 'Instagram Ads Claude', 'connect Meta Ads to ChatGPT'],
     workflows: [
       ['Read Insights in context', 'Ask for performance by campaign, ad set, or ad with the date range and breakdowns supported by Meta. Keep reporting windows explicit instead of comparing mismatched exports.'],
@@ -32,7 +52,7 @@ export const providers = [
     prerequisites: ['A Meta Business app with the Marketing API product and access to the relevant business assets.', 'A system user assigned to the ad accounts you intend to connect.', 'A token with ads_read and ads_management for read/write workflows. Additional review may be required for other businesses’ assets.'],
     connection: 'Run the wizard and provide the token through its secure prompt. Adport uses your own Meta app and assigned assets; public customer onboarding is a separate approval process.',
     nuance: 'Facebook and Instagram placements are handled through Meta’s advertising account structure, not a personal Instagram login. Reported results depend on the campaign objective and Meta’s attribution settings.',
-    faq: ['Does the Facebook Ads MCP also cover Instagram ads?', 'Yes, for Instagram advertising managed through a connected Meta ad account and exposed by the Marketing API. It is not an Instagram publishing or personal-account automation tool.'],
+    faq: ['Does the Facebook Ads MCP also cover Instagram ads?', 'Yes. It covers Instagram advertising managed through the connected Meta ad account and exposed by the Marketing API.'],
     guide: 'docs/providers.md#meta-ads', reference: 'https://developers.facebook.com/docs/marketing-apis/',
     related: ['google', 'tiktok', 'pinterest'],
   },

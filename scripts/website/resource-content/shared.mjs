@@ -19,6 +19,13 @@ export const sources = {
   access: { title: 'Google Ads: manager account access levels', url: 'https://support.google.com/google-ads/answer/9977851?hl=en' },
   values: { title: 'Google Ads: conversion values', url: 'https://support.google.com/google-ads/answer/13064207?hl=en' },
   bidding: { title: 'Google Ads: bidding objectives', url: 'https://support.google.com/google-ads/answer/10969287?hl=en' },
+  searchConsolePerformance: { title: 'Google Search Console: Performance report', url: 'https://support.google.com/webmasters/answer/7576553?hl=en' },
+  searchConsoleApi: { title: 'Google Search Console API: search analytics query', url: 'https://developers.google.com/webmaster-tools/v1/searchanalytics/query' },
+  searchConsoleInspection: { title: 'Google Search Console: URL Inspection Tool', url: 'https://support.google.com/webmasters/answer/9012289?hl=en' },
+  ga4Reports: { title: 'Google Analytics Data API: create a report', url: 'https://developers.google.com/analytics/devguides/reporting/data/v1/basics' },
+  ga4Schema: { title: 'Google Analytics Data API: dimensions and metrics', url: 'https://developers.google.com/analytics/devguides/reporting/data/v1/api-schema' },
+  analyticsClicksSessions: { title: 'Google Analytics: troubleshoot click and session discrepancies', url: 'https://support.google.com/analytics/answer/14452452' },
+  analyticsConversions: { title: 'Google Ads: create conversions from Google Analytics events', url: 'https://support.google.com/google-ads/answer/2375435?hl=en' },
 };
 export const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 export const cite = (id, label = sources[id].title) => `<a href="${escape(sources[id].url)}" rel="noreferrer">${escape(label)}</a>`;
