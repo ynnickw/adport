@@ -138,7 +138,7 @@ function providerPage(p) {
     <section class="p-hero" aria-labelledby="provider-title">
       <div class="p-hero-copy">
         <p class="p-kicker"><span class="p-logo">${logo(p)}</span>${escape(p.name)} MCP server</p>
-        <h1 id="provider-title">${escape(p.name)}, from your AI agent.</h1>
+        <h1 id="provider-title">${escape(p.headline ?? `${p.name}, from your AI agent.`)}</h1>
         <p class="lede">${escape(p.intro)}</p>
         <div class="hero-actions">${signup}${github}</div>
         <p class="local-option">Prefer to run it on your machine? <a class="text-link" href="#connect">Local setup for ${escape(p.name)}</a></p>
@@ -154,7 +154,13 @@ function providerPage(p) {
       <div class="section-intro"><h2 id="capabilities-title">What you can do with ${escape(p.name)} MCP</h2></div>
       <div class="p-workflows">${p.workflows.map(([title, text]) => `<article><h3>${escape(title)}</h3><p>${escape(text)}</p></article>`).join('')}</div>
       <aside class="p-nuance" aria-labelledby="nuance-title"><h3 id="nuance-title">Know what the data means</h3><p>${escape(p.nuance)}</p></aside>
-    </section>
+    </section>${p.cloudSetup ? `
+
+    <section class="p-section" aria-labelledby="cloud-connect-title">
+      <div class="section-intro"><h2 id="cloud-connect-title">Connect ${escape(p.name)} in Adport Cloud</h2><p>Start with read-only reporting on the free plan. Paid plans add supported writes with an approval step.</p></div>
+      <ol class="steps">${p.cloudSetup.map(step => `<li>${escape(step)}</li>`).join('')}</ol>
+      <p class="p-links">${p.guides.map(([link, label]) => `<a class="text-link" href="${escape(link)}">${escape(label)}</a>`).join('')}</p>
+    </section>` : ''}
 
     <section class="p-section" id="connect" aria-labelledby="connect-title">
       <div class="section-intro">
