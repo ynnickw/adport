@@ -5,12 +5,13 @@ import path from 'node:path';
 import { articles, articlesInCluster, clusters, published, sources } from './website-resources.mjs';
 import { escape } from './resource-content/shared.mjs';
 import { providers } from './website-providers.mjs';
+import { cloudSignupUrl } from './website-agent-setups.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const site = path.join(root, 'website');
 const check = process.argv.includes('--check');
 const home = await readFile(path.join(site, 'index.html'), 'utf8');
-const header = home.match(/<header class="site-header">[\s\S]*?<\/header>/)?.[0]?.replaceAll('href="#waitlist"', 'href="/#waitlist"');
+const header = home.match(/<header class="site-header">[\s\S]*?<\/header>/)?.[0];
 const footer = home.match(/<footer class="site-footer">[\s\S]*?<\/footer>/)?.[0];
 if (!header || !footer) throw new Error('Shared header/footer missing.');
 const clusterFor = article => clusters.find(cluster => cluster.slug === article.cluster);
@@ -28,7 +29,7 @@ const mark = id => {
 const marks = article => `<div class="resource-marks" aria-hidden="true">${article.marks.map(mark).join('<span class="resource-connector">+</span>')}</div>`;
 const card = article => `<article class="resource-card"><a href="${url(article)}">${marks(article)}<span class="resource-card-meta">${escape(clusterFor(article).title)} · ${minutes(article)} min read</span><h3>${escape(article.title)}</h3><p>${escape(article.summary)}</p><span class="resource-read">Read guide <span aria-hidden="true">↗</span></span></a></article>`;
 const breadcrumbs = (cluster, article) => `<nav class="resource-breadcrumbs" aria-label="Breadcrumb"><a href="/resources">Resources</a>${cluster ? `<span aria-hidden="true">/</span>${article ? `<a href="/resources/${cluster.slug}">${escape(cluster.title)}</a>` : `<span aria-current="page">${escape(cluster.title)}</span>`}` : ''}${article ? '<span aria-hidden="true">/</span><span aria-current="page">Guide</span>' : ''}</nav>`;
-const cta = `<section class="resource-cta"><div><h2>Get early access to Adport Cloud.</h2><p>Join the waitlist to connect your ad accounts with your AI tools.</p></div><div><a class="resource-primary" href="/#waitlist">Join the Cloud waitlist</a><a href="/pricing">Compare plans</a></div></section>`;
+const cta = `<section class="resource-cta"><div><h2>Try Adport Cloud</h2><p>Connect your ad accounts and run your first report with the free plan.</p></div><div><a class="resource-primary" href="${cloudSignupUrl}">Start free</a><a href="/pricing">Compare plans</a></div></section>`;
 function document({ title, description, pathname, content, article, cluster }) {
   const canonical = `https://www.adport.dev${pathname}`;
   const crumbs = [{ '@type': 'ListItem', position: 1, name: 'Adport', item: 'https://www.adport.dev/' }, { '@type': 'ListItem', position: 2, name: 'Resources', item: 'https://www.adport.dev/resources' }];
@@ -61,7 +62,7 @@ for (const cluster of clusters) {
 for (const article of articles) {
   const cluster = clusterFor(article);
   const accessNote = article.sections.some(s => s.html.includes('https://app.adport.dev'))
-    ? '<p>Adport Cloud is currently invite-only. <a href="/#waitlist">Join the Cloud waitlist</a> for access before following the hosted setup instructions below.</p>' : '';
+    ? `<p><a href="${cloudSignupUrl}">Create a free Adport Cloud account</a> to follow the hosted setup instructions below.</p>` : '';
   output.set(`resources/${article.slug}.html`, document({ title: `${article.title} | Adport`, description: article.description, pathname: url(article), article, cluster,
     content: `${breadcrumbs(cluster, article)}<article class="guide"><header class="guide-header">${marks(article)}<h1>${escape(article.title)}</h1><p class="guide-deck">${escape(article.intro)}</p><div class="guide-meta"><span>By Adport</span><time datetime="${published}">November 1, 2026</time><span>${minutes(article)} min read</span></div></header>
 <div class="guide-layout"><aside class="guide-toc"><nav aria-label="In this guide"><p>In this guide</p>${article.sections.map(s => `<a href="#${s.id}">${escape(s.title)}</a>`).join('')}<a href="#sources">Sources</a></nav></aside><div class="guide-body">${accessNote}${article.sections.map(s => `<section id="${s.id}"><h2>${escape(s.title)}</h2>${s.html}</section>`).join('\n')}<section class="guide-sources" id="sources"><h2>Sources & further reading</h2><p>Provider documentation for the setup and platform behavior described above.</p><ul>${article.sources.map(id => `<li><a href="${escape(sources[id].url)}" rel="noreferrer">${escape(sources[id].title)}</a><span>${new URL(sources[id].url).hostname}</span></li>`).join('')}</ul></section></div></div></article>

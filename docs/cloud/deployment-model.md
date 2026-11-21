@@ -1,6 +1,6 @@
 # Deployment model
 
-Adport has one shared provider/tool/policy layer and two deployment modes. The self-hosted CLI remains local and bring-your-own-credentials. The managed Cloud application is implemented in `apps/cloud`, can also run locally, and is available to hosted users through an invitation-controlled rollout. Public access is offered through the [waitlist](https://adport.dev/#waitlist).
+Adport has one shared provider/tool/policy layer and two deployment modes. The self-hosted CLI remains local and bring-your-own-credentials. The managed Cloud application is implemented in `apps/cloud`, can also run locally, and is in public early access. Hosted users can [create a free account](https://app.adport.dev/login?mode=signup).
 
 ## Self-hosted mode
 

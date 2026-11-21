@@ -12,7 +12,7 @@
 
 Adport is an open-source control plane for paid media. Connect your advertising accounts, inspect performance, investigate audit findings, and preview changes through the CLI or a Model Context Protocol (MCP) client. Claude Code and other MCP clients use the same typed tools and policy engine as the terminal.
 
-The local CLI and stdio MCP server run on your machine with your own provider credentials. They require no Adport account and contain no telemetry. [Adport Cloud](https://adport.dev/#waitlist) adds hosted connections and a team dashboard; public access is currently through the waitlist.
+The local CLI and stdio MCP server run on your machine with your own provider credentials. They require no Adport account and contain no telemetry. [Adport Cloud](https://app.adport.dev/login?mode=signup) adds hosted connections and a team dashboard. Create a free account to try Cloud in early access.
 
 ## Quick start
 
@@ -113,7 +113,7 @@ Provider application approval, account access, and available metrics depend on t
 
 | | Local CLI and MCP | Adport Cloud |
 | --- | --- | --- |
-| Setup | Install `adport`, bring your own provider applications and credentials | Hosted provider authorization; access through the [waitlist](https://adport.dev/#waitlist) |
+| Setup | Install `adport`, bring your own provider applications and credentials | Hosted provider authorization and [free account signup](https://app.adport.dev/login?mode=signup) |
 | Runtime | Your machine, stdio MCP | Hosted dashboard, REST, and remote MCP |
 | Credentials | Permission-restricted local file | Encrypted tenant vault |
 | Approvals and audit | Local pending operations and JSONL log | Persistent tenant-scoped approvals and audit events |

@@ -249,20 +249,6 @@ button { font: inherit; color: inherit; }
 .lede { color: var(--ink-soft); font-size: clamp(1.0625rem, 1.4vw, 1.1875rem); line-height: 1.55; text-wrap: pretty; }
 .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1.5rem; }
 
-/* Hero sign-up: the pill expands into the form (behaviour in site.js). */
-.hero-signup { max-width: 100%; }
-.hero-signup.is-open { width: min(100vw - 2.5rem, 27rem); }
-.hero-signup [hidden] { display: none; }
-.hero-signup .hero-waitlist-fields { position: relative; display: flex; align-items: center; padding: 0.25rem; }
-.hero-signup-surface { position: absolute; inset: 0; border: 1px solid var(--rule-strong); border-radius: 999px; background: var(--raised); transform-origin: left center; }
-.hero-signup .hero-waitlist-fields input { position: relative; flex: 1; min-width: 0; min-height: 2.75rem; padding: 0.55rem 0.9rem 0.45rem; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 1rem; }
-.hero-signup .hero-waitlist-fields input:focus-visible { outline: none; }
-.hero-signup .hero-waitlist-fields:focus-within { border-radius: 999px; outline: 2px solid var(--signal); outline-offset: 3px; }
-.hero-signup .hero-waitlist-fields button { position: relative; min-height: 2.75rem; padding-inline: 1.1rem; }
-.hero-signup-meta { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 0.4rem; }
-.hero-signup-close { min-height: 2.5rem; font-size: 0.875rem; }
-.hero-signup .waitlist-status:empty { display: none; }
-
 /* Console: the dark control room, used for agent transcripts on every page. */
 .console {
   overflow: hidden;
@@ -292,7 +278,7 @@ button { font: inherit; color: inherit; }
 
 /* Section headings ------------------------------------------------- */
 
-.section-intro h2, .rules h2, .waitlist h2 {
+.section-intro h2, .rules h2, .cloud-cta h2 {
   max-width: 17em;
   font-size: clamp(2.05rem, 4.3vw, 3.5rem);
   font-weight: 800;
@@ -301,7 +287,7 @@ button { font: inherit; color: inherit; }
   text-wrap: balance;
 }
 /* Chapter label above a section heading; shared by every page that reuses home sections. */
-.section-kicker, :is(.section-intro, .waitlist-copy, .rules-copy) > .section-kicker { max-width: none; margin: 0 0 0.75rem; color: var(--signal-ink); font-size: 1rem; font-weight: 750; line-height: 1.4; }
+.section-kicker, :is(.section-intro, .cloud-cta-copy, .rules-copy) > .section-kicker { max-width: none; margin: 0 0 0.75rem; color: var(--signal-ink); font-size: 1rem; font-weight: 750; line-height: 1.4; }
 .section-intro p { max-width: 35rem; margin-top: 1.25rem; color: var(--ink-soft); line-height: 1.6; text-wrap: pretty; }
 .section-intro .text-link { margin-top: 1.25rem; }
 
@@ -368,26 +354,11 @@ button { font: inherit; color: inherit; }
 .agent-instructions .text-link { font-size: 0.9375rem; }
 .agent-setup .local-option { max-width: 46rem; margin-top: 1rem; color: var(--muted); font-size: 0.875rem; line-height: 1.6; }
 
-/* Waitlist + footer ---------------------------------------------------- */
+/* Cloud signup and footer ---------------------------------------------- */
 
-.waitlist { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 2.5rem clamp(2.5rem, 6vw, 6rem); align-items: end; padding: clamp(5rem, 11vw, 9rem) var(--gutter) clamp(4rem, 8vw, 6rem); }
-.waitlist-copy p { max-width: 33rem; margin-top: 1.25rem; color: var(--ink-soft); }
-.waitlist-form { position: relative; }
-.waitlist-form > label { display: block; margin-bottom: 0.55rem; font-size: 0.9375rem; font-weight: 700; }
-.waitlist-fields { display: flex; gap: 0.5rem; }
-.waitlist-fields input { width: 100%; min-width: 0; min-height: 3.25rem; padding: 0.7rem 1.2rem 0.55rem; border: 1px solid var(--rule-strong); border-radius: 999px; background: var(--raised); color: var(--ink); font: inherit; font-size: 1rem; }
-.waitlist-fields input::placeholder { color: var(--dim); }
-.waitlist-fields input:focus-visible { border-color: var(--signal); outline: 2px solid var(--signal); outline-offset: 1px; }
-.waitlist-fields button { position: relative; flex: none; min-height: 3.25rem; }
-.waitlist-fields button:disabled { cursor: wait; }
-.waitlist-spinner { position: absolute; display: none; width: 1.1rem; height: 1.1rem; border: 2px solid rgba(29, 29, 31, 0.25); border-top-color: #1d1d1f; border-radius: 50%; animation: spin 700ms linear infinite; }
-.waitlist-fields button[aria-busy="true"] .waitlist-button-label { visibility: hidden; }
-.waitlist-fields button[aria-busy="true"] .waitlist-spinner { display: block; }
-.waitlist-notice { margin-top: 0.75rem; color: var(--muted); font-size: 0.8125rem; line-height: 1.6; }
-.waitlist-notice a { text-underline-offset: 0.2em; }
-.waitlist-status { min-height: 1.5em; margin-top: 0.5rem; font-size: 0.9375rem; font-weight: 600; color: var(--go); }
-.waitlist-status[data-error="true"] { color: var(--stop); }
-.form-trap { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.cloud-cta { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 1.5rem 3rem; padding: clamp(5rem, 11vw, 9rem) var(--gutter) clamp(4rem, 8vw, 6rem); }
+.cloud-cta-copy > p:not(.section-kicker) { max-width: 33rem; margin-top: 1.25rem; color: var(--ink-soft); }
+.cloud-cta-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.5rem; }
 
 .site-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem 2rem; padding: 2rem var(--gutter) 2.5rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: 0.875rem; }
 .site-footer nav { display: flex; flex-wrap: wrap; gap: 0.5rem 1.4rem; }
@@ -432,19 +403,12 @@ button { font: inherit; color: inherit; }
   .header-meta .github-link svg { width: 1.3rem; height: 1.3rem; }
   .hero-actions { flex-direction: column; align-items: stretch; }
   .hero-actions > .text-action { justify-content: center; min-height: 2.75rem; }
-  .hero-signup-trigger { width: 100%; }
-  .hero-signup.is-open { width: 100%; }
+  .hero-actions > .primary-action { width: 100%; }
   .console { border-radius: 1rem; }
   .console-title { display: none; }
   .platform-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .platform-grid a { min-height: 6.25rem; padding: 1rem; font-size: 0.875rem; }
-  .waitlist { grid-template-columns: minmax(0, 1fr); }
-  .waitlist-fields { flex-direction: column; }
   .site-footer { flex-direction: column; align-items: flex-start; }
-}
-
-@media (max-width: 64rem) {
-  .waitlist { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -455,6 +419,6 @@ button { font: inherit; color: inherit; }
 .header-meta a[aria-current="page"] { color: var(--signal-ink); }
 @media (max-width: 40rem) {
   .header-meta { gap: .8rem; }
-  .header-meta .github-link, .header-meta .header-cta[href="#waitlist"] { display: none; }
+  .header-meta .github-link { display: none; }
 }
 @media (max-width: 24rem) { .header-meta .header-cta { display: none; } }
