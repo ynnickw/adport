@@ -1,0 +1,47 @@
+import { cite, prompt, section } from './shared.mjs';
+
+const cluster = 'meta-ads-reporting';
+const published = '2026-11-21';
+
+export const metaReportingArticles = [
+  {
+    slug: 'meta-ads-creative-fatigue', cluster, published,
+    title: 'How to spot creative fatigue in Meta Ads',
+    description: 'Review Meta ad frequency, link clicks and cost per purchase over two weeks. Use the ad and creative IDs to decide which Facebook or Instagram ad to refresh.',
+    summary: 'Find an ad worth refreshing and give the creative team a brief they can act on.',
+    marks: ['meta'], sources: ['metaInsights', 'metaBreakdowns'],
+    intro: 'Before asking a designer for another version of an ad, find out what people stopped doing. Did fewer people click after seeing it, or did the same traffic buy less often? With a connected Meta account, Adport can bring the ad, its creative and both weeks of delivery into the same conversation.',
+    sections: [
+      section('choose-ad', 'Start with an ad your team could replace', `<p>Open the <a href="/providers/meta-ads">Meta Ads integration</a> and choose the account that paid for the ad. Pick a sales ad set with enough delivery in each of two complete weeks to make a comparison. Use the same weekdays. Write down a single outcome, such as a website purchase. A lead or an add to cart answers a different question.</p>
+        <p>Ask for the ad ID and ad set ID. Two ads called “Summer launch” can belong to different audiences. Use <code>meta_list_ads</code> to identify the attached creative. If the team changed the image or destination between weeks, record the change date before interpreting the comparison.</p>`),
+      section('compare-response', 'Compare exposure, clicks and purchases', `<p>In <code>meta_insights</code>, request ad-level rows for each period. Include <code>adset_id</code> and <code>ad_id</code> so you can select the right ads. Keep the same link-click field, such as <code>inline_link_clicks</code>, in both reads. The broad clicks field also includes interactions that never take someone to the destination. Calculate link click-through rate from link clicks divided by impressions. Keep spend and the count of the selected purchase action alongside cost per purchase. A week with zero purchases has no calculable cost per purchase. ${cite('metaInsights')}</p>
+        ${prompt('Read only. Compare the last two complete Monday-to-Sunday weeks for my selected Meta ad set. For each ad ID show spend, impressions, reach, frequency, link clicks and the named purchase action. Show both periods side by side. Mark missing fields and tell me which creative to inspect first and why.')}`),
+      section('read-pattern', 'Work through a change in frequency', `<p>Suppose an ad goes from 10,000 impressions and 200 link clicks to 10,000 impressions and 100 link clicks. Its link click-through rate fell from 2% to 1%. If its reported frequency also rose, the combination gives the designer a reason to inspect the opening frame or headline. These figures are an example. There is no single frequency at which every audience tires of an ad.</p>
+        <p>Use Meta’s reported frequency for each whole period. Adding daily reach counts can count the same person several times. Check another ad that ran in the same ad set over both weeks. If both lost clicks, look for a change they share before commissioning two replacements.</p>`),
+      section('rule-out', 'Check where delivery moved', `<p>A shift from Facebook Feed to Instagram Reels can change the average for the same creative. Re-run delivery by publisher platform and inspect the placement where the change was largest. Keep dates and ad IDs fixed. Use the <a href="/resources/facebook-instagram-placement-report">Facebook and Instagram placement report</a> when a result field disappears after adding a breakdown. ${cite('metaBreakdowns')}</p>
+        <p>If clicks held up while purchases fell, open the destination on a phone. Check the offer, stock and checkout, and ask whether purchase tracking or attribution changed. This gives the person who owns the landing page a specific lead to investigate.</p>`),
+      section('brief', 'Write the brief for one new variation', `<p>Give the designer the ad ID, creative ID, placement, two date ranges and one element to test. For example, keep the offer and destination and try an opening frame that shows the product in use. Record what the original frame showed so that the difference is clear when someone reads the brief a week later.</p>
+        <p>Name the measure you will check once the variation has delivered. For an opening-frame test that might be link click-through rate with purchase cost alongside it. The designer can work from this brief while the buyer reviews the existing ad. Any later change to a serving ad starts with its own Adport preview.</p>`),
+    ],
+  },
+  {
+    slug: 'facebook-instagram-placement-report', cluster, published,
+    title: 'Compare Facebook and Instagram ad placements',
+    description: 'Build a Meta Ads placement report for Facebook and Instagram. Compare delivery and cost per result, keep other placements visible and handle missing conversions.',
+    summary: 'See where an ad actually ran and whether its placement mix explains a change in results.',
+    marks: ['meta'], sources: ['metaBreakdowns', 'metaInsights'],
+    intro: 'A campaign named “Instagram launch” can spend on Facebook too. For a placement review, start with what Meta says it delivered. Adport can ask for that breakdown from the ad account and help you trace a change in cost to the platform, placement or ad that deserves a closer look.',
+    sections: [
+      section('baseline', 'Save a total to reconcile against', `<p>Choose one account, a completed period and the campaign or ad set under review. Start from the <a href="/providers/meta-ads">Meta Ads connection</a> if your assistant cannot see that account yet. Request an unbroken Insights report with spend, impressions and link clicks. Save the IDs, the currency and the exact date range. This is the reference for the next read. ${cite('metaInsights')}</p>
+        <p>Pick the outcome your team cares about and keep its name in the report. A website purchase and an on-platform lead can both appear in Meta’s action lists. Adding them under a general results heading would hide which outcome the team paid to acquire.</p>`),
+      section('platform', 'Ask where the impressions ran', `<p>Use <code>meta_insights</code> with <code>publisher_platform</code> as the breakdown. This returns publishing surfaces such as Facebook and Instagram. With a supported combination, <code>platform_position</code> adds the placement within each surface. Keep the publisher next to each position so a Feed row still has a clear owner. Start with spend and impressions before adding actions. ${cite('metaBreakdowns')}</p>
+        ${prompt('For the selected Meta account, show campaign spend and impressions for last week by publisher platform. Keep every returned platform. For the campaign I select, break delivery down by platform and position where supported. Include IDs, currency and date range. Reconcile spend against the same campaign without breakdowns. Read only.')}`),
+      section('compare-mix', 'Calculate how much the mix changed', `<p>In an illustrative €1,000 week, €550 on Facebook, €350 on Instagram and €100 on other surfaces gives Instagram a 35% share of campaign spend. Dividing by just Facebook and Instagram would give 39% and answer a different question. Show the other rows so someone reading the report can reproduce the headline.</p>
+        <p>Repeat for the previous week. Decide whether the campaign shifted money between surfaces or whether response changed within the same surface. If Instagram’s overall click rate dropped, check whether spend moved from Feed to Reels before concluding that the creative itself lost appeal.</p>`),
+      section('missing-results', 'Handle a missing purchase breakdown', `<p>Some combinations of action metrics and breakdowns are unavailable. When Meta returns delivery by placement but purchases only for the campaign, show each at the level returned. Leave the placement purchase column unavailable. Allocating campaign purchases in proportion to impressions would give every placement a made-up conversion count. ${cite('metaBreakdowns')}</p>
+        <p>If spend totals disagree, revisit the account, reporting period, row limit and filters. Check that you included every publisher and that a campaign total did not slip into the placement rows. For reach and frequency, use the totals Meta calculated at the level in question because people can appear across placements.</p>`),
+      section('decision', 'Give the buyer a placement-specific next step', `<p>A high-spend placement with healthy link clicks and poor downstream results calls for a different check from a placement with few clicks. Open the actual creative and landing page at that placement’s aspect ratio. A cropped caption or unreadable offer gives the designer something concrete to fix. Record the ad ID and the position where you saw it.</p>
+        <p>End the report with one decision and the evidence it still needs. A buyer might keep the placement running while testing a better crop. If the same ad lost response on several surfaces, continue with the <a href="/resources/meta-ads-creative-fatigue">creative fatigue review</a> before changing targeting.</p>`),
+    ],
+  },
+];

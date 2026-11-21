@@ -6,6 +6,7 @@ import { providers } from './website-providers.mjs';
 import { agentSetups, cloudSignInUrl, cloudSignupUrl, mcpBaseUrl, cursorInstallUrl } from './website-agent-setups.mjs';
 import { claudeGuideForProvider } from './resource-content/claude-connections.mjs';
 import { chatgptGuideForProvider } from './resource-content/chatgpt-connections.mjs';
+import { workflowClusters } from './website-resources.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const site = path.join(root, 'website');
@@ -129,6 +130,7 @@ function document({ title, description, pathname, content, name }) {
 }
 
 function providerPage(p) {
+  const relatedTopics = workflowClusters.filter(cluster => cluster.providers.includes(p.id));
   const install = 'npm install -g adport';
   const connect = `adport connect ${p.id}`;
   const check = `adport doctor\nadport accounts --provider ${p.id}`;
@@ -153,7 +155,8 @@ function providerPage(p) {
     <section class="p-section" aria-labelledby="capabilities-title">
       <div class="section-intro"><h2 id="capabilities-title">What you can do with ${escape(p.name)} MCP</h2></div>
       <div class="p-workflows">${p.workflows.map(([title, text]) => `<article><h3>${escape(title)}</h3><p>${escape(text)}</p></article>`).join('')}</div>
-      <aside class="p-nuance" aria-labelledby="nuance-title"><h3 id="nuance-title">Know what the data means</h3><p>${escape(p.nuance)}</p></aside>
+      <aside class="p-nuance" aria-labelledby="nuance-title"><h3 id="nuance-title">Know what the data means</h3><p>${escape(p.nuance)}</p></aside>${relatedTopics.length ? `
+      <p class="p-links">${relatedTopics.map(cluster => `<a class="text-link" href="/resources/${escape(cluster.slug)}">${escape(cluster.task)}</a>`).join('')}</p>` : ''}
     </section>${p.cloudSetup ? `
 
     <section class="p-section" aria-labelledby="cloud-connect-title">

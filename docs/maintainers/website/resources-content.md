@@ -4,12 +4,17 @@ The Resources hub, topic hubs, articles, and landing section are generated from 
 
 | Cluster | Search intent | Initial articles |
 | --- | --- | --- |
+| Meta Ads creative reporting | Decide which Facebook or Instagram ad needs a refresh | Creative fatigue, placement reporting, existing Meta and ChatGPT setup |
+| Paid search reporting | Explain changes across Google and Microsoft search accounts | Weekly report, cross-network search terms, existing Google budget pacing guide |
+| Apple Ads for app developers | Measure App Store acquisition and prepare a first search campaign | Cost per install, search term discovery, paused campaign planning |
 | Connect ads to Claude | Set up Claude or Claude Code for a specific ad provider | Shared MCP setup; Google; Meta; TikTok; Snapchat; LinkedIn; Microsoft |
 | Connect ads to ChatGPT | Install a ChatGPT MCP plugin and review a specific provider | Shared plugin/OAuth setup; Google; Meta; TikTok; Snapchat; LinkedIn; Microsoft |
 | AI ad management | Connect an AI client to real Google Ads data | Google Ads MCP server; Claude; ChatGPT; Codex |
 | Google Ads optimization | Investigate a concrete account issue | Audit checklist; negative keywords; budget pacing |
 | Marketing analytics with MCP | Connect marketing data and verify what each source measures | Search Console setup and SEO reports, GA4 setup and acquisition reports, Google Ads and GA4 conversion checks |
 | Agency operations | Organize clients, permissions, and reporting | Multi-client management; client viewers; CPA vs ROAS |
+
+The homepage workflow cards and the corresponding integration-page links come from `workflowClusters` in `scripts/website/website-resources.mjs`. Each card names an audience and a task. Each topic links back to account setup for its providers. Reuse `relatedClusters` when an existing guide completes one of these workflows.
 
 Google Ads Keyword Planner data informed the November 21 analytics and integration updates. English-language Google Search estimates for the United States, United Kingdom, Canada, and Australia showed demand for Google Ads MCP, Meta Ads MCP, Google Analytics MCP, and Search Console MCP. These estimates describe market searches. Use the Adport Search Console property for site impressions, clicks, and query coverage when choosing subsequent updates.
 
