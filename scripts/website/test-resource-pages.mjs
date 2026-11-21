@@ -3,7 +3,8 @@ import { readFile, access } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import test from 'node:test';
-import { articles, articlesInCluster, clusters, sources } from './website-resources.mjs';
+import { articles, articlesInCluster, clusters, sources, workflowClusters } from './website-resources.mjs';
+import { providers } from './website-providers.mjs';
 import { escape } from './resource-content/shared.mjs';
 import { chatgptGuideForProvider } from './resource-content/chatgpt-connections.mjs';
 import { agentSetups, mcpBaseUrl } from './website-agent-setups.mjs';
@@ -86,6 +87,25 @@ test('hubs, sitemap and related guides make every article discoverable', () => {
   }
   assert(home.includes('href="/resources"'));
   assert(home.includes('id="resources-title"'));
+});
+
+test('homepage workflows and provider setup pages lead to each other through the topic hub', async () => {
+  const directory = pages.find(([file]) => file === 'resources.html')[1];
+  assert(home.includes('href="#workflow-guides"') && home.includes('id="workflow-guides"'));
+  for (const topic of workflowClusters) {
+    const href = `/resources/${topic.slug}`;
+    const hub = pages.find(([file]) => file === `resources/${topic.slug}.html`)[1];
+    assert(home.includes(`href="${href}"`) && directory.includes(`href="${href}"`), topic.slug);
+    assert(hub.includes(`rel="canonical" href="https://www.adport.dev${href}"`), topic.slug);
+    assert.equal(sitemap.split(`<loc>https://www.adport.dev${href}</loc>`).length - 1, 1, topic.slug);
+    for (const id of topic.providers) {
+      const provider = providers.find(p => p.id === id);
+      assert(provider, id);
+      const integration = await readFile(path.join(site, `providers/${provider.slug}.html`), 'utf8');
+      assert(integration.includes(`href="${href}"`), provider.slug);
+      assert(hub.includes(`<a href="/providers/${provider.slug}">Connect ${escape(provider.name)}</a>`), topic.slug);
+    }
+  }
 });
 
 test('resource navigation, local assets and fragments resolve', async () => {
