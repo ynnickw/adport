@@ -17,7 +17,8 @@ if (!header || !footer) throw new Error('Shared header/footer missing.');
 const clusterFor = article => clusters.find(cluster => cluster.slug === article.cluster);
 const url = article => `/resources/${article.slug}`;
 const publicationDate = article => article.published ?? published;
-const latestPublication = items => items.map(publicationDate).sort().at(-1);
+const lastModified = article => article.updated ?? publicationDate(article);
+const latestModification = items => items.map(lastModified).sort().at(-1);
 const formatDate = date => new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(date));
 const words = article => (article.intro + ' ' + article.sections.map(section => `${section.title} ${section.html.replace(/<[^>]*>/g, ' ')}`).join(' ')).trim().split(/\s+/).length;
 const minutes = article => Math.ceil(words(article) / 200);
@@ -41,7 +42,7 @@ function document({ title, description, pathname, content, article, cluster }) {
   const entity = article ? { '@type': 'Article', headline: article.title, description, mainEntityOfPage: canonical,
     author: { '@type': 'Organization', name: 'Adport', url: 'https://www.adport.dev' },
     publisher: { '@type': 'Organization', name: 'Adport', url: 'https://www.adport.dev', logo: { '@type': 'ImageObject', url: 'https://www.adport.dev/meta-app-icon.png' } },
-    datePublished: article.published ?? `${published}T00:00:00+07:00`, dateModified: article.published ?? `${published}T00:00:00+07:00`, articleSection: cluster.title, wordCount: words(article), image: 'https://www.adport.dev/og-image.png?v=8' }
+    datePublished: article.published ?? `${published}T00:00:00+07:00`, dateModified: article.updated ?? article.published ?? `${published}T00:00:00+07:00`, articleSection: cluster.title, wordCount: words(article), image: 'https://www.adport.dev/og-image.png?v=8' }
     : { '@type': 'CollectionPage', name: title, description, url: canonical, mainEntity: { '@type': 'ItemList', itemListElement: (cluster ? articlesInCluster(cluster.slug) : articles).map((a, i) => ({ '@type': 'ListItem', position: i + 1, name: a.title, url: `https://www.adport.dev${url(a)}` })) } };
   const schema = { '@context': 'https://schema.org', '@graph': [entity, { '@type': 'BreadcrumbList', itemListElement: crumbs }] };
   return withSupport(`<!doctype html>
@@ -67,7 +68,7 @@ for (const article of articles) {
   const accessNote = article.sections.some(s => s.html.includes('https://app.adport.dev'))
     ? `<p><a href="${cloudSignupUrl}">Create a free Adport Cloud account</a> to follow the hosted setup instructions below.</p>` : '';
   output.set(`resources/${article.slug}.html`, document({ title: `${article.title} | Adport`, description: article.description, pathname: url(article), article, cluster,
-    content: `${breadcrumbs(cluster, article)}<article class="guide"><header class="guide-header">${marks(article)}<h1>${escape(article.title)}</h1><p class="guide-deck">${escape(article.intro)}</p><div class="guide-meta"><span>By Adport</span><time datetime="${publicationDate(article)}">${formatDate(publicationDate(article))}</time><span>${minutes(article)} min read</span></div></header>
+    content: `${breadcrumbs(cluster, article)}<article class="guide"><header class="guide-header">${marks(article)}<h1>${escape(article.title)}</h1><p class="guide-deck">${escape(article.intro)}</p><div class="guide-meta"><span>By Adport</span><time datetime="${publicationDate(article)}">${formatDate(publicationDate(article))}</time>${article.updated ? `<span>Updated <time datetime="${article.updated}">${formatDate(article.updated)}</time></span>` : ''}<span>${minutes(article)} min read</span></div></header>
 <div class="guide-layout"><aside class="guide-toc"><nav aria-label="In this guide"><p>In this guide</p>${article.sections.map(s => `<a href="#${s.id}">${escape(s.title)}</a>`).join('')}<a href="#sources">Sources</a></nav></aside><div class="guide-body">${accessNote}${article.sections.map(s => `<section id="${s.id}"><h2>${escape(s.title)}</h2>${s.html}</section>`).join('\n')}<section class="guide-sources" id="sources"><h2>Sources & further reading</h2><p>Provider documentation for the setup and platform behavior described above.</p><ul>${article.sources.map(id => `<li><a href="${escape(sources[id].url)}" rel="noreferrer">${escape(sources[id].title)}</a><span>${new URL(sources[id].url).hostname}</span></li>`).join('')}</ul></section></div></div></article>
 <section class="resource-related"><div class="resource-section-head"><h2>Keep reading</h2><a href="/resources/${cluster.slug}">${escape(cluster.title)} <span aria-hidden="true">↗</span></a></div><div class="resource-grid">${articlesInCluster(cluster.slug).filter(a => a.slug !== article.slug).slice(0, 3).map(card).join('')}</div></section>` }));
 }
@@ -81,9 +82,9 @@ output.set('index.html', home.replace(marker, landing));
 let sitemap = await readFile(path.join(site, 'sitemap.xml'), 'utf8');
 sitemap = sitemap.replace(/\s*<url><loc>https:\/\/www\.adport\.dev\/resources(?:\/[^<]+)?<\/loc>(?:<lastmod>[^<]+<\/lastmod>)?<\/url>/g, '');
 const paths = [
-  ['/resources', latestPublication(articles)],
-  ...clusters.map(c => [`/resources/${c.slug}`, latestPublication(articlesInCluster(c.slug))]),
-  ...articles.map(article => [url(article), publicationDate(article)]),
+  ['/resources', latestModification(articles)],
+  ...clusters.map(c => [`/resources/${c.slug}`, latestModification(articlesInCluster(c.slug))]),
+  ...articles.map(article => [url(article), lastModified(article)]),
 ];
 const entries = paths.map(([resourcePath, lastmod]) => `  <url><loc>https://www.adport.dev${resourcePath}</loc><lastmod>${lastmod}</lastmod></url>`).join('\n');
 const providerAnchor = '  <url><loc>https://www.adport.dev/providers</loc></url>';
