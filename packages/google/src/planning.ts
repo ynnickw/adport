@@ -70,7 +70,7 @@ export function googlePlanningTools(provider: GoogleAdsProvider): AnyToolDefinit
     defineTool({
       name: 'google_keyword_ideas', namespace: 'google',
       description: 'Discover keyword ideas from keywords, a URL, both, or a site. Reads one native page; pass next_page_token as page_token with identical targeting and seed. Metrics are historical estimates, not a forecast. No keyword plan or campaign is created.',
-      input: ideasInput, output, annotations: { readOnly: true },
+      input: ideasInput, output, pagination: { cursorInput: 'page_token', cursorOutput: 'next_page_token' }, annotations: { readOnly: true },
       async handler(input) {
         const seed = input.seed;
         const body = {

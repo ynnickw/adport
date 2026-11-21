@@ -140,8 +140,9 @@ Attempts are keyed to the pending token. A host echo cannot offer a second apply
 and a late response cannot replace a newer preview. Host facts include resource
 receipts and project/account scope, but never a reusable pending token.
 
-The widget resource is `ui://adport/insight-card-v26.html`. Previous v2–v25 URIs are
-retained as aliases. Existing creative resource domains keep their configured CSP; provider logos
+The current resources are `ui://adport/insight-card-v32.html` and
+`ui://adport/summary-card-v32.html`. Previously published URIs remain available
+for cached conversations. Existing creative resource domains keep their configured CSP; provider logos
 and scripts are embedded.
 
 Claude uses its default isolated conversation sandbox. The widget does not run
@@ -156,3 +157,25 @@ Run `pnpm build`, `pnpm test`, and `pnpm typecheck`. The provider suites cover n
 request/response shapes; widget tests execute the shipped iframe script and cover
 the full registry, native and standard host bridges, scopes, errors, holds,
 processing receipts, view-only provider galleries, and central-library uploads and pagination.
+
+## Specialized read views
+
+Tool availability leads with matching tools, their blockers and the link to the
+connection's Tool access settings. Measurement health keeps provider-native
+status, observation windows, per-source counters and explicitly missing values.
+Catalog processing separates status at the batch or feed level from individual
+outcomes. Temporary report URLs are available only before their reported expiry.
+
+Distribution shows the destination's eligibility and missing choices. Its review
+button requests the existing provider preview for the selected project, account
+and asset checksum. Approval stays in the ordinary guarded change view. Receipt
+history distinguishes an accepted upload from verified processing readiness.
+
+Apple change history displays native UTC audit summaries. Google experiment
+comparison uses the returned arm and campaign configuration. Keyword research,
+forecasts and Apple recommendations use the planning and recommendation views.
+
+The MCP server provides a continuation only for a declared read-only cursor
+whose original arguments can be shared with the widget. The widget verifies
+scope and filters before requesting the next page and checks the reply against
+that request before updating its results.

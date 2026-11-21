@@ -32,7 +32,7 @@ export const RECORD_UI_STYLES = String.raw`
 export const RECORD_UI_SCRIPT = String.raw`
     let recordPages=null;
     function recordPagesIgnoreEcho(data) {
-      return !!recordPages?.busy && data?._adport?.view==='records' && galleryMatches(data._adport,recordPages.meta) && galleryScope(data._adport)===recordPages.scope;
+      return !!recordPages?.busy && data?._adport?.view===recordPages.meta.view && galleryMatches(data._adport,recordPages.meta) && galleryScope(data._adport)===recordPages.scope;
     }
     function providerMarks(values,meta,label='Platforms') {
       const providers=[...new Set(arr(values).filter(value=>typeof value==='string'&&value))];
@@ -87,13 +87,46 @@ export const RECORD_UI_SCRIPT = String.raw`
       const provider=nativeProvider!==meta.provider?nativeProvider:undefined;
       return '<article class="record-row"><div class="record-heading"><div class="record-name">'+(provider?'<span role="img" aria-label="'+esc(providerName(provider,meta.providerNames||{}))+'">'+logo(provider)+'</span>':'')+'<strong>'+esc(label)+'</strong></div>'+(status?'<span>'+esc(status.label==='Archived'&&typeof status.after==='boolean'?(status.after?'Archived':'Unarchived'):status.after)+'</span>':'')+'</div>'+(chosen.length?'<dl class="record-fields">'+chosen.slice(0,4).map(field=>/^(providers|platforms)$/i.test(field.label)&&Array.isArray(field.after)?'<div><dd>'+providerMarks(field.after,meta)+'</dd></div>':'<div><dt>'+esc(/micros$|cents$/i.test(field.label)?field.label.replace(/ (?:micros|cents)$/i,'')+' · '+(currency||'account units'):field.label)+'</dt><dd>'+recordValue(field.after,field.label.replaceAll(' ','_'),currency)+'</dd></div>').join('')+'</dl>':'')+'</article>';
     }
+    function entityRecordTable(tool) {
+      return /^(?:google|meta|apple|microsoft|tiktok|linkedin|pinterest|reddit|snapchat|spotify|openai|x)_(?:list_)?(?:campaigns|campaign_groups|adgroups|ad_groups|ad_sets|adsets|line_items|adsquads)$/.test(tool||'');
+    }
+
+    function entityFields(row,meta) {
+      const item=object(row?.campaign)?row.campaign:object(row?.ad_group)?row.ad_group:row||{};
+      const name=item.name??item.Name??item.campaign_name??item.adgroup_name??item.id??item.Id;
+      const status=item.effective_status??item.status??item.Status??item.delivery_status??item.configured_status??
+        item.displayStatus??item.systemStatus??item.secondary_status??item.operation_status??item.entity_status;
+      const scope=/(?:campaigns|campaign_groups)$/.test(meta.tool)?item.account_id??item.ad_account_id??item.advertiser_id??meta.accountId:
+        item.campaign_name??item.campaign_id??item.campaignId??item.CampaignId??item.parent_id??meta.accountId;
+      const native=item.dailyBudget??item.DailyBudget??item.daily_budget??(meta.provider==='tiktok'?item.budget:undefined);
+      const daily=object(native?.value)?native.value:native;
+      const minor=meta.provider==='meta'?2:0;
+      const currency=currencyOf(item)||currencyOf({currency:item.currency_code??item.currencyCode??meta.currency});
+      const moneyField=(value,scale)=> {
+        const amount=nativeReportDecimal(object(value)?value.amount??value.Amount??value.value:value,scale);
+        return amount===null?null:amount+' '+(currencyOf(object(value)?value:{})||currency||'account units');
+      };
+      const dailyMicros=item.daily_budget_micros??item.daily_budget_amount_local_micro??item.daily_spend_cap??item.budget?.daily_spend_limit_micros;
+      const totalMicros=item.lifetime_budget_micros??item.total_budget_amount_local_micro??item.lifetime_spend_cap??item.budget?.lifetime_spend_limit_micros;
+      const value=moneyField(dailyMicros,6)??moneyField(daily,minor)??moneyField(totalMicros,6)??moneyField(item.lifetime_budget,minor)??
+        moneyField(item.bid_micros??item.bid_amount_local_micro,6)??moneyField(item.bidAmount??item.bid??item.bid_amount,minor);
+      return [name,workflowLabel(status),scope,value];
+    }
+
+    const entityHeaders=['Name','Status','Scope','Budget or bid'];
+    function recordEntryMarkup(row,index,meta,table) {
+      if(!table)return recordRow(row,index,meta);
+      return '<tr role="row">'+entityFields(row,meta).map((value,i)=>
+        workflowCell(entityHeaders[i],esc(workflowText(value)||(i===0?'Record '+(index+1):'—')),i===0)).join('')+'</tr>';
+    }
+
     function renderRecordPages(message='') {
       const pages=recordPages,area=app.querySelector('[data-record-pages]');if(!pages||!area)return;
       const next=pages.rows.length<1000 && galleryNext(pages.meta);
       let status=area.querySelector('[role="status"]');if(!status){status=document.createElement('p');status.className='operation-note';status.setAttribute('role','status');area.prepend(status);}status.textContent=message;status.hidden=!message;
       let button=area.querySelector('[data-record-more]');
       if(next){if(!button){button=document.createElement('button');button.type='button';button.className='media-button';button.dataset.recordMore='';button.addEventListener('click',loadRecordPage);area.append(button);}button.textContent=pages.busy?'Loading…':'Load more';button.setAttribute('aria-disabled',String(!!pages.busy));}
-      else if(button){const focused=button===document.activeElement;button.remove();if(focused)app.querySelector('[data-record-list]')?.focus({preventScroll:true});}
+      else if(button){const focused=button===document.activeElement;button.remove();if(focused)(app.querySelector('[data-record-list]')?.closest('[role=region]'))?.focus({preventScroll:true});}
     }
     async function loadRecordPage() {
       const pages=recordPages,args=pages && galleryNext(pages.meta);if(!pages||pages.busy||!args||pages.rows.length>=1000)return;
@@ -103,15 +136,16 @@ export const RECORD_UI_SCRIPT = String.raw`
         const response=await callTool(pages.meta.tool,args,60000),value=resultData(response),meta=value?._adport,rows=recordEntries(recordPayload(value));
         hostResults.add(JSON.stringify(value));if(hostResults.size>16)hostResults.delete(hostResults.values().next().value);
         if(recordPages!==pages){state.hasLocalResult=true;return;}
-        if(response?.isError||value?.error||!Array.isArray(rows)||!meta||meta.view!=='records'||!galleryMatches(meta,pages.meta)||galleryScope(meta)!==pages.scope||!object(meta.refresh?.arguments)||galleryStable(meta.refresh.arguments)!==key||!rows.length&&(value.truncated!==false||galleryNext(meta)))throw new Error('The next page could not be confirmed.');
+        if(response?.isError||value?.error||!Array.isArray(rows)||!meta||meta.view!==pages.meta.view||!galleryMatches(meta,pages.meta)||galleryScope(meta)!==pages.scope||!object(meta.refresh?.arguments)||galleryStable(meta.refresh.arguments)!==key||!rows.length&&(value.truncated!==false||galleryNext(meta)))throw new Error('The next page could not be confirmed.');
         const root=app.querySelector('[data-record-list]');if(!root)return;
+        const displayMeta=currencyOf(value)?{...meta,currency:currencyOf(value)}:meta;
         let added=0;
         rows.forEach((row,index)=>{
           const identity=object(row)&&(typeof row.id==='string'&&row.id||typeof row.id==='number'&&Number.isSafeInteger(row.id))?'id:'+String(row.id):key+':'+index;
           const previous=pages.items.get(identity);
-          if(previous){if(galleryStable(previous.row)!==galleryStable(row)){const template=document.createElement('template');template.innerHTML=recordRow(row,previous.index,meta);const node=template.content.firstElementChild;previous.node.replaceWith(node);previous.node=node;previous.row=row;pages.rows[previous.index]=row;}return;}
+          if(previous){if(galleryStable(previous.row)!==galleryStable(row)){const template=document.createElement('template');template.innerHTML=recordEntryMarkup(row,previous.index,displayMeta,pages.table);const node=template.content.firstElementChild;previous.node.replaceWith(node);previous.node=node;previous.row=row;pages.rows[previous.index]=row;}return;}
           if(pages.rows.length>=1000)return;
-          const template=document.createElement('template');template.innerHTML=recordRow(row,pages.rows.length,meta);const node=template.content.firstElementChild;
+          const template=document.createElement('template');template.innerHTML=recordEntryMarkup(row,pages.rows.length,displayMeta,pages.table);const node=template.content.firstElementChild;
           pages.items.set(identity,{row,index:pages.rows.length,node});pages.rows.push(row);root.append(node);added++;
         });
         pages.seen.add(key);pages.meta={...meta,...(!added||pages.rows.length>=1000?{next:undefined}:{})};pages.data=value;
@@ -130,11 +164,16 @@ export const RECORD_UI_SCRIPT = String.raw`
       const parent=object(data.parent)?Object.entries(data.parent).filter(([key])=>/_id$/.test(key)).map(([key,value])=>human(key.replace(/_id$/,''))+' '+value).join(' · '):'';
       const scope=[parent,typeof data.parent_id==='string'&&!parent?data.parent_id:'',meta.accountId].filter(Boolean).join(' · ');
       const clean=object(data)?Object.fromEntries(Object.entries(data).filter(([key])=>key!=='_adport'&&!(key==='creatives'&&meta.view==='records'))):data;
-      const content=rows.length?'<div class="record-list" data-record-list role="region" aria-label="Returned records" tabindex="0">'+rows.slice(0,1000).map((row,index)=>recordRow(row,index,meta)).join('')+'</div>':'<p class="operation-note">No results returned.</p>';
+      const table=Array.isArray(entries)&&entityRecordTable(meta.tool)&&rows.every(object);
+      const displayMeta=currencyOf(data)?{...meta,currency:currencyOf(data)}:meta;
+      const markup=rows.slice(0,1000).map((row,index)=>recordEntryMarkup(row,index,displayMeta,table)).join('');
+      const content=rows.length?table?'<div class="workflow-scroll" role="region" aria-label="Returned records" tabindex="0"><table class="workflow-table workflow-stack" role="table">'+workflowHeader(entityHeaders)+
+        '<tbody data-record-list role="rowgroup">'+markup+'</tbody></table></div>':
+        '<div class="record-list" data-record-list role="region" aria-label="Returned records" tabindex="0">'+markup+'</div>':'<p class="operation-note">No results returned.</p>';
       app.innerHTML=chrome(operationHeader(title,scope,meta.provider)+'<div class="record-notes">'+notices(data)+'</div>'+content+(rows.length>1000?'<p class="operation-note">Showing 1,000 of '+rows.length+' records. The full response is in Details.</p>':'')+'<div data-record-pages></div><details data-record-details><summary>Details'+(entries?' · '+entries.length+' results':'')+'</summary><pre>'+esc(JSON.stringify(clean,null,2))+'</pre></details>','');
-      if(meta.view==='records'&&Array.isArray(entries)&&rows.length&&galleryNext(meta)){
-        recordPages={scope:galleryScope(meta),meta,data,rows:rows.slice(0,1000),items:new Map(),seen:new Set([galleryStable(meta.refresh.arguments)]),busy:false};
-        const nodes=app.querySelectorAll('[data-record-list]>article');recordPages.rows.forEach((row,index)=>{const identity=object(row)&&(typeof row.id==='string'&&row.id||typeof row.id==='number'&&Number.isSafeInteger(row.id))?'id:'+String(row.id):galleryStable(meta.refresh.arguments)+':'+index;recordPages.items.set(identity,{row,index,node:nodes[index]});});
+      if(Array.isArray(entries)&&rows.length&&galleryNext(meta)){
+        recordPages={scope:galleryScope(meta),meta,data,table,rows:rows.slice(0,1000),items:new Map(),seen:new Set([galleryStable(meta.refresh.arguments)]),busy:false};
+        const nodes=app.querySelectorAll('[data-record-list]>*');recordPages.rows.forEach((row,index)=>{const identity=object(row)&&(typeof row.id==='string'&&row.id||typeof row.id==='number'&&Number.isSafeInteger(row.id))?'id:'+String(row.id):galleryStable(meta.refresh.arguments)+':'+index;recordPages.items.set(identity,{row,index,node:nodes[index]});});
         renderRecordPages();
       }
     }

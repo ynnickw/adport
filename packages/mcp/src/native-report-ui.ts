@@ -114,20 +114,12 @@ export const NATIVE_REPORT_UI_SCRIPT = String.raw`
       const missingGoals=arr(data.not_returned_goal_ids).filter(id=>!arr(data.errors).some(error=>error?.goal_id===id&&error?.error_code));
       const absent=missingGoals.length?'<p class="notice">No summary returned for goal'+(missingGoals.length===1?'':'s')+' '+missingGoals.map(esc).join(', ')+'.</p>':'';
       const records=entries.slice(0,1000).map((row,index)=>nativeReportRecord(row,index,meta,payload)),delay=provider==='google'&&entries.some(row=>row.segments?.conversionLagBucket||row.segments?.conversionOrAdjustmentLagBucket);
-      const pageArgs=['ga4_report','gsc_search_analytics'].includes(meta.tool)?galleryNext(meta):null;
+      const pageArgs=['ga4_report','gsc_search_analytics'].includes(meta.tool)?readPageArgs(meta,'data-report-next'):null;
       const chart=reportCharts(records.map(nativeChartRecord),delay?{dimension:'delay',mode:'bars',metric:records.some(record=>record?.fields.some(([key])=>key==='conversions'))?'conversions':undefined}:meta.tool==='apple_impression_share'?{metric:'Impression share',dimension:'search term'}:{});
-      app.innerHTML=chrome(operationHeader(delay?'Conversion delay':title,'',provider)+notices({...data,...(meta.tool==='linkedin_demographic_report'?{notes:[]}:{}),errors:arr(data.errors).filter(error=>!error?.error_code)})+errors+absent+'<section data-native-report>'+(entries.length?chart.html:'<p class="operation-note">'+missing+'</p>')+(meta.tool==='linkedin_demographic_report'?'<p class="report-chart-foot">Approximate demographics · privacy thresholds apply</p>':'')+(entries.length>1000?'<p class="operation-note">Showing 1,000 returned rows. The full response is in Details.</p>':'')+(pageArgs?'<div class="provider-pages"><button type="button" class="media-button" data-report-next>Next page</button></div><p class="provider-message" data-report-page-status role="status"></p>':'')+'<details class="report-data"><summary>Details · '+entries.length+' results</summary>'+(entries.length?'<div class="record-list" role="region" aria-label="Native report data" tabindex="0">'+entries.slice(0,1000).map((row,index)=>nativeReportRow(row,index,meta,payload)).join('')+'</div>':'')+'<pre>'+esc(JSON.stringify(clean,null,2))+'</pre></details></section>','');
+      const analytics=['ga4','gsc'].includes(provider),range=payload?.date_range;
+      const period=analytics&&object(range)?[range.start_date??range.start,range.end_date??range.end].filter(workflowText).join(' – '):'';
+      app.innerHTML=chrome(operationHeader(delay?'Conversion delay':title,analytics?[meta.accountId,period].filter(Boolean).join(' · '):'',provider)+notices({...data,...(meta.tool==='linkedin_demographic_report'?{notes:[]}:{}),errors:arr(data.errors).filter(error=>!error?.error_code)})+errors+absent+'<section data-native-report data-read-page-focus tabindex="-1">'+(entries.length?chart.html:'<p class="operation-note">'+missing+'</p>')+(meta.tool==='linkedin_demographic_report'?'<p class="report-chart-foot">Approximate demographics · privacy thresholds apply</p>':'')+(entries.length>1000?'<p class="operation-note">Showing 1,000 returned rows. The full response is in Details.</p>':'')+readPageMarkup(pageArgs,'data-report-next','data-report-page-status')+'<details class="report-data"><summary>Details · '+entries.length+' results</summary>'+(entries.length?'<div class="record-list" role="region" aria-label="Native report data" tabindex="0">'+entries.slice(0,1000).map((row,index)=>nativeReportRow(row,index,meta,payload)).join('')+'</div>':'')+'<pre>'+esc(JSON.stringify(clean,null,2))+'</pre></details></section>','');
       chart.mount();
-      const snapshot=state.result,button=app.querySelector('[data-report-next]');
-      button?.addEventListener('click',async()=>{
-        if(button.disabled || state.result!==snapshot)return;
-        button.disabled=true;button.textContent='Loading…';
-        try {
-          const response=await callTool(meta.tool,pageArgs,60000),value=resultData(response),nextMeta=value?._adport;
-          if(state.result!==snapshot)return;
-          if(response?.isError || value?.error || !nextMeta || !galleryMatches(nextMeta,meta) || galleryStable(nextMeta.refresh?.arguments)!==galleryStable(pageArgs))throw new Error('The report page could not be confirmed.');
-          acceptResult(response,true);
-        } catch(error) {if(state.result===snapshot) {app.querySelector('[data-report-page-status]').textContent=error?.message||'Could not load the next page.';button.disabled=false;button.textContent='Next page';}}
-      });
+      bindReadPage(meta,pageArgs,'data-report-next','data-report-page-status',value=>Array.isArray(recordPayload(value)?.rows));
     }
 `;

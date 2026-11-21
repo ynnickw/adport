@@ -10,10 +10,13 @@ import { PROVIDER_LOGOS } from './provider-logos.js';
 import { OPERATION_UI_SCRIPT } from './operation-ui.js';
 import { APPLE_REPORT_UI_SCRIPT, APPLE_REPORT_UI_STYLES } from './apple-report-ui.js';
 import { NATIVE_REPORT_UI_SCRIPT, NATIVE_REPORT_UI_STYLES } from './native-report-ui.js';
+import { WORKFLOW_UI, WORKFLOW_UI_STYLES } from './workflow-ui.js';
+import { PLANNING_UI } from './planning-ui.js';
+import { READ_PAGE_UI } from './read-page-ui.js';
 import { REPORT_CHART_SCRIPT, REPORT_CHART_STYLES } from './report-chart-ui.js';
 
-export const ADPORT_UI_URI = 'ui://adport/insight-card-v31.html';
-export const ADPORT_SUMMARY_UI_URI = 'ui://adport/summary-card-v30.html';
+export const ADPORT_UI_URI = 'ui://adport/insight-card-v32.html';
+export const ADPORT_SUMMARY_UI_URI = 'ui://adport/summary-card-v32.html';
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
 export const ADPORT_UI_RESOURCE_DOMAINS = [
   ADPORT_UI_DOMAIN,
@@ -254,6 +257,7 @@ ${RECORD_UI_STYLES}
 ${APPLE_REPORT_UI_STYLES}
 ${NATIVE_REPORT_UI_STYLES}
 ${REPORT_CHART_STYLES}
+${WORKFLOW_UI_STYLES}
 ${RECEIPT_UI_STYLES}
 ${INSIGHT_UI_STYLES}
 ${TREND_UI_STYLES}
@@ -332,8 +336,17 @@ ${TREND_UI_STYLES}
       const dated=rows.some(row=>typeof row.date==='string');
       const chart=dated?'<div class="report-trend"><div class="panel-head"><b>Daily '+esc(labels[metric].toLowerCase())+'</b>'+providerMarks(rows.map(row=>row.provider),meta,'Report platforms')+'</div><div data-report-trend></div><p class="operation-note">Missing or unavailable days remain gaps.</p></div>':'<div class="panel"><div class="panel-head"><b>'+esc(labels[metric])+'</b><span>Top '+ranked.length+' of '+rows.length+' rows</span></div><div class="bars">'+bars+'</div></div>';
       const body=notices(data)+tabs+(rows.length ? (!currency?'<p class="notice">Currency unavailable. These values belong to this account only; no cross-account money total is calculated.</p>':'')+'<div class="kpis" role="group" aria-label="Chart metric">'+kpi('spend','Spend',spend===null?'—':money(spend,currency))+kpi('clicks','Clicks',total(rows,'clicks')===null?'—':compact(total(rows,'clicks')))+kpi('conversions','Conversions',total(rows,'conversions')===null?'—':compact(total(rows,'conversions')))+kpi('roas','ROAS',roas)+'</div>'+chart : '<div class="empty">'+(arr(data.errors).length?'Report unavailable for the requested providers.':'No rows returned for this period.')+'</div>');
+      const table=rows.length?'<details class="report-data"><summary>Returned rows · '+rows.length+'</summary>'+
+        workflowTable(['Entity','Platform','Date','Spend','Clicks','Conversions','ROAS'],rows.map(row=>{
+          const metrics=row.metrics||{},revenue=rowReturn(row);
+          return [row.entity?.name||row.entity?.id,providerName(row.provider,meta.providerNames),row.date,
+            available(metrics.spend)?money(metrics.spend,currency,6):null,metrics.clicks,metrics.conversions,
+            available(revenue)&&metrics.spend>0?(revenue/metrics.spend).toFixed(2)+'×':available(metrics.roas)?metrics.roas+'×':null];
+        }),'Returned performance rows')+'</details>':'';
+      const incomplete=data.summary?.complete===false&&!data.truncated&&arr(data.errors).length===0?
+        '<p class="notice">Totals cover only the returned rows.</p>':'';
       trendResize?.disconnect();
-      app.innerHTML=chrome(body,period+(currency?' · '+currency:''));
+      app.innerHTML=chrome(incomplete+body+table,period+(currency?' · '+currency:''));
       if(dated)mountReportTrend(rows,metric,currency,data);
       app.querySelectorAll('[data-group]').forEach(button=>button.addEventListener('click',()=>{state.reportGroup=choices[Number(button.dataset.group)].key;renderReport(data,meta);}));
       app.querySelectorAll('[data-metric]').forEach(button=>button.addEventListener('click',()=>{state.reportMetric=button.dataset.metric;renderReport(data,meta);}));
@@ -341,6 +354,7 @@ ${TREND_UI_STYLES}
 ${OPERATION_UI_SCRIPT}
 ${RECEIPT_UI_SCRIPT}
 ${RECORD_UI_SCRIPT}
+${READ_PAGE_UI}
 ${APPLE_REPORT_UI_SCRIPT}
 ${NATIVE_REPORT_UI_SCRIPT}
 ${REPORT_CHART_SCRIPT}
@@ -362,16 +376,8 @@ ${MEDIA_UPLOAD_UI}
 ${MEDIA_LIBRARY_UI}
 ${CREATIVE_UI_SCRIPT}
 ${PROVIDER_GALLERY_UI}
-    function renderPlanning(data,meta) {
-      const planning=data.planning || {}, columns=arr(planning.columns).filter(v=>typeof v?.key==='string'&&typeof v?.label==='string').slice(0,12), rows=arr(planning.rows), pageSize=100, pages=Math.max(1,Math.ceil(rows.length/pageSize));
-      state.planningPage=Math.max(0,Math.min(state.planningPage,pages-1));
-      const start=state.planningPage*pageSize, shown=rows.slice(start,start+pageSize);
-      const notes=arr(planning.notes).filter(v=>typeof v==='string').map(v=>'<p class="notice">'+esc(v)+'</p>').join('');
-      const table=columns.length&&shown.length?'<div class="planning-scroll" tabindex="0" role="region" aria-label="Planning estimate table"><table class="planning-table"><thead><tr>'+columns.map(v=>'<th scope="col">'+esc(v.label)+'</th>').join('')+'</tr></thead><tbody>'+shown.map(row=>'<tr>'+columns.map(column=>{const value=row&&Object.hasOwn(row,column.key)?row[column.key]:null;return '<td>'+esc(value==null?'—':value)+'</td>';}).join('')+'</tr>').join('')+'</tbody></table></div>':'<div class="empty">No planning values were returned for this selection.</div>';
-      const controls=pages>1?'<div class="planning-pages"><button type="button" data-planning-page="previous" '+(state.planningPage===0?'disabled':'')+'>Previous rows</button><span class="context">Rows '+(start+1)+'–'+(start+shown.length)+' of '+rows.length+'</span><button type="button" data-planning-page="next" '+(state.planningPage===pages-1?'disabled':'')+'>Next rows</button></div>':'';
-      app.innerHTML=chrome(operationHeader(planning.title || 'Planning estimates','',meta.provider)+table+controls+(data.truncated?'<p class="notice">Partial native response. More estimates may exist.</p>':'')+notes,'Read-only estimates');
-      app.querySelectorAll('[data-planning-page]').forEach(button=>button.addEventListener('click',()=>{if(button.disabled)return;state.planningPage+=button.dataset.planningPage==='next'?1:-1;renderPlanning(data,meta);}));
-    }
+${WORKFLOW_UI}
+${PLANNING_UI}
     function render(result) {
       cancelHold();clearTimeout(expiryTimer);trendResize?.disconnect();
       let data=resultData(result);
@@ -391,6 +397,19 @@ ${PROVIDER_GALLERY_UI}
       if (meta.view === 'accounts') return renderAccounts(data,meta);
       if (meta.view === 'report') return renderReport(data,meta);
       if (meta.view === 'operation') {renderOperation(data,meta);providerGalleryReviewControls(data,meta);return;}
+      if (meta.tool === 'capabilities_list') return renderAvailability(data,meta);
+      if (meta.tool === 'apple_change_history') return renderHistory(data,meta);
+      if (meta.tool === 'apple_recommendations') return renderAppleRecommendations(data,meta);
+      if (meta.tool === 'google_experiment_context') return renderExperiment(data,meta);
+      if (['media_distribution_plan','media_distributions'].includes(meta.tool)) return renderDistribution(data,meta);
+      if (['reddit_pixel_last_fired','pinterest_event_quality','meta_custom_conversion_stats','tiktok_pixel_event_stats',
+        'spotify_dataset_diagnostics','openai_conversion_events'].includes(meta.tool)) return renderMeasurement(data,meta);
+      if (['pinterest_feed_processing_results','pinterest_feed_item_issues','pinterest_catalog_item_batch_status',
+        'pinterest_reconcile_catalog_item_batch','pinterest_local_inventory_batch_status','pinterest_reconcile_local_inventory_batch',
+        'reddit_catalog_imports','reddit_catalog_import_issues','reddit_catalog_import_report','tiktok_catalog_feed_log',
+        'tiktok_catalog_product_log','tiktok_catalog_video_log'].includes(meta.tool)) return renderCatalogProcessing(data,meta);
+      const projected=planningProjection(data,meta);
+      if (projected) return renderPlanning(data,meta,projected);
       if (meta.view === 'records') return renderRecords(data,meta);
       if (meta.view === 'receipt') return renderReceipt(data,meta);
       if (meta.view === 'creatives') return renderCreatives(data,meta);
@@ -405,13 +424,13 @@ ${PROVIDER_GALLERY_UI}
     function acceptResult(result,local=false) {
       if (!result || typeof result !== 'object') return;
       const incoming=resultData(result);
-      if(!local && (providerGalleryIgnoreEcho(incoming) || mediaLibraryIgnoreEcho(incoming) || recordPagesIgnoreEcho(incoming))) return;
+      if(!local && (providerGalleryIgnoreEcho(incoming) || mediaLibraryIgnoreEcho(incoming) || recordPagesIgnoreEcho(incoming) || readPageIgnoreEcho(incoming) || distributionIgnoreEcho(incoming))) return;
       if(!local && (app.querySelector('[data-media-gallery]') && uploads.items.length>0 && ['media_prepare_upload','media_finalize_upload','media_get'].includes(incoming?._adport?.tool || result._meta?.adport?.tool) || mediaLibrary?.loading && incoming?._adport?.tool==='media_list' && mediaLibraryProject(incoming,incoming._adport)===mediaLibrary.project)) return;
       const fingerprint=JSON.stringify(incoming);
       // Host state updates can echo an old tool result after a local edit/apply.
       if (!local && state.hasLocalResult && hostResults.has(fingerprint)) return;
       if (local) state.hasLocalResult=true;
-      else rememberHostResult(fingerprint);
+      else {rememberHostResult(fingerprint);readPageHistory=null;}
       clearTimeout(resultWait);
       // ChatGPT can deliver the same result through both supported bridges.
       // Do not reset an open disclosure when the second copy arrives.
