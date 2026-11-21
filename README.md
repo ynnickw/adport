@@ -1,7 +1,7 @@
 <div align="center">
   <img src="website/favicon.svg" width="56" height="56" alt="Adport" />
   <h1>Adport</h1>
-  <p><strong>Manage your ad accounts from the terminal or any AI agent.</strong><br />11 ad providers. One tool registry. Every write previewed first.</p>
+  <p><strong>Manage your ad accounts from the terminal or any AI agent.</strong><br />12 ad providers. One tool registry. Every write previewed first.</p>
   <p>
     <a href="https://github.com/ynnickw/adport/actions/workflows/ci.yml"><img src="https://github.com/ynnickw/adport/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
     <a href="https://www.npmjs.com/package/adport"><img src="https://img.shields.io/npm/v/adport" alt="npm version" /></a>
@@ -90,7 +90,7 @@ Local state lives under `${ADPORT_HOME:-~/.config/adport}`. Credentials are stor
 
 ## Providers
 
-All 11 providers have local connection commands, normalized reports, and guarded write tools. Coverage varies by provider; implementation and contract tests do not establish approval or successful live execution for every operation.
+All 12 advertising providers have local connection commands, normalized reports, and guarded write tools. Coverage varies by provider; implementation and contract tests do not establish approval or successful live execution for every operation.
 
 | Provider | Connection ID | Capabilities and setup |
 | --- | --- | --- |

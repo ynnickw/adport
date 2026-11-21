@@ -198,4 +198,21 @@ export const providers = [
     guide: 'docs/providers/x.md', reference: 'https://docs.x.com/x-ads-api/getting-started/step-by-step-guide',
     related: ['reddit', 'meta', 'linkedin'],
   },
+  {
+    id: 'openai', slug: 'openai-ads', name: 'OpenAI Ads', label: 'Campaigns and reporting for ads in ChatGPT.',
+    description: 'Connect OpenAI Ads to Adport MCP with an Advertiser API key. Report on ads in ChatGPT, inspect conversion tracking, and preview campaign and spend-limit changes.',
+    intro: 'Review how your ads in ChatGPT perform from your AI assistant. Inspect campaigns and conversion tracking, then preview supported changes before you approve them.',
+    workflows: [
+      ['Review campaign performance', 'Report on spend, impressions, clicks, and available conversion metrics at the account, campaign, ad-group, or ad level.'],
+      ['Check conversion tracking', 'List conversion sources and goals, inspect recent event activity, and read attributed conversions and sales where available.'],
+      ['Preview campaign and spend-limit changes', 'Create a paused campaign, preview status changes, or adjust an existing daily or lifetime spend limit. Adport checks your rules before applying the approved change.'],
+    ],
+    prompts: ['Compare OpenAI Ads campaign spend and conversions for the last two weeks.', 'Show the conversion goals and sources connected to my OpenAI Ads campaigns.', 'Preview a spend-limit change for campaign CAMPAIGN_ID. Keep the existing limit type.'],
+    prerequisites: ['An OpenAI Ads account with Advertiser API access.', 'An Advertiser API key for the specific ad account, created in Ads Manager settings.', 'For Adport Cloud, an owner or admin who can connect the provider and enable the ad account.'],
+    connection: 'Set OPENAI_ADS_API_KEY in your shell before running this command. To use Cloud, enter the Advertiser API key in Adport under Ad platforms → OpenAI Ads, then enable the account.',
+    nuance: 'Conversion totals can include both click-through and view-through conversions. Report dates use the ad account’s time zone. Adport previews changes locally, and OpenAI Ads validates the write when it runs.',
+    faq: ['Can I use one key for several ad accounts?', 'Each Advertiser API key is tied to one ad account. Adport currently supports Advertiser API keys.'],
+    guide: 'docs/providers/openai.md', reference: 'https://developers.openai.com/ads/api-overview',
+    related: ['google', 'meta', 'reddit'],
+  },
 ];

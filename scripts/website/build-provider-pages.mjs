@@ -63,14 +63,16 @@ const homeSetup = () => `<!-- agent-setup:start -->
             ${setupTabs('your ads', { home: true })}
             <p class="setup-foot">Adport Cloud is currently invite-only. <a class="text-link" href="/#waitlist">Join the waitlist</a></p>
           </div>
-          <aside class="setup-card setup-local" aria-labelledby="local-title">
+          <aside class="setup-card setup-local" id="local" aria-labelledby="local-title">
             <div class="setup-card-head"><h3 id="local-title">Run it locally</h3><span class="setup-badge setup-badge-go">Open source</span></div>
             <p class="setup-sub">Apache-2.0 and free. Bring your own credentials; Node.js 22.13 or newer.</p>
             <ol class="steps">
               <li><span class="step-title">Install the CLI</span>${cmd('npm install -g adport')}</li>
+              <li><span class="step-title">Try a report with demo data</span>${cmd('adport --demo report --range last_7_days')}</li>
               <li><span class="step-title">Connect a platform</span>${cmd('adport connect google')}</li>
               <li data-agent-tabs><span class="step-title">Add it to your agent</span>${localTabs()}</li>
             </ol>
+            <p class="setup-foot">${github}</p>
           </aside>
         </div>
       </section>
@@ -100,14 +102,14 @@ function document({ title, description, pathname, content, name }) {
   <meta property="og:title" content="${escape(title)}" />
   <meta property="og:description" content="${escape(description)}" />
   <meta property="og:url" content="${canonical}" />
-  <meta property="og:image" content="https://www.adport.dev/og-image.png?v=7" />
+  <meta property="og:image" content="https://www.adport.dev/og-image.png?v=8" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="og:image:alt" content="Adport — Your agent proposes. You see the diff. Then it runs." />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="${escape(title)}" />
   <meta name="twitter:description" content="${escape(description)}" />
-  <meta name="twitter:image" content="https://www.adport.dev/og-image.png?v=7" />
+  <meta name="twitter:image" content="https://www.adport.dev/og-image.png?v=8" />
   <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" />
   <link rel="preload" href="/fonts/overpass-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/site.css" />
@@ -204,11 +206,11 @@ function providerPage(p) {
 }
 
 const output = new Map(providers.map(p => [`providers/${p.slug}.html`, providerPage(p)]));
-output.set('providers.html', document({ title: 'Ads MCP integrations for Claude, Cursor & ChatGPT | Adport', description: 'Explore 11 ad platform MCP integrations. Connect ad accounts to ChatGPT, Claude, Codex, Cursor, or any MCP client with Adport MCP.', pathname: '/providers', name: 'Ad integrations', content: `<main class="provider" id="main">
+output.set('providers.html', document({ title: 'Ads MCP integrations for Claude, Cursor & ChatGPT | Adport', description: 'Explore ad platform integrations for ChatGPT, Claude, Codex, Cursor, and local MCP clients. Check the setup and permissions for each platform.', pathname: '/providers', name: 'Ad integrations', content: `<main class="provider" id="main">
     <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/">Adport</a><span aria-hidden="true">/</span><span aria-current="page">Integrations</span></nav>
     <section class="p-directory-hero" aria-labelledby="directory-title">
-      <h1 id="directory-title">Every ad platform. One agent.</h1>
-      <p class="lede">Eleven providers behind one open-source MCP server. Find the setup, capabilities, and reporting details for your platform. Connect ChatGPT, Claude, Codex, Cursor, or any MCP client with MCP and OAuth, or run locally with npm for stdio-compatible clients.</p>
+      <h1 id="directory-title">Ad platform integrations</h1>
+      <p class="lede">Find setup instructions, supported changes, and reporting details for ${providers.length} advertising integrations. Use your own provider credentials with the open-source CLI and local MCP server. Cloud access is by invitation, and connection requirements vary by platform.</p>
     </section>
     <section aria-label="Advertising integrations"><ul class="platform-grid p-directory p-directory-all">${providers.map(card).join('')}<li class="platform-request"><a href="https://github.com/ynnickw/adport/issues" rel="noreferrer"><span class="request-plus" aria-hidden="true"></span><span class="pg-text"><span class="pg-name">Request a platform</span><span class="pg-label">Tell us which ad platform your agent should reach next.</span></span></a></li></ul></section>
     <section class="p-section p-boundary" aria-labelledby="boundary-title">

@@ -48,7 +48,7 @@
   .hero-signup { position: relative; }
   .hero-signup-meta { position: absolute; top: calc(100% + 0.4rem); left: 0.5rem; right: 0; margin-top: 0; }
   .hero-signup .waitlist-status { position: absolute; top: calc(100% + 3.4rem); left: 0.5rem; margin: 0; }
-  .hero-actions:has(.hero-signup.is-open) > .github-link { display: none; }
+  .hero-actions:has(.hero-signup.is-open) > .hero-local-link { display: none; }
 }
 .hero-signup .waitlist-form[data-joined] input,
 .hero-signup .waitlist-form[data-joined] .hero-signup-close { display: none; }

@@ -68,6 +68,9 @@ test('provider instruction tabs have matching labels and panels with no-JavaScri
 });
 
 test('local setup offers Claude Code, Codex and Cursor, each with its mark and command', () => {
+  assert(home.includes('href="#local">Try the open-source CLI</a>'));
+  assert(home.includes('id="local" aria-labelledby="local-title"'));
+  assert(home.includes('data-copy-command="adport --demo report --range last_7_days"'));
   for (const [id, command] of [['claude-code', 'claude mcp add --transport stdio adport -- adport mcp'], ['codex', 'codex mcp add adport -- adport mcp'], ['cursor', '&quot;command&quot;: &quot;adport&quot;']]) {
     const tab = home.match(new RegExp(`<button class="local-tab"[^>]*id="local-tab-${id}"[\\s\\S]*?</button>`))?.[0];
     assert(tab?.includes(`agent-brand-${id}`), `local ${id} tab is missing its mark`);
@@ -132,9 +135,9 @@ test('tabs switch by click and keyboard, wrap, and keep exactly one active panel
   key(2, 'Home', 0); key(0, 'End', 2);
 });
 
-test('covers all eleven advertising providers exactly once', () => {
-  assert.deepEqual(providers.map(p => p.id).sort(), ['apple', 'google', 'linkedin', 'meta', 'microsoft', 'pinterest', 'reddit', 'snapchat', 'spotify', 'tiktok', 'x']);
-  assert.equal(new Set(providers.map(p => p.slug)).size, 11);
+test('covers all twelve advertising providers exactly once', () => {
+  assert.deepEqual(providers.map(p => p.id).sort(), ['apple', 'google', 'linkedin', 'meta', 'microsoft', 'openai', 'pinterest', 'reddit', 'snapchat', 'spotify', 'tiktok', 'x']);
+  assert.equal(new Set(providers.map(p => p.slug)).size, 12);
 });
 
 test('titles, descriptions, editorial introductions, and workflow text are distinct', () => {
