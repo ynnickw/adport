@@ -323,7 +323,7 @@
 @media (max-width: 40rem) {
   .logo-strip, .agent-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 1rem; }
   .video-frame { border-radius: 1rem; margin-inline: -0.25rem; }
-  .gate-head { flex-direction: column; align-items: stretch; }
+  .gate-head { flex-flow: column nowrap; align-items: stretch; }
   .scenarios { overflow-x: auto; scrollbar-width: none; }
   .scenario { flex: 1 0 auto; padding-inline: 0.75rem; font-size: 0.8125rem; }
   .gate .console { margin-inline: -0.25rem; }
