@@ -352,6 +352,8 @@ button { font: inherit; color: inherit; }
 .agent-instructions .cmd > code, .agent-instructions .cmd pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .agent-instructions .agent-note { color: var(--muted); font-size: 0.875rem; }
 .agent-instructions .text-link { font-size: 0.9375rem; }
+.agent-manual { margin-top: 0.85rem; }
+.agent-manual summary { width: fit-content; color: var(--ink-soft); font-size: 0.875rem; cursor: pointer; }
 .agent-setup .local-option { max-width: 46rem; margin-top: 1rem; color: var(--muted); font-size: 0.875rem; line-height: 1.6; }
 
 /* Cloud signup and footer ---------------------------------------------- */

@@ -1,7 +1,7 @@
-import { AGENT_SETUPS } from '../../apps/cloud/lib/agent-setups.mjs';
-export { cursorInstallUrl } from '../../apps/cloud/lib/agent-setups.mjs';
+import { ADPORT_CLOUD_URL, AGENT_SETUPS } from '../../apps/cloud/lib/agent-setups.mjs';
+export { CHATGPT_PLUGIN_URL, cursorInstallUrl } from '../../apps/cloud/lib/agent-setups.mjs';
 
-export const mcpBaseUrl = 'https://app.adport.dev';
+export const mcpBaseUrl = ADPORT_CLOUD_URL;
 export const cloudSignInUrl = `${mcpBaseUrl}/login`;
 export const cloudSignupUrl = `${cloudSignInUrl}?mode=signup`;
 export const agentSetups = AGENT_SETUPS.map(setup => ({

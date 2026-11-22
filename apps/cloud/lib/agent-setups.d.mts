@@ -11,4 +11,6 @@ export interface AgentSetup {
 }
 
 export const AGENT_SETUPS: AgentSetup[];
+export const ADPORT_CLOUD_URL: string;
+export const CHATGPT_PLUGIN_URL: string;
 export function cursorInstallUrl(baseUrl: string): string;
