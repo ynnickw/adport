@@ -1,4 +1,7 @@
 // Shared by the Cloud dashboard, onboarding, and generated public setup guides.
+export const ADPORT_CLOUD_URL = 'https://app.adport.dev';
+export const CHATGPT_PLUGIN_URL = 'https://chatgpt.com/plugins/plugin_asdk_app_6ac8e34c80f88191ab5020c82b00e652';
+
 export const AGENT_SETUPS = [
   {
     id: 'chatgpt', name: 'ChatGPT', provider: 'openai', label: 'Web',

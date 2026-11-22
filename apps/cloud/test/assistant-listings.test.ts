@@ -1,9 +1,14 @@
 import { expect, it } from 'vitest';
 import { approvedAssistantListings } from '@/lib/assistant-listings';
 
-it('uses manual setup until approved listing URLs are configured', () => {
+it('uses manual setup without an approved listing on a self-hosted deployment', () => {
   expect(approvedAssistantListings({})).toEqual({});
   expect(approvedAssistantListings({ claude: 'https://claude.ai/directory/test', chatgpt: 'https://chatgpt.com/plugins/test' })).toEqual({ claude: 'https://claude.ai/directory/test', chatgpt: 'https://chatgpt.com/plugins/test' });
+});
+it('uses the production plugin only on Adport Cloud unless an approved listing is configured', () => {
+  expect(approvedAssistantListings({ baseUrl: 'https://app.adport.dev/' }).chatgpt).toBe('https://chatgpt.com/plugins/plugin_asdk_app_6ac8e34c80f88191ab5020c82b00e652');
+  expect(approvedAssistantListings({ baseUrl: 'https://app.adport.dev.example.com' })).toEqual({});
+  expect(approvedAssistantListings({ baseUrl: 'https://app.adport.dev', chatgpt: 'https://chatgpt.com/plugins/override' }).chatgpt).toBe('https://chatgpt.com/plugins/override');
 });
 it.each(['http://claude.ai/directory/test', 'https://claude.ai.evil.test/directory/test', 'https://claude.ai@evil.test/test', 'javascript:alert(1)', 'https://claude.ai/', 'https://claude.ai:8443/test'])('rejects unsafe or unusable listing: %s', claude => {
   expect(approvedAssistantListings({ claude })).toEqual({});

@@ -24,7 +24,7 @@ Onboarding carries the chosen assistant from welcome to a compact connection pan
 
 **Set up later** records `skipped_at`, independently of `completed_at`. Skipped projects keep a small setup checklist on Overview. Dismissal is stored per user/project in that browser; the permanent **Connect assistant** button remains available and opens the same connection panel in a modal. Its status refreshes while visible and when the user returns to the tab.
 
-Official listing buttons are opt-in server configuration: `ADPORT_APPROVED_CHATGPT_LISTING_URL` and `ADPORT_APPROVED_CLAUDE_LISTING_URL`. Set each only after the Adport listing is approved and public. Destinations must use HTTPS on `chatgpt.com` or `claude.ai`, respectively. Empty or invalid configuration uses existing manual setup. No directory approval is implied and no public landing-page app links are introduced.
+Adport Cloud links to the published ChatGPT plugin when `ADPORT_CLOUD_BASE_URL` is `https://app.adport.dev`. Deployments can supply their own approved listing with `ADPORT_APPROVED_CHATGPT_LISTING_URL` or `ADPORT_APPROVED_CLAUDE_LISTING_URL`. Destinations must use HTTPS on `chatgpt.com` or `claude.ai`, respectively. Invalid configuration falls back to manual setup.
 
 ## Security and lifecycle
 

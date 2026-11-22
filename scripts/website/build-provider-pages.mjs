@@ -3,7 +3,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { providers } from './website-providers.mjs';
-import { agentSetups, cloudSignInUrl, cloudSignupUrl, mcpBaseUrl, cursorInstallUrl } from './website-agent-setups.mjs';
+import { agentSetups, CHATGPT_PLUGIN_URL, cloudSignInUrl, cloudSignupUrl, mcpBaseUrl, cursorInstallUrl } from './website-agent-setups.mjs';
 import { claudeGuideForProvider } from './resource-content/claude-connections.mjs';
 import { chatgptGuideForProvider } from './resource-content/chatgpt-connections.mjs';
 import { workflowClusters } from './website-resources.mjs';
@@ -34,14 +34,22 @@ const href = provider => `/providers/${provider.slug}`;
 const code = text => `<pre><code>${escape(text)}</code></pre>`;
 const copy = (text, label) => `<button class="text-action copy-chip" type="button" data-copy-command="${escape(text)}"><span class="copy-label" aria-live="polite">${escape(label)}</span></button>`;
 const cmd = (text, label = 'Copy') => `<div class="cmd${text.includes('\n') ? ' cmd-block' : ''}">${text.includes('\n') ? code(text) : `<code>${escape(text)}</code>`}${copy(text, label)}</div>`;
-// The home page keeps each assistant to one instruction, its command and the next step;
-// the provider pages carry the full guide.
-const homePanel = agent => `<div class="agent-instructions" id="agent-panel-${agent.id}" role="tabpanel" aria-labelledby="agent-tab-${agent.id}" tabindex="0"><p>${escape(agent.instructions)}${agent.open ? ` <a class="text-link" href="${escape(agent.open.href)}">${escape(agent.open.label)} ↗</a>` : agent.id === 'cursor' ? ` <a class="text-link" href="${escape(cursorInstallUrl(mcpBaseUrl))}">Add to Cursor ↗</a>` : ''}</p>${cmd(agent.command(mcpBaseUrl), 'Copy')}<p class="agent-next">${escape(agent.nextStep)}</p>${agent.id === 'codex' ? cmd('codex mcp login adport', 'Copy') : ''}</div>`;
+const setupLink = (url, label) => `<a class="text-link" href="${escape(url)}">${escape(label)} ↗</a>`;
+function agentPanel(agent, context, home) {
+  const isCursor = agent.id === 'cursor';
+  const open = isCursor ? setupLink(cursorInstallUrl(mcpBaseUrl), 'Add to Cursor') : agent.open ? setupLink(agent.open.href, agent.open.label) : '';
+  const manual = `<p>${escape(agent.instructions)}${home && open ? ` ${open}` : ''}</p>${!home && open ? `<p>${open}</p>` : ''}${!home && isCursor ? '<p>Add this configuration to ~/.cursor/mcp.json for manual setup.</p>' : ''}${cmd(agent.command(mcpBaseUrl), home ? 'Copy' : `Copy ${agent.name} setup`)}<p class="agent-next">${escape(agent.nextStep)}</p>${agent.id === 'codex' ? cmd('codex mcp login adport', home ? 'Copy' : 'Copy sign-in command') : ''}`;
+  const heading = home ? '' : `<h3>Use ${escape(context)} in ${agent.id === 'mcp' ? 'any MCP client' : agent.name}</h3>`;
+  const content = agent.id === 'chatgpt'
+    ? `<p>${setupLink(CHATGPT_PLUGIN_URL, 'Add Adport to ChatGPT')}</p><p class="agent-next">Sign in to Adport and choose the project to connect. Select Adport in your conversation.</p><details class="agent-manual"><summary>Manual MCP setup</summary>${manual}<p class="agent-note">Your ChatGPT workspace must allow custom MCP plugins. ${setupLink(agent.docsUrl, 'ChatGPT custom MCP documentation')}</p></details>`
+    : manual;
+  return `<div class="agent-instructions" id="agent-panel-${agent.id}" role="tabpanel" aria-labelledby="agent-tab-${agent.id}" tabindex="0">${heading}${content}</div>`;
+}
 const setupTabs = (context = 'your ads', { home = false } = {}) => `<div class="agent-setup" data-agent-tabs>${home ? '' : `
   <p class="agent-setup-intro">Adport Cloud is in public early access. <a href="${cloudSignupUrl}">Create a free account</a> to connect your ad accounts.</p>
-  <p class="agent-setup-intro">Use the same Adport MCP endpoint and OAuth sign-in in each client. First connect your ad accounts in your Adport workspace. No platform secrets belong in chat.</p>`}
+  <p class="agent-setup-intro">Connect your ad accounts in Adport, then choose your AI assistant below.</p>`}
   <div class="agent-tab-list" role="tablist" aria-label="AI tool setup instructions" hidden>${agentSetups.map((agent, i) => `<button class="agent-tab" type="button" role="tab" id="agent-tab-${agent.id}" aria-controls="agent-panel-${agent.id}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}">${agent.logo ? agentLogo(agent.logo) : ''}<span>${agent.name}</span></button>`).join('')}</div>
-  ${agentSetups.map(agent => home ? homePanel(agent) : `<div class="agent-instructions" id="agent-panel-${agent.id}" role="tabpanel" aria-labelledby="agent-tab-${agent.id}" tabindex="0"><h3>Use ${escape(context)} in ${agent.id === 'mcp' ? 'any MCP client' : agent.name}</h3><p>${escape(agent.instructions)}</p>${agent.open ? `<p><a class="text-link" href="${escape(agent.open.href)}">${escape(agent.open.label)} ↗</a></p>` : agent.id === 'cursor' ? `<p><a class="text-link" href="${escape(cursorInstallUrl(mcpBaseUrl))}">Add to Cursor ↗</a></p><p>Or add this configuration to ~/.cursor/mcp.json:</p>` : ''}${cmd(agent.command(mcpBaseUrl), `Copy ${agent.name} setup`)}<p class="agent-next">${escape(agent.nextStep)}</p>${agent.id === 'codex' ? cmd('codex mcp login adport', 'Copy sign-in command') : ''}${agent.id === 'chatgpt' ? '<p class="agent-note">Your ChatGPT workspace must allow custom MCP plugins. ChatGPT connects over HTTP; the local stdio command is for clients that can launch a process.</p><p><a class="text-link" href="https://developers.openai.com/api/docs/guides/custom-mcp-server">ChatGPT custom MCP documentation</a></p>' : ''}</div>`).join('')}${home ? '' : '\n  <p class="local-option">Use the MCP URL from AI assistants if you run your own Adport deployment. Client settings, workspace permissions, and advertising-platform approvals still apply.</p>'}
+  ${agentSetups.map(agent => agentPanel(agent, context, home)).join('')}${home ? '' : '\n  <p class="local-option">Use the MCP URL from AI assistants if you run your own Adport deployment. Client settings, workspace permissions, and advertising-platform approvals still apply.</p>'}
 </div>`;
 // The local server registers the same way in each CLI agent; one tab per agent, with its mark.
 const localAgents = [
@@ -54,7 +62,7 @@ const homeSetup = () => `<!-- agent-setup:start -->
       <section class="setup" id="setup" aria-labelledby="agent-title">
         <div class="section-intro">
           <p class="section-kicker">Get started</p>
-          <h2 id="agent-title">One URL. Your choice of AI.</h2>
+          <h2 id="agent-title">Connect the AI you use.</h2>
           <p>Add Adport to the AI you already use. Every write still goes through the same gate.</p>
         </div>
         <div class="setup-layout">

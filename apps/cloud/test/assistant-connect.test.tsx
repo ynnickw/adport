@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { AssistantConnect } from '@/components/assistant-connect';
+import { ADPORT_CLOUD_URL, CHATGPT_PLUGIN_URL } from '@/lib/agent-setups.mjs';
 import { approvedAssistantListings } from '@/lib/assistant-listings';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
@@ -22,6 +23,14 @@ describe('assistant connection navigation', () => {
     expect(html).toContain('Copy URL');
     expect(html).not.toContain('from the official');
     expect(html).not.toContain('Set up manually');
+  });
+
+  it('links the default hosted ChatGPT setup to the published Adport plugin', () => {
+    const listings = approvedAssistantListings({ baseUrl: ADPORT_CLOUD_URL });
+    const html = renderToStaticMarkup(<AssistantConnect baseUrl={ADPORT_CLOUD_URL} projectName="Product marketing" listings={listings} />);
+    expect(html).toContain(`href="${CHATGPT_PLUGIN_URL}"`);
+    expect(html).toContain('Add to ChatGPT');
+    expect(html).not.toContain('Copy URL');
   });
 
   it.each([['chatgpt', 'ChatGPT', 'https://chatgpt.com/plugins/approved-adport'], ['claude', 'Claude', 'https://claude.ai/directory/approved-adport']] as const)('enables the official %s connector button once its approved URL is configured', (initialAgent, name, url) => {

@@ -6,7 +6,7 @@ import test from 'node:test';
 import { runInNewContext } from 'node:vm';
 import { providers } from './website-providers.mjs';
 import { AGENT_SETUPS } from '../../apps/cloud/lib/agent-setups.mjs';
-import { agentSetups, cloudSignupUrl, mcpBaseUrl } from './website-agent-setups.mjs';
+import { agentSetups, CHATGPT_PLUGIN_URL, cloudSignupUrl, mcpBaseUrl } from './website-agent-setups.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const site = path.join(root, 'website');
@@ -96,13 +96,19 @@ test('homepage and provider pages link directly to public Cloud signup', () => {
   for (const [file, html] of [['index.html', home], ...pages]) {
     assert(html.includes(`class="header-cta" href="${cloudSignupUrl}">Start free</a>`), file);
     assert(html.includes(`class="primary-action" href="${cloudSignupUrl}">Start free</a>`), file);
-    if (file !== 'providers.html') {
-      const panel = html.match(/id="agent-panel-chatgpt"[\s\S]*?<\/div>/)?.[0];
-      assert(panel && /choose OAuth/i.test(panel), file);
-      assert(panel.includes(`${mcpBaseUrl}/mcp`), file);
-    }
   }
   assert(home.includes('id="waitlist" aria-labelledby="cloud-cta-title"'), 'existing waitlist links should reach the Cloud signup section');
+});
+
+test('the homepage and provider pages prioritize the published ChatGPT plugin', () => {
+  for (const [file, html] of [['index.html', home], ...pages.filter(([file]) => file.startsWith('providers/'))]) {
+    const panel = html.match(/id="agent-panel-chatgpt"[\s\S]*?(?=id="agent-panel-codex")/)?.[0];
+    assert(panel, file);
+    const [primary, manual] = panel.split('<details class="agent-manual">');
+    assert(primary.includes(`href="${CHATGPT_PLUGIN_URL}">Add Adport to ChatGPT`), file);
+    assert(manual?.includes('choose OAuth'), file);
+    assert(manual.includes(`${mcpBaseUrl}/mcp`), file);
+  }
 });
 
 test('tabs switch by click and keyboard, wrap, and keep exactly one active panel', async () => {
@@ -163,7 +169,7 @@ for (const p of providers) {
     assert(html.includes(`adport accounts --provider ${p.id}`));
     assert(html.includes('claude mcp add --transport stdio adport -- adport mcp'));
     assert(html.includes('Cloud is in public early access'));
-    assert(html.includes('Use the same Adport MCP endpoint and OAuth sign-in'));
+    assert(html.includes('Connect your ad accounts in Adport, then choose your AI assistant below.'));
     assert(html.includes('Provider access and approval are separate'));
     assert(html.includes('pending-operation token'));
     assert(html.includes('aria-live="polite"'));

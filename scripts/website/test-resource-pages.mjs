@@ -7,7 +7,7 @@ import { articles, articlesInCluster, clusters, sources, workflowClusters } from
 import { providers } from './website-providers.mjs';
 import { escape } from './resource-content/shared.mjs';
 import { chatgptGuideForProvider } from './resource-content/chatgpt-connections.mjs';
-import { agentSetups, mcpBaseUrl } from './website-agent-setups.mjs';
+import { agentSetups, CHATGPT_PLUGIN_URL, mcpBaseUrl } from './website-agent-setups.mjs';
 const site = fileURLToPath(new URL('../../website/', import.meta.url));
 const sitemap = await readFile(path.join(site, 'sitemap.xml'), 'utf8');
 const home = await readFile(path.join(site, 'index.html'), 'utf8');
@@ -36,6 +36,7 @@ test('ChatGPT setup matches the shared client flow and reuses one Google guide U
   const setup = guides.find(a => a.slug === 'connect-ads-to-chatgpt-mcp');
   const setupHtml = setup.sections.map(s => s.html).join('');
   const client = agentSetups.find(a => a.id === 'chatgpt');
+  assert(setupHtml.includes(`href="${CHATGPT_PLUGIN_URL}"`));
   assert(setupHtml.includes(client.instructions));
   assert(setupHtml.includes(client.nextStep));
   assert(setupHtml.includes(client.command(mcpBaseUrl)));
@@ -46,6 +47,7 @@ test('ChatGPT setup matches the shared client flow and reuses one Google guide U
     assert(guide, slug);
     assert(guide.marks.includes(provider) && guide.marks.includes('chatgpt'), slug);
     const body = guide.sections.map(s => s.html).join('');
+    if (provider === 'google') assert(body.includes(`href="${CHATGPT_PLUGIN_URL}"`), slug);
     assert(!/claude mcp add|adport mcp --http/.test(body), slug);
     assert(body.includes('/resources/connect-ads-to-chatgpt-mcp'), slug);
     const integration = await readFile(path.join(site, `providers/${provider}-ads.html`), 'utf8');
