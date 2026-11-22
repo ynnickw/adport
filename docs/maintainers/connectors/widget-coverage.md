@@ -76,10 +76,12 @@ Unreported currencies stay account units and Spotify's privacy sentinel remains
 suppressed. Microsoft offline reports remain upload diagnostics with exact counts,
 ratios, missing summaries and per-goal errors. Native reports never invent totals,
 combine attribution actions, or add edit controls. All source metrics remain in
-Details. Reports lead with comparison bars or dated series, with the complete
-record rows and source response inside one collapsed Details disclosure. Google
-conversion-lag buckets receive readable delay labels; distinct returned rows are
-not summed into invented totals. Non-metric GAQL queries retain the records view.
+Details. GAQL shows large, multi-metric or ambiguous comparisons as a table in
+query order. Returned keywords, search terms, IDs and segments identify rows. Spend
+uses the reported currency when available, with raw precision in Details. Small
+comparisons, identifiable daily trends and conversion delays can use charts. Other
+native reports lead with comparison bars or dated series. Non-metric GAQL queries
+use the records view.
 Apple shows one provider-reported total and campaign comparisons. Different
 currencies remain separate; absent days break trend lines and suppressed values
 never turn into zero bars. Impression-share bounds remain intervals, not midpoint
@@ -140,8 +142,8 @@ Attempts are keyed to the pending token. A host echo cannot offer a second apply
 and a late response cannot replace a newer preview. Host facts include resource
 receipts and project/account scope, but never a reusable pending token.
 
-The current resources are `ui://adport/insight-card-v32.html` and
-`ui://adport/summary-card-v32.html`. Previously published URIs remain available
+The current resources are `ui://adport/insight-card-v33.html` and
+`ui://adport/summary-card-v33.html`. Previously published URIs remain available
 for cached conversations. Existing creative resource domains keep their configured CSP; provider logos
 and scripts are embedded.
 

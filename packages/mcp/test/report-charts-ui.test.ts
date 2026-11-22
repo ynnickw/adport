@@ -76,6 +76,98 @@ describe('chart-first provider reports', () => {
     } finally { dom.window.close(); }
   });
 
+  it('shows 162 Google search terms in query order with their spend and outcomes', () => {
+    const rows = Array.from({ length: 162 }, (_, i) => ({
+      campaign: { name: 'Search' }, adGroup: { name: 'Ad group 1' },
+      searchTermView: { searchTerm: i === 0 ? '<example term>' : 'Search term ' + (i + 1) },
+      segments: { keyword: { info: { text: 'Shared keyword' } } },
+      metrics: { costMicros: i === 0 ? '17263597' : '299012998', clicks: String(i + 1), conversions: 0, ctr: 0.0625 },
+    }));
+    const { dom, document, callTool } = mount('google_gaql', { rows, row_count: rows.length });
+    try {
+      expect(document.querySelector('h2')?.textContent).toBe('Search term performance');
+      expect(document.querySelector('.operation-heading p')?.textContent).toContain('Ad group 1');
+      const table = document.querySelector('table')!;
+      expect(table.closest('details')).toBeNull();
+      expect([...table.querySelectorAll('thead th')].map(node => node.textContent)).toEqual(['Search term', 'Spend', 'Conversions', 'Clicks', 'CTR']);
+      expect(table.querySelectorAll('tbody tr')).toHaveLength(162);
+      expect([...table.querySelector('tbody tr')!.children].map(cell => cell.textContent)).toEqual(['<example term>', '17.26', '0', '1', '6.25%']);
+      expect(table.querySelector('tbody tr:nth-child(2) td')?.textContent).toBe('299.01');
+      expect(table.querySelector('tbody tr:last-child th')?.textContent).toBe('Search term 162');
+      expect(table.textContent).not.toMatch(/account units|Ad group 1/);
+      expect(document.querySelectorAll('.report-bars, example, button')).toHaveLength(0);
+      expect(document.querySelector('main')?.textContent?.match(/Currency unavailable/g)).toHaveLength(1);
+      expect(JSON.parse(document.querySelector('details pre')!.textContent!).rows).toEqual(rows);
+      expect(callTool).not.toHaveBeenCalled();
+    } finally { dom.window.close(); }
+  });
+
+  it('labels small keyword comparisons by keyword and puts the currency in the heading', () => {
+    const rows = ['First', 'Second'].map((text, i) => ({
+      customer: { currencyCode: 'EUR' }, adGroup: { name: 'Ad group 1' },
+      adGroupCriterion: { keyword: { text } }, metrics: { costMicros: i ? '299012998' : '17263597' },
+    }));
+    const { dom, document } = mount('google_gaql', { rows });
+    try {
+      expect(document.querySelector('.report-chart-head b')?.textContent).toBe('Spend by keyword');
+      expect(document.querySelector('.report-chart-head > span')?.textContent).toBe('EUR');
+      expect([...document.querySelectorAll('.report-bar-label > span')].map(el => el.textContent)).toEqual(['First', 'Second']);
+      expect([...document.querySelectorAll('.report-bars strong')].map(el => el.textContent)).toEqual(['17.26', '299.01']);
+      expect(document.querySelector('details')?.textContent).toContain('17.263597 EUR');
+    } finally { dom.window.close(); }
+  });
+
+  it('keeps indistinguishable Google rows separate and flags the missing dimension', () => {
+    const rows = ['17263597', '0', null, '1'].map(costMicros => ({ adGroup: { name: 'Ad group 1' }, metrics: { costMicros } }));
+    const { dom, document } = mount('google_gaql', { rows });
+    try {
+      expect(document.querySelector('.report-bars')).toBeNull();
+      expect(document.querySelector('.operation-heading p')?.textContent).toBe('Ad group 1 · Currency unavailable');
+      expect([...document.querySelectorAll('tbody th')].map(el => el.textContent)).toEqual(['1', '2', '3', '4']);
+      expect([...document.querySelectorAll('tbody td')].map(el => el.textContent)).toEqual(['17.26', '0.00', '—', '<0.01']);
+      expect(document.querySelector('[data-native-report] .operation-note')?.textContent).toContain('Include a more specific name, ID or segment');
+      expect(document.querySelector('table')?.textContent).not.toMatch(/€|\$/);
+    } finally { dom.window.close(); }
+  });
+
+  it('uses the varying segment when all rows belong to the same ad group', () => {
+    const rows = ['MOBILE', 'DESKTOP'].map(device => ({
+      adGroup: { name: 'Ad group 1' }, segments: { device }, metrics: { clicks: '12' },
+    }));
+    const { dom, document } = mount('google_gaql', { rows });
+    try {
+      expect(document.querySelector('.report-bars')).toBeNull();
+      expect(document.querySelector('thead th')?.textContent).toBe('Device');
+      expect([...document.querySelectorAll('tbody th')].map(el => el.textContent)).toEqual(['MOBILE', 'DESKTOP']);
+    } finally { dom.window.close(); }
+  });
+
+  it('shows campaign names when different campaigns reuse the same ad-group name', () => {
+    const rows = ['Brand search', 'Generic search'].map((name, i) => ({
+      campaign: { name }, adGroup: { name: 'Ad group 1', id: String(i + 1) }, metrics: { costMicros: '17263597' },
+    }));
+    const { dom, document } = mount('google_gaql', { rows });
+    try {
+      expect(document.querySelector('thead th')?.textContent).toBe('Campaign');
+      expect([...document.querySelectorAll('tbody th')].map(el => el.textContent)).toEqual(['Brand search', 'Generic search']);
+    } finally { dom.window.close(); }
+  });
+
+  it('does not join different ad IDs with the same name across dates or currencies', () => {
+    const rows = ['EUR', 'JPY'].map((currencyCode, i) => ({
+      customer: { currencyCode }, adGroup: { name: 'Ad group 1' }, adGroupAd: { ad: { id: '10' + i, name: 'Same ad' } },
+      segments: { date: '2026-11-0' + (i + 1) }, metrics: { costMicros: '17263597' },
+    }));
+    const { dom, document } = mount('google_gaql', { rows });
+    try {
+      expect(document.querySelector('[data-native-line], .report-bars')).toBeNull();
+      expect([...document.querySelectorAll('thead th')].map(el => el.textContent)).toEqual(['Ad ID', 'Spend', 'Currency', 'Date']);
+      expect([...document.querySelectorAll('tbody tr')].map(tr => [...tr.children].map(el => el.textContent))).toEqual([
+        ['100', '17.26', 'EUR', '2026-11-01'], ['101', '17', 'JPY', '2026-11-02'],
+      ]);
+    } finally { dom.window.close(); }
+  });
+
   it('shows real daily points and breaks lines across absent or unavailable days', () => {
     const data = { rows: [1, 2, 4, 5, 6].map(day => ({ campaign: { name: 'Search' }, customer: { currencyCode: 'EUR' }, segments: { date: '2026-11-0' + day }, metrics: { costMicros: day === 5 ? null : String(day * 1000000) } })) };
     const { dom, document } = mount('google_gaql', data);
