@@ -18,7 +18,7 @@ export const OPERATION_UI_SCRIPT = String.raw`
       if (!object(value) || depth>8) return [];
       return Object.entries(value).filter(([key])=>!['_adport','data_source','pending_operation_id'].includes(key)).flatMap(([key,item])=>{
         const path=prefix?prefix+'.'+key:key;
-        return object(item)?dataFields(item,path,depth+1):[{label:human(path),after:item}];
+        return object(item)?dataFields(item,path,depth+1):[{path,label:human(path),after:item}];
       });
     }
     function valueHTML(value,compact=false) {

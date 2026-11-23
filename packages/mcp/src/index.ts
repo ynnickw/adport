@@ -32,7 +32,7 @@ import {
 
 export const PROVIDER_IDS = ['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai'] as const;
 export { ADPORT_UI_RESOURCE_DOMAINS };
-export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v31.html', 'ui://adport/insight-card-v30.html', 'ui://adport/insight-card-v29.html', 'ui://adport/insight-card-v28.html', 'ui://adport/insight-card-v27.html', 'ui://adport/insight-card-v26.html', 'ui://adport/insight-card-v25.html', 'ui://adport/insight-card-v24.html', 'ui://adport/insight-card-v23.html', 'ui://adport/insight-card-v22.html', 'ui://adport/insight-card-v21.html', 'ui://adport/insight-card-v20.html', 'ui://adport/insight-card-v19.html', 'ui://adport/insight-card-v18.html', 'ui://adport/insight-card-v17.html', 'ui://adport/insight-card-v16.html', 'ui://adport/insight-card-v15.html', 'ui://adport/insight-card-v14.html', 'ui://adport/insight-card-v13.html', 'ui://adport/insight-card-v12.html', 'ui://adport/insight-card-v11.html', 'ui://adport/insight-card-v10.html', 'ui://adport/insight-card-v9.html', 'ui://adport/insight-card-v8.html', 'ui://adport/insight-card-v7.html', 'ui://adport/insight-card-v6.html', 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html', ADPORT_SUMMARY_UI_URI, 'ui://adport/summary-card-v30.html'];
+export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v32.html', 'ui://adport/insight-card-v31.html', 'ui://adport/insight-card-v30.html', 'ui://adport/insight-card-v29.html', 'ui://adport/insight-card-v28.html', 'ui://adport/insight-card-v27.html', 'ui://adport/insight-card-v26.html', 'ui://adport/insight-card-v25.html', 'ui://adport/insight-card-v24.html', 'ui://adport/insight-card-v23.html', 'ui://adport/insight-card-v22.html', 'ui://adport/insight-card-v21.html', 'ui://adport/insight-card-v20.html', 'ui://adport/insight-card-v19.html', 'ui://adport/insight-card-v18.html', 'ui://adport/insight-card-v17.html', 'ui://adport/insight-card-v16.html', 'ui://adport/insight-card-v15.html', 'ui://adport/insight-card-v14.html', 'ui://adport/insight-card-v13.html', 'ui://adport/insight-card-v12.html', 'ui://adport/insight-card-v11.html', 'ui://adport/insight-card-v10.html', 'ui://adport/insight-card-v9.html', 'ui://adport/insight-card-v8.html', 'ui://adport/insight-card-v7.html', 'ui://adport/insight-card-v6.html', 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html', ADPORT_SUMMARY_UI_URI, 'ui://adport/summary-card-v32.html', 'ui://adport/summary-card-v30.html'];
 
 const DEFAULT_MCP_ICONS = [{
   src: 'https://app.adport.dev/icon.svg?brand=orange-dot-v2',
@@ -112,7 +112,7 @@ function registerUiResources(server: McpServer, uiDomain: string | null, uiResou
   // Summary cards can still display project logos from the hosted storage origin.
   const summaryDomains = uiResourceDomains.filter(domain => domain === ADPORT_UI_DOMAIN || uiConnectDomains.includes(domain));
   for (const uri of ADPORT_UI_RESOURCE_URIS) {
-    const summary = uri === ADPORT_SUMMARY_UI_URI || uri === 'ui://adport/summary-card-v30.html';
+    const summary = uri.startsWith('ui://adport/summary-card-');
     const resourceMeta = {
       ui: {
         ...(uiDomain ? { domain: uiDomain } : {}),

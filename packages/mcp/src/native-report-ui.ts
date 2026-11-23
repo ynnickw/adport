@@ -1,3 +1,5 @@
+import { GAQL_REPORT_UI } from './gaql-report-ui.js';
+
 export const NATIVE_REPORT_TOOLS = [
   'ga4_report', 'ga4_realtime_report', 'gsc_search_analytics',
   'google_gaql',
@@ -15,6 +17,7 @@ export const NATIVE_REPORT_UI_STYLES = String.raw`
 /** Each native read retains its own metrics, attribution and units. */
 export const NATIVE_REPORT_UI_SCRIPT = String.raw`
     const nativeReportTools=new Set(${JSON.stringify(NATIVE_REPORT_TOOLS)});
+    ${GAQL_REPORT_UI}
     function nativeReportDecimal(value,scale=0) {
       const text=typeof value==='number'&&Number.isFinite(value)?String(value):typeof value==='string'?value:'';
       if(!/^-?\d+(?:\.\d+)?$/.test(text))return null;
@@ -27,7 +30,7 @@ export const NATIVE_REPORT_UI_SCRIPT = String.raw`
       const known={spend:'Spend',costMicros:'Spend',conversionsValue:'Conversion value',impressions:'Impressions',clicks:'Clicks',conversion:'Conversions',conversions:'Conversions',purchases:'Purchases',cpc:'CPC',cpm:'CPM',ctr:'CTR',roas:'ROAS',total_complete_payment_rate:'Purchase value',complete_payment_roas:'Purchase ROAS',lowImpressionShare:'Impression share · lower bound',highImpressionShare:'Impression share · upper bound',searchPopularity1to5:'Popularity · 1–5',searchPopularity1to100:'Popularity · 1–100',searchPopularityInGenre:'Genre popularity · 1–100',rankInGenre:'Genre rank',OverallSuccessRate:'Success rate · ratio',OverallSuccessCount:'Succeeded',SuccessCount:'Succeeded',FailureCount:'Failed',OverallUnattributedCount:'Unattributed'};
       return known[key]||known[key.toLowerCase()]||human(human(key).toLowerCase());
     }
-    function nativeReportRatio(key,provider) {return provider==='gsc'&&key==='ctr'||provider==='ga4'&&!key.includes(':')&&/Rate$/.test(key);}
+    function nativeReportRatio(key,provider) {return (provider==='gsc'||provider==='google')&&key==='ctr'||provider==='ga4'&&!key.includes(':')&&/Rate$/.test(key);}
     function nativeReportMetric(key,value,provider,currency,moneyFields=[]) {
       if(key==='costInUsd')currency='USD';
       const lower=key.toLowerCase(),decimal=nativeReportDecimal(value);
@@ -60,7 +63,9 @@ export const NATIVE_REPORT_UI_SCRIPT = String.raw`
       const names=provider==='microsoft'?['SearchQuery','Keyword','ConversionName','UploadDate']:provider==='apple'?['searchTerm','appName']:['ad_name','adgroup_name','adset_name','campaign_name','account_name','advertiser_name','name','entity_name'];
       const ids=['ad_id','adgroup_id','adset_id','campaign_id','advertiser_id','account_id','entity_id','id','GoalId','urn'];
       const first=(keys,sources)=>keys.flatMap(key=>sources.map(source=>source[key])).find(value=>(typeof value==='string'&&value.trim())||typeof value==='number');
-      const googleName=provider==='google'?[row.adGroupAd?.ad?.name,row.adGroup?.name,row.campaign?.name,row.customer?.descriptiveName,row.searchTermView?.searchTerm,row.adGroupCriterion?.keyword?.text].find(value=>typeof value==='string'&&value):null;
+      const googleDimensions=provider==='google'?gaqlDimensions(row):null;
+      const googleEntity=googleDimensions&&[...gaqlEntities.keys()].find(path=>googleDimensions.has(path));
+      const googleName=googleDimensions?.get(googleEntity);
       const bucket=dimensions.conversionLagBucket??dimensions.conversionOrAdjustmentLagBucket;
       const analyticsName=['ga4','gsc'].includes(provider)?Object.values(dimensions).filter(value=>typeof value==='string'&&value).join(' · '):null;
       const name=bucket?reportBucket(bucket):googleName??analyticsName??first(names,[row,metrics,dimensions]) ?? first(ids,[row,dimensions]) ?? (provider==='google'?'Report':'Result '+(index+1));
@@ -81,7 +86,7 @@ export const NATIVE_REPORT_UI_SCRIPT = String.raw`
       const priority=key=>/^(spend|impressions|clicks)$/i.test(key)?['spend','impressions','clicks'].indexOf(key.toLowerCase()):/^(conversion|conversions|purchases)$|^actions · purchase$/i.test(key)?3:4;
       fields.sort((a,b)=>priority(a[0])-priority(b[0]));
       const moneyFields=provider==='ga4'?arr(payload.metric_headers).filter(header=>header.type==='TYPE_CURRENCY').map(header=>header.name):[];
-      return {name,status,context,currency,moneyFields,provider,fields,native:row,date:reportDate(dimensions.stat_time_day??(provider==='ga4'&&/^\d{8}$/.test(dimensions.date||'')?dimensions.date.replace(/^(\d{4})(\d{2})(\d{2})$/,'$1-$2-$3'):dimensions.date)??(row.date_start===row.date_stop?row.date_start:null)??(row.date_range?.start===row.date_range?.end?row.date_range?.start:null)),series:googleName||(['ga4','gsc'].includes(provider)?Object.entries(dimensions).filter(([key])=>key!=='date').map(([,value])=>value).join(' · ')||'Website':name)};
+      return {name,status,context,currency,moneyFields,provider,fields,gaqlDimensions:googleDimensions,gaqlEntity:googleEntity,native:row,date:reportDate(dimensions.stat_time_day??(provider==='ga4'&&/^\d{8}$/.test(dimensions.date||'')?dimensions.date.replace(/^(\d{4})(\d{2})(\d{2})$/,'$1-$2-$3'):dimensions.date)??(row.date_start===row.date_stop?row.date_start:null)??(row.date_range?.start===row.date_range?.end?row.date_range?.start:null)),series:googleName||(['ga4','gsc'].includes(provider)?Object.entries(dimensions).filter(([key])=>key!=='date').map(([,value])=>value).join(' · ')||'Website':name)};
     }
     function nativeChartRecord(record) {
       if(!record)return {name:'Unavailable row',context:[],fields:[]};
@@ -90,7 +95,9 @@ export const NATIVE_REPORT_UI_SCRIPT = String.raw`
         const ratio=nativeReportRatio(key,record.provider);
         const value=record.provider==='spotify'&&String(raw)==='-5'?null:reportNumber(monetary?scaled:raw);
         const display=nativeReportMetric(key,raw,record.provider,record.currency,record.moneyFields);
-        return {key,label:key==='costInLocalCurrency'?'Spend':key==='costInUsd'?'Spend · USD':nativeReportLabel(key),value:ratio&&value!==null?value*100:value,display,unit:ratio?'%':monetary?key==='costInUsd'?'USD':record.currency||'Account units':''};
+        const googleMoney=record.provider==='google'&&monetary;
+        const shortDisplay=googleMoney&&scaled!==null?gaqlAmount(scaled,record.currency):undefined;
+        return {key,label:key==='costInLocalCurrency'?'Spend':key==='costInUsd'?'Spend · USD':nativeReportLabel(key),value:ratio&&value!==null?value*100:value,display,shortDisplay,unit:ratio?'%':monetary?key==='costInUsd'?'USD':record.currency||(googleMoney?'Currency unavailable':'Account units'):''};
       });
       const low=record.native.lowImpressionShare,high=record.native.highImpressionShare;
       const range=record.provider==='apple'&&[low,high].every(value=>typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=1)&&low<=high?[low,high]:undefined;
@@ -113,13 +120,19 @@ export const NATIVE_REPORT_UI_SCRIPT = String.raw`
       const errors=arr(data.errors).filter(error=>error?.error_code).map(error=>'<p class="notice">Goal '+esc(error.goal_id||'unavailable')+': '+esc(error.error_code)+'</p>').join('');
       const missingGoals=arr(data.not_returned_goal_ids).filter(id=>!arr(data.errors).some(error=>error?.goal_id===id&&error?.error_code));
       const absent=missingGoals.length?'<p class="notice">No summary returned for goal'+(missingGoals.length===1?'':'s')+' '+missingGoals.map(esc).join(', ')+'.</p>':'';
-      const records=entries.slice(0,1000).map((row,index)=>nativeReportRecord(row,index,meta,payload)),delay=provider==='google'&&entries.some(row=>row.segments?.conversionLagBucket||row.segments?.conversionOrAdjustmentLagBucket);
+      const records=entries.slice(0,1000).map((row,index)=>nativeReportRecord(row,index,meta,payload)),delay=provider==='google'&&entries.some(row=>row?.segments?.conversionLagBucket||row?.segments?.conversionOrAdjustmentLagBucket);
       const pageArgs=['ga4_report','gsc_search_analytics'].includes(meta.tool)?readPageArgs(meta,'data-report-next'):null;
-      const chart=reportCharts(records.map(nativeChartRecord),delay?{dimension:'delay',mode:'bars',metric:records.some(record=>record?.fields.some(([key])=>key==='conversions'))?'conversions':undefined}:meta.tool==='apple_impression_share'?{metric:'Impression share',dimension:'search term'}:{});
+      const points=records.map(nativeChartRecord);
+      const table=provider==='google'&&!delay&&entries.length?gaqlReportTable(records,points):null;
+      const entity=records[0]?.gaqlEntity;
+      const dimension=entity&&records.every(row=>row?.gaqlEntity===entity)?gaqlEntities.get(entity).toLowerCase():undefined;
+      const chart=table?null:reportCharts(points,delay?{dimension:'delay',mode:'bars',metric:records.some(record=>record?.fields.some(([key])=>key==='conversions'))?'conversions':undefined}:meta.tool==='apple_impression_share'?{metric:'Impression share',dimension:'search term'}:{dimension});
       const analytics=['ga4','gsc'].includes(provider),range=payload?.date_range;
       const period=analytics&&object(range)?[range.start_date??range.start,range.end_date??range.end].filter(workflowText).join(' – '):'';
-      app.innerHTML=chrome(operationHeader(delay?'Conversion delay':title,analytics?[meta.accountId,period].filter(Boolean).join(' · '):'',provider)+notices({...data,...(meta.tool==='linkedin_demographic_report'?{notes:[]}:{}),errors:arr(data.errors).filter(error=>!error?.error_code)})+errors+absent+'<section data-native-report data-read-page-focus tabindex="-1">'+(entries.length?chart.html:'<p class="operation-note">'+missing+'</p>')+(meta.tool==='linkedin_demographic_report'?'<p class="report-chart-foot">Approximate demographics · privacy thresholds apply</p>':'')+(entries.length>1000?'<p class="operation-note">Showing 1,000 returned rows. The full response is in Details.</p>':'')+readPageMarkup(pageArgs,'data-report-next','data-report-page-status')+'<details class="report-data"><summary>Details · '+entries.length+' results</summary>'+(entries.length?'<div class="record-list" role="region" aria-label="Native report data" tabindex="0">'+entries.slice(0,1000).map((row,index)=>nativeReportRow(row,index,meta,payload)).join('')+'</div>':'')+'<pre>'+esc(JSON.stringify(clean,null,2))+'</pre></details></section>','');
-      chart.mount();
+      const subject=table?.subject||(analytics?[meta.accountId,period].filter(Boolean).join(' · '):'');
+      const body=table?.html||(entries.length?chart.html:'<p class="operation-note">'+missing+'</p>');
+      app.innerHTML=chrome(operationHeader(table?.title||(delay?'Conversion delay':title),subject,provider)+notices({...data,...(meta.tool==='linkedin_demographic_report'?{notes:[]}:{}),errors:arr(data.errors).filter(error=>!error?.error_code)})+errors+absent+'<section data-native-report data-read-page-focus tabindex="-1">'+body+(meta.tool==='linkedin_demographic_report'?'<p class="report-chart-foot">Approximate demographics · privacy thresholds apply</p>':'')+(entries.length>1000?'<p class="operation-note">Showing 1,000 returned rows. The full response is in Details.</p>':'')+readPageMarkup(pageArgs,'data-report-next','data-report-page-status')+'<details class="report-data"><summary>Details · '+entries.length+' results</summary>'+(!table&&entries.length?'<div class="record-list" role="region" aria-label="Native report data" tabindex="0">'+entries.slice(0,1000).map((row,index)=>nativeReportRow(row,index,meta,payload)).join('')+'</div>':'')+'<pre>'+esc(JSON.stringify(clean,null,2))+'</pre></details></section>',table?entries.length+(entries.length===1?' row':' rows'):'');
+      chart?.mount();
       bindReadPage(meta,pageArgs,'data-report-next','data-report-page-status',value=>Array.isArray(recordPayload(value)?.rows));
     }
 `;
