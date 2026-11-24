@@ -24,8 +24,8 @@ export const WORKFLOW_UI_STYLES = String.raw`
       .workflow-stack thead { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%) }
       .workflow-stack tbody tr { border-bottom:1px solid var(--line); padding:7px 0 }
       .workflow-stack tbody :is(td,th) { display:grid; grid-template-columns:minmax(88px,2fr) minmax(0,3fr); gap:8px; padding:4px 0; border:0 }
-      .workflow-cell-label { display:block; color:var(--muted); font-weight:400 }
-      .workflow-cell-label::before { content:attr(data-label) }
+      .workflow-stack .workflow-cell-label { display:block; color:var(--muted); font-weight:400 }
+      .workflow-stack .workflow-cell-label::before { content:attr(data-label) }
     }
 `;
 

@@ -15,8 +15,8 @@ import { PLANNING_UI } from './planning-ui.js';
 import { READ_PAGE_UI } from './read-page-ui.js';
 import { REPORT_CHART_SCRIPT, REPORT_CHART_STYLES } from './report-chart-ui.js';
 
-export const ADPORT_UI_URI = 'ui://adport/insight-card-v33.html';
-export const ADPORT_SUMMARY_UI_URI = 'ui://adport/summary-card-v33.html';
+export const ADPORT_UI_URI = 'ui://adport/insight-card-v34.html';
+export const ADPORT_SUMMARY_UI_URI = 'ui://adport/summary-card-v34.html';
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
 export const ADPORT_UI_RESOURCE_DOMAINS = [
   ADPORT_UI_DOMAIN,
@@ -74,6 +74,7 @@ export function viewForTool(name: string, readOnly: boolean): AdportView {
 export function toolTitle(name: string): string {
   if (name === 'accounts_list') return 'Show connected ad accounts';
   if (name === 'report') return 'Show advertising performance';
+  if (name === 'google_gaql') return 'Query Google Ads';
   return name
     .split('_')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
