@@ -99,7 +99,7 @@ describe('compact record, recommendation, receipt and trend views', () => {
   it('selects actual records before empty warnings, keeps all rows, units and provider notes', () => {
     const { dom, document, callTool } = mount('records', { warnings: [], items: Array.from({ length: 12 }, (_, i) => ({ id: String(i), value: 'Keyword '+i, match_type: 'EXACT', status: 'UNARCHIVED', daily_budget_micros: 1250000, currency: 'USD' })), notes: ['Campaign scope only. Unarchived is not delivery.'] });
     try {
-      expect(document.querySelectorAll('.record-row')).toHaveLength(12);
+      expect(document.querySelectorAll('tbody th[scope="row"]')).toHaveLength(12);
       expect(document.querySelector('main')?.textContent).toContain('Keyword 11'); expect(document.querySelector('main')?.textContent).toContain('EXACT');
       expect(document.querySelector('main')?.textContent).toContain('$1.25'); expect(document.querySelector('main')?.textContent).toContain('Campaign scope only');
       expect(document.querySelector('button,form,input,select,textarea')).toBeNull(); expect(callTool).not.toHaveBeenCalled();

@@ -1,4 +1,7 @@
+import { RECORD_COLLECTION_STYLES, RECORD_COLLECTION_UI } from './record-collection-ui.js';
+
 export const RECORD_UI_STYLES = String.raw`
+${RECORD_COLLECTION_STYLES}
     .record-list { display:grid; max-height:400px; overflow:auto; scrollbar-width:thin }
     .record-row { min-width:0; padding:10px 0; border-bottom:1px solid var(--line) }
     .record-heading { display:flex; align-items:baseline; justify-content:space-between; gap:10px; min-width:0 }
@@ -30,6 +33,7 @@ export const RECORD_UI_STYLES = String.raw`
 `;
 
 export const RECORD_UI_SCRIPT = String.raw`
+${RECORD_COLLECTION_UI}
     let recordPages=null;
     function recordPagesIgnoreEcho(data) {
       return !!recordPages?.busy && data?._adport?.view===recordPages.meta.view && galleryMatches(data._adport,recordPages.meta) && galleryScope(data._adport)===recordPages.scope;
@@ -65,27 +69,49 @@ export const RECORD_UI_SCRIPT = String.raw`
       if(!object(payload))return null;
       if(['name','value','title','id','saved_audience_name','saved_audience_id','pixel_name','pixel_id','capi_connection_id'].some(key=>Object.hasOwn(payload,key)&&!object(payload[key])&&!Array.isArray(payload[key])))return null;
       const ignored=/^(_adport|notes|warnings|errors|actions|creatives|fields|media|resourceIds|resource_ids)$/;
-      const keys=['items','results','records','campaigns','ad_groups','ad_sets','ads','keywords','audiences','accounts','projects','assets','data'];
+      const keys=['items','results','records','rows','campaigns','ad_groups','ad_sets','ads','keywords','audiences','accounts','projects','assets','data'];
       const key=keys.find(key=>Array.isArray(payload[key])) ?? Object.keys(payload).find(key=>!ignored.test(key)&&Array.isArray(payload[key]));
       return key?payload[key]:null;
     }
-    function recordValue(value,key,currency) {
-      if(typeof value==='number'&&Number.isFinite(value)&&/micros$|cents$/i.test(key))return esc(money(value/(/cents$/i.test(key)?100:1e6),currency,6));
+    function recordAmountScale(path) {
+      const leaf=recordLeaf(path), label=/^(micros|cents)$/.test(leaf)?recordLabel(path).toLowerCase():leaf;
+      if(!/\b(?:budget|amount|price|cost|bid|spend|revenue|fee)\b/.test(label))return 0;
+      return /\bmicros$/.test(leaf)?6:/\bcents$/.test(leaf)?2:0;
+    }
+    function recordCurrencyField(path) { return /^(?:currency|currency code)$/.test(recordLeaf(path)); }
+    function recordCurrency(values,meta) {
+      const codes=new Set(values.filter(value=>typeof value==='string'&&/^[A-Z]{3}$/.test(value)));
+      if(!codes.size)return currencyOf(meta);
+      return codes.size===1?[...codes][0]:null;
+    }
+    function recordValue(value,key,currency,scale=recordAmountScale(key)) {
+      if(scale) {
+        const amount=nativeReportDecimal(value,scale);
+        if(amount!==null)return esc(currency?new Intl.NumberFormat(state.host.locale||'en',{style:'currency',currency,maximumFractionDigits:6}).format(amount):amount+' account units');
+      }
       return valueHTML(value,true);
     }
     function recordRow(value,index,meta) {
       if(!object(value))return '<article class="record-row">'+valueHTML(value,true)+'</article>';
-      const fields=dataFields(value).filter(field=>!/(?:hash|token|secret|password|authorization|pending operation|snapshot)/i.test(field.label));
-      const name=fields.find(field=>/^(name|display name|title|value|keyword|keyword text|campaign name|ad group name|ad name|creative name|account name|audience name|saved audience name|pixel name)$/i.test(field.label));
-      const id=fields.find(field=>/^(id|resource name|saved audience id|pixel id|capi connection id)$/i.test(field.label));
-      const status=fields.find(field=>/^(status|state|delivery status|archived)$/i.test(field.label));
-      const currency=currencyOf(value)||(/^[A-Z]{3}$/.test(value.currency_code||'')?value.currency_code:currencyOf(meta));
-      const chosen=fields.filter(field=>!/^note$|^notes$|^actions$|preview url|preview cover url|logo url/i.test(field.label)&&field!==name&&field!==status&&!/^(id|saved audience id|pixel id|pixel code|capi connection id|account id|provider|resource name|currency|currency code)$/i.test(field.label));
+      const fields=recordVisibleFields(value);
+      const identities=fields.filter(field=>(typeof field.after==='string'&&field.after.trim())||typeof field.after==='number')
+        .sort((a,b)=>recordFieldPriority(a.path)-recordFieldPriority(b.path));
+      const name=identities.find(field=>recordFieldPriority(field.path)<=recordRank.code && recordLeaf(field.path)!=='currency code');
+      const id=identities.find(field=>recordFieldPriority(field.path)>=recordRank.id);
+      const status=fields.find(field=>/^(status|state|delivery status|archived)$/.test(recordLeaf(field.path)));
+      const currency=recordCurrency(fields.filter(field=>recordCurrencyField(field.path)).map(field=>field.after),meta);
+      const chosen=fields.filter(field=>field!==(name||id)&&field!==status&&!/^(id|saved audience id|pixel id|capi connection id|account id|provider|resource name|currency|currency code)$/.test(recordLeaf(field.path)));
       chosen.sort((a,b)=>{const priority=field=>/match type|scope|budget|bid|size|type|rule|frequency/i.test(field.label)?0:1;return priority(a)-priority(b);});
-      const label=name?.after ?? id?.after ?? 'Record '+(index+1);
+      const displayed=chosen.slice(0,4), labels=recordColumnLabels(displayed.map(field=>field.path));
+      const label=name?.after ?? id?.after ?? (displayed.length?null:'Record '+(index+1));
       const nativeProvider=typeof value.provider==='string'?value.provider:typeof value.platform==='string'&&providerSvg[value.platform]?value.platform:undefined;
       const provider=nativeProvider!==meta.provider?nativeProvider:undefined;
-      return '<article class="record-row"><div class="record-heading"><div class="record-name">'+(provider?'<span role="img" aria-label="'+esc(providerName(provider,meta.providerNames||{}))+'">'+logo(provider)+'</span>':'')+'<strong>'+esc(label)+'</strong></div>'+(status?'<span>'+esc(status.label==='Archived'&&typeof status.after==='boolean'?(status.after?'Archived':'Unarchived'):status.after)+'</span>':'')+'</div>'+(chosen.length?'<dl class="record-fields">'+chosen.slice(0,4).map(field=>/^(providers|platforms)$/i.test(field.label)&&Array.isArray(field.after)?'<div><dd>'+providerMarks(field.after,meta)+'</dd></div>':'<div><dt>'+esc(/micros$|cents$/i.test(field.label)?field.label.replace(/ (?:micros|cents)$/i,'')+' · '+(currency||'account units'):field.label)+'</dt><dd>'+recordValue(field.after,field.label.replaceAll(' ','_'),currency)+'</dd></div>').join('')+'</dl>':'')+'</article>';
+      const heading=label!=null||provider||status?'<div class="record-heading"><div class="record-name">'+(provider?'<span role="img" aria-label="'+esc(providerName(provider,meta.providerNames||{}))+'">'+logo(provider)+'</span>':'')+(label!=null?'<strong>'+esc(label)+'</strong>':'')+'</div>'+(status?'<span>'+esc(recordLeaf(status.path)==='archived'&&typeof status.after==='boolean'?(status.after?'Archived':'Unarchived'):status.after)+'</span>':'')+'</div>':'';
+      return '<article class="record-row">'+heading+(displayed.length?'<dl class="record-fields">'+displayed.map(field=>{
+        if(/^(providers|platforms)$/i.test(field.label)&&Array.isArray(field.after))return '<div><dd>'+providerMarks(field.after,meta)+'</dd></div>';
+        const label=labels.get(field.path);
+        return '<div><dt>'+esc(recordAmountScale(field.path)?label.replace(/ (?:micros|cents)$/i,''):label)+'</dt><dd>'+recordValue(field.after,field.path,currency)+'</dd></div>';
+      }).join('')+'</dl>':'')+'</article>';
     }
     function entityRecordTable(tool) {
       return /^(?:google|meta|apple|microsoft|tiktok|linkedin|pinterest|reddit|snapchat|spotify|openai|x)_(?:list_)?(?:campaigns|campaign_groups|adgroups|ad_groups|ad_sets|adsets|line_items|adsquads)$/.test(tool||'');
@@ -160,13 +186,16 @@ export const RECORD_UI_SCRIPT = String.raw`
       if(meta.tool==='apple_report')return renderAppleReport(data,meta);
       if(nativeReportTools.has(meta.tool)&&(meta.tool!=='google_gaql'||arr(recordPayload(data)?.rows).some(row=>object(row?.metrics)&&Object.keys(row.metrics).length)))return renderNativeReport(data,meta);
       const payload=recordPayload(data),entries=recordEntries(payload),rows=entries ?? [payload];
-      const title=human(String(meta.tool||'Results').replace(/^(?:google|meta|tiktok|apple|microsoft|reddit|snapchat|spotify|pinterest|linkedin|x)_/,'').replace(/^(?:list|get)_/,'').replace(/_(?:list|get)$/,'').replaceAll('_',' '));
+      const title=meta.tool==='google_gaql'?'Google Ads query results':human(String(meta.tool||'Results').replace(/^(?:google|meta|tiktok|apple|microsoft|reddit|snapchat|spotify|pinterest|linkedin|openai|x)_/,'').replace(/^(?:list|get)_/,'').replace(/_(?:list|get)$/,'').replaceAll('_',' '));
       const parent=object(data.parent)?Object.entries(data.parent).filter(([key])=>/_id$/.test(key)).map(([key,value])=>human(key.replace(/_id$/,''))+' '+value).join(' · '):'';
       const scope=[parent,typeof data.parent_id==='string'&&!parent?data.parent_id:'',meta.accountId].filter(Boolean).join(' · ');
       const clean=object(data)?Object.fromEntries(Object.entries(data).filter(([key])=>key!=='_adport'&&!(key==='creatives'&&meta.view==='records'))):data;
       const table=Array.isArray(entries)&&entityRecordTable(meta.tool)&&rows.every(object);
       const displayMeta=currencyOf(data)?{...meta,currency:currencyOf(data)}:meta;
-      const markup=rows.slice(0,1000).map((row,index)=>recordEntryMarkup(row,index,displayMeta,table)).join('');
+      const shown=rows.slice(0,1000);
+      const collection=entries&&!table&&recordCollection(shown,meta,rows.length);
+      if(collection)return renderRecordCollection(data,displayMeta,collection,title,scope,clean,rows.length);
+      const markup=shown.map((row,index)=>recordEntryMarkup(row,index,displayMeta,table)).join('');
       const content=rows.length?table?'<div class="workflow-scroll" role="region" aria-label="Returned records" tabindex="0"><table class="workflow-table workflow-stack" role="table">'+workflowHeader(entityHeaders)+
         '<tbody data-record-list role="rowgroup">'+markup+'</tbody></table></div>':
         '<div class="record-list" data-record-list role="region" aria-label="Returned records" tabindex="0">'+markup+'</div>':'<p class="operation-note">No results returned.</p>';
