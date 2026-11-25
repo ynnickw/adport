@@ -26,6 +26,7 @@ import { GoogleDataManagerService } from './data-manager.js';
 import { GoogleExperimentService, GOOGLE_EXPERIMENT_WRITES } from './experiments.js';
 import { GooglePerformanceMaxService, GOOGLE_PMAX_WRITES } from './pmax.js';
 import { GoogleTargetingService } from './targeting.js';
+import { GoogleKeywordService, GOOGLE_KEYWORD_WRITES, keywordUrlCreateFields } from './keywords.js';
 
 const LEVEL_RESOURCE = {
   account: 'customer',
@@ -61,6 +62,7 @@ export class GoogleAdsProvider implements AdProvider {
   readonly experiments: GoogleExperimentService;
   readonly performanceMax: GooglePerformanceMaxService;
   readonly targeting: GoogleTargetingService;
+  readonly keywords: GoogleKeywordService;
 
   constructor(private readonly client: GoogleAdsRestClient, media?: MediaResolver) {
     this.assets = new GoogleAssetService(client, media);
@@ -71,6 +73,7 @@ export class GoogleAdsProvider implements AdProvider {
     this.experiments = new GoogleExperimentService(client);
     this.performanceMax = new GooglePerformanceMaxService(client);
     this.targeting = new GoogleTargetingService(client);
+    this.keywords = new GoogleKeywordService(client);
   }
 
   keywordPlanning(customerId: string, method: 'generateKeywordIdeas' | 'generateKeywordHistoricalMetrics', body: Record<string, unknown>) {
@@ -359,6 +362,7 @@ export class GoogleAdsProvider implements AdProvider {
     if (GOOGLE_EXPERIMENT_WRITES.has(op.tool)) return this.experiments.plan(op, guard);
     if (GOOGLE_PMAX_WRITES.has(op.tool)) return this.performanceMax.plan(op, guard);
     if (op.tool === 'google_update_targeting') return this.targeting.plan(op);
+    if (GOOGLE_KEYWORD_WRITES.has(op.tool)) return this.keywords.plan(op);
     const cid = normalizeCustomerId(op.accountId);
     // Tool input was already zod-validated at the registry boundary.
     const payload = op.payload as never;
@@ -675,20 +679,28 @@ export class GoogleAdsProvider implements AdProvider {
 
   private async planAddKeywords(
     cid: string,
-    payload: { ad_group_id: string; keywords: Array<{ text: string; match_type: string }>; negative?: boolean },
+    payload: { ad_group_id: string; keywords: Array<{ text: string; match_type: string; final_urls?: string[]; final_mobile_urls?: string[]; tracking_url_template?: string; final_url_suffix?: string }>; negative?: boolean },
   ): Promise<WritePlan> {
-    const operations = payload.keywords.map((kw) => ({
+    const urls = payload.keywords.map(keywordUrlCreateFields);
+    if (payload.negative && urls.some(fields => Object.keys(fields).length)) {
+      throw new AdportError('INVALID_INPUT', 'google: negative keywords cannot have final URLs, tracking templates or URL suffixes');
+    }
+    if (urls.some(fields => fields.finalMobileUrls && !fields.finalUrls)) {
+      throw new AdportError('INVALID_INPUT', 'google: final_mobile_urls require final_urls on the same keyword');
+    }
+    const operations = payload.keywords.map((kw, index) => ({
       create: {
         adGroup: `customers/${cid}/adGroups/${payload.ad_group_id}`,
         status: 'ENABLED',
         negative: payload.negative ?? false,
         keyword: { text: kw.text, matchType: kw.match_type },
+        ...urls[index],
       },
     }));
     const kind = payload.negative ? 'negative keywords' : 'keywords';
     return {
       summary: `Add ${payload.keywords.length} ${kind} to ad group ${payload.ad_group_id}`,
-      changes: payload.keywords.map((kw) => `+ ${payload.negative ? 'negative ' : ''}keyword [${kw.match_type}] "${kw.text}"`),
+      changes: payload.keywords.map((kw) => `+ ${payload.negative ? 'negative ' : ''}keyword [${kw.match_type}] "${kw.text}"${kw.final_urls?.length ? ` → ${kw.final_urls.join(', ')}` : ''}${kw.final_mobile_urls?.length ? ` (mobile ${kw.final_mobile_urls.join(', ')})` : ''}${kw.tracking_url_template ? ` tracking ${kw.tracking_url_template}` : ''}${kw.final_url_suffix ? ` suffix ${kw.final_url_suffix}` : ''}`),
       coercions: [],
       budgetDeltas: [],
       execute: async (validateOnly) => {

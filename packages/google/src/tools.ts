@@ -11,6 +11,7 @@ import { googleDataManagerTools } from './data-manager.js';
 import { googleExperimentTools } from './experiments.js';
 import { googlePerformanceMaxTools } from './pmax.js';
 import { googleTargetingTools } from './targeting.js';
+import { googleKeywordTools, keywordUrlFields } from './keywords.js';
 
 const statusSchema = z.enum(['ENABLED', 'PAUSED']);
 const matchTypeSchema = z.enum(['EXACT', 'PHRASE', 'BROAD']);
@@ -27,6 +28,7 @@ export function googleTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
     ...googleExperimentTools(provider),
     ...googlePerformanceMaxTools(provider),
     ...googleTargetingTools(provider),
+    ...googleKeywordTools(),
     defineTool({
       name: 'google_ads', namespace: 'google',
       description: 'Browse Google Ads with their actual text, final URLs, serving status and creative actions. Filter by campaign or ad group. Changes requested from the creative viewer return a preview before approval.',
@@ -46,7 +48,7 @@ export function googleTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
       name: 'google_gaql',
       namespace: 'google',
       description:
-        'Run a structured Google Ads (GAQL) query: pick a resource (campaign, ad_group, keyword_view, change_event, ...), ' +
+        'Run a structured Google Ads (GAQL) query: pick a resource (campaign, ad_group, keyword_view, ad_group_criterion, change_event, ...), ' +
         'fields (e.g. campaign.name, metrics.clicks, segments.date), optional conditions and ordering. ' +
         "Conditions are raw GAQL predicates, e.g. \"segments.date DURING LAST_7_DAYS\" or \"campaign.status = 'ENABLED'\".",
       input: z.object({
@@ -160,9 +162,10 @@ export function googleTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
       kind: 'create',
       payload: z.object({
         ad_group_id: z.string(),
-        keywords: z.array(z.object({ text: z.string().min(1), match_type: matchTypeSchema })).min(1),
+        keywords: z.array(z.object({ text: z.string().min(1), match_type: matchTypeSchema, ...keywordUrlFields })).min(1),
         negative: z.boolean().default(false),
-      }),
+      }).refine(input => !input.negative || input.keywords.every(kw => !kw.final_urls?.length && !kw.final_mobile_urls?.length && !kw.tracking_url_template && !kw.final_url_suffix), 'Negative keywords cannot have URL fields')
+        .refine(input => input.keywords.every(kw => !kw.final_mobile_urls?.length || kw.final_urls?.length), 'final_mobile_urls require final_urls'),
     }),
     guardedWriteTool({
       name: 'google_set_keyword_status',

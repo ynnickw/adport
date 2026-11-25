@@ -52,6 +52,14 @@ Idea results contain one native page. Continue with `next_page_token` as `page_t
 
 The REST paths, seed variants and limits follow Google's [v25 keyword planning protocol](https://github.com/googleapis/googleapis/blob/master/google/ads/googleads/v25/services/keyword_plan_idea_service.proto). Provider authorization, API quotas and account eligibility still apply.
 
+### Keyword landing pages
+
+Each keyword in `google_add_keywords` can carry its own `final_urls`, `final_mobile_urls`, `tracking_url_template` and `final_url_suffix`. These keyword-level values override the ad's URLs for clicks on that keyword. URLs must be absolute `http`/`https` addresses without embedded credentials. Negative keywords reject URL fields, and mobile URLs require `final_urls`.
+
+`google_update_keyword_urls` sets or clears these fields on up to 1,000 existing keywords across ad groups in one call, each identified by `ad_group_id` and `criterion_id`. Omitted fields stay unchanged. `[]` clears a URL list and `null` clears the tracking template or suffix. The preview reads the current values first and shows them before and after for each keyword. Each operation's update mask contains only the supplied fields. Negative, removed and non-keyword criteria are rejected before any request. Text, match type, status and bids are not changed.
+
+To check the result, query `ad_group_criterion` through `google_gaql`, for example fields `ad_group_criterion.keyword.text` and `ad_group_criterion.final_urls` with the condition `ad_group_criterion.type = 'KEYWORD'`. The fields follow the [v25 AdGroupCriterion reference](https://developers.google.com/google-ads/api/reference/rpc/v25/AdGroupCriterion).
+
 ### Field metadata
 
 `google_field_metadata` looks up up to 20 exact resource or field names, such as `campaign`, `campaign.status` and `metrics.cost_micros`, through the native [GoogleAdsFieldService](https://github.com/googleapis/googleapis/blob/57aa4dbce5d23b2115b2732b10dcb7ddc8e8698d/google/ads/googleads/v25/services/google_ads_field_service.proto). It returns the connected API version, native categories, types, enum values, and select/filter/sort flags. Optional compatibility lists include `selectableWith`, `attributeResources`, metrics and segments. Metadata queries have no `FROM` clause and do not fetch account performance or customer data; `account_id` selects the authorized project connection.

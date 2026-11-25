@@ -33,7 +33,7 @@ const STANDARD_TOOLS = new Set([
   'x_authenticated_user_access', 'x_media_library', 'x_get_media_library_item', 'x_upload_media', 'x_media_upload_status', 'x_register_uploaded_media',
   'google_gaql', 'google_create_campaign', 'google_set_campaign_status', 'google_set_budget', 'google_set_bid_ceiling',
   'google_set_bidding_strategy', 'google_create_ad_group', 'google_set_ad_group_status', 'google_add_keywords',
-  'google_set_keyword_status', 'google_remove_keywords', 'google_create_responsive_search_ad',
+  'google_set_keyword_status', 'google_remove_keywords', 'google_update_keyword_urls', 'google_create_responsive_search_ad',
   'meta_list_campaigns', 'meta_get_campaign', 'meta_insights', 'meta_list_ad_sets', 'meta_list_ads',
   'meta_list_pages', 'meta_advertisable_applications', 'meta_create_campaign', 'meta_create_ad_set', 'meta_create_ad', 'meta_create_link_creative',
   'meta_list_creatives', 'meta_list_images', 'meta_list_videos', 'meta_upload_image', 'meta_upload_video',
