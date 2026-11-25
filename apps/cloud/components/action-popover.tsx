@@ -22,15 +22,15 @@ export function ActionPopover({ label, triggerLabel, panelLabel = label, childre
   const [open, setOpen] = useState(false);
   useLayoutEffect(() => {
     const surface = panel.current;
-    if (!surface || typeof surface.showPopover !== 'function') return;
-    if (open) surface.showPopover();
-    else surface.hidePopover();
+    if (!open || !surface || typeof surface.showPopover !== 'function') return;
+    surface.showPopover();
+    return () => surface.hidePopover();
   }, [open]);
   const position = useAnchoredLayer(open, trigger, panel, { align: 'end', minWidth: width, maxWidth: width, heightLimit: 416 });
   const positioned = position.visibility !== 'hidden';
 
   function close() {
-    const wasOpen = !panel.current?.hidden;
+    const wasOpen = panel.current !== null;
     setOpen(false);
     if (wasOpen) trigger.current?.focus({ preventScroll: true });
   }
@@ -57,7 +57,7 @@ export function ActionPopover({ label, triggerLabel, panelLabel = label, childre
       onClick={() => { if (!open) onOpen?.(); setOpen(!open); }}>
       {triggerLabel}{iconOnly ? null : <Chevron />}
     </Button>
-    <div ref={panel} id={id} popover="manual" hidden={!open} className={`floating-surface ${panelClassName ?? ''}`} style={position}
+    {open ? <div ref={panel} id={id} popover="manual" className={`floating-surface ${panelClassName ?? ''}`} style={position}
       role="dialog" aria-label={panelLabel} tabIndex={-1}
       onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); } }}
       onBlur={event => {
@@ -65,6 +65,6 @@ export function ActionPopover({ label, triggerLabel, panelLabel = label, childre
         if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget) && event.relatedTarget !== trigger.current) setOpen(false);
       }}>
       {children(close)}
-    </div>
+    </div> : null}
   </>;
 }

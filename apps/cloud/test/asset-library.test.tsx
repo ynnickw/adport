@@ -90,18 +90,20 @@ describe('simple agent-first creative library', () => {
     const all = Array.from({ length: 103 }, (_, index) => source(index + 1));
     let finish: ((response: Response) => void) | undefined;
     vi.mocked(fetch).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; })).mockResolvedValueOnce(Response.json({ assets: all.slice(96), truncated: false })).mockResolvedValueOnce(Response.json({ assets: [], truncated: false }));
-    render(<AssetLibrary {...props} initialAssets={all.slice(0, 48)} truncated initialCursor={all[47]!.id} />);
+    const { container } = render(<AssetLibrary {...props} initialAssets={all.slice(0, 48)} truncated initialCursor={all[47]!.id} />);
+    const cards = () => container.querySelectorAll('article');
+    expect(container.querySelector('[popover]')).toBeNull();
     const firstImage = screen.getByAltText('File 1.png');
     fireEvent.click(screen.getByRole('button', { name: 'Load more' })); fireEvent.click(screen.getByRole('button', { name: 'Loading…' }));
-    expect(fetch).toHaveBeenCalledTimes(1); expect(screen.getAllByRole('article')).toHaveLength(48);
+    expect(fetch).toHaveBeenCalledTimes(1); expect(cards()).toHaveLength(48);
     await act(async () => { finish!(Response.json({ assets: all.slice(48, 96), truncated: true, next_cursor: all[95]!.id })); });
     await screen.findByText('96 shown'); expect(screen.getByAltText('File 1.png')).toBe(firstImage);
     fireEvent.click(screen.getByRole('button', { name: 'Load more' })); await screen.findByText('103 files');
-    expect(screen.getAllByRole('article')).toHaveLength(103); expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+    expect(cards()).toHaveLength(103); expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
     const calls = vi.mocked(fetch).mock.calls; expect(new URL(String(calls[0]![0]), 'https://app.test').searchParams.get('cursor')).toBe(all[47]!.id); expect(new URL(String(calls[1]![0]), 'https://app.test').searchParams.get('limit')).toBe('48');
     chooseFileType('Videos'); await screen.findByText('No matching files');
     chooseFileType('All files'); await screen.findByText('103 files');
-    expect(fetch).toHaveBeenCalledTimes(3); expect(screen.getAllByRole('article')).toHaveLength(103);
+    expect(fetch).toHaveBeenCalledTimes(3); expect(cards()).toHaveLength(103);
   });
 
   it('keeps CSV and PDF documents visible through pagination, label changes and cached filters', async () => {
@@ -128,11 +130,12 @@ describe('simple agent-first creative library', () => {
     const csv = source(2, { name: 'Product IDs', content_type: 'text/csv' });
     vi.mocked(fetch).mockResolvedValueOnce(Response.json({ assets: [], truncated: false }));
     mocks.upload.mockImplementation(async input => { input.ready(csv); return csv.id; });
-    render(<AssetLibrary {...props} acceptedTypes={['image/png', 'text/csv']} />);
+    const { container } = render(<AssetLibrary {...props} acceptedTypes={['image/png', 'text/csv']} />);
     chooseFileType('Documents'); await screen.findByText('No matching files');
     fireEvent.drop(screen.getByRole('region', { name: 'Creative files' }), { dataTransfer: { types: ['Files'], files: [new File(['sku_id\n00012\n'], 'Products.csv', { type: 'text/csv' })] } });
     await screen.findByRole('button', { name: 'Preview Product IDs' });
-    expect(screen.getAllByRole('article')).toHaveLength(1); expect(fetch).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(container.querySelectorAll('article')).toHaveLength(1));
+    expect(screen.queryByRole('button', { name: 'Preview Launch.png' })).toBeNull(); expect(fetch).toHaveBeenCalledTimes(1);
     chooseFileType('All files'); await screen.findByText('2 files');
     expect(screen.getByRole('button', { name: 'Preview Product IDs' })).toBeTruthy(); expect(fetch).toHaveBeenCalledTimes(1);
   });
