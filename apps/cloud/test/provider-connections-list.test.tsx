@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+import { fireEvent, render as renderClient } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { ProviderConnections, type ConnectionView } from '@/app/dashboard/connections/provider-connections';
@@ -10,10 +12,27 @@ const connection: ConnectionView = {
   connectedAt: '2026-08-31T12:00:00Z', lastVerifiedAt: null, lastError: null,
 };
 
-function render(options: { canManage?: boolean; available?: boolean; connections?: ConnectionView[]; returnTo?: string } = {}) {
-  return renderToStaticMarkup(<ProviderConnections organizationId="org" projectName="Fixture" canManage={options.canManage ?? true}
+type Options = { canManage?: boolean; available?: boolean; connections?: ConnectionView[]; returnTo?: string };
+
+function providerList(options: Options) {
+  return <ProviderConnections organizationId="org" projectName="Fixture" canManage={options.canManage ?? true}
     connections={options.connections ?? [connection]} returnTo={options.returnTo}
-    oauthProviders={OAUTH_PROVIDERS.map(id => ({ id, available: options.available ?? true }))} />);
+    oauthProviders={OAUTH_PROVIDERS.map(id => ({ id, available: options.available ?? true }))} />;
+}
+
+const render = (options: Options = {}) => renderToStaticMarkup(providerList(options));
+
+function renderManaged(platform: string, options: Options = {}) {
+  const view = renderClient(providerList(options));
+  try {
+    const manage = view.getByRole('button', { name: `Manage ${platform}` });
+    expect(view.queryByRole('dialog', { name: `Manage ${platform}` })).toBeNull();
+    fireEvent.click(manage);
+    expect(view.getByRole('dialog', { name: `Manage ${platform}` })).toBeTruthy();
+    return view.container.innerHTML;
+  } finally {
+    view.unmount();
+  }
 }
 
 describe('compact provider connection list', () => {
@@ -25,53 +44,53 @@ describe('compact provider connection list', () => {
   });
   it('offers Pin management separately and preserves an enabled opt-in on reconnection', () => {
     const pinterest = { ...connection, provider: 'pinterest', status: 'error' as const };
-    const basic = render({ connections: [pinterest] });
+    const basic = renderManaged('Pinterest Ads', { connections: [pinterest] });
     expect(basic).toContain('Authorize Pinterest public board, Pin and media management with additional permissions');
     expect(basic).not.toContain('secret_pins=1');
     expect(basic).toContain('/api/oauth/pinterest/start?organization_id=org&amp;pin_management=1');
-    const enabled = render({ connections: [{ ...pinterest, pinManagementEnabled: true }] });
+    const enabled = renderManaged('Pinterest Ads', { connections: [{ ...pinterest, pinManagementEnabled: true }] });
     expect(enabled).not.toContain('Enable Pin management');
     expect(enabled).toContain('/api/oauth/pinterest/start?organization_id=org&amp;pin_management=1');
     expect(render({ connections: [pinterest], canManage: false })).not.toContain('Enable Pin management');
   });
   it('offers secret content separately from a public grant and retains it on reconnect', () => {
     const pinterest = { ...connection, provider: 'pinterest', pinManagementEnabled: true };
-    const publicOnly = render({ connections: [pinterest] });
+    const publicOnly = renderManaged('Pinterest Ads', { connections: [pinterest] });
     expect(publicOnly).toContain('four additional private-content permissions');
     expect(publicOnly).toContain('pin_management=1&amp;secret_pins=1');
-    const secret = render({ connections: [{ ...pinterest, secretPinsEnabled: true }] });
+    const secret = renderManaged('Pinterest Ads', { connections: [{ ...pinterest, secretPinsEnabled: true }] });
     expect(secret).not.toContain('Enable secret Pin management');
     expect(secret).not.toContain('pin_management=1');
     expect(secret).toContain('/api/oauth/pinterest/start?organization_id=org&amp;secret_pins=1');
     expect(render({ connections: [pinterest], canManage: false })).not.toContain('Enable secret Pin management');
-    expect(render({ connections: [{ ...pinterest, accountSelectionId: 'pending' }] })).not.toContain('Enable secret Pin management');
+    expect(renderManaged('Pinterest Ads', { connections: [{ ...pinterest, accountSelectionId: 'pending' }] })).not.toContain('Enable secret Pin management');
   });
   it('offers catalogs separately and preserves all existing Pinterest grants in either upgrade direction', () => {
     const pinterest = { ...connection, provider: 'pinterest', pinManagementEnabled: true, secretPinsEnabled: true };
-    const html = render({ connections: [pinterest] });
+    const html = renderManaged('Pinterest Ads', { connections: [pinterest] });
     expect(html).toContain('two additional catalog permissions'); expect(html).toContain('secret_pins=1&amp;catalog_management=1');
-    const enabled = render({ connections: [{ ...pinterest, catalogManagementEnabled: true }] });
+    const enabled = renderManaged('Pinterest Ads', { connections: [{ ...pinterest, catalogManagementEnabled: true }] });
     expect(enabled).not.toContain('Enable catalogs'); expect(enabled).toContain('secret_pins=1&amp;catalog_management=1');
-    const catalogOnly = render({ connections: [{ ...pinterest, secretPinsEnabled: false, pinManagementEnabled: false, catalogManagementEnabled: true }] });
+    const catalogOnly = renderManaged('Pinterest Ads', { connections: [{ ...pinterest, secretPinsEnabled: false, pinManagementEnabled: false, catalogManagementEnabled: true }] });
     expect(catalogOnly).toContain('catalog_management=1&amp;pin_management=1');
     expect(render({ connections: [pinterest], canManage: false })).not.toContain('Enable catalogs');
-    expect(render({ connections: [{ ...pinterest, accountSelectionId: 'pending' }] })).not.toContain('Enable catalogs');
+    expect(renderManaged('Pinterest Ads', { connections: [{ ...pinterest, accountSelectionId: 'pending' }] })).not.toContain('Enable catalogs');
   });
   it('offers conversion permission separately and retains it on later Google reconnection', () => {
-    const basic = render();
+    const basic = renderManaged('Google Ads');
     expect(basic).toContain('Authorize Google conversion imports with additional Data Manager permission');
     expect(basic).toContain('/api/oauth/google/start?organization_id=org&amp;data_manager=1');
-    const enabled = render({ connections: [{ ...connection, dataManagerEnabled: true }] });
+    const enabled = renderManaged('Google Ads', { connections: [{ ...connection, dataManagerEnabled: true }] });
     expect(enabled).not.toContain('Enable conversion imports');
     expect(enabled).toContain('/api/oauth/google/start?organization_id=org&amp;data_manager=1');
     expect(render({ canManage: false })).not.toContain('Enable conversion imports');
   });
   it('offers Reddit conversion events separately and keeps the permission on later reconnection', () => {
     const reddit = { ...connection, provider: 'reddit' };
-    const basic = render({ connections: [reddit] });
+    const basic = renderManaged('Reddit Ads', { connections: [reddit] });
     expect(basic).toContain('Authorize Reddit conversion events with the additional adsconversions permission');
     expect(basic).toContain('/api/oauth/reddit/start?organization_id=org&amp;conversions=1');
-    const enabled = render({ connections: [{ ...reddit, redditConversionsEnabled: true }] });
+    const enabled = renderManaged('Reddit Ads', { connections: [{ ...reddit, redditConversionsEnabled: true }] });
     expect(enabled).not.toContain('Enable conversion events');
     expect(enabled).toContain('/api/oauth/reddit/start?organization_id=org&amp;conversions=1');
     expect(render({ connections: [reddit], canManage: false })).not.toContain('Enable conversion events');
@@ -98,7 +117,7 @@ describe('compact provider connection list', () => {
   });
 
   it('keeps tenant binding and onboarding return path in OAuth links', () => {
-    const html = render({ returnTo: '/onboarding' });
+    const html = renderManaged('Google Ads', { returnTo: '/onboarding' });
     expect(html).toContain('/api/oauth/linkedin/start?organization_id=org&amp;return_to=%2Fonboarding');
     expect(html).toContain('aria-label="Connect LinkedIn Ads"');
     expect(html).toContain('aria-label="Disconnect Google Ads"');
@@ -129,11 +148,12 @@ describe('compact provider connection list', () => {
     const html = render({ canManage: false });
     expect(html).not.toContain('/api/oauth/');
     expect(html).not.toContain('>Disconnect</button>');
+    expect(html).not.toContain('Manage Google Ads');
     expect(html.match(/Owners and admins manage connections/g)).toHaveLength(1);
   });
 
   it('hides unavailable unconnected platforms while retaining existing connections and disconnect', () => {
-    const html = render({ available: false });
+    const html = renderManaged('Google Ads', { available: false });
     expect(html).not.toContain('LinkedIn Ads');
     expect(html).toContain('Google Ads');
     expect(html).not.toContain('/api/oauth/');
