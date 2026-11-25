@@ -17,18 +17,19 @@ export function DangerZone({ organizationId, isDefaultProject = true }: { organi
     if (!await confirm({ title: `Delete ${subject}?`, description: `Permanently deletes this ${subject} and its Adport Cloud data. This cannot be undone.`, confirmLabel: `Delete ${subject}` })) return;
     setBusy(true);
     setError(undefined);
-    const response = await fetch('/api/deletion', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ organization_id: organizationId, confirmation }),
-    });
-    const result = await response.json().catch(() => ({})) as { error?: string };
-    if (!response.ok) {
-      setError(result.error ?? 'Unable to delete organization.');
+    try {
+      const response = await fetch('/api/deletion', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ organization_id: organizationId, confirmation }),
+      });
+      const result = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(result.error ?? `Unable to delete this ${subject}.`);
+      window.location.assign('/');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : `Unable to delete this ${subject}.`);
       setBusy(false);
-      return;
     }
-    window.location.assign('/');
   }
 
   return (
@@ -40,7 +41,7 @@ export function DangerZone({ organizationId, isDefaultProject = true }: { organi
         {error ? <div className="error-callout" role="alert" style={{ marginBottom: 0 }}>{error}</div> : null}
         <div className="form-row">
           <Input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder="Type DELETE to confirm" aria-label="Type DELETE to confirm" style={{ maxWidth: '16rem' }} />
-          <Button className="button danger" disabled={busy || confirmation !== 'DELETE'} onClick={() => void deleteOrganization()}>{busy ? 'Deleting…' : `Delete ${subject}`}</Button>
+          <Button type="button" className="button danger" disabled={confirmation !== 'DELETE'} pending={busy} pendingLabel="Deleting…" onClick={() => void deleteOrganization()}>Delete {subject}</Button>
         </div>
       </div>
     </section>

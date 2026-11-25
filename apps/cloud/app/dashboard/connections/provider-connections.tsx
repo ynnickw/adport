@@ -1,11 +1,15 @@
 'use client';
 
 import { Button } from '@/components/controls';
+import { ActionPopover } from '@/components/action-popover';
+import { FilterButtons } from '@/components/list-controls';
+import { Notice } from '@/components/feedback';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Fragment, useState } from 'react';
-import { Provider, StatusPill, formatDate } from '@/components/ui';
-import { providerLabel, providerAccountsPath, usesAdAccountSlot } from '@/lib/cloud/providers';
+import { Provider, formatDate } from '@/components/ui';
+import { providerLabel, providerAccountsPath, providerResourceName, usesAdAccountSlot } from '@/lib/cloud/providers';
 import type { CloudProvider } from '@/lib/cloud/types';
 import { OpenAIConnectButton } from './openai-connect-button';
 import { OAuthPopupLink } from '@/components/oauth-popup-link';
@@ -33,19 +37,31 @@ export interface OAuthProviderView {
   available: boolean;
 }
 
-export function ProviderConnections({ organizationId, canManage, connections, oauthProviders, returnTo, variant = 'settings' }: {
+export function ProviderConnections({ organizationId, projectName, canManage, connections, oauthProviders, returnTo, variant = 'settings' }: {
   organizationId: string;
+  projectName: string;
   canManage: boolean;
   connections: ConnectionView[];
   oauthProviders: OAuthProviderView[];
   returnTo?: string;
-  variant?: 'settings' | 'onboarding';
+  variant?: 'settings' | 'onboarding' | 'chooser';
 }) {
   const router = useRouter();
   const [confirm, confirmationDialog] = useConfirm();
   const [busy, setBusy] = useState<string>();
   const [notice, setNotice] = useState<Partial<Record<string, { error?: string; success?: string }>>>({});
-  const visibleProviders = oauthProviders.filter(provider => provider.available || find(provider.id)).sort((a, b) => Number(!usesAdAccountSlot(a.id)) - Number(!usesAdAccountSlot(b.id)) || Number(!find(a.id)) - Number(!find(b.id)));
+  const [filter, setFilter] = useState<'all' | 'attention' | 'connected' | 'available'>('all');
+  const settings = variant === 'settings';
+  const chooser = variant === 'chooser';
+  const roster = oauthProviders.filter(provider => provider.available || find(provider.id));
+  const needsAttention = (connection?: ConnectionView) => Boolean(connection && (connection.status !== 'connected' || connection.accountSelectionId));
+  const attention = roster.filter(provider => needsAttention(find(provider.id))).length;
+  const connected = roster.filter(provider => find(provider.id) && !needsAttention(find(provider.id))).length;
+  const visibleProviders = roster.filter(provider => {
+    if (!settings || filter === 'all') return true;
+    const connection = find(provider.id);
+    return filter === 'attention' ? needsAttention(connection) : filter === 'connected' ? connection && !needsAttention(connection) : !connection;
+  }).sort((a, b) => Number(!usesAdAccountSlot(a.id)) - Number(!usesAdAccountSlot(b.id)) || Number(!needsAttention(find(a.id))) - Number(!needsAttention(find(b.id))) || Number(!find(a.id)) - Number(!find(b.id)));
 
   function find(provider: string): ConnectionView | undefined {
     return connections.find((connection) => connection.provider === provider);
@@ -76,17 +92,33 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
   }
 
   return (
-    <section aria-label="Provider connections" className={variant === 'onboarding' ? 'onboarding-platforms' : undefined}>
+    <section aria-label="Provider connections" className={variant === 'onboarding' ? 'onboarding-platforms' : chooser ? 'provider-chooser' : 'provider-settings'}>
       {confirmationDialog}
       {!canManage ? <p className="inline-note">Owners and admins manage connections.</p> : null}
-      {!visibleProviders.length ? <div className="card"><div className="empty"><h2>Platform connections are temporarily unavailable</h2><p>{canManage ? 'You can finish setup now and connect your accounts later. Contact support if this continues.' : 'Ask your organization owner or an admin to connect an ad platform.'}</p></div></div> : <>
+      {Object.entries(notice).map(([id, message]) => message?.error ? <Notice key={id} tone="error">{message.error}</Notice>
+        : message?.success ? <Notice key={id} tone="success">{message.success}</Notice> : null)}
+      {!roster.length ? <div className="card"><div className="empty"><h2>Platform connections are temporarily unavailable</h2><p>{canManage ? 'You can finish setup now and connect your accounts later. Contact support if this continues.' : 'Ask your organization owner or an admin to connect an ad platform.'}</p></div></div> : <>
       <div className="connection-list">
-      <div className="connection-list-heading" aria-hidden="true"><span>Platform</span><span>Status</span><span>Accounts</span><span>Actions</span></div>
+      {settings ? <FilterButtons className="connection-filters" label="Filter platforms" value={filter} onChange={setFilter}
+        options={([['all', 'All', roster.length], ['attention', 'Needs attention', attention], ['connected', 'Connected', connected], ['available', 'Not connected', roster.length - attention - connected]] as const)
+          .map(([value, label, count]) => ({ value, label, count }))} /> : null}
+      {!visibleProviders.length ? <div className="empty compact-empty"><h3>No matching platforms</h3><Button type="button" className="button secondary small" onClick={() => setFilter('all')}>Show all platforms</Button></div> : null}
+      {visibleProviders.length ? <div className="connection-list-heading" aria-hidden="true"><span>Platform</span><span>Status</span><span>{oauthProviders.every(provider => !usesAdAccountSlot(provider.id)) ? 'Sources' : 'Accounts'}</span><span>Actions</span></div> : null}
       <ul className="connection-rows" role="list">
       {visibleProviders.map((provider, index) => {
         const connection = find(provider.id);
-        const message = notice[provider.id];
+        const platform = providerLabel(provider.id);
+        const resources = providerResourceName(provider.id);
+        const healthy = Boolean(connection && !needsAttention(connection));
+        const resumeHref = connection?.status === 'connected' && connection.accountSelectionId && !connection.accountSelectionUnavailable ? '/account-selection?selection_id=' + connection.accountSelectionId : undefined;
         const startHref = `/api/oauth/${provider.id}/start?organization_id=${organizationId}${returnTo ? `&return_to=${encodeURIComponent(returnTo)}` : ''}${provider.id === 'google' && connection?.dataManagerEnabled ? '&data_manager=1' : ''}${provider.id === 'reddit' && connection?.redditConversionsEnabled ? '&conversions=1' : ''}${provider.id === 'pinterest' ? `${connection?.secretPinsEnabled ? '&secret_pins=1' : connection?.pinManagementEnabled ? '&pin_management=1' : ''}${connection?.catalogManagementEnabled ? '&catalog_management=1' : ''}` : ''}`;
+        const connectLabel = !connection ? 'Connect' : connection.status === 'connected' && connection.accountSelectionUnavailable ? 'Restart selection' : healthy ? `Find ${resources}` : 'Reconnect';
+        const connect = canManage && provider.available ? provider.id === 'openai'
+          ? <OpenAIConnectButton organizationId={organizationId} connected={Boolean(connection)} />
+          : <OAuthPopupLink platform={platform} resourceProvider={provider.id} projectName={projectName} className="button secondary" label={`${connectLabel} ${healthy || connectLabel === 'Restart selection' ? 'for ' : ''}${platform}`} href={startHref}>{connectLabel}</OAuthPopupLink> : null;
+        const mainAction = !canManage ? null : resumeHref
+          ? <Link className="button" prefetch={false} href={resumeHref}>Choose {resources}</Link>
+          : healthy && settings ? <Link className="button secondary" href={providerAccountsPath(provider.id)}>View {resources}</Link> : connect;
         return (
           <Fragment key={provider.id}>
           {visibleProviders.some(item => !usesAdAccountSlot(item.id)) && visibleProviders.some(item => usesAdAccountSlot(item.id))
@@ -95,41 +127,28 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
           <li className="connection-row" data-connected={Boolean(connection)} id={'platform-' + provider.id} key={provider.id} aria-label={providerLabel(provider.id)}>
             <Provider name={provider.id} />
             <div className="connection-status">
-              {connection?.accountSelectionId && connection.status === 'connected' ? <span className={'status ' + (connection.accountSelectionUnavailable ? 'warn' : 'neutral')}>{connection.accountSelectionUnavailable ? 'Restart selection' : 'Choose accounts'}</span> : connection ? <StatusPill status={connection.status} /> : <span className="status neutral">{provider.available ? 'Not connected' : 'Unavailable'}</span>}
-              {connection ? <InfoTooltip label={'Connection details for ' + providerLabel(provider.id)}>Last verified {formatDate(connection.lastVerifiedAt ?? connection.connectedAt)}. Connecting a platform and enabling individual accounts are separate steps.</InfoTooltip> : null}
+              <span className={`status ${healthy ? '' : connection ? 'warn' : 'neutral'}`}>{healthy ? 'Connected' : resumeHref ? 'Selection pending' : connection?.accountSelectionUnavailable && connection.status === 'connected' ? 'Selection expired or unavailable' : connection ? 'Reconnect needed' : 'Not connected'}</span>
+              {connection && settings ? <InfoTooltip label={'Connection details for ' + platform}>Last verified {formatDate(connection.lastVerifiedAt ?? connection.connectedAt)}.</InfoTooltip> : null}
             </div>
             <div className="connection-accounts">
-              {connection?.accountSelectionId && connection.status === 'connected' ? (
-                canManage && !connection.accountSelectionUnavailable ? <a href={`/account-selection?selection_id=${connection.accountSelectionId}`}>Finish selection</a> : <span>{connection.accountSelectionUnavailable ? 'New authorization needed' : 'Selection pending'}</span>
-              ) : connection?.status === 'connected' ? (
-                <a href={providerAccountsPath(provider.id)} aria-label={`View ${providerLabel(provider.id)} accounts`}>
-                  {accountSummary(connection.externalLabel)}
-                </a>
-              ) : <span>{connection ? 'Reconnect to verify' : '—'}</span>}
+              {healthy ? accountSummary(provider.id, connection?.externalLabel ?? null) : '—'}
             </div>
             <div className="connection-actions">
-            {canManage ? (
-              connection || provider.available ? (
-                <>
-                  {provider.id === 'openai' && provider.available ? <OpenAIConnectButton organizationId={organizationId} connected={Boolean(connection)} /> : !connection && provider.available ? <OAuthPopupLink className="button" label={`Connect ${providerLabel(provider.id)}`} href={startHref}>Connect</OAuthPopupLink> : null}
-                  {connection?.accountSelectionId && connection.status === 'connected' && !connection.accountSelectionUnavailable ? <a className="button secondary" href={'/account-selection?selection_id=' + connection.accountSelectionId}>Choose accounts</a>
-                    : connection && provider.available && provider.id !== 'openai' ? <OAuthPopupLink className="button secondary" label={`${connection.status !== 'connected' ? 'Reconnect' : connection.accountSelectionUnavailable ? 'Restart selection for' : 'Change accounts for'} ${providerLabel(provider.id)}`} href={startHref}>{connection.status !== 'connected' ? 'Reconnect' : connection.accountSelectionUnavailable ? 'Restart selection' : 'Change accounts'}</OAuthPopupLink> : null}
-                  {provider.id === 'google' && provider.available && connection?.status === 'connected' && !connection.accountSelectionId && !connection.dataManagerEnabled && variant === 'settings' ? <OAuthPopupLink className="button secondary" label="Authorize Google conversion imports with additional Data Manager permission" href={`${startHref}&data_manager=1`}>Enable conversion imports</OAuthPopupLink> : null}
-                  {provider.id === 'reddit' && provider.available && connection?.status === 'connected' && !connection.accountSelectionId && !connection.redditConversionsEnabled && variant === 'settings' ? <OAuthPopupLink className="button secondary" label="Authorize Reddit conversion events with the additional adsconversions permission" href={`${startHref}&conversions=1`}>Enable conversion events</OAuthPopupLink> : null}
-                  {provider.id === 'pinterest' && provider.available && connection && !connection.accountSelectionId && !connection.pinManagementEnabled && !connection.secretPinsEnabled && variant === 'settings' ? <OAuthPopupLink className="button secondary" label="Authorize Pinterest public board, Pin and media management with additional permissions" href={`${startHref}&pin_management=1`}>Enable Pin management</OAuthPopupLink> : null}
-                  {provider.id === 'pinterest' && provider.available && connection?.pinManagementEnabled && !connection.accountSelectionId && !connection.secretPinsEnabled && variant === 'settings' ? <OAuthPopupLink className="button secondary" label="Authorize Pinterest secret board and Pin management with four additional private-content permissions" href={`${startHref}&secret_pins=1`}>Enable secret Pin management</OAuthPopupLink> : null}
-                  {provider.id === 'pinterest' && provider.available && connection?.status === 'connected' && !connection.accountSelectionId && !connection.catalogManagementEnabled && variant === 'settings' ? <OAuthPopupLink className="button secondary" label="Authorize Pinterest catalogs and feeds with two additional catalog permissions" href={`${startHref}&catalog_management=1`}>Enable catalogs</OAuthPopupLink> : null}
-                  {connection && variant !== 'onboarding' ? <Button className="button secondary small" aria-label={`Disconnect ${providerLabel(provider.id)}`} type="button" disabled={busy === provider.id} onClick={() => void disconnect(provider.id, shortLabel(provider.id))}>{busy === provider.id ? 'Disconnecting…' : 'Disconnect'}</Button> : null}
-                </>
-              ) : null
-            ) : (
-              <span className="inline-note">View only</span>
-            )}
+            {canManage ? mainAction : healthy ? <Link className="button secondary" href={providerAccountsPath(provider.id)}>View {resources}</Link> : null}
+            {canManage && connection && settings ? <ActionPopover label={`Manage ${platform}`} triggerLabel="Manage" panelClassName="row-action-panel">
+              {close => <>
+                  {healthy ? connect : null}
+                  {provider.id === 'google' && provider.available && connection?.status === 'connected' && !connection.accountSelectionId && !connection.dataManagerEnabled && variant === 'settings' ? <OAuthPopupLink platform={platform} projectName={projectName} className="button secondary" label="Authorize Google conversion imports with additional Data Manager permission" href={`${startHref}&data_manager=1`}>Enable conversion imports</OAuthPopupLink> : null}
+                  {provider.id === 'reddit' && provider.available && connection?.status === 'connected' && !connection.accountSelectionId && !connection.redditConversionsEnabled && variant === 'settings' ? <OAuthPopupLink platform={platform} projectName={projectName} className="button secondary" label="Authorize Reddit conversion events with the additional adsconversions permission" href={`${startHref}&conversions=1`}>Enable conversion events</OAuthPopupLink> : null}
+                  {provider.id === 'pinterest' && provider.available && connection && !connection.accountSelectionId && !connection.pinManagementEnabled && !connection.secretPinsEnabled && variant === 'settings' ? <OAuthPopupLink platform={platform} projectName={projectName} className="button secondary" label="Authorize Pinterest public board, Pin and media management with additional permissions" href={`${startHref}&pin_management=1`}>Enable Pin management</OAuthPopupLink> : null}
+                  {provider.id === 'pinterest' && provider.available && connection?.pinManagementEnabled && !connection.accountSelectionId && !connection.secretPinsEnabled && variant === 'settings' ? <OAuthPopupLink platform={platform} projectName={projectName} className="button secondary" label="Authorize Pinterest secret board and Pin management with four additional private-content permissions" href={`${startHref}&secret_pins=1`}>Enable secret Pin management</OAuthPopupLink> : null}
+                  {provider.id === 'pinterest' && provider.available && connection?.status === 'connected' && !connection.accountSelectionId && !connection.catalogManagementEnabled && variant === 'settings' ? <OAuthPopupLink platform={platform} projectName={projectName} className="button secondary" label="Authorize Pinterest catalogs and feeds with two additional catalog permissions" href={`${startHref}&catalog_management=1`}>Enable catalogs</OAuthPopupLink> : null}
+                  <Button className="button secondary small" aria-label={`Disconnect ${platform}`} type="button" pending={busy === provider.id} pendingLabel="Disconnecting…" onClick={() => { close(); void disconnect(provider.id, shortLabel(provider.id)); }}>Disconnect</Button>
+              </>}
+            </ActionPopover> : null}
             </div>
-            {connection?.status === 'error' ? <div className="error-callout connection-feedback" role="alert">{connection.lastError ?? 'Verification failed. Reconnect to retry.'}</div> : null}
-            {connection?.accountSelectionUnavailable && !provider.available ? <div className="error-callout connection-feedback" role="alert">This platform connection needs to be restarted, but new authorization is currently unavailable. Contact support.</div> : null}
-            {message?.error ? <div className="error-callout connection-feedback" role="alert">{message.error}</div> : null}
-            {message?.success ? <div className="callout success connection-feedback" role="status">{message.success}</div> : null}
+            {connection?.status === 'error' && !chooser ? <Notice tone="error" className="connection-feedback">{connection.lastError ?? 'Verification failed. Reconnect to retry.'}</Notice> : null}
+            {connection?.accountSelectionUnavailable && !provider.available ? <Notice tone="error" className="connection-feedback">This platform connection needs to be restarted, but new authorization is currently unavailable. Contact support.</Notice> : null}
           </li></Fragment>
         );
       })}
@@ -140,9 +159,9 @@ export function ProviderConnections({ organizationId, canManage, connections, oa
   );
 }
 
-function accountSummary(label: string | null): string {
+function accountSummary(provider: string, label: string | null): string {
   const count = label?.match(/^(\d+) (?:accessible|added) .+ account\(s\)$/)?.[1];
-  return count ? `${count} ${count === '1' ? 'account' : 'accounts'}` : label ?? 'View accounts';
+  return count ? `${count} ${providerResourceName(provider, Number(count))}` : label ?? '—';
 }
 
 function shortLabel(provider: string): string {

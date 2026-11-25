@@ -11,14 +11,14 @@ const connection: ConnectionView = {
 };
 
 function render(options: { canManage?: boolean; available?: boolean; connections?: ConnectionView[]; returnTo?: string } = {}) {
-  return renderToStaticMarkup(<ProviderConnections organizationId="org" canManage={options.canManage ?? true}
+  return renderToStaticMarkup(<ProviderConnections organizationId="org" projectName="Fixture" canManage={options.canManage ?? true}
     connections={options.connections ?? [connection]} returnTo={options.returnTo}
     oauthProviders={OAUTH_PROVIDERS.map(id => ({ id, available: options.available ?? true }))} />);
 }
 
 describe('compact provider connection list', () => {
   it('connects OpenAI through the key dialog and keeps account selection separate', () => {
-    const html = renderToStaticMarkup(<ProviderConnections organizationId="org" canManage connections={[]}
+    const html = renderToStaticMarkup(<ProviderConnections organizationId="org" projectName="Fixture" canManage connections={[]}
       oauthProviders={[{ id: 'openai', available: true }]} />);
     expect(html).toContain('Connect OpenAI Ads');
     expect(html).not.toContain('/api/oauth/openai/');
@@ -115,7 +115,7 @@ describe('compact provider connection list', () => {
   it('offers reconnection for revoked grants without implying healthy access', () => {
     const html = render({ connections: [{ ...connection, status: 'revoked' }] });
     expect(html).toContain('>Reconnect</a>');
-    expect(html).toContain('Reconnect to verify');
+    expect(html).toContain('Reconnect needed');
   });
 
   it('restarts an unavailable selection instead of sending users back to an expired link', () => {
@@ -137,7 +137,7 @@ describe('compact provider connection list', () => {
     expect(html).not.toContain('LinkedIn Ads');
     expect(html).toContain('Google Ads');
     expect(html).not.toContain('/api/oauth/');
-    expect(html).toContain('>Disconnect</button>');
+    expect(html).toContain('aria-label="Disconnect Google Ads"');
   });
 
   it('explains how to continue when no platforms can be connected', () => {

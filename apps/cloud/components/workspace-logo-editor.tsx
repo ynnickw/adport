@@ -54,8 +54,8 @@ export function WorkspaceLogoEditor({ kind, id, name, logoUrl }: {
             event.currentTarget.value = '';
             if (file) void change(file);
           }} />
-          <Button type="button" className="button secondary small" disabled={Boolean(busy)} aria-describedby={hintId} onClick={() => input.current?.click()}>{busy === 'upload' ? 'Uploading…' : currentUrl ? 'Replace logo' : 'Upload logo'}</Button>
-          {currentUrl ? <Button type="button" className="button secondary small" disabled={Boolean(busy)} onClick={() => void change(null)}>{busy === 'remove' ? 'Removing…' : 'Remove logo'}</Button> : null}
+          <Button type="button" className="button secondary small" disabled={Boolean(busy)} pending={busy === 'upload'} pendingLabel="Uploading…" aria-describedby={hintId} onClick={() => input.current?.click()}>{currentUrl ? 'Replace logo' : 'Upload logo'}</Button>
+          {currentUrl ? <Button type="button" className="button secondary small" disabled={Boolean(busy)} pending={busy === 'remove'} pendingLabel="Removing…" onClick={() => void change(null)}>Remove logo</Button> : null}
         </div>
         <p id={hintId} className="inline-note">PNG, JPG, or WebP up to 2 MB. A square image works best.</p>
       </div>

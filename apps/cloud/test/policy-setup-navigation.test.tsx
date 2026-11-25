@@ -48,7 +48,8 @@ describe('policy customization during onboarding', () => {
 
   it('returns to setup without losing the intended dashboard destination', async () => {
     const html = renderToStaticMarkup(await PoliciesPage({ searchParams: Promise.resolve({ setup: '1', return_to: '/dashboard/agents' }) }));
-    expect(html).toContain('Client policy');
+    expect(html).toContain('Client · Cloud assistants');
+    expect(html).toContain('Safeguards');
     expect(html).toContain('Back to setup');
     expect(html).toContain('href="/onboarding?resume=1&amp;return_to=%2Fdashboard%2Fagents"');
   });

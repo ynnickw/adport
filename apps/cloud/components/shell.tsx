@@ -32,12 +32,13 @@ export function Shell({ tenant, pendingApprovals = 0, children }: { tenant: Shel
               <span className="user-sub">{tenant.email}</span>
             </span>
           </div>
+          <Link className="link-button sidebar-preferences" href="/dashboard/preferences" prefetch={false}>Preferences</Link>
           <form action={signOut}>
             <Button className="link-button" type="submit">Sign out</Button>
           </form>
         </div>
       </SidebarFrame>
-      <div className="main" id="content" tabIndex={-1}><ContextNav />{children}</div>
+      <div className="main" id="content" tabIndex={-1}><ContextNav canManage={['owner', 'admin'].includes(tenant.role)} />{children}</div>
       <SupportWidget />
     </div>
   );

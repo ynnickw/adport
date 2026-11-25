@@ -71,7 +71,7 @@ export function SupportWidget() {
               <label className="field"><span>Message type</span><Select name="kind" defaultValue="support" aria-label="Message type" options={[{ value: 'support', label: 'Question' }, { value: 'feedback', label: 'Product feedback' }, { value: 'bug', label: 'Bug report' }]} /></label>
               <label className="field"><span>Your message</span><Textarea data-autofocus ref={firstInput} name="message" minLength={10} maxLength={5000} required placeholder="Hi Yannick, I could use a hand with…" /></label>
               <Input className="support-honeypot" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" />
-              <div className="modal-actions"><Button className="button" disabled={busy}>{busy ? 'Sending…' : 'Send to Yannick'}</Button><Button className="button secondary" type="button" onClick={() => setOpen(false)}>Close</Button></div>
+              <div className="modal-actions"><Button className="button" pending={busy} pendingLabel="Sending…">Send to Yannick</Button><Button className="button secondary" type="button" onClick={() => setOpen(false)}>Close</Button></div>
               <a className="inline-note" href="mailto:yannick@adport.dev?subject=Adport%20support">Prefer email? yannick@adport.dev ↗</a>
             </form>
         </Dialog>

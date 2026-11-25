@@ -1,18 +1,22 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Account } from '@adport/core';
 import { Provider } from '@/components/ui';
 import { accountSelectionSavedPath } from '@/lib/account-selection-path';
-import { Button, Checkbox, Input } from '@/components/controls';
+import { Button, Checkbox } from '@/components/controls';
+import { ConnectionSteps } from '@/components/connection-steps';
+import { DataCell, DataTable } from '@/components/data-table';
+import { Notice } from '@/components/feedback';
+import { SearchField } from '@/components/list-controls';
 import { InfoTooltip } from '@/components/info-tooltip';
 import { UpgradeButton } from '@/components/upgrade-button';
 import { PlanLimitModal } from '@/components/plan-limit-modal';
 import { planLimitFromResponse, type PlanLimitDetails } from '@/lib/cloud/plan-limit';
-import { useUpgradeContext } from '@/components/upgrade-context';
-import { usesAdAccountSlot } from '@/lib/cloud/providers';
+import { useConfirm } from '@/components/use-confirm';
+import { providerResourceName, usesAdAccountSlot } from '@/lib/cloud/providers';
 
 export interface ProviderAccountSelection {
   id: string;
@@ -21,15 +25,7 @@ export interface ProviderAccountSelection {
   pages?: Array<{ id: string; name: string; category?: string }>;
 }
 
-export function AccountConnectionProgress({ stage = 'choose' }: { stage?: 'choose' | 'enable' | 'ready' }) {
-  return <ol className="account-connection-progress" aria-label="Account connection progress">
-    <li data-complete="true"><span aria-hidden="true">✓</span><span>Platform connected</span></li>
-    <li data-complete={stage !== 'choose'} aria-current={stage === 'choose' ? 'step' : undefined}><span aria-hidden="true">{stage !== 'choose' ? '✓' : '•'}</span><span>Choose accounts</span></li>
-    <li data-complete={stage === 'ready'} aria-current={stage === 'enable' ? 'step' : undefined}><span aria-hidden="true">{stage === 'ready' ? '✓' : '•'}</span><span>Enable access</span></li>
-  </ol>;
-}
-
-export function ProviderAccountPicker({ organizationId, selectionId, provider, accounts, initialSelectedIds, initialEnabledIds = [], maxActiveAccounts = null, organizationActiveCount = 0, pages, backHref = '/dashboard/connections', nextPath }: {
+export function ProviderAccountPicker({ organizationId, selectionId, provider, accounts, initialSelectedIds, initialEnabledIds = [], maxActiveAccounts = null, organizationActiveCount = 0, pages, backHref = '/dashboard/connections', nextPath, showProgress = true }: {
   organizationId: string; selectionId: string; provider: string;
   accounts: Account[]; initialSelectedIds: string[];
   pages?: Array<{ id: string; name: string; category?: string }>;
@@ -38,6 +34,7 @@ export function ProviderAccountPicker({ organizationId, selectionId, provider, a
   initialEnabledIds?: string[];
   maxActiveAccounts?: number | null;
   organizationActiveCount?: number;
+  showProgress?: boolean;
 }) {
   const router = useRouter();
   const singleAccount = accounts.length === 1;
@@ -47,16 +44,32 @@ export function ProviderAccountPicker({ organizationId, selectionId, provider, a
   const [error, setError] = useState<string>();
   const [planLimit, setPlanLimit] = useState<PlanLimitDetails>();
   const [pending, startTransition] = useTransition();
-  const { canManageBilling } = useUpgradeContext();
+  const [saveMode, setSaveMode] = useState<'enable' | 'import'>();
+  const [confirm, confirmationDialog] = useConfirm();
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { heading.current?.focus({ preventScroll: true }); }, []);
   const visible = accounts.filter(account => `${account.name} ${account.id}`.toLowerCase().includes(query.trim().toLowerCase()));
   const chosenIds = singleAccount ? accounts.map(account => account.id) : [...selected];
+  const chosen = new Set(chosenIds);
+  const removedCount = initialSelectedIds.filter(id => !chosen.has(id)).length;
   const enabledElsewhere = organizationActiveCount - initialEnabledIds.length;
   const billable = usesAdAccountSlot(provider);
-  const exceedsLimit = billable && maxActiveAccounts !== null && enabledElsewhere + chosenIds.length > maxActiveAccounts;
+  const showCurrency = billable || accounts.some(account => Boolean(account.currency));
+  const resource = providerResourceName(provider);
+  const singular = providerResourceName(provider, 1);
+  const header = singular[0]!.toUpperCase() + singular.slice(1);
+  const exceedsLimit = billable && chosenIds.length > 0 && maxActiveAccounts !== null && enabledElsewhere + chosenIds.length > maxActiveAccounts;
+  const limitMessage = `Enabling this selection would use ${enabledElsewhere + chosenIds.length} account slots. Your organization’s plan includes ${maxActiveAccounts}.`;
 
-  function save(enableAccess: boolean) {
+  async function save(enableAccess: boolean) {
     const accountIds = chosenIds;
+    if (removedCount && !await confirm({
+      title: `Remove ${removedCount} ${providerResourceName(provider, removedCount)} from this project?`,
+      description: `Saving removes the unselected ${resource} from Adport and its assistants. It does not change anything at the platform.`,
+      confirmLabel: 'Remove and save',
+    })) return;
     setError(undefined);
+    setSaveMode(enableAccess ? 'enable' : 'import');
     startTransition(async () => {
       try {
         const response = await fetch('/api/account-selection', {
@@ -70,50 +83,51 @@ export function ProviderAccountPicker({ organizationId, selectionId, provider, a
         if (limit) { setPlanLimit(limit); return; }
         if (!response.ok) { setError(body.error ?? 'Could not save account selection.'); return; }
         router.replace(accountSelectionSavedPath(nextPath ?? body.returnPath ?? '/dashboard/accounts', provider, enableAccess && accountIds.length > 0));
-        router.refresh();
       } catch { setError('Could not save account selection. Check your connection and try again.'); }
     });
   }
 
-  return <div className="account-selection-step"><AccountConnectionProgress /><section className="card account-selection-card">
+  return <div className="account-selection-step">{showProgress ? <ConnectionSteps active={pending ? 'save' : 'choose'} resources={resource} /> : null}<section className="card account-selection-card">
+    {confirmationDialog}
     <PlanLimitModal limit={planLimit} onClose={() => setPlanLimit(undefined)} />
-    <div className="card-head"><h2><Provider name={provider} /></h2><span className="card-note" aria-live="polite">{singleAccount ? '1 account available' : `${selected.size} of ${accounts.length} selected`}</span></div>
+    <div className="card-head"><h2 ref={heading} tabIndex={-1}><Provider name={provider} /></h2><span className="card-note" aria-live="polite">{singleAccount ? `1 ${singular} available` : `${selected.size} of ${accounts.length} selected`}</span></div>
     {!singleAccount && accounts.length > 0 ? <div className="account-picker-toolbar">
-      <label className="account-picker-search">Search accounts<Input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Account name or ID" /></label>
+      <label className="account-picker-search">Search {resource}<SearchField value={query} disabled={pending} onChange={event => setQuery(event.target.value)} placeholder={`${header} name or ID`} /></label>
       <Button type="button" className="button secondary small" disabled={pending || !visible.length} onClick={() => setSelected(current => new Set([...current, ...visible.map(account => account.id)]))}>{query.trim() ? 'Select matching' : 'Select all'}</Button>
       <Button type="button" className="button secondary small" disabled={pending || !selected.size} onClick={() => setSelected(new Set())}>Clear selection</Button>
     </div> : null}
-    {error ? <div role="alert" className="error-callout">{error}</div> : null}
-    {visible.length ? <div className="table-wrap"><table className="stack-on-mobile account-picker-table">
-      <thead><tr>{!singleAccount ? <th>Add</th> : null}<th>Account</th><th>Currency</th><th>Platform status</th></tr></thead>
-      <tbody>{visible.map(account => <tr key={account.id}>
-        {!singleAccount ? <td data-label="Add"><Checkbox aria-label={`Add ${account.name} (${account.id})`} checked={selected.has(account.id)} disabled={pending} onChange={event => {
+    {error ? <Notice tone="error">{error}</Notice> : null}
+    {visible.length ? <DataTable busy={pending} responsive className="account-picker-table" columns={[...(!singleAccount ? ['Add'] : []), header, ...(showCurrency ? ['Currency'] : []), 'Platform status']}>
+      {visible.map(account => <tr key={account.id}>
+        {!singleAccount ? <DataCell label="Add"><Checkbox aria-label={`Add ${account.name} (${account.id})`} checked={selected.has(account.id)} disabled={pending} onChange={event => {
           const checked = event.target.checked;
           setSelected(current => { const next = new Set(current); if (checked) next.add(account.id); else next.delete(account.id); return next; });
-        }} /></td> : null}
-        <td data-label="Account"><strong>{account.name}</strong><div className="cell-sub">{account.id}</div></td>
-        <td data-label="Currency">{account.currency ?? '—'}</td><td data-label="Platform status"><span className="status neutral">{account.status ?? 'available'}</span></td>
-      </tr>)}</tbody>
-    </table></div> : <div className="empty"><h3>{accounts.length ? 'No matching accounts' : 'No accounts returned'}</h3><p>{accounts.length ? 'Try another name or account ID.' : 'The provider did not return any accounts for this authorization. You can finish without adding accounts and re-authorize later.'}</p></div>}
+        }} /></DataCell> : null}
+        <DataCell label={header}><strong>{account.name}</strong><div className="cell-sub">{account.id}</div></DataCell>
+        {showCurrency ? <DataCell label="Currency">{account.currency ?? '—'}</DataCell> : null}<DataCell label="Platform status"><span className="status neutral">{account.status ?? 'available'}</span></DataCell>
+      </tr>)}
+    </DataTable> : <div className="empty"><h3>{accounts.length ? `No matching ${resource}` : `No ${resource} returned`}</h3><p>{accounts.length ? 'Try another name or ID.' : `This connection returned no ${resource}. Continue without adding any, or reconnect later.`}</p></div>}
     {provider === 'meta' && pages !== undefined ? <section aria-labelledby="meta-pages-heading">
       <div className="card-head"><h2 id="meta-pages-heading">Facebook Pages</h2><span className="card-note" aria-live="polite">{selectedPages.size} of {pages.length} selected</span></div>
-      <div className="account-picker-help"><span>Optional Page access</span><InfoTooltip label="About Page access">Choose which Pages Adport and your connected agents may read. Pages are separate from ad accounts; selecting one does not link it to an account or publish content.</InfoTooltip></div>
-      {pages.length ? <div className="table-wrap"><table>
-        <thead><tr><th>Allow</th><th>Page</th><th>Category</th></tr></thead>
-        <tbody>{pages.map(page => <tr key={page.id}>
-          <td><Checkbox aria-label={`Allow Page ${page.name} (${page.id})`} checked={selectedPages.has(page.id)} disabled={pending}
-            onChange={event => { const checked = event.target.checked; setSelectedPages(current => { const next = new Set(current); if (checked) next.add(page.id); else next.delete(page.id); return next; }); }} /></td>
-          <td><strong>{page.name}</strong><div className="cell-sub">{page.id}</div></td><td>{page.category ?? '—'}</td>
-        </tr>)}</tbody>
-      </table></div> : <p className="inline-note" style={{ padding: '0 1.5rem' }}>Meta returned no Pages. To grant a Page, re-authorize Meta and use Edit settings in Facebook to review Page access.</p>}
-      {!selectedPages.size ? <p className="inline-note" style={{ padding: '0 1.5rem' }}>No Pages selected. Page tools will have no access; ad-account access is managed separately.</p> : null}
+      <div className="account-picker-help"><span>Optional Page access</span><InfoTooltip label="About Page access">Page tools will have no access unless you select a Page. Selecting a Page allows reading; it does not link it to an ad account or publish content.</InfoTooltip></div>
+      {pages.length ? <DataTable responsive columns={['Allow', 'Page', 'Category']}>
+        {pages.map(page => <tr key={page.id}>
+          <DataCell label="Allow"><Checkbox aria-label={`Allow Page ${page.name} (${page.id})`} checked={selectedPages.has(page.id)} disabled={pending}
+            onChange={event => { const checked = event.target.checked; setSelectedPages(current => { const next = new Set(current); if (checked) next.add(page.id); else next.delete(page.id); return next; }); }} /></DataCell>
+          <DataCell label="Page"><strong>{page.name}</strong><div className="cell-sub">{page.id}</div></DataCell><DataCell label="Category">{page.category ?? '—'}</DataCell>
+        </tr>)}
+      </DataTable> : <p className="inline-note" style={{ padding: '0 1.5rem' }}>Meta returned no Pages. To grant a Page, re-authorize Meta and use Edit settings in Facebook to review Page access.</p>}
     </section> : null}
     <div className="account-picker-footer">
-      <p className="account-picker-help">{chosenIds.length ? `Enable ${chosenIds.length === 1 ? 'this account' : 'these accounts'} for Adport and your assistant.` : 'Choose the accounts this project can use.'} <InfoTooltip label="About enabling accounts">{billable ? 'Enabled ad accounts count toward your plan across all projects. Enabling Adport access does not start or change campaigns.' : 'Analytics and tracking accounts do not use ad-account slots.'} Importing without enabling keeps new accounts disabled and preserves access for accounts already enabled.</InfoTooltip></p>
-      {billable && maxActiveAccounts !== null ? <p className={exceedsLimit ? 'error-text' : 'inline-note'} role={exceedsLimit ? 'status' : undefined}>{exceedsLimit ? `Choose fewer accounts or import without enabling. Your plan allows ${maxActiveAccounts} enabled accounts across projects.` : `You can enable up to ${Math.max(0, maxActiveAccounts - enabledElsewhere)} accounts here.`}</p> : !billable ? <p className="inline-note">Analytics and tracking accounts do not use ad-account slots.</p> : null}
-      {exceedsLimit ? <div className="account-picker-upgrade"><UpgradeButton kind="active_accounts" required={enabledElsewhere + chosenIds.length} message={`You need room for ${enabledElsewhere + chosenIds.length} enabled ad accounts across your organization to enable this selection.`} label={canManageBilling ? 'Upgrade to enable these accounts' : 'View plans to enable these accounts'} className="button secondary small" /><span>You can also import them without enabling access.</span></div> : null}
-      {!singleAccount && !selected.size && initialSelectedIds.length ? <p className="inline-note">Saving with nothing selected removes this provider’s accounts from Adport, without changing them at the provider.</p> : null}
-      <div className="account-picker-actions"><Link className="button secondary" href={backHref} aria-disabled={pending} onClick={event => { if (pending) event.preventDefault(); }}>Back</Link><div className="account-picker-submit">{chosenIds.length ? <Button type="button" className="link-button" disabled={pending} onClick={() => save(false)}>Import without enabling</Button> : null}<Button type="button" className="button" disabled={pending || exceedsLimit} onClick={() => save(chosenIds.length > 0)}>{pending ? 'Saving…' : chosenIds.length ? `Add and enable ${chosenIds.length} account${chosenIds.length === 1 ? '' : 's'}` : selectedPages.size ? 'Save Pages and continue' : 'Continue without accounts'}</Button></div></div>
+      <p className="account-picker-help">{billable ? 'Enabling access does not change campaigns.' : 'Sources don’t use ad-account slots.'} <InfoTooltip label={`About enabling ${resource}`}>Importing without enabling keeps new {resource} disabled and preserves existing access.</InfoTooltip></p>
+      {exceedsLimit ? <Notice>{limitMessage} Choose fewer accounts to enable them, or save this selection without enabling.</Notice> : null}
+      {removedCount ? <p className="inline-note selection-removal-note">{removedCount} previously added {providerResourceName(provider, removedCount)} will be removed from this project.</p> : null}
+      <div className="account-picker-actions"><Link className="button secondary" href={backHref} aria-disabled={pending} onClick={event => { if (pending) event.preventDefault(); }}>Back</Link><div className="account-picker-submit">
+        {exceedsLimit ? <UpgradeButton kind="active_accounts" required={enabledElsewhere + chosenIds.length} message={limitMessage} label="Compare plans" className="button secondary" disabled={pending} /> : null}
+        {chosenIds.length ? <Button type="button" className={exceedsLimit ? 'button account-picker-save' : 'link-button'} disabled={pending} pending={pending && saveMode === 'import'} pendingLabel="Saving…" onClick={() => void save(false)}>{exceedsLimit ? 'Save without enabling' : 'Import without enabling'}</Button> : null}
+        {!exceedsLimit ? <Button type="button" className="button account-picker-save" disabled={pending} pending={pending && (saveMode === 'enable' || chosenIds.length === 0)} pendingLabel="Saving…" onClick={() => void save(chosenIds.length > 0)}>{chosenIds.length ? `Add and enable ${chosenIds.length} ${providerResourceName(provider, chosenIds.length)}` : removedCount ? 'Review removals' : selectedPages.size ? 'Save Pages and continue' : `Continue without ${resource}`}</Button> : null}
+      </div></div>
+      <p className="selection-save-status" role="status">{pending ? 'Saving your selection…' : null}</p>
     </div>
   </section></div>;
 }

@@ -38,7 +38,7 @@ describe('one-time account picker', () => {
   it('explains that an empty Page selection grants no Page access', () => {
     const html = renderToStaticMarkup(<ProviderAccountPicker organizationId={organizationId} selectionId={selectionId} provider="meta"
       accounts={[]} initialSelectedIds={[]} pages={[]} />);
-    expect(html).toContain('Meta returned no Pages'); expect(html).toContain('Page tools will have no access');
+    expect(html).toContain('Meta returned no Pages'); expect(html).toContain('Optional Page access');
   });
   it.each(OAUTH_PROVIDERS)('starts unchecked and supports selecting accounts for %s', provider => {
     const html = renderToStaticMarkup(<ProviderAccountPicker organizationId={organizationId} selectionId={selectionId} provider={provider}
@@ -56,7 +56,8 @@ describe('one-time account picker', () => {
   it.each(OAUTH_PROVIDERS)('offers explicit confirmation without checkboxes for one %s account', provider => {
     const html = renderToStaticMarkup(<ProviderAccountPicker organizationId={organizationId} selectionId={selectionId} provider={provider}
       accounts={[{ provider, id: 'a', name: 'Only account', currency: 'EUR' }]} initialSelectedIds={[]} />);
-    expect(html).toContain('Only account'); expect(html).toContain('EUR'); expect(html).toContain('Add and enable 1 account');
+    expect(html).toContain('Only account'); expect(html).toContain('EUR');
+    expect(html).toContain('Add and enable 1 ' + ({ ga4: 'property', gsc: 'site', gtm: 'container' }[provider as 'ga4' | 'gsc' | 'gtm'] ?? 'account'));
     expect(html).not.toContain('type="checkbox"'); expect(html).not.toContain('Select all'); expect(html).not.toContain('Search accounts');
     expect(html).toContain('Import without enabling'); expect(mocks.save).not.toHaveBeenCalled();
   });

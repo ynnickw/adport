@@ -7,7 +7,7 @@ import { Dialog } from '@/components/dialog';
 
 export function OpenAIConnectButton({ organizationId, connected }: { organizationId: string; connected: boolean }) {
   const [open, setOpen] = useState(false);
-  return <><Button className={connected ? 'button secondary' : 'button'} type="button" onClick={() => setOpen(true)} aria-label={connected ? 'Reconnect OpenAI Ads' : 'Connect OpenAI Ads'}>{connected ? 'Reconnect' : 'Connect'}</Button>
+  return <><Button className="button secondary" type="button" onClick={() => setOpen(true)} aria-label={connected ? 'Reconnect OpenAI Ads' : 'Connect OpenAI Ads'}>{connected ? 'Reconnect' : 'Connect'}</Button>
     {open ? <KeyDialog organizationId={organizationId} onClose={() => setOpen(false)} /> : null}</>;
 }
 
@@ -34,7 +34,7 @@ function KeyDialog({ organizationId, onClose }: { organizationId: string; onClos
       <label className="field"><span className="field-label">Advertiser API key</span><Input name="api_key" type="password" required maxLength={4096} autoComplete="off" spellCheck={false} disabled={busy} /></label>
       <p className="field-hint">Your key is stored encrypted for this project. You’ll choose account access before assistants can use it.</p>
       {error ? <p className="error-callout" role="alert">{error}</p> : null}
-      <Button className="button" type="submit" disabled={busy}>{busy ? 'Verifying…' : 'Verify and choose account'}</Button>
+      <Button className="button" type="submit" pending={busy} pendingLabel="Verifying…">Verify and choose account</Button>
     </form>
   </Dialog>;
 }

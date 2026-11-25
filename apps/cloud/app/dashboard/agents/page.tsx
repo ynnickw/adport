@@ -1,15 +1,16 @@
 import { PageHeader } from '@/components/ui';
+import { redirect } from 'next/navigation';
 import { canAdminister, requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { env } from '@/lib/env';
-import { AssistantConnect } from '@/components/assistant-connect';
+import { ConnectAssistantButton } from '@/components/assistant-connect';
 import { getAssistantListings } from '@/lib/cloud/assistant-listings';
-import { ApiKeyManager } from './api-key-manager';
+import { AssistantConnections } from './assistant-connections';
 import Link from 'next/link';
-import { connectedCatalogProviders } from '@/lib/cloud/tool-catalog';
 import { listOrganizationAdAccounts } from '@/lib/cloud/repository';
 import { listMcpOAuthGrants } from '@/lib/cloud/mcp-oauth-repository';
 import { selectProjectAction } from '../projects/actions';
 import { Button } from '@/components/controls';
+import { usesAdAccountSlot } from '@/lib/cloud/providers';
 
 export const metadata = { title: 'AI assistants' };
 
@@ -22,21 +23,25 @@ export default async function AgentsPage({ searchParams }: { searchParams?: Prom
       {target ? <form action={selectProjectAction}><input type="hidden" name="projectId" value={target.id} /><input type="hidden" name="return_to" value={destination} /><Button type="submit" className="button">Open {target.name}</Button></form> : <Link className="button secondary" href="/dashboard/agents">View your assistants</Link>}
     </main>;
   }
+  if (query.kind === 'key') redirect('/dashboard/developer?' + new URLSearchParams({ kind: 'key', ...(query.connection ? { connection: query.connection } : {}) }));
   const baseUrl = env().ADPORT_CLOUD_BASE_URL.replace(/\/$/, '');
   const canManage = canAdminister(tenant);
-  const [accounts, grants, providersByProject] = await Promise.all([
+  const [accounts, grants] = await Promise.all([
     listOrganizationAdAccounts(tenant.organizationId),
     canManage ? listMcpOAuthGrants(tenant.organizationId) : Promise.resolve([]),
-    canManage ? connectedCatalogProviders([tenant.organizationId]) : undefined,
   ]);
   const initialGrants = grants.map(grant => ({ ...grant, createdAt: grant.createdAt.toISOString(), expiresAt: grant.expiresAt.toISOString(), lastUsedAt: grant.lastUsedAt?.toISOString() ?? null }));
-  const active = accounts.filter(account => account.enabled).length;
+  const adAccounts = accounts.filter(account => usesAdAccountSlot(account.provider));
+  const active = adAccounts.filter(account => account.enabled).length;
   return (
     <main className="page">
-      <PageHeader title="AI assistants" description="Connect the AI you use. Ask about performance, find wasted spend, and manage your ads from one conversation." />
+      <PageHeader title="AI assistants" action={<ConnectAssistantButton key={tenant.organizationId} baseUrl={baseUrl} projectName={tenant.organizationName} listings={getAssistantListings()} canManage={canManage} />} />
       <div className="stack agent-access-stack">
-        {!active ? <section className="setup-next-step"><div><strong>{canAdminister(tenant) ? accounts.length ? 'Enable an account first' : 'Add your first ad account' : 'No accounts available yet'}</strong><p>{canAdminister(tenant) ? 'Your assistant can connect now, but it will have no ad accounts to read.' : 'Ask a project owner or admin to enable account access for your assistant.'}</p></div><Link className="button secondary small" href={canAdminister(tenant) && !accounts.length ? '/dashboard/connections' : '/dashboard/accounts'}>{canAdminister(tenant) && !accounts.length ? 'Connect a platform' : 'View accounts'}</Link></section> : null}
-        {canManage ? <ApiKeyManager key={tenant.organizationId} organizationId={tenant.organizationId} currentUserId={tenant.userId} suggestedProviders={providersByProject?.[tenant.organizationId] ?? []} canManage baseUrl={baseUrl} initialGrants={initialGrants} initialCheckedAt={Date.now()} setup={<AssistantConnect baseUrl={baseUrl} projectName={tenant.organizationName} listings={getAssistantListings()} />} /> : <><AssistantConnect key={tenant.organizationId} baseUrl={baseUrl} projectName={tenant.organizationName} listings={getAssistantListings()} /><p className="inline-note">An owner or admin can view this project’s authorized assistants and manage API keys.</p></>}
+        {canManage ? <AssistantConnections key={tenant.organizationId} organizationId={tenant.organizationId} currentUserId={tenant.userId} initialGrants={initialGrants} initialCheckedAt={Date.now()} /> : <p className="inline-note">You can connect an assistant. Owners and admins manage project connections.</p>}
+        <div className="assistant-access-summary"><Link href="/dashboard/accounts">{active ? `View ad account access (${active} enabled)` : canManage && !adAccounts.length ? 'Add accounts' : 'No enabled ad accounts'}</Link>
+          <span>Changes require approval and account permission. <Link href="/dashboard/policies">View safeguards</Link></span>
+          {canManage ? <Link href="/dashboard/developer">Developer settings</Link> : null}
+        </div>
       </div>
     </main>
   );

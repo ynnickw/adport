@@ -13,11 +13,13 @@ const members = [
 describe('company project team controls', () => {
   it('keeps inherited organization roles visible but not editable from a project', () => {
     const html = renderToStaticMarkup(<TeamMembers organizationId="project" currentUserId="owner" currentRole="owner" members={members} />);
-    expect(html).toContain('Organization admin · all projects');
+    expect(html).toContain('Inherited · All projects');
+    expect(html).toContain('<th scope="col">Project access</th>');
     expect(html).not.toContain('Role for admin@example.test');
     expect(html).not.toContain('Role for owner@example.test');
     expect(html).toContain('Role for member@example.test');
-    expect(html.match(/>Remove<\/button>/g)).toHaveLength(1);
+    expect(html.match(/aria-label="Remove [^"]+ from this project"/g)).toHaveLength(1);
+    expect(html).toContain('aria-label="Remove member@example.test from this project"');
   });
 
   it.each(['member', 'viewer'])('gives a %s no invitation, role-change, or removal controls', role => {
