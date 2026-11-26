@@ -1,6 +1,6 @@
 import { AdportError, defineTool, guardedWriteTool, type AnyToolDefinition, type ReviewField, type WriteOperation, type WritePreview } from '@adport/core';
 import { z } from 'zod';
-import { GoogleAdsRestClient, normalizeCustomerId } from './client.js';
+import { GoogleAdsRestClient, isGoogleAdsRejection, normalizeCustomerId } from './client.js';
 import type { GoogleAdsProvider } from './provider.js';
 
 type Row = Record<string, unknown>;
@@ -43,9 +43,20 @@ async function mapBounded<T, R>(values: T[], limit: number, map: (value: T) => P
   return results;
 }
 
-/** A request Google answered, but whose receipt could not be confirmed: it may have been applied. */
-class ReceiptMismatch extends AdportError {
-  constructor(readonly unconfirmed: number) { super('PROVIDER_ERROR', 'google: negative keyword mutation receipt mismatch'); }
+/** A sent batch can succeed even if its connection fails or its receipt is incomplete. */
+class UnconfirmedBatch extends AdportError {
+  constructor(readonly unconfirmed: number, cause?: unknown) {
+    super('PROVIDER_ERROR', cause instanceof Error ? cause.message : 'google: negative keyword mutation receipt mismatch');
+  }
+}
+
+async function confirmBatch<T>(request: Promise<T>, size: number): Promise<T> {
+  try {
+    return await request;
+  } catch (error) {
+    if (isGoogleAdsRejection(error)) throw error;
+    throw new UnconfirmedBatch(size, error);
+  }
 }
 
 /** Case-insensitive text + match type deduplication, keeping the first spelling. */
@@ -154,10 +165,11 @@ export class GoogleNegativeKeywordService {
   /** Runs service mutates in bounded batches; each request is atomic (partialFailure=false). */
   private async batches(account: string, service: string, operations: Row[], validateOnly: boolean, expected: (operation: Row, resource: string) => boolean, acknowledged: string[]) {
     for (const batch of chunks(operations, NEGATIVE_KEYWORD_MUTATE_BATCH)) {
-      const result = await this.client.mutate(account, service, batch, { validateOnly });
-      if (validateOnly) continue;
+      const request = this.client.mutate(account, service, batch, { validateOnly });
+      if (validateOnly) { await request; continue; }
+      const result = await confirmBatch(request, batch.length);
       const resources = (result.results ?? []).map(value => value.resourceName ?? '');
-      if (resources.length !== batch.length || resources.some((resource, index) => !expected(batch[index]!, resource))) throw new ReceiptMismatch(batch.length);
+      if (resources.length !== batch.length || resources.some((resource, index) => !expected(batch[index]!, resource))) throw new UnconfirmedBatch(batch.length);
       acknowledged.push(...resources);
     }
   }
@@ -165,7 +177,7 @@ export class GoogleNegativeKeywordService {
   private outcome(error: unknown, acknowledged: string[], total: number, guidance: string, details: Row = {}) {
     // Only a request Google rejected outright, before anything was confirmed, is
     // known to have changed nothing; anything else may have been applied.
-    const unconfirmed = error instanceof ReceiptMismatch ? error.unconfirmed : 0;
+    const unconfirmed = error instanceof UnconfirmedBatch ? error.unconfirmed : 0;
     if (!acknowledged.length && !unconfirmed && error instanceof AdportError) return error;
     const pending = unconfirmed ? ` A request of ${plural(unconfirmed, 'operation')} was sent but its receipt could not be confirmed; it may have been applied.` : '';
     return new AdportError('PROVIDER_ERROR', `google: negative keyword change stopped after ${acknowledged.length} of ${total} confirmed operations.${pending} ${guidance} Each request is atomic; earlier batches remain applied.`, { resourceIds: acknowledged, ...(unconfirmed ? { unconfirmed_operations: unconfirmed } : {}), ...details, cause: error instanceof Error ? error.message : String(error) });
@@ -208,14 +220,14 @@ export class GoogleNegativeKeywordService {
         let list: string | undefined, listId: string | undefined;
         try {
           const [first, ...rest] = keywordChunks;
-          const result = await this.client.googleAdsMutate(account, [{ sharedSetOperation: { create: { resourceName: temp, name: input.name, type: 'NEGATIVE_KEYWORDS' } } }, ...first!.map(value => ({ sharedCriterionOperation: { create: criterion(temp, value) } }))], { validateOnly: false });
+          const result = await confirmBatch(this.client.googleAdsMutate(account, [{ sharedSetOperation: { create: { resourceName: temp, name: input.name, type: 'NEGATIVE_KEYWORDS' } } }, ...first!.map(value => ({ sharedCriterionOperation: { create: criterion(temp, value) } }))], { validateOnly: false }), first!.length + 1);
           const responses = result.mutateOperationResponses ?? [];
           list = responses[0]?.sharedSetResult?.resourceName; listId = list?.match(new RegExp(`^customers/${account}/sharedSets/([1-9]\\d*)$`))?.[1];
-          if (!listId) throw new ReceiptMismatch(first!.length + 1);
+          if (!listId) throw new UnconfirmedBatch(first!.length + 1);
           // Record the list before checking the keyword receipts so a mismatch still names it.
           acknowledged.push(list!);
           const criterionPattern = new RegExp(`^customers/${account}/sharedCriteria/${listId}~[1-9]\\d*$`);
-          if (responses.length !== first!.length + 1 || responses.slice(1).some(value => !criterionPattern.test(value.sharedCriterionResult?.resourceName ?? ''))) throw new ReceiptMismatch(first!.length);
+          if (responses.length !== first!.length + 1 || responses.slice(1).some(value => !criterionPattern.test(value.sharedCriterionResult?.resourceName ?? ''))) throw new UnconfirmedBatch(first!.length);
           acknowledged.push(...responses.slice(1).map(value => value.sharedCriterionResult!.resourceName!));
           await this.batches(account, 'sharedCriteria', rest.flat().map(value => ({ create: criterion(list!, value) })), false, (_, resource) => criterionPattern.test(resource), acknowledged);
           await this.batches(account, 'campaignSharedSets', campaigns.map(value => ({ create: { campaign: value.resourceName, sharedSet: list } })), false, (operation, resource) => resource === `${String(object(operation.create).campaign).replace('/campaigns/', '/campaignSharedSets/')}~${listId}`, acknowledged);

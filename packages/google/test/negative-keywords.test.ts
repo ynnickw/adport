@@ -27,6 +27,7 @@ function fixture() {
     links: [{ campaign: '11', set: '501' }] as Row[],
     campaigns: [campaign('11', 'Search FR'), campaign('12', 'Search BE', 'PAUSED'), campaign('13', 'Search CH')] as Row[],
     campaignNegatives: [{ campaign: '12', id: '7001', text: 'Cheap', matchType: 'EXACT' }] as Row[],
+    response: undefined as undefined | ((url: string, body: Row) => Response | undefined),
     fail: undefined as undefined | ((url: string, body: Row) => boolean),
     receipt: undefined as undefined | ((url: string, response: Row) => Row),
     inventoryReads: { active: 0, peak: 0 },
@@ -38,6 +39,8 @@ function fixture() {
     if (url.includes('oauth2.googleapis.com')) return Response.json({ access_token: 'inert', expires_in: 3600 });
     const body = JSON.parse(String(init.body ?? '{}')) as Row;
     calls.push({ url, method: String(init.method), body, headers: init.headers as Row });
+    const override = state.response?.(url, body);
+    if (override) return override;
     if (state.fail?.(url, body)) return Response.json({ error: { code: 400, message: 'Request contains an invalid argument.', status: 'INVALID_ARGUMENT', details: [{ '@type': 'type.googleapis.com/google.ads.googleads.v25.errors.GoogleAdsFailure', errors: [{ errorCode: { criterionError: 'KEYWORD_HAS_INVALID_CHARS' }, message: 'Keyword text has invalid characters.', location: { fieldPathElements: [{ fieldName: 'operations', index: 0 }, { fieldName: 'create' }] } }], requestId: 'req-1' }] } }, { status: 400 });
     if (url.endsWith('/googleAds:search')) {
       const query = String(body.query), from = query.match(/ FROM (\w+) /)![1];
@@ -260,6 +263,24 @@ describe('Google negative keyword tools', () => {
     f.state.fail = undefined;
     // Re-running the same request skips the 1,000 keywords already applied.
     expect((await f.provider.applyWrite(op('google_update_negative_keyword_list', { shared_set_id: '501', add_keywords: keywords }, 'update'), guard)).details).toMatchObject({ added: 500, skipped_already_present: 1000 });
+  });
+
+  it.each(['network', 'server'])('reports an unconfirmed first batch after a %s failure without retrying', async failure => {
+    const f = fixture();
+    f.state.response = (url, body) => {
+      if (!url.endsWith(':mutate') || body.validateOnly) return undefined;
+      if (failure === 'network') throw new TypeError('connection lost');
+      return Response.json({ error: { code: 503, status: 'UNAVAILABLE' } }, { status: 503 });
+    };
+    const create = op('google_create_negative_keyword_list', { name: 'QA list', keywords: [kw('one')] }, 'create');
+    const update = op('google_update_negative_keyword_list', { shared_set_id: '501', add_keywords: [kw('one')] }, 'update');
+    for (const [index, write] of [create, update].entries()) {
+      await expect(f.provider.applyWrite(write, guard)).rejects.toMatchObject({
+        code: 'PROVIDER_ERROR', message: expect.stringContaining('may have been applied'),
+        details: { resourceIds: [], unconfirmed_operations: index === 0 ? 2 : 1 },
+      });
+    }
+    expect(mutates(f)).toHaveLength(2);
   });
 
   it('keeps writes behind the two-step policy gate', async () => {
