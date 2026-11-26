@@ -171,8 +171,7 @@ it('keeps the expanded publisher catalog below the metadata limit with GTM and S
       return total + Buffer.byteLength(JSON.stringify(definition)) + 360;
     }, 0);
     console.info(`Estimated publisher metadata with GTM and Search Console available: ${names.length} tools, ${bytes} bytes`);
-    // 3 MB publisher limit; +5 KB in v0.12.x for google_update_keyword_urls (one guarded tool costs ~2.6 KB).
-    expect(bytes).toBeLessThan(2_955_000);
+    expect(bytes).toBeLessThan(2_950_000);
   } finally {
     vi.unstubAllEnvs();
     resetEnvForTests();
