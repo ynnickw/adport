@@ -30,6 +30,20 @@ describe('provider popup navigation', () => {
   it.each(['https://evil.test', '//evil.test', '/\\evil.test', '/api/oauth/x/start', '/oauth/provider-complete', '/account-selection?code=secret', '/dashboard/accounts?access_token=secret'])('rejects unsafe completion destinations: %s', path => {
     expect(popupDestination(path)).toBeUndefined();
   });
+  it.each([
+    '/dashboard/analytics?error=Authorization+denied',
+    '/onboarding?resume=1&return_to=%2Fdashboard%2Fagents&error=Try+again',
+  ])('returns to the initiating workspace on a failed OAuth attempt: %s', path => {
+    expect(popupDestination(path)).toBe(path);
+  });
+  it.each([
+    '/dashboard/analytics?return_to=%2Fdashboard%2Fagents',
+    '/onboarding?return_to=https%3A%2F%2Fevil.test',
+    '/onboarding?error=a&error=b',
+    '/onboarding?resume=0',
+  ])('rejects unknown, duplicated, or unsafe return data: %s', path => {
+    expect(popupDestination(path)).toBeUndefined();
+  });
   it('opens a centered small window synchronously and removes its opener', () => {
     openProviderPopup('/api/oauth/x/start?organization_id=org', navigate, timeout);
     expect(open).toHaveBeenCalledWith('about:blank', `adport-oauth-${id}`, 'popup=yes,width=540,height=740,left=450,top=80');

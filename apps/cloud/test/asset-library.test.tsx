@@ -17,10 +17,15 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
+function chooseFileType(label: string) {
+  fireEvent.click(screen.getByRole('combobox', { name: /^File type:/ }));
+  fireEvent.click(screen.getByRole('option', { name: label }));
+}
+
 describe('simple agent-first creative library', () => {
   it('keeps only compact browsing/upload controls and moves tags into the three-dot popover', () => {
     render(<AssetLibrary {...props} />);
-    expect(screen.getByRole('combobox', { name: 'File type' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'File type: All files' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Upload files' })).toBeTruthy();
     expect(screen.queryByRole('checkbox')).toBeNull(); expect(screen.queryByText('Channel labels')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Organize' })).toBeNull(); expect(screen.queryByRole('button', { name: 'Distribute' })).toBeNull();
@@ -28,7 +33,8 @@ describe('simple agent-first creative library', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Actions for Launch.png' }));
     expect(screen.getByRole('dialog', { name: 'Tags for Launch.png' })).toBeTruthy();
     expect(screen.getByRole('textbox', { name: 'Tags' })).toHaveProperty('value', 'launch');
-    fireEvent.keyDown(document, { key: 'Escape' }); expect(screen.queryByRole('dialog')).toBeNull(); expect(fetch).not.toHaveBeenCalled();
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Tags' }), { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull(); expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Actions for Launch.png' })); expect(fetch).not.toHaveBeenCalled();
   });
 
   it('saves only the selected file tags and keeps all existing previews mounted without a list request', async () => {
@@ -84,18 +90,20 @@ describe('simple agent-first creative library', () => {
     const all = Array.from({ length: 103 }, (_, index) => source(index + 1));
     let finish: ((response: Response) => void) | undefined;
     vi.mocked(fetch).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; })).mockResolvedValueOnce(Response.json({ assets: all.slice(96), truncated: false })).mockResolvedValueOnce(Response.json({ assets: [], truncated: false }));
-    render(<AssetLibrary {...props} initialAssets={all.slice(0, 48)} truncated initialCursor={all[47]!.id} />);
+    const { container } = render(<AssetLibrary {...props} initialAssets={all.slice(0, 48)} truncated initialCursor={all[47]!.id} />);
+    const cards = () => container.querySelectorAll('article');
+    expect(container.querySelector('[popover]')).toBeNull();
     const firstImage = screen.getByAltText('File 1.png');
     fireEvent.click(screen.getByRole('button', { name: 'Load more' })); fireEvent.click(screen.getByRole('button', { name: 'Loading…' }));
-    expect(fetch).toHaveBeenCalledTimes(1); expect(screen.getAllByRole('article')).toHaveLength(48);
+    expect(fetch).toHaveBeenCalledTimes(1); expect(cards()).toHaveLength(48);
     await act(async () => { finish!(Response.json({ assets: all.slice(48, 96), truncated: true, next_cursor: all[95]!.id })); });
     await screen.findByText('96 shown'); expect(screen.getByAltText('File 1.png')).toBe(firstImage);
     fireEvent.click(screen.getByRole('button', { name: 'Load more' })); await screen.findByText('103 files');
-    expect(screen.getAllByRole('article')).toHaveLength(103); expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+    expect(cards()).toHaveLength(103); expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
     const calls = vi.mocked(fetch).mock.calls; expect(new URL(String(calls[0]![0]), 'https://app.test').searchParams.get('cursor')).toBe(all[47]!.id); expect(new URL(String(calls[1]![0]), 'https://app.test').searchParams.get('limit')).toBe('48');
-    fireEvent.change(screen.getByRole('combobox', { name: 'File type' }), { target: { value: 'video' } }); await screen.findByText('No matching files');
-    fireEvent.change(screen.getByRole('combobox', { name: 'File type' }), { target: { value: '' } }); await screen.findByText('103 files');
-    expect(fetch).toHaveBeenCalledTimes(3); expect(screen.getAllByRole('article')).toHaveLength(103);
+    chooseFileType('Videos'); await screen.findByText('No matching files');
+    chooseFileType('All files'); await screen.findByText('103 files');
+    expect(fetch).toHaveBeenCalledTimes(3); expect(cards()).toHaveLength(103);
   });
 
   it('keeps CSV and PDF documents visible through pagination, label changes and cached filters', async () => {
@@ -103,7 +111,7 @@ describe('simple agent-first creative library', () => {
     vi.mocked(fetch).mockResolvedValueOnce(Response.json({ assets: [csv, pdf], truncated: true, next_cursor: pdf.id })).mockResolvedValueOnce(Response.json({ assets: [next], truncated: false }));
     mocks.change.mockResolvedValue({ status: 'applied', result: { details: { asset: { ...csv, tags: ['audience'], metadata_version: 4 } } } });
     render(<AssetLibrary {...props} />);
-    fireEvent.change(screen.getByRole('combobox', { name: 'File type' }), { target: { value: 'document' } });
+    chooseFileType('Documents');
     await screen.findByRole('button', { name: 'Preview Audience IDs' });
     expect(screen.getByRole('button', { name: 'Preview Brief.pdf' })).toBeTruthy();
     expect(new URL(String(vi.mocked(fetch).mock.calls[0]![0]), 'https://app.test').searchParams.get('kind')).toBe('document');
@@ -113,8 +121,8 @@ describe('simple agent-first creative library', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save tags' })); await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(screen.getByRole('button', { name: 'Preview Audience IDs' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'audience' })).toBeTruthy();
-    fireEvent.change(screen.getByRole('combobox', { name: 'File type' }), { target: { value: '' } }); await screen.findByRole('button', { name: 'Preview Launch.png' });
-    fireEvent.change(screen.getByRole('combobox', { name: 'File type' }), { target: { value: 'document' } }); await screen.findByText('3 files');
+    chooseFileType('All files'); await screen.findByRole('button', { name: 'Preview Launch.png' });
+    chooseFileType('Documents'); await screen.findByText('3 files');
     expect(screen.getAllByRole('article')).toHaveLength(3); expect(fetch).toHaveBeenCalledTimes(2);
   });
 
@@ -122,12 +130,13 @@ describe('simple agent-first creative library', () => {
     const csv = source(2, { name: 'Product IDs', content_type: 'text/csv' });
     vi.mocked(fetch).mockResolvedValueOnce(Response.json({ assets: [], truncated: false }));
     mocks.upload.mockImplementation(async input => { input.ready(csv); return csv.id; });
-    render(<AssetLibrary {...props} acceptedTypes={['image/png', 'text/csv']} />);
-    fireEvent.change(screen.getByRole('combobox', { name: 'File type' }), { target: { value: 'document' } }); await screen.findByText('No matching files');
+    const { container } = render(<AssetLibrary {...props} acceptedTypes={['image/png', 'text/csv']} />);
+    chooseFileType('Documents'); await screen.findByText('No matching files');
     fireEvent.drop(screen.getByRole('region', { name: 'Creative files' }), { dataTransfer: { types: ['Files'], files: [new File(['sku_id\n00012\n'], 'Products.csv', { type: 'text/csv' })] } });
     await screen.findByRole('button', { name: 'Preview Product IDs' });
-    expect(screen.getAllByRole('article')).toHaveLength(1); expect(fetch).toHaveBeenCalledTimes(1);
-    fireEvent.change(screen.getByRole('combobox', { name: 'File type' }), { target: { value: '' } }); await screen.findByText('2 files');
+    await waitFor(() => expect(container.querySelectorAll('article')).toHaveLength(1));
+    expect(screen.queryByRole('button', { name: 'Preview Launch.png' })).toBeNull(); expect(fetch).toHaveBeenCalledTimes(1);
+    chooseFileType('All files'); await screen.findByText('2 files');
     expect(screen.getByRole('button', { name: 'Preview Product IDs' })).toBeTruthy(); expect(fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -135,9 +144,9 @@ describe('simple agent-first creative library', () => {
     const pending: Array<(response: Response) => void> = [];
     vi.mocked(fetch).mockImplementation(() => new Promise(resolve => { pending.push(resolve); }));
     render(<AssetLibrary {...props} />);
-    fireEvent.change(screen.getByRole('combobox', { name: 'File type' }), { target: { value: 'video' } }); await waitFor(() => expect(pending).toHaveLength(1));
+    chooseFileType('Videos'); await waitFor(() => expect(pending).toHaveLength(1));
     expect(screen.getByRole('button', { name: 'Preview Launch.png' })).toBeTruthy(); expect(screen.getByRole('button', { name: 'Refresh library' }).hasAttribute('disabled')).toBe(true);
-    fireEvent.change(screen.getByRole('combobox', { name: 'File type' }), { target: { value: 'audio' } }); await waitFor(() => expect(pending).toHaveLength(2));
+    chooseFileType('Audio'); await waitFor(() => expect(pending).toHaveLength(2));
     await act(async () => { pending[1]!(Response.json({ assets: [source(3, { name: 'Audio.mp3', content_type: 'audio/mpeg' })], truncated: false })); });
     await screen.findByRole('button', { name: 'Preview Audio.mp3' });
     await act(async () => { pending[0]!(Response.json({ assets: [source(4, { name: 'Late.mp4', content_type: 'video/mp4' })], truncated: false })); });

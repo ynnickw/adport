@@ -16,17 +16,19 @@ const inputSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const organizationId = new URL(request.url).searchParams.get('organization_id') ?? undefined;
+    const params = new URL(request.url).searchParams;
+    const organizationId = params.get('organization_id') ?? undefined;
+    const view = params.get('view');
     const principal = await sessionPrincipal(organizationId);
     if (!['owner', 'admin'].includes(principal.role ?? '')) throw new Error('Owner or admin access is required.');
     const [keys, oauthGrants] = await Promise.all([
-      db()<Array<{ id: string; name: string; keyPrefix: string; createdAt: Date; lastUsedAt: Date | null }>>`
+      view === 'connections' ? [] : db()<Array<{ id: string; name: string; keyPrefix: string; createdAt: Date; lastUsedAt: Date | null }>>`
         select id, name, key_prefix, created_at, last_used_at
         from public.api_keys
         where organization_id = ${principal.organizationId} and revoked_at is null
         order by created_at desc
       `,
-      listMcpOAuthGrants(principal.organizationId),
+      view === 'keys' ? [] : listMcpOAuthGrants(principal.organizationId),
     ]);
     const selectedKeys = await Promise.all(keys.map(async key => ({ ...key,
       toolSelection: await loadToolSelection({ organizationId: principal.organizationId, apiKeyId: key.id }),

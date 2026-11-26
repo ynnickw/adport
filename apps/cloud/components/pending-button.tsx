@@ -6,5 +6,5 @@ import { Button } from './controls';
 
 export function PendingButton({ pendingLabel = 'Please wait…', children, ...props }: ComponentProps<typeof Button> & { pendingLabel?: string }) {
   const { pending } = useFormStatus();
-  return <Button {...props} type="submit" disabled={pending || props.disabled} aria-busy={pending}>{pending ? pendingLabel : children}</Button>;
+  return <Button {...props} type="submit" pending={pending} pendingLabel={pendingLabel}>{children}</Button>;
 }

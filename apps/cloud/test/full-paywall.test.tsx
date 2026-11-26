@@ -15,16 +15,18 @@ const limit = { kind: 'active_accounts' as const, currentPlan: 'Free', recommend
 const render = (canManageBilling = true, billingOptions = options) => renderToStaticMarkup(<UpgradeProvider value={{ planId: 'reader', canManageBilling, projectId: 'project', billingOptions }}><PlanLimitModal limit={limit} onClose={() => {}} /></UpgradeProvider>);
 
 beforeEach(() => vi.clearAllMocks());
-describe('full upgrade paywall', () => {
-  it('offers every plan, a Free exit, and the complete feature comparison', () => {
+describe('contextual upgrade paywall', () => {
+  it('explains the plan limit and shows paid options, optional comparison, and a single Free exit', () => {
     const html = render();
-    for (const text of ['Pro plan', 'Growth plan', 'Business plan', '€19', '€39', '€79', 'Continue with Free', 'Compare all features', 'Plan feature comparison', 'Not now']) expect(html).toContain(text);
+    for (const text of ['More account slots', 'Your selection needs 12 accounts.', 'Pro plan', 'Growth plan', 'Business plan', '€19', '€39', '€79', 'Continue with Free', 'Compare all features', 'Plan feature comparison', 'Doesn’t cover this request']) expect(html).toContain(text);
     expect(html).toContain('data-portal="true"');
-    expect(html).not.toContain('View Pro plan');
+    expect(html.match(/Continue with Free/g)).toHaveLength(1);
+    expect(html).not.toContain('Not now');
   });
   it('starts checkout directly for the selected paid plan instead of routing through another pricing page', async () => {
     render();
-    for (const [index, id] of ['operator', 'premium', 'agency'].entries()) {
+    expect(mocks.forms).toHaveBeenCalledTimes(2);
+    for (const [index, id] of ['premium', 'agency'].entries()) {
       await mocks.forms.mock.calls[index]![0].action({}, new FormData());
       expect(mocks.checkout).toHaveBeenLastCalledWith('project', id, 'monthly', {}, expect.any(FormData));
     }
@@ -32,7 +34,8 @@ describe('full upgrade paywall', () => {
   });
   it('offers owner handoff instead of purchase actions for teammates', () => {
     const html = render(false);
-    for (const name of ['Pro', 'Growth', 'Business']) expect(html).toContain(`Ask owner for ${name}`);
+    for (const name of ['Growth', 'Business']) expect(html).toContain(`Copy ${name} plan link`);
+    expect(html).not.toContain('Copy Pro plan link');
     expect(mocks.forms).not.toHaveBeenCalled();
     expect(html).not.toContain('Start 7-day free trial');
   });
@@ -40,7 +43,7 @@ describe('full upgrade paywall', () => {
     render(true, { ...options, hasSubscription: true, portalAvailable: true, trialEligible: false });
     await mocks.forms.mock.calls[0]![0].action({}, new FormData());
     expect(mocks.portal).toHaveBeenCalledOnce();
-    expect(mocks.portal).toHaveBeenCalledWith('project', 'operator', 'monthly', {}, expect.any(FormData));
+    expect(mocks.portal).toHaveBeenCalledWith('project', 'premium', 'monthly', {}, expect.any(FormData));
     expect(mocks.checkout).not.toHaveBeenCalled();
   });
   it('keeps the comparison usable when checkout is not configured', () => {

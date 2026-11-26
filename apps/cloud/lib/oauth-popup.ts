@@ -1,4 +1,4 @@
-import { safeReturnPath } from './return-path';
+import { safeDashboardReturnPath, safeReturnPath } from './return-path';
 
 export const POPUP_COMPLETE_PATH = '/oauth/provider-complete';
 export const popupChannelName = (id: string) => `adport-provider-oauth:${id}`;
@@ -9,8 +9,14 @@ export const validPopupId = (id: unknown): id is string => typeof id === 'string
 export function popupDestination(value: unknown): string | undefined {
   if (typeof value !== 'string' || safeReturnPath(value) !== value) return undefined;
   const url = new URL(value, 'https://adport.invalid');
-  if (!['/account-selection', '/onboarding', '/dashboard/accounts', '/dashboard/connections'].includes(url.pathname)) return undefined;
-  if ([...url.searchParams.keys()].some(key => !['selection_id', 'select_provider', 'error', 'connected', 'accounts_saved'].includes(key))) return undefined;
+  const allowed = ['selection_id', 'select_provider', 'error', 'connected', 'accounts_saved'];
+  if (url.pathname === '/onboarding') {
+    allowed.push('return_to', 'resume');
+    const returnTo = url.searchParams.get('return_to');
+    if (returnTo !== null && safeDashboardReturnPath(returnTo) !== returnTo) return undefined;
+    if (url.searchParams.has('resume') && url.searchParams.get('resume') !== '1') return undefined;
+  } else if (!['/account-selection', '/dashboard/accounts', '/dashboard/connections', '/dashboard/analytics'].includes(url.pathname)) return undefined;
+  if ([...url.searchParams.keys()].some(key => !allowed.includes(key) || url.searchParams.getAll(key).length !== 1)) return undefined;
   return value;
 }
 

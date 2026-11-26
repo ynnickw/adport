@@ -44,13 +44,14 @@ export function ToolCatalogEditor({ organizationId, connection, initialSelection
     finally { setBusy(false); }
   }
   const profile = TOOL_PROFILE_OPTIONS.find(option => option.value === savedSelection.profile)!.label;
-  return <Disclosure ref={details} className="assistant-tool-access" label={`Tool access · ${profile} · ${savedSelection.providers === null ? 'All platforms' : `${savedSelection.providers.length} platforms`}`}>
+  const scope = savedSelection.providers === null ? 'All platforms' : `${savedSelection.providers.length} ${savedSelection.providers.length === 1 ? 'platform' : 'platforms'}`;
+  return <Disclosure ref={details} className="assistant-tool-access" label={`Tool access · ${profile} · ${scope}`}>
     <form className="stack" onSubmit={event => void save(event)}>
       <ToolCatalogFields initialSelection={savedSelection} disabled={busy} />
       <p className="field-hint">Applies to this connection across its authorized projects. Your account permissions and approval requirements stay the same.</p>
       {error ? <p className="error-callout" role="alert">{error}</p> : null}
       {message ? <p className="field-hint" role="status">{message}</p> : null}
-      <div><Button className="button secondary small" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save tool access'}</Button></div>
+      <div><Button className="button small" type="submit" pending={busy} pendingLabel="Saving…">Save tool access</Button></div>
     </form>
   </Disclosure>;
 }

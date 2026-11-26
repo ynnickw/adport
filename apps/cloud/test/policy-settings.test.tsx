@@ -52,8 +52,9 @@ describe('optional policy settings', () => {
     expect(html).toContain('Preview required</span>');
     expect(html).toContain('Disabled</span>');
     expect(html).toContain('aria-label="About budget limits"');
-    expect(html).toContain('All changes saved');
-    expect(html).toContain('Discard</button>');
+    expect(html).toContain('Manage accounts · 1 read only');
+    expect(html).not.toContain('Discard</button>');
+    expect(html).not.toContain('Save policy');
     expect(html).not.toContain('name="require_validation"');
   });
 });

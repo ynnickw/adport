@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Disclosure, Input } from '@/components/controls';
 import { Dialog } from '@/components/dialog';
+import { Select } from '@/components/select';
+import { LoadingStatus, Notice } from '@/components/feedback';
 
 type Provider = 'tiktok' | 'reddit';
 const platformName = { tiktok: 'TikTok', reddit: 'Reddit' };
@@ -28,7 +30,8 @@ export function CatalogAccessManager({ organizationId, projectName, accounts, pr
   return <Disclosure label={platformName[provider] + ' catalog access'} className="card catalog-access-control">
     <div className="catalog-access-launch">
       <p className="inline-note">Choose the catalogs agents can use in {projectName}.</p>
-      {accounts.length > 1 ? <label>Advertiser<select value={account.accountId} onChange={event => setSelected(event.target.value)}>{accounts.map(value => <option key={value.accountId} value={value.accountId}>{value.name}</option>)}</select></label> : null}
+      {accounts.length > 1 ? <div className="catalog-field">Advertiser<Select aria-label="Advertiser" value={account.accountId} onValueChange={setSelected}
+        options={accounts.map(value => ({ value: value.accountId, label: value.name }))} /></div> : null}
       <Button type="button" className="button secondary small" onClick={() => setOpen(true)}>Manage catalog access</Button>
     </div>
     {open ? <CatalogAccessDialog key={organizationId + ':' + provider + ':' + account.accountId} provider={provider} organizationId={organizationId} projectName={projectName} account={account} onClose={() => setOpen(false)} /> : null}
@@ -47,6 +50,12 @@ function CatalogAccessDialog({ organizationId, projectName, account, onClose, pr
     return () => { active = false;controller.abort(); };
   }, [listUrl, provider]);
   const change = () => { setReview(undefined);setError('');setNotice(''); };
+  const resourceOptions = [{ value: 'catalog', label: 'Existing catalog' }, { value: 'catalog_creation', label: 'New catalogs' },
+    ...(provider === 'tiktok' ? [{ value: 'catalog_migration', label: 'Transfer a catalog' }] : [])];
+  const accessOptions = (kind === 'catalog_creation' ? [{ value: 'create', label: 'Create and manage new catalogs' }]
+    : kind === 'catalog_migration' ? [{ value: 'migrate', label: 'Transfer this catalog only' }]
+    : [{ value: 'read', label: 'Read' }, { value: 'write', label: 'Read and write' }])
+    .map(option => ({ ...option, disabled: !account.ready }));
   async function submit(apply = false) {
     if (flight.current || apply && !review || !apply && kind === 'catalog_migration' && mode !== 'none' && (!ownership || !sharedEffects)) return;
     flight.current = true;
@@ -70,19 +79,24 @@ function CatalogAccessDialog({ organizationId, projectName, account, onClose, pr
     <form onSubmit={event => { event.preventDefault();void submit(); }}>
       <div className="catalog-access-fields">
         <label>{provider === 'reddit' ? 'Business ID' : 'Business Center ID'}<Input data-autofocus inputMode={provider === 'reddit' ? 'text' : 'numeric'} required pattern={businessPattern(provider)} value={bc} disabled={busy} onChange={event => { setBc(provider === 'reddit' ? event.target.value.trim().toLowerCase() : event.target.value.trim());setOwnership(false);setSharedEffects(false);change(); }} /></label>
-        <label>Resource<select value={kind} disabled={busy} onChange={event => { const next = event.target.value as 'catalog' | 'catalog_creation' | 'catalog_migration';setKind(next);setCatalog('');setOwnership(false);setSharedEffects(false);setMode(account.ready ? next === 'catalog_creation' ? 'create' : next === 'catalog_migration' ? 'migrate' : 'read' : 'none');change(); }}><option value="catalog">Existing catalog</option><option value="catalog_creation">New catalogs</option>{provider === 'tiktok' ? <option value="catalog_migration">Transfer a catalog</option> : null}</select></label>
+        <div className="catalog-field">Resource<Select aria-label="Resource" value={kind} disabled={busy} options={resourceOptions} onValueChange={value => {
+          const next = value as typeof kind;setKind(next);setCatalog('');setOwnership(false);setSharedEffects(false);
+          setMode(account.ready ? next === 'catalog_creation' ? 'create' : next === 'catalog_migration' ? 'migrate' : 'read' : 'none');change();
+        }} /></div>
         {kind !== 'catalog_creation' ? <label>Catalog ID<Input inputMode={provider === 'reddit' ? 'text' : 'numeric'} required pattern={provider === 'reddit' ? '[A-Za-z0-9_-]{1,256}' : '[0-9]{1,30}'} value={catalog} disabled={busy} onChange={event => { setCatalog(event.target.value.trim());setOwnership(false);setSharedEffects(false);change(); }} /></label> : null}
-        <label>Project access<select value={mode} disabled={busy} onChange={event => { setMode(event.target.value);setOwnership(false);setSharedEffects(false);change(); }}>{kind === 'catalog_creation' ? <option value="create" disabled={!account.ready}>Create and manage new catalogs</option> : kind === 'catalog_migration' ? <option value="migrate" disabled={!account.ready}>Transfer this catalog only</option> : <><option value="read" disabled={!account.ready}>Read</option><option value="write" disabled={!account.ready}>Read and write</option></>}<option value="none">Revoke access</option></select></label>
+        <div className="catalog-field">Project access<Select aria-label="Project access" value={mode} disabled={busy}
+          options={[...accessOptions, { value: 'none', label: 'Revoke access' }]}
+          onValueChange={value => { setMode(value);setOwnership(false);setSharedEffects(false);change(); }} /></div>
       </div>
       {kind === 'catalog_creation' ? <p className="inline-note">Allows creation in this Business and management of verified new catalog IDs. Existing catalogs are excluded. Revoking this delegation keeps independent catalog grants in place.</p> : null}
       {kind === 'catalog_migration' && mode !== 'none' ? <fieldset disabled={busy}><legend>Source ownership and transfer</legend><label><input type="checkbox" checked={ownership} onChange={event => { setOwnership(event.target.checked);change(); }} />I own catalog {catalog || '…'} under advertiser {account.accountId}. Adport cannot independently verify the source catalog; TikTok checks ownership on transfer.</label><label><input type="checkbox" checked={sharedEffects} onChange={event => { setSharedEffects(event.target.checked);change(); }} />I authorize transferring this entire catalog and its contents to Business Center {bc || '…'}, including effects on shared ads and users. This does not grant ongoing project read/write access.</label></fieldset> : null}
       {review ? <div className="catalog-access-review" aria-label="Access change preview"><strong>{review.result.preview.review.subject}</strong><dl>{review.result.preview.review.fields.map(field => <div key={field.label}><dt>{field.label}</dt><dd>{field.before !== undefined ? <><span>{String(field.before)}</span> → </> : null}<strong>{String(field.after)}</strong></dd></div>)}</dl><p className="inline-note">Catalog changes can affect other ads or accounts that reuse it. This grants Adport access; {platformName[provider]} permissions remain in place.</p></div> : null}
-      {error ? <p role="alert" className="error-callout">{error}</p> : null}{notice ? <p role="status">{notice}</p> : null}
+      {error ? <Notice tone="error">{error}</Notice> : null}{notice ? <Notice tone="success">{notice}</Notice> : null}
       {!account.ready ? <p className="inline-note">Access can be revoked now. Enable the advertiser and reconnect the platform before granting access.</p> : null}
-      <div className="dialog-actions"><Button type="button" className="button secondary" disabled={busy} onClick={onClose}>Close</Button>{review ? <Button type="button" className="button" disabled={busy || !account.ready && review.arguments.mode !== 'none'} onClick={() => void submit(true)}>{busy ? 'Applying…' : 'Confirm access'}</Button> : <Button type="submit" className="button" disabled={busy || !validBusiness(bc, provider) || kind !== 'catalog_creation' && !validCatalog(catalog, provider) || kind === 'catalog_migration' && mode !== 'none' && (!ownership || !sharedEffects) || !account.ready && mode !== 'none'}>{busy ? 'Preparing…' : 'Review access'}</Button>}</div>
+      <div className="dialog-actions"><Button type="button" className="button secondary" disabled={busy} onClick={onClose}>Close</Button>{review ? <Button type="button" className="button" pending={busy} pendingLabel="Applying…" disabled={!account.ready && review.arguments.mode !== 'none'} onClick={() => void submit(true)}>Confirm access</Button> : <Button type="submit" className="button" pending={busy} pendingLabel="Preparing…" disabled={!validBusiness(bc, provider) || kind !== 'catalog_creation' && !validCatalog(catalog, provider) || kind === 'catalog_migration' && mode !== 'none' && (!ownership || !sharedEffects) || !account.ready && mode !== 'none'}>Review access</Button>}</div>
     </form>
     <div className="catalog-access-list"><div className="card-head"><h3>Current access</h3><Button type="button" className="button secondary small" disabled={busy || loading} onClick={() => { setLoading(true);change();void loadGrants(listUrl, undefined, provider).then(setGrants).catch(reason => setError(reason instanceof Error ? reason.message : 'Could not refresh access.')).finally(() => setLoading(false)); }}>Refresh</Button></div>
-      {loading ? <p className="inline-note" role="status">Loading…</p> : grants.length ? <><ul>{grants.slice(0, limit).map(grant => <li key={grant.scope.businessId + ':' + grant.scope.kind + ':' + grant.scope.resourceId}><Button type="button" disabled={busy} onClick={() => { setBc(grant.scope.businessId);setKind(grant.scope.kind as 'catalog' | 'catalog_creation' | 'catalog_migration');setCatalog(grant.scope.kind !== 'catalog_creation' ? grant.scope.resourceId : '');setOwnership(false);setSharedEffects(false);setMode(grant.mode);change(); }}><span>{grant.scope.kind === 'catalog_creation' ? 'New catalogs' : grant.scope.kind === 'catalog_migration' ? 'Transfer catalog ' + grant.scope.resourceId : 'Catalog ' + grant.scope.resourceId}<small>{provider === 'reddit' ? 'Business' : 'Business Center'} {grant.scope.businessId}</small></span><span>{grant.mode === 'write' ? 'Read and write' : grant.mode === 'create' ? 'Create and manage new' : grant.mode === 'migrate' ? 'Transfer only' : 'Read'}</span></Button></li>)}</ul>{grants.length > limit ? <Button type="button" className="button secondary small" onClick={() => setLimit(value => value + 10)}>Load more</Button> : null}</> : <p className="inline-note">No catalogs selected for this advertiser.</p>}
+      {loading ? <LoadingStatus>Loading access…</LoadingStatus> : grants.length ? <><ul>{grants.slice(0, limit).map(grant => <li key={grant.scope.businessId + ':' + grant.scope.kind + ':' + grant.scope.resourceId}><Button type="button" disabled={busy} onClick={() => { setBc(grant.scope.businessId);setKind(grant.scope.kind as 'catalog' | 'catalog_creation' | 'catalog_migration');setCatalog(grant.scope.kind !== 'catalog_creation' ? grant.scope.resourceId : '');setOwnership(false);setSharedEffects(false);setMode(grant.mode);change(); }}><span>{grant.scope.kind === 'catalog_creation' ? 'New catalogs' : grant.scope.kind === 'catalog_migration' ? 'Transfer catalog ' + grant.scope.resourceId : 'Catalog ' + grant.scope.resourceId}<small>{provider === 'reddit' ? 'Business' : 'Business Center'} {grant.scope.businessId}</small></span><span>{grant.mode === 'write' ? 'Read and write' : grant.mode === 'create' ? 'Create and manage new' : grant.mode === 'migrate' ? 'Transfer only' : 'Read'}</span></Button></li>)}</ul>{grants.length > limit ? <Button type="button" className="button secondary small" onClick={() => setLimit(value => value + 10)}>Load more</Button> : null}</> : <p className="inline-note">No catalogs selected for this advertiser.</p>}
     </div>
   </Dialog>;
 }

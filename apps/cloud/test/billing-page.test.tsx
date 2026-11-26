@@ -14,12 +14,12 @@ vi.mock('@/app/dashboard/billing/actions', () => ({ startProjectSubscriptionForm
 import BillingPage from '@/app/dashboard/billing/page';
 const base = { plan: PLANS.premium, status: 'active', providerCustomerId: 'cus_owned', providerSubscriptionId: 'sub_owned', billingOrganizationId: 'company', currentPeriodEnd: null, cancelAtPeriodEnd: false };
 const tenant = { organizationId: 'project', organizationGroupId: 'company', organizationGroupName: 'Wettberg', organizationRole: 'owner', userId: 'owner', onboardingCompletedAt: new Date(), projects: [{ id: 'project', organizationId: 'company' }] };
-const render = async (query = {}) => renderToStaticMarkup(await BillingPage({ searchParams: Promise.resolve(query) }));
+const render = async (query = {}) => renderToStaticMarkup(await BillingPage({ searchParams: Promise.resolve({ view: 'plans', ...query }) }));
 beforeEach(() => { vi.clearAllMocks(); mocks.tenant.mockResolvedValue(tenant); mocks.entitlement.mockResolvedValue(base); mocks.details.mockResolvedValue({ interval: 'monthly' }); mocks.usage.mockResolvedValue({ editingMembers: 2 }); });
 describe('plan management in the dashboard', () => {
   it('offers specific paid upgrades, downgrades, and Free cancellation without new trials', async () => {
     const html = await render();
-    for (const text of ['Downgrade to Pro', 'Upgrade to Business', 'Downgrade to Free', 'Current plan', 'Choose your plan', '<details class="pricing-details"']) expect(html).toContain(text);
+    for (const text of ['Downgrade to Pro', 'Upgrade to Business', 'Downgrade to Free', 'Current plan', 'Choose your plan', 'Compare all features']) expect(html).toContain(text);
     expect(html).not.toContain('Start 7-day free trial');
     expect(html).not.toContain('One organization. Your whole team in control.');
     for (const [label, plan] of [['Downgrade to Pro', 'operator'], ['Upgrade to Business', 'agency'], ['Downgrade to Free', 'reader']]) {
