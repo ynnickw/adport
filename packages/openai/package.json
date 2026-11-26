@@ -1,6 +1,6 @@
 {
   "name": "@adport/provider-openai",
-  "version": "0.12.2",
+  "version": "0.13.0",
   "description": "OpenAI Ads API provider (ads in ChatGPT) for adport",
   "license": "Apache-2.0",
   "type": "module",
