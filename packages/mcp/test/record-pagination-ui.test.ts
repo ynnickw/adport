@@ -14,6 +14,34 @@ const button = (dom: JSDOM) => dom.window.document.querySelector<HTMLButtonEleme
 const cards = (dom: JSDOM) => dom.window.document.querySelectorAll('[data-record-list]>article');
 
 describe('record list native paging', () => {
+  it('pages custom conversion goals while keeping the selected campaigns visible once', async () => {
+    const args = { project_id: PROJECT, account_id: ACCOUNT, campaign_ids: ['7'], limit: 1 };
+    const result = (name: string, cursor?: string) => structuredResult('google_custom_conversion_goals', 'data', {
+      goals: [{ custom_conversion_goal_id: cursor ? '12' : '11', name, status: 'ENABLED' }],
+      campaigns: [{ campaign_id: '7', name: 'Search campaign', summary: 'Account-default goals' }],
+      truncated: !cursor, ...(!cursor && { next_cursor: '11' }),
+    }, undefined, { project_id: PROJECT }, { can_write: false },
+    { arguments: cursor ? { ...args, after_goal_id: cursor } : args },
+    cursor ? undefined : { arguments: { ...args, after_goal_id: '11' } },
+    { provider: 'google', accountId: ACCOUNT, pagination: { cursorInput: 'after_goal_id' } });
+    const callTool = vi.fn(async () => ({ structuredContent: result('Sales', '11') })), dom = setup(callTool);
+    try {
+      send(dom, result('Leads'));
+      expect(cards(dom)[0]?.textContent).toContain('Leads');
+      button(dom)!.click();
+      await vi.waitFor(() => expect(cards(dom)).toHaveLength(2));
+      expect(cards(dom)[1]?.textContent).toContain('Sales');
+      expect(callTool).toHaveBeenCalledWith('google_custom_conversion_goals', { ...args, after_goal_id: '11' });
+      const campaigns = dom.window.document.querySelector('[aria-label="Campaign goal settings"]');
+      expect(campaigns?.textContent?.match(/Search campaign/g)).toHaveLength(1);
+      expect(campaigns?.textContent).toContain('Account-default goals');
+      expect(button(dom)).toBeNull();
+      const empty = { ...result('Sales', '11'), goals: [] };
+      send(dom, empty);
+      expect(dom.window.document.querySelector('main')?.textContent).toContain('No custom conversion goals returned.');
+      expect(dom.window.document.querySelector('[aria-label="Campaign goal settings"]')?.textContent).toContain('Search campaign');
+    } finally { dom.window.close(); }
+  });
   it('appends without rebuilding existing cards or losing scroll, deduplicates clicks and ignores host echoes', async () => {
     let resolve!: (value: unknown) => void;
     const callTool = vi.fn(() => new Promise(done => { resolve = done; })), dom = setup(callTool);
