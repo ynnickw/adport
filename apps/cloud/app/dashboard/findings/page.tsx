@@ -1,39 +1,31 @@
-import { Empty, PageHeader, Provider, formatDate } from '@/components/ui';
+import { Empty, PageHeader, formatDate } from '@/components/ui';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { PostgresFindingsStore } from '@/lib/cloud/repository';
+import { getAssistantConnectionStatus } from '@/lib/cloud/assistant-connection';
+import { CopyButton } from '@/app/dashboard/agents/agent-setup-guide';
+import { Disclosure } from '@/components/controls';
+import { FindingsTable } from './findings-table';
 
 export const metadata = { title: 'Findings' };
-
-const TONE: Record<string, string> = { critical: 'critical', warn: 'warn', info: 'neutral' };
 
 export default async function FindingsPage() {
   const tenant = await requireDashboardTenant();
   const findings = await new PostgresFindingsStore(tenant.organizationId).list();
+  const assistant = findings.length === 0 ? await getAssistantConnectionStatus({ ...tenant, scopes: [] }).catch(() => undefined) : undefined;
+  const prompt = 'Run an Adport audit of the enabled ad accounts in this project. Report findings only; don’t apply changes.';
   return (
     <main className="page">
-      <PageHeader title="Findings" description="Persisted, evidence-backed audit results for this workspace. Applying a proposed action still requires the normal preview and exact second call." />
+      <PageHeader title="Findings" />
       <section className="card">
         {findings.length === 0 ? (
-          <Empty title="No findings yet" copy="Ask your agent to “run an Adport audit of my ad accounts”. Findings stay in this workspace until you dismiss or apply them." href="/dashboard/agents" action="Connect an agent" />
+          assistant?.authorized ? <div className="empty">
+            <h2>No findings yet</h2><p>Run an audit in your assistant to see what needs attention.</p>
+            <CopyButton className="finding-prompt" value={prompt} label="Copy audit prompt" />
+            <Disclosure className="finding-prompt-details" label="View prompt">{prompt}</Disclosure>
+          </div> : <Empty title="No findings yet" copy={assistant ? 'Connect an assistant to run an audit.' : 'Run an audit in your assistant to see findings.'} href="/dashboard/agents" action={assistant ? 'Connect assistant' : 'View assistants'} />
         ) : (
-          <>
-            <div className="card-head"><h2>Audit findings</h2><span className="card-note">{findings.length} total</span></div>
-            <div className="table-wrap"><table>
-              <thead><tr><th>Severity</th><th>Finding</th><th>Provider</th><th>Account</th><th>Status</th><th>Updated</th></tr></thead>
-              <tbody>
-                {findings.map((finding) => (
-                  <tr key={finding.id}>
-                    <td><span className={`status ${TONE[finding.severity] ?? 'neutral'}`}>{finding.severity}</span></td>
-                    <td><strong>{finding.title}</strong><div className="cell-sub">{finding.recommendation}</div></td>
-                    <td><Provider name={finding.provider} /></td>
-                    <td><span className="cell-sub" style={{ marginTop: 0 }}>{finding.accountId}</span></td>
-                    <td><span className="status neutral">{finding.status}</span></td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{formatDate(finding.updatedAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table></div>
-          </>
+          <FindingsTable key={tenant.organizationId} findings={findings.map(({ id, title, detail, recommendation, severity, provider, accountId, entity, status, updatedAt }) =>
+            ({ id, title, detail, recommendation, severity, provider, accountId, entity, status, updatedAt, updatedLabel: formatDate(updatedAt) }))} />
         )}
       </section>
     </main>

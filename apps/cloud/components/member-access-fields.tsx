@@ -21,9 +21,9 @@ export function MemberAccessFields({ roles, projects, initialRole, initialProjec
   return <>
     <label>Role<Select name="role" value={role} onValueChange={setRole} aria-label="Organization role"
       options={roles.map(option => ({ ...option, disabled: !seatAvailable && option.value !== 'viewer' }))} /></label>
-    <p className="inline-note" aria-live="polite">{TEAM_ROLES[role as keyof typeof TEAM_ROLES]?.description}</p>
-    {!seatAvailable ? <p className="member-seat-note">All team seats are in use. Viewer access is free. <UpgradeButton kind="members" required={requiredSeats} message="Your organization has used all of its editing-member seats. Read-only viewers remain free." /></p> : null}
-    {allProjects ? <div className="member-project-scope"><strong>All projects</strong><InfoTooltip>Owners and admins can access every project in the organization, including new projects.</InfoTooltip></div>
+    <p className="inline-note" aria-live="polite">{role === 'viewer' ? 'Read-only access · No seat required' : role === 'member' ? 'Can propose ad changes · Uses a seat' : TEAM_ROLES[role as keyof typeof TEAM_ROLES]?.description}</p>
+    {!seatAvailable ? <p className="member-seat-note">No team seats available. <UpgradeButton kind="members" required={requiredSeats} message="Your organization has used all of its editing-member seats. Read-only viewers remain free." /></p> : null}
+    {allProjects ? <div className="member-project-scope"><strong>All current and future projects</strong></div>
       : <fieldset className="project-access-fields"><legend>Project access <InfoTooltip>Only the selected projects will be available to this person.</InfoTooltip></legend>
         {projects.map(project => <label className="project-checkbox" key={project.id}><Checkbox name="projectIds" value={project.id} checked={selected.has(project.id)} onChange={event => {
           const checked = event.target.checked; setSelected(current => { const next = new Set(current); if (checked) next.add(project.id); else next.delete(project.id); return next; });

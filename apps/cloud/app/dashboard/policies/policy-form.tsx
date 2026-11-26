@@ -46,6 +46,11 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty]);
+  useEffect(() => {
+    if (!message.success) return;
+    const timer = window.setTimeout(() => setMessage({}), 4500);
+    return () => window.clearTimeout(timer);
+  }, [message.success]);
 
   function update<K extends keyof PolicySettingsDraft>(key: K, value: PolicySettingsDraft[K]) {
     setDraft(current => ({ ...current, [key]: value }));
@@ -78,7 +83,7 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
     <form className="form" onSubmit={(event) => void save(event)}>
       <PlanLimitModal limit={planLimit} onClose={() => setPlanLimit(undefined)} />
       <fieldset className="form" style={{ border: 0, margin: 0, padding: 0 }}>
-        {!writeAccess ? <div className="policy-plan-note"><div><strong>{planName} is read only</strong><p>Your safeguards apply when write access is enabled.</p></div>{canAdminister ? <UpgradeButton kind="write_access" message="Upgrade to preview and apply ad changes from your assistant, with your project’s safeguards in place." label="Explore write access" className="button secondary small" /> : null}</div> : null}
+        {!writeAccess ? <div className="policy-plan-note"><div><strong>{planName} is read only</strong><p>Your safeguards apply when write access is enabled.</p></div>{canAdminister ? <UpgradeButton kind="write_access" message="Paid plans let an assistant preview ad changes and apply them after approval. Your project’s safeguards still apply." className="button secondary small" /> : null}</div> : null}
         <section className="policy-section">
           <div className="policy-section-copy"><h3>Creation <InfoTooltip label="About paused creation">When enabled, supported new campaigns, ad groups, and ads start paused. Turning this off uses the requested status. Existing campaigns are unaffected.</InfoTooltip></h3></div>
           <div className="policy-controls">
@@ -101,7 +106,8 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
         <section className="policy-section protected-section">
           <div className="policy-section-copy"><h3>Read-only accounts <InfoTooltip label="About read-only accounts">Select accounts to block advertising changes while keeping read access. Account access and plan restrictions still apply.</InfoTooltip></h3></div>
           <div className="policy-controls">
-            {accounts.length > 0 ? <div className="policy-account-list">
+            {accounts.length > 0 ? <Disclosure label={`Manage accounts · ${draft.protectedAccounts.length} read only`}>
+            <div className="policy-account-list">
               {accounts.map((account) => {
                 const protectedAccount = draft.protectedAccounts.includes(account.accountId);
                 return <label className="policy-account" key={`${account.provider}:${account.accountId}`}>
@@ -111,7 +117,8 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
                   <span className={`status ${!account.enabled || protectedAccount || !writeAccess ? 'neutral' : ''}`}>{!account.enabled ? 'Disabled' : protectedAccount || !writeAccess ? 'Read only' : 'Preview required'}</span>
                 </label>;
               })}
-            </div> : <div className="inline-note">Connect a platform to choose read-only accounts.</div>}
+            </div>
+            </Disclosure> : <div className="inline-note">Connect a platform to choose read-only accounts.</div>}
             <Disclosure label="Other account IDs"><Field label="Read-only account IDs" htmlFor="other-account-ids" help="Use this for accounts temporarily absent from the list. Separate IDs with commas."><Input disabled={disabled} id="other-account-ids" name="manualProtectedAccounts" value={draft.otherAccountIds} onChange={event => update('otherAccountIds', event.target.value)} /></Field></Disclosure>
           </div>
         </section>
@@ -122,16 +129,20 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
             <Field label="History retention (days)" htmlFor="data-retention" help={`${planName} includes up to ${maxRetentionDays} days. A longer history requires an upgrade.`}><Input disabled={disabled} id="data-retention" name="dataRetentionDays" type="number" min="1" max="3650" step="1" value={draft.retentionDays} onChange={event => update('retentionDays', event.target.value)} required /></Field>
           </div>
         </section>
-        {canAdminister ? (
-          <div className="form-actions save-bar">
-            <p className={`save-state${message.error ? ' is-error' : message.success ? ' is-saved' : dirty ? ' is-dirty' : ''}`} role={message.error ? 'alert' : 'status'}>
-              {message.error ?? message.success ?? (dirty ? 'Unsaved changes' : 'All changes saved')}
-            </p>
-            <Button type="button" className="button secondary" disabled={busy || !dirty} onClick={() => { setDraft(saved); setMessage({}); }}>Discard</Button>
-            <Button className="button" disabled={busy || !dirty}>{busy ? 'Saving…' : 'Save policy'}</Button>
-          </div>
-        ) : <p className="inline-note">Owners and admins can change the policy.</p>}
       </fieldset>
+      {canAdminister ? <div className={dirty || busy ? 'form-actions save-bar' : 'policy-idle-feedback'}>
+        <div className="save-feedback">
+          {message.error ? <p className="save-state is-error" role="alert">{message.error}</p> : null}
+          <p className={`save-state${message.success ? ' is-saved' : dirty && !busy ? ' is-dirty' : ''}`} role="status">
+            {busy ? 'Saving policy…' : message.success ? 'Policy saved' : dirty && !message.error ? 'Unsaved changes' : null}
+          </p>
+          {dirty && !busy && !message.error ? <small>Pending changes will need a fresh preview.</small> : null}
+        </div>
+        {dirty || busy ? <>
+          <Button type="button" className="button secondary" disabled={busy} onClick={() => { setDraft(saved); setMessage({}); }}>Discard</Button>
+          <Button type="submit" className="button" pending={busy} pendingLabel="Saving…">Save policy</Button>
+        </> : null}
+      </div> : <p className="inline-note">Owners and admins can change the policy.</p>}
     </form>
   );
 }

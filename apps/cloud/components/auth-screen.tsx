@@ -18,11 +18,6 @@ export function AuthScreen({ mode, error, message, returnTo }: AuthScreenProps) 
     <AuthFrame label={signup ? 'create account' : 'sign in'}>
       <BrandLockup size="large" />
       <h1>{signup ? 'Create your Adport account.' : 'Sign in to Adport.'}</h1>
-      <p>
-        {signup
-          ? 'Create an organization, invite your team, and organize accounts by brand, department, or client.'
-          : 'Your projects, ad accounts, and connected assistants in one place.'}
-      </p>
       {error ? <div className="error-callout" role="alert">{error}</div> : null}
       {message ? <div className="callout success" role="status">{message}</div> : null}
       <div className="social-auth" aria-label="Social sign in">
@@ -60,14 +55,14 @@ export function AuthScreen({ mode, error, message, returnTo }: AuthScreenProps) 
         </label>
         <label className="field">
           <span>Password</span>
-          <Input name="password" type="password" minLength={12} autoComplete={signup ? 'new-password' : 'current-password'} required placeholder="At least 12 characters" />
+          <Input name="password" type="password" minLength={12} autoComplete={signup ? 'new-password' : 'current-password'} required placeholder={signup ? 'At least 12 characters' : undefined} />
         </label>
         <PendingButton className="button full" pendingLabel={signup ? 'Creating account…' : 'Signing in…'}>{signup ? 'Create account' : 'Sign in'}</PendingButton>
       </form>
-      {!signup ? <>
-        <p className="auth-switch"><Link href={'/login/email-link' + (returnTo ? '?return_to=' + encodeURIComponent(returnTo) : '')}>Sign in with an email link</Link></p>
-        <p className="auth-switch"><Link href={'/login/forgot-password' + (returnTo ? '?return_to=' + encodeURIComponent(returnTo) : '')}>Forgot password?</Link></p>
-      </> : null}
+      {!signup ? <div className="auth-switch auth-alternatives">
+        <Link href={'/login/email-link' + (returnTo ? '?return_to=' + encodeURIComponent(returnTo) : '')}>Use email link</Link>
+        <Link href={'/login/forgot-password' + (returnTo ? '?return_to=' + encodeURIComponent(returnTo) : '')}>Forgot password?</Link>
+      </div> : null}
       <p className="auth-switch">
         {signup
           ? <>Already have an account? <Link href={returnTo ? `/login?return_to=${encodeURIComponent(returnTo)}` : '/'}>Sign in</Link></>

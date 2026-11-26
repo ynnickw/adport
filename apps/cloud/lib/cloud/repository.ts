@@ -751,29 +751,6 @@ export async function listPendingOperations(organizationId: string, limit = 50):
   });
 }
 
-export interface AuditEventRow {
-  id: string;
-  event: string;
-  provider: string;
-  tool: string;
-  accountId: string;
-  pendingId: string | null;
-  summary: string;
-  actorUserId: string | null;
-  apiKeyId: string | null;
-  createdAt: Date;
-}
-
-export async function listAuditEvents(organizationId: string, limit = 100): Promise<AuditEventRow[]> {
-  return db()<AuditEventRow[]>`
-    select id, event, provider, tool, account_id, pending_id, summary, actor_user_id, api_key_id, created_at
-    from public.audit_events
-    where organization_id = ${organizationId}
-    order by created_at desc
-    limit ${limit}
-  `;
-}
-
 export async function countPendingOperations(organizationId: string): Promise<number> {
   const rows = await db()<Array<{ count: number }>>`
     select count(*)::int as count from public.pending_operations

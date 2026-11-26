@@ -27,7 +27,7 @@ beforeEach(() => {
   mocks.tenant.mockResolvedValue(tenant);
   mocks.entitlement.mockResolvedValue({ plan: PLANS.reader, status: 'active', providerSubscriptionId: null, providerCustomerId: null, cancelAtPeriodEnd: false, currentPeriodEnd: null });
 });
-const render = async (query: { plan?: string; intent?: string; billing?: string; projectId?: string } = {}) => renderToStaticMarkup(await BillingPage({ searchParams: Promise.resolve(query) }));
+const render = async (query: { plan?: string; intent?: string; billing?: string; projectId?: string; checkout?: string; view?: string } = {}) => renderToStaticMarkup(await BillingPage({ searchParams: Promise.resolve(query) }));
 
 describe('dashboard pricing presentation', () => {
   it('shows dashboard cards with unchanged prices and contextual upgrade before usage', async () => {
@@ -52,7 +52,7 @@ describe('dashboard pricing presentation', () => {
   });
   it('gives teammates plan details while reserving checkout for the organization owner', async () => {
     mocks.tenant.mockResolvedValue({ ...tenant, organizationRole: 'admin' });
-    const html = await render();
+    const html = await render({ view: 'plans' });
     expect(html).toContain('Only your organization owner can change plans');
     expect(html).toContain('Owner approval needed');
     expect(html).not.toContain('Start 7-day free trial');
@@ -71,11 +71,20 @@ describe('dashboard pricing presentation', () => {
     expect(mocks.entitlement).not.toHaveBeenCalled();
     expect(html).not.toContain('name="projectId"');
   });
-  it('preserves subscription-management and existing-price messaging for paid organizations', async () => {
-    mocks.entitlement.mockResolvedValue({ plan: PLANS.premium, status: 'active', providerSubscriptionId: 'sub_test', providerCustomerId: 'cus_test', cancelAtPeriodEnd: false, currentPeriodEnd: null });
+  it('puts subscription status first and makes plan comparison an explicit top-level action', async () => {
+    mocks.entitlement.mockResolvedValue({ plan: PLANS.premium, status: 'active', providerSubscriptionId: 'sub_test', providerCustomerId: 'cus_test', cancelAtPeriodEnd: false, currentPeriodEnd: new Date('2027-01-01T00:00:00Z') });
     const html = await render();
     expect(html).toContain('Manage billing');
-    expect(html).toContain('keeps its current price');
+    expect(html).toContain('Current period ends Jan 1, 2027');
+    expect(html).toMatch(/view=plans#plans">Compare plans/);
+    expect(html).not.toContain('Available plans');
     expect(html).not.toContain('Start 7-day free trial');
+  });
+  it('gives first-time owners a path back to their saved setup after checkout', async () => {
+    mocks.tenant.mockResolvedValue({ ...tenant, onboardingCompletedAt: null });
+    const html = await render({ checkout: 'canceled' });
+    expect(html).toContain('/onboarding?resume=1&amp;return_to=%2Fdashboard');
+    expect(html).toContain('Continue setup');
+    expect(html).toContain('Your current plan is unchanged');
   });
 });

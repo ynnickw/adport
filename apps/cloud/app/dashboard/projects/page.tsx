@@ -3,6 +3,7 @@ import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { listOrganizationProjects } from '@/lib/cloud/workspaces';
 import { NewProjectButton } from '@/components/new-project-dialog';
 import { ProjectManager } from '@/components/project-manager';
+import { DangerZone } from '../team/danger-zone';
 
 export const metadata = { title: 'Projects' };
 
@@ -14,9 +15,9 @@ export default async function ProjectsPage() {
   const defaultProjectId = tenant.projects.find(project => project.id === tenant.organizationId)!.defaultProjectId;
   return <main className="page">
     <p className="workspace-context-label">{tenant.organizationGroupName}</p>
-    <PageHeader title="Projects" description={`Your workspaces in ${tenant.organizationGroupName}. Keep ad accounts, connections, and history separate for each brand, department, or client.`}
+    <PageHeader title="Projects"
       action={canManage ? <NewProjectButton organizationId={tenant.organizationGroupId} organizationName={tenant.organizationGroupName} /> : undefined} />
-    <p className="project-plan-note">Projects are unlimited. Your organization shares one plan and account allowance.</p>
-    <ProjectManager key={tenant.organizationGroupId} projects={projects} currentProjectId={tenant.organizationId} defaultProjectId={defaultProjectId} organizationName={tenant.organizationGroupName} canManage={canManage} />
+    <ProjectManager key={tenant.organizationGroupId} projects={projects} currentProjectId={tenant.organizationId} defaultProjectId={defaultProjectId} organizationName={tenant.organizationGroupName} canManage={canManage}
+      dangerZone={tenant.role === 'owner' ? <DangerZone organizationId={tenant.organizationId} isDefaultProject={tenant.organizationId === defaultProjectId} /> : undefined} />
   </main>;
 }

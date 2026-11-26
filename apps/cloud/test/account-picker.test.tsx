@@ -34,7 +34,7 @@ describe('provider-specific account picker', () => {
     const html = renderToStaticMarkup(await AnalyticsPage({ searchParams: Promise.resolve({}) }));
     expect(html).toContain('gtm unique account');
     expect(html).not.toContain('google unique account');
-    expect(html).toContain('No ad-account slots used');
+    expect(html).toContain('Source access');
     expect(html).not.toContain('organization slots');
     await expect(AccountsPage({ searchParams: Promise.resolve({ select_provider: 'gtm' }) })).rejects.toThrow('NEXT_REDIRECT:/dashboard/analytics');
   });
@@ -43,7 +43,7 @@ describe('provider-specific account picker', () => {
     const html = renderToStaticMarkup(<AccountAccessManager organizationId="org" accounts={accounts} canManage maxActiveAccounts={3} providerFilter={providerFilter} />);
     expect(html).toContain(`${providerFilter} unique account`);
     for (const other of accounts.filter((account) => account.provider !== providerFilter)) expect(html).not.toContain(other.name);
-    expect(html).toContain(usesAdAccountSlot(providerFilter) ? 'Organization allowance: 3 accounts' : 'No ad-account slots used');
+    expect(html).toContain(usesAdAccountSlot(providerFilter) ? 'Organization allowance: 3 accounts' : 'Source access');
     expect(html).toContain('role="switch"');
     expect(html).toContain('aria-checked="' + String(accounts.find(account => account.provider === providerFilter)!.enabled) + '"');
   });
@@ -65,7 +65,7 @@ describe('provider-specific account picker', () => {
 
   it('does not replace an empty provider selection with other providers', async () => {
     mocks.inventory.mockResolvedValue(accounts.filter((account) => account.provider !== 'tiktok'));
-    mocks.connections.mockResolvedValue([{ provider: 'tiktok', status: 'connected' }, { provider: 'google', status: 'connected' }]);
+    mocks.connections.mockResolvedValue(['tiktok', 'google'].map(provider => ({ provider, status: 'connected', scopes: [], connectedAt: new Date() })));
     const html = renderToStaticMarkup(await AccountsPage({ searchParams: Promise.resolve({ select_provider: 'tiktok' }) }));
     expect(html).toContain('No TikTok Ads accounts added');
     expect(html).not.toContain('google unique account');

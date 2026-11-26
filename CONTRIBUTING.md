@@ -28,6 +28,11 @@ No advertising credentials are needed. For safe CLI experiments, use synthetic d
 
 Match the surrounding TypeScript and ESM style. Avoid unrelated formatting or dependency changes. Update user documentation when behavior changes; explain any migration or compatibility impact in the PR.
 
+For Cloud dashboard UI, check `apps/cloud/components` before adding a new control:
+
+- Use `Select` to choose a value, `ActionPopover` for row actions or a short anchored form, `Dialog` for modal tasks, and `Disclosure` for inline details. Keep the feature's permissions and write logic outside these primitives.
+- Use `SearchField`, `ListToolbar`, and the shared filters and tables for lists. Use `Notice`, `LoadingStatus`, and `Empty` for feedback; keep the copy and recovery action specific to the page.
+
 ## Validate
 
 ```sh

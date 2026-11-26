@@ -16,8 +16,13 @@ export function SetupChecklist({ userId, projectId, projectName, connected, acco
   }, [key]);
   if (dismissed) return null;
   const ready = connected && accountsEnabled && assistantVerified;
+  if (ready) return <div className="setup-verified">
+    <span className="status">Assistant read verified</span>
+    <Link href="/dashboard/agents">View assistants</Link>
+  </div>;
+  const step = !connected ? 'connect' : !accountsEnabled ? 'accounts' : 'agent';
   return <section className="setup-checklist" aria-label="Project setup">
-    <div className="setup-checklist-heading"><div><h2>{ready ? 'Your first read is verified' : 'Get your first answer'} <InfoTooltip label="About this setup checklist">Setup is verified after your assistant successfully reads an account list or report in this project. You can hide this checklist on this browser and return through Connect assistant anytime.</InfoTooltip></h2><p>{projectName} · {ready ? 'Finish setup when you’re ready.' : 'Pick up where you left off.'}</p></div><Button type="button" className="icon-button" aria-label="Dismiss setup checklist" onClick={() => { try { localStorage.setItem(key, '1'); } catch { /* Dismiss for this session if storage is unavailable. */ } setDismissed(true); }}>×</Button></div>
-    <div className="setup-checklist-content"><ol>{[['Platform connected', connected], ['Accounts enabled', accountsEnabled], ['Assistant read verified', assistantVerified]].map(([label, done]) => <li key={String(label)} data-complete={done}><span aria-hidden="true">{done ? '✓' : '○'}</span>{label}</li>)}</ol><Link href={'/onboarding?' + new URLSearchParams({ resume: '1', step: !connected ? 'connect' : !accountsEnabled ? 'accounts' : 'agent' })} className="button secondary small">{ready ? 'Finish setup' : 'Continue setup'}</Link></div>
+    <div className="setup-checklist-heading"><div><h2>Get your first answer <InfoTooltip label="About this setup checklist">Setup is verified after your assistant successfully reads an account list or report in this project. Return through Connect assistant anytime.</InfoTooltip></h2><p>{projectName}</p></div><Button type="button" className="icon-button" aria-label="Dismiss setup checklist" onClick={() => { try { localStorage.setItem(key, '1'); } catch { /* Dismiss for this session if storage is unavailable. */ } setDismissed(true); }}>×</Button></div>
+    <div className="setup-checklist-content"><ol>{[['Platform connected', connected], ['Accounts enabled', accountsEnabled], ['Assistant read verified', assistantVerified]].map(([label, done]) => <li key={String(label)} data-complete={done}><span aria-hidden="true">{done ? '✓' : '○'}</span>{label}</li>)}</ol><Link href={'/onboarding?' + new URLSearchParams({ resume: '1', step })} className="button secondary small">{step === 'connect' ? 'Connect a platform' : step === 'accounts' ? 'Choose accounts' : 'Connect assistant'}</Link></div>
   </section>;
 }

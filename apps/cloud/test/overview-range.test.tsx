@@ -5,11 +5,11 @@ import { LiveData } from '@/app/dashboard/live-data';
 import { ToolCatalogEditor } from '@/components/tool-catalog-editor';
 import { ApiKeyManager } from '@/app/dashboard/agents/api-key-manager';
 
-const requests: Array<{ url: string; resolve: (value: Response) => void }> = [];
+const requests: Array<{ url: string; init?: RequestInit; resolve: (value: Response) => void }> = [];
 beforeEach(() => {
   requests.length = 0;
   window.history.replaceState(null, '', '/dashboard');
-  vi.stubGlobal('fetch', vi.fn((url: string) => new Promise<Response>(resolve => requests.push({ url, resolve }))));
+  vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => new Promise<Response>(resolve => requests.push({ url, init, resolve }))));
   HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
   HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
   Element.prototype.scrollIntoView = vi.fn();
@@ -40,6 +40,7 @@ it('applies dates to the report and ignores an older response after changing ran
   expect(await screen.findByText('Yesterday campaign')).toBeTruthy();
   expect(screen.queryByText('Stale today campaign')).toBeNull();
   expect(window.location.search).toContain('range=yesterday');
+  expect(screen.getByRole('link', { name: 'Campaign report' }).getAttribute('href')).toBe('/dashboard/reports?range=yesterday');
 });
 
 it('keeps draft dates local until Apply and leaves the report unchanged on Cancel', async () => {
@@ -73,9 +74,9 @@ it('opens the linked connection’s settings and saves only after an explicit us
   expect(await screen.findByRole('status')).toHaveProperty('textContent', expect.stringContaining('Refresh tools'));
 });
 
-it('reveals API key settings through the surrounding Advanced disclosure when following a capability link', async () => {
-  window.history.replaceState(null, '', '/dashboard/agents?connection=fixture&kind=key');
-  render(<ApiKeyManager organizationId="fixture-project" currentUserId="fixture-user" canManage baseUrl="https://app.adport.test" initialGrants={[]} initialCheckedAt={Date.now()} setup={null} />);
+it('reveals API key settings in Developer settings when following a capability link', async () => {
+  window.history.replaceState(null, '', '/dashboard/developer?connection=fixture&kind=key');
+  render(<ApiKeyManager organizationId="fixture-project" suggestedProviders={[]} baseUrl="https://app.adport.test" />);
   await waitFor(() => expect(requests).toHaveLength(1));
   await act(async () => requests[0]!.resolve(Response.json({ oauthGrants: [], keys: [{ id: 'fixture', name: 'Fixture key', keyPrefix: 'fixture', createdAt: new Date().toISOString(), lastUsedAt: null, toolSelection: { profile: 'standard', providers: ['meta'] } }] })));
   const row = (await screen.findByText('Fixture key')).closest('.row-item') as HTMLElement;
@@ -83,11 +84,22 @@ it('reveals API key settings through the surrounding Advanced disclosure when fo
   expect(requests).toHaveLength(1);
 });
 
+it.each([false, true])('creates a read-only key unless changes are explicitly selected (%s)', async write => {
+  render(<ApiKeyManager organizationId="fixture-project" suggestedProviders={['google']} baseUrl="https://app.adport.test" />);
+  await waitFor(() => expect(requests).toHaveLength(1));
+  await act(async () => requests[0]!.resolve(Response.json({ keys: [] })));
+  fireEvent.click(screen.getByText('Create API key', { exact: true }));
+  expect(screen.getByRole('checkbox', { name: 'Allow changes after approval' })).toHaveProperty('checked', false);
+  if (write) fireEvent.click(screen.getByRole('checkbox', { name: 'Allow changes after approval' }));
+  fireEvent.click(screen.getByRole('button', { name: /^Create key$/ }));
+  await waitFor(() => expect(requests).toHaveLength(2));
+  expect(JSON.parse(requests[1]!.init?.body as string)).toMatchObject({ scopes: write ? ['tools:read', 'tools:write'] : ['tools:read'] });
+});
+
 it('copies the API tool search configuration with a placeholder for the key', async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
-  render(<ApiKeyManager organizationId="fixture-project" canManage baseUrl="https://app.adport.test" initialGrants={[]} initialCheckedAt={Date.now()} setup={null} />);
-  fireEvent.click(screen.getByText('Advanced: API keys & custom integrations'));
+  render(<ApiKeyManager organizationId="fixture-project" suggestedProviders={[]} baseUrl="https://app.adport.test" />);
   fireEvent.click(screen.getByText('Tool search for OpenAI and Claude APIs'));
   fireEvent.click(screen.getByRole('button', { name: 'Copy OpenAI Responses API tool search config' }));
   fireEvent.click(screen.getByRole('button', { name: 'Copy Claude Messages API tool search config' }));

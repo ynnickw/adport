@@ -37,10 +37,10 @@ const SETTINGS_ITEMS: NavItem[] = [
   { label: 'Project team', href: '/dashboard/team', icon: icon.team },
   { label: 'Policies', href: '/dashboard/policies', icon: icon.policies },
   { label: 'Plan & usage', href: '/dashboard/billing', icon: icon.billing },
-  { label: 'Preferences', href: '/dashboard/preferences', icon: icon.policies },
+  { label: 'Developer', href: '/dashboard/developer', icon: icon.agents },
 ];
 const UTILITY_ITEMS: NavItem[] = [
-  { label: 'Settings', href: '/dashboard/preferences', icon: icon.policies, paths: SETTINGS_ITEMS.map(item => item.href) },
+  { label: 'Settings', href: '/dashboard/organization', icon: icon.policies, paths: SETTINGS_ITEMS.map(item => item.href) },
 ];
 
 const isActive = (item: NavItem, pathname: string) => item.exact ? pathname === item.href : (item.paths ?? [item.href]).some(path => pathname === path || pathname.startsWith(`${path}/`));
@@ -71,7 +71,7 @@ export function UtilityNav() {
   );
 }
 
-export function ContextNav() {
+export function ContextNav({ canManage = false }: { canManage?: boolean }) {
   const pathname = usePathname();
   const navigation = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -89,11 +89,13 @@ export function ContextNav() {
     reveal();
     return () => observer.disconnect();
   }, [pathname]);
-  const tabs = SETTINGS_ITEMS.some(item => isActive(item, pathname)) ? SETTINGS_ITEMS
+  const tabs = SETTINGS_ITEMS.some(item => isActive(item, pathname)) ? SETTINGS_ITEMS.filter(item => canManage || item.href !== '/dashboard/developer')
     : ['/dashboard/accounts', '/dashboard/connections', '/dashboard/analytics'].includes(pathname)
       ? [{ label: 'Ad accounts', href: '/dashboard/accounts' }, { label: 'Ad platforms', href: '/dashboard/connections' }, { label: 'Analytics & tracking', href: '/dashboard/analytics' }]
       : ['/dashboard/approvals', '/dashboard/audit'].includes(pathname)
-        ? [{ label: 'Pending changes', href: '/dashboard/approvals' }, { label: 'History', href: '/dashboard/audit' }] : [];
+        ? [{ label: 'Pending changes', href: '/dashboard/approvals' }, { label: 'History', href: '/dashboard/audit' }]
+        : ['/dashboard/reports', '/dashboard/findings'].includes(pathname)
+          ? [{ label: 'Overview', href: '/dashboard' }, { label: 'Campaign report', href: '/dashboard/reports' }, { label: 'Findings', href: '/dashboard/findings' }] : [];
   if (!tabs.length) return null;
   return <header className="workspace-bar">
     <nav ref={navigation} className="section-tabs" aria-label="Section navigation">{tabs.map(item => <Link href={item.href} key={item.href} prefetch={false} aria-current={pathname === item.href ? 'page' : undefined}>{item.label}</Link>)}</nav>

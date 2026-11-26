@@ -6,7 +6,7 @@ import { Button } from './controls';
 
 const subscribe = () => () => {};
 
-export function Dialog({ title, children, onClose, className = '', portal = false }: { title: string; children: React.ReactNode; onClose: () => void; className?: string; portal?: boolean }) {
+export function Dialog({ title, children, onClose, className = '', portal = false, closeLabel = `Close ${title}` }: { title: string; children: React.ReactNode; onClose: () => void; className?: string; portal?: boolean; closeLabel?: string }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const hydrated = useSyncExternalStore(subscribe, () => true, () => false);
@@ -16,7 +16,10 @@ export function Dialog({ title, children, onClose, className = '', portal = fals
     const previous = document.activeElement as HTMLElement | null;
     const dialog = ref.current;
     dialog?.showModal();
-    dialog?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
+    const target = dialog?.querySelector<HTMLElement>('[data-autofocus]');
+    if (target && (target.dataset.autofocus !== 'fine-pointer' || !window.matchMedia?.('(pointer: coarse)').matches)) {
+      target.focus();
+    }
     return () => { dialog?.close(); previous?.focus(); };
   }, [ready]);
   if (!ready) return null;
@@ -27,7 +30,7 @@ export function Dialog({ title, children, onClose, className = '', portal = fals
       const rect = event.currentTarget.getBoundingClientRect();
       if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) onClose();
     }}>
-    <div className="dialog-heading"><h2 id={titleId}>{title}</h2><Button type="button" className="icon-button" aria-label={`Close ${title}`} onClick={onClose}>×</Button></div>
+    <div className="dialog-heading"><h2 id={titleId}>{title}</h2><Button type="button" className="icon-button" aria-label={closeLabel} onClick={onClose}>×</Button></div>
     {children}
   </dialog>;
   return portal ? createPortal(content, document.body) : content;
@@ -35,5 +38,5 @@ export function Dialog({ title, children, onClose, className = '', portal = fals
 
 export function DialogTrigger({ label, title, children, className = 'button secondary' }: { label: string; title: string; children: React.ReactNode; className?: string }) {
   const [open, setOpen] = useState(false);
-  return <><Button type="button" className={className} onClick={() => setOpen(true)}>{label}</Button>{open ? <Dialog title={title} onClose={() => setOpen(false)}>{children}</Dialog> : null}</>;
+  return <><Button type="button" className={className} onClick={event => { event.currentTarget.focus({ preventScroll: true }); setOpen(true); }}>{label}</Button>{open ? <Dialog title={title} onClose={() => setOpen(false)}>{children}</Dialog> : null}</>;
 }
