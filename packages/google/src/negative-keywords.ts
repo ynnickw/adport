@@ -11,6 +11,8 @@ interface Campaign { id: string; name: string; status: string; resourceName: str
 
 /** Operations per mutate request; Google's hard limit is 10,000 per request. */
 export const NEGATIVE_KEYWORD_MUTATE_BATCH = 1000;
+// Independent campaign criteria can use the full per-request Google Ads limit.
+const CAMPAIGN_MUTATE_BATCH = 10_000;
 /**
  * Google Ads limits: keywords per negative keyword list and negative keywords per campaign.
  * Account-level list counts and channel-specific caps are left to the validate_only dry run.
@@ -163,8 +165,8 @@ export class GoogleNegativeKeywordService {
   }
 
   /** Runs service mutates in bounded batches; each request is atomic (partialFailure=false). */
-  private async batches(account: string, service: string, operations: Row[], validateOnly: boolean, expected: (operation: Row, resource: string) => boolean, acknowledged: string[]) {
-    for (const batch of chunks(operations, NEGATIVE_KEYWORD_MUTATE_BATCH)) {
+  private async batches(account: string, service: string, operations: Row[], validateOnly: boolean, expected: (operation: Row, resource: string) => boolean, acknowledged: string[], batchSize = NEGATIVE_KEYWORD_MUTATE_BATCH) {
+    for (const batch of chunks(operations, batchSize)) {
       const request = this.client.mutate(account, service, batch, { validateOnly });
       if (validateOnly) { await request; continue; }
       const result = await confirmBatch(request, batch.length);
@@ -314,10 +316,11 @@ export class GoogleNegativeKeywordService {
       if (existing.size + additions.length > CAMPAIGN_LIMIT) throw new AdportError('INVALID_INPUT', `google: campaign ${campaign.id} would exceed ${CAMPAIGN_LIMIT} negative keywords; consider a negative keyword list`);
       return { campaign, additions, present };
     });
+    const count = perCampaign.reduce((sum, campaign) => sum + campaign.additions.length, 0);
+    if (!count) throw new AdportError('INVALID_INPUT', 'google: every keyword is already a negative keyword in every selected campaign');
+    if (count > OPERATION_BOUND) throw new AdportError('INVALID_INPUT', `google: ${count} operations exceed the ${OPERATION_BOUND} per-call bound; split campaigns across calls or use a negative keyword list`);
     const operations = perCampaign.flatMap(({ campaign, additions }) => additions.map(value => ({ create: { campaign: campaign.resourceName, negative: true, keyword: { text: value.text, matchType: value.match_type } } })));
-    if (!operations.length) throw new AdportError('INVALID_INPUT', 'google: every keyword is already a negative keyword in every selected campaign');
-    if (operations.length > OPERATION_BOUND) throw new AdportError('INVALID_INPUT', `google: ${operations.length} operations exceed the ${OPERATION_BOUND} per-call bound; split campaigns across calls or use a negative keyword list`);
-    const notices = ['Campaign-level negative keywords block matching searches immediately in enabled campaigns. Budgets, bids and statuses are unchanged. For keywords shared by many campaigns, a negative keyword list is easier to maintain.', `Keywords are deduplicated by text and match type, ignoring case. Applied in ${plural(Math.ceil(operations.length / NEGATIVE_KEYWORD_MUTATE_BATCH), 'atomic request')} of at most ${NEGATIVE_KEYWORD_MUTATE_BATCH} operations.`];
+    const notices = ['Campaign-level negative keywords block matching searches immediately in enabled campaigns. Budgets, bids and statuses are unchanged. For keywords shared by many campaigns, a negative keyword list is easier to maintain.', `Keywords are deduplicated by text and match type, ignoring case. Applied in ${plural(Math.ceil(operations.length / CAMPAIGN_MUTATE_BATCH), 'atomic request')} of at most ${CAMPAIGN_MUTATE_BATCH} operations.`];
     const fields: ReviewField[] = perCampaign.map(({ campaign, additions, present }) => ({ label: `${campaign.name} (${campaign.id}): +${additions.length}${present.length ? `, ${present.length} already present` : ''}`, after: additions.length ? sample(additions) : 'No change' }));
     fields.unshift({ label: 'Negative keywords to add', after: `${operations.length} across ${plural(perCampaign.filter(value => value.additions.length).length, 'campaign')}` });
     if (duplicates.length) fields.push({ label: `Skipped duplicates (${duplicates.length})`, after: sample(duplicates) });
@@ -332,7 +335,7 @@ export class GoogleNegativeKeywordService {
       resultDetails: () => details,
       execute: async validateOnly => {
         const acknowledged: string[] = [];
-        try { await this.batches(account, 'campaignCriteria', operations, validateOnly, (operation, resource) => resource.match(pattern)?.[1] === String(object(operation.create).campaign).split('/').at(-1), acknowledged); }
+        try { await this.batches(account, 'campaignCriteria', operations, validateOnly, (operation, resource) => resource.match(pattern)?.[1] === String(object(operation.create).campaign).split('/').at(-1), acknowledged, CAMPAIGN_MUTATE_BATCH); }
         catch (error) { if (validateOnly) throw error; throw this.outcome(error, acknowledged, operations.length, 'Re-run the same request; negative keywords already present are skipped.'); }
         details = { added: operations.length, campaigns: perCampaign.map(({ campaign, additions, present }) => ({ campaign_id: campaign.id, added: additions.length, skipped_already_present: present.length })), skipped_duplicates: duplicates.length };
         return acknowledged;

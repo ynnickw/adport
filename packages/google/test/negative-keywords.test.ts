@@ -248,6 +248,18 @@ describe('Google negative keyword tools', () => {
     expect(mutates(f)).toEqual([]);
   });
 
+  it('validates and applies the maximum campaign operation count in two atomic batches per phase', async () => {
+    const f = fixture();
+    f.state.campaigns.push(campaign('14', 'Search LU'));
+    const keywords = Array.from({ length: 5000 }, (_, i) => kw('exclude ' + i));
+    const change = op('google_add_campaign_negative_keywords', { campaign_ids: ['11', '12', '13', '14'], keywords }, 'create');
+    await f.provider.previewWrite(change, guard);
+    await f.provider.applyWrite(change, guard);
+    expect(mutates(f).map(({ body }) => [body.validateOnly, body.operations.length])).toEqual([
+      [true, 10000], [true, 10000], [false, 10000], [false, 10000],
+    ]);
+  });
+
   it('surfaces Google error envelopes and reports partial batch progress without retrying', async () => {
     const f = fixture();
     f.state.fail = url => url.endsWith('/campaignCriteria:mutate');
