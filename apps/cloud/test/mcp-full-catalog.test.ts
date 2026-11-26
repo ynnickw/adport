@@ -171,7 +171,7 @@ it('keeps the expanded publisher catalog below the metadata limit with GTM and S
       return total + Buffer.byteLength(JSON.stringify(definition)) + 360;
     }, 0);
     console.info(`Estimated publisher metadata with GTM and Search Console available: ${names.length} tools, ${bytes} bytes`);
-    expect(bytes).toBeLessThan(2_960_000);
+    expect(bytes).toBeLessThan(2_950_000);
   } finally {
     vi.unstubAllEnvs();
     resetEnvForTests();
