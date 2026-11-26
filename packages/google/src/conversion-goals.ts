@@ -214,6 +214,7 @@ export class GoogleConversionGoalService {
     const configOps: Row[] = [], standardOps: Row[] = [], fields: ReviewField[] = [], expectations: Array<{ campaignId: string; level: 'CUSTOMER' | 'CAMPAIGN'; goal?: string; biddable: Map<string, boolean> }> = [], warnings: string[] = [];
     for (const entry of entries) {
       const campaignId = String(entry.campaign.id), name = String(entry.campaign.name), currentGoal = entry.config.level === 'CAMPAIGN' ? entry.config.goal : null;
+      const operationsBefore = configOps.length + standardOps.length;
       let level = entry.config.level, goalResource = currentGoal;
       if (input.goal?.type === 'ACCOUNT_DEFAULT') {
         if (entry.config.level !== 'CUSTOMER') configOps.push({ conversionGoalCampaignConfigOperation: { update: { resourceName: entry.config.resourceName, goalConfigLevel: 'CUSTOMER' }, updateMask: 'goal_config_level' } });
@@ -239,9 +240,12 @@ export class GoogleConversionGoalService {
           if (row.biddable !== item.biddable) { standardOps.push({ campaignConversionGoalOperation: { update: { resourceName: row.resourceName, biddable: item.biddable }, updateMask: 'biddable' } }); row.biddable = item.biddable; }
         }
       }
+      if (level === 'CAMPAIGN' && !goalResource && !standardAfter.some(row => row.biddable)) {
+        throw new AdportError('INVALID_INPUT', 'google: campaign ' + campaignId + ' needs at least one biddable standard goal or a custom conversion goal; keep a standard goal enabled or select a custom goal in this request');
+      }
       const beforeText = this.describe({ level: entry.config.level, goal: currentGoal ? goals.get(currentGoal) ?? null : null, goalResource: currentGoal, standard: entry.standard }, actions);
       const afterText = level === 'CUSTOMER' ? 'Account default goals (campaign-specific and custom goals no longer apply)' : this.describe({ level, goal: goalResource ? goals.get(goalResource) ?? null : null, goalResource, standard: standardAfter }, actions);
-      fields.push({ label: `${name} [${campaignId}]`, before: beforeText, after: beforeText === afterText && level === entry.config.level ? 'No change' : afterText });
+      fields.push({ label: `${name} [${campaignId}]`, before: beforeText, after: configOps.length + standardOps.length === operationsBefore ? 'No change' : afterText });
       if (target && level === 'CAMPAIGN' && standardAfter.some(row => row.biddable)) warnings.push(`${name} [${campaignId}] also keeps bidding on ${standardAfter.filter(row => row.biddable).map(standardLabel).join(', ')}. Pass standard_goals="DISABLE_ALL" to optimize only for the custom goal.`);
       expectations.push({ campaignId, level, ...(goalResource ? { goal: goalResource } : {}), biddable });
     }

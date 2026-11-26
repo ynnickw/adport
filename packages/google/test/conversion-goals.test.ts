@@ -252,10 +252,22 @@ describe('campaign conversion goal writes', () => {
     const f = fixture(); Object.assign(f.state.configs[1], { goalConfigLevel: 'CAMPAIGN', customConversionGoal: goalResource('701') }); f.state.standard[2].biddable = false;
     const write = await setOp(f, ['11', '12'], { goal: { type: 'ACCOUNT_DEFAULT' } });
     const preview = await f.provider.previewWrite(write, guard);
+    expect(preview.summary).toBe('Restore account default conversion goals on 1 Google campaign');
+    expect(preview.fieldChanges![0]!.after).toBe('No change');
     expect(preview.fieldChanges![1]).toEqual({ field: 'Search 2 [12]', before: 'Campaign-specific goals: custom goal "Leads only" optimizing for "Demo request"; standard goals used for bidding: Submit lead form · Website', after: 'Account default goals (campaign-specific and custom goals no longer apply)' });
     expect(mutations(f)[0]!.body.mutateOperations).toEqual([{ conversionGoalCampaignConfigOperation: { update: { resourceName: `${ROOT}/conversionGoalCampaignConfigs/12`, goalConfigLevel: 'CUSTOMER' }, updateMask: 'goal_config_level' } }]);
     await f.provider.applyWrite(write, guard);
     expect(f.state.configs[1].goalConfigLevel).toBe('CUSTOMER');
+  });
+
+  it('rejects removing the last bidding goal for any campaign in the batch before mutation', async () => {
+    const f = fixture();
+    f.state.standard[3].biddable = false;
+    for (const standard_goals of ['DISABLE_ALL', [{ category: 'PURCHASE', origin: 'WEBSITE', biddable: false }]]) {
+      const write = await setOp(f, ['11', '12'], { standard_goals });
+      await expect(f.provider.previewWrite(write, guard)).rejects.toMatchObject({ code: 'INVALID_INPUT', message: expect.stringContaining('at least one biddable standard goal or a custom conversion goal') });
+    }
+    expect(mutations(f)).toEqual([]);
   });
 
   it('toggles selected standard goals, switching the level first in the same request', async () => {
