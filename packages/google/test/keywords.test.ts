@@ -19,7 +19,7 @@ const op = (tool: string, payload: Row, kind: WriteOperation['kind'] = 'update')
 function fixture(options: { criteria?: Row[]; receipt?: (names: string[]) => string[]; mutateError?: boolean } = {}) {
   const criteria = options.criteria ?? [
     crit('22', '101', 'running shoes', { finalUrls: ['https://shop.example/old'] }),
-    crit('33', '202', 'trail shoes', { trackingUrlTemplate: '{lpurl}?src=old', finalUrlSuffix: 'utm=old' }),
+    crit('33', '202', 'trail shoes', { finalUrls: ['https://shop.example/trail'], trackingUrlTemplate: '{lpurl}?src=old', finalUrlSuffix: 'utm=old' }),
   ];
   const calls: Array<{ url: URL; body: Row; init: RequestInit }> = [];
   const client = new GoogleAdsRestClient({ clientId: 'inert', clientSecret: 'inert', refreshToken: 'inert' }, 'v25', async (raw, init = {}) => {
@@ -66,6 +66,9 @@ describe('google_add_keywords landing pages', () => {
     await expect(call([{ text: 'shoes', match_type: 'EXACT', final_urls: ['not a URL'] }])).rejects.toMatchObject({ code: 'INVALID_INPUT' });
     await expect(call([{ text: 'shoes', match_type: 'EXACT', final_urls: ['https://user:secret@shop.example/'] }])).rejects.toMatchObject({ code: 'INVALID_INPUT' });
     await expect(call([{ text: 'shoes', match_type: 'EXACT', final_mobile_urls: ['https://m.shop.example/'] }])).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    for (const extra of [{ final_url_suffix: 'a=b' }, { tracking_url_template: '{lpurl}?src=test' }]) {
+      await expect(call([{ text: 'shoes', match_type: 'EXACT', ...extra }])).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    }
     expect(f.calls).toEqual([]);
     await expect(f.provider.previewWrite(op('google_add_keywords', { ad_group_id: '22', negative: true, keywords: [{ text: 'cheap', match_type: 'BROAD', final_urls: ['https://shop.example'] }] }, 'create'), guard)).rejects.toMatchObject({ code: 'INVALID_INPUT' });
     expect(f.calls).toEqual([]);
@@ -75,7 +78,7 @@ describe('google_add_keywords landing pages', () => {
 describe('google_update_keyword_urls', () => {
   const payload = { keywords: [
     { ad_group_id: '22', criterion_id: '101', final_urls: ['https://shop.example/running'] },
-    { ad_group_id: '33', criterion_id: '202', tracking_url_template: null, final_url_suffix: 'utm=new', final_urls: [] },
+    { ad_group_id: '33', criterion_id: '202', tracking_url_template: null, final_url_suffix: 'utm=new' },
   ] };
 
   it('reads current values, then sends exact per-keyword masks and clears through the mask', async () => {
@@ -88,11 +91,10 @@ describe('google_update_keyword_urls', () => {
     expect(call!.url.pathname).toBe(`/v25/${ROOT}/adGroupCriteria:mutate`);
     expect(call!.body).toEqual({ validateOnly: true, partialFailure: false, operations: [
       { update: { resourceName: `${ROOT}/adGroupCriteria/22~101`, finalUrls: ['https://shop.example/running'] }, updateMask: 'final_urls' },
-      { update: { resourceName: `${ROOT}/adGroupCriteria/33~202`, finalUrlSuffix: 'utm=new' }, updateMask: 'final_urls,tracking_url_template,final_url_suffix' },
+      { update: { resourceName: `${ROOT}/adGroupCriteria/33~202`, finalUrlSuffix: 'utm=new' }, updateMask: 'tracking_url_template,final_url_suffix' },
     ] });
     expect(preview.fieldChanges).toEqual([
       { field: '"running shoes" [EXACT] 22~101 final_urls', before: 'https://shop.example/old', after: 'https://shop.example/running' },
-      { field: '"trail shoes" [EXACT] 33~202 final_urls', before: '(none)', after: '(cleared)' },
       { field: '"trail shoes" [EXACT] 33~202 tracking_url_template', before: '{lpurl}?src=old', after: '(cleared)' },
       { field: '"trail shoes" [EXACT] 33~202 final_url_suffix', before: 'utm=old', after: 'utm=new' },
     ]);
@@ -106,12 +108,14 @@ describe('google_update_keyword_urls', () => {
       { ad_group_id: '22', criterion_id: '102', final_urls: ['https://shop.example'] },
       { ad_group_id: '22', criterion_id: '999', final_urls: ['https://shop.example'] },
       { ad_group_id: '22', criterion_id: '103', final_mobile_urls: ['https://m.shop.example'] },
+      { ad_group_id: '22', criterion_id: '103', tracking_url_template: '{lpurl}?src=ad' },
+      { ad_group_id: '22', criterion_id: '103', final_url_suffix: 'src=ad' },
     ]) await expect(f.provider.previewWrite(op('google_update_keyword_urls', { keywords: [keyword] }), guard)).rejects.toMatchObject({ code: 'INVALID_INPUT' });
     expect(mutations(f)).toEqual([]);
   });
 
   it('batches lookups in chunks of 200 and sends one mutate in input order', async () => {
-    const ids = Array.from({ length: 450 }, (_, i) => String(1000 + i)), criteria = ids.map(id => crit('22', id, `kw ${id}`));
+    const ids = Array.from({ length: 450 }, (_, i) => String(1000 + i)), criteria = ids.map(id => crit('22', id, `kw ${id}`, { finalUrls: ['https://shop.example/'] }));
     const f = fixture({ criteria }), keywords = ids.map(id => ({ ad_group_id: '22', criterion_id: id, final_url_suffix: `n=${id}` }));
     const preview = await f.provider.previewWrite(op('google_update_keyword_urls', { keywords }), guard);
     const searches = f.calls.filter(call => call.url.pathname.endsWith('googleAds:search'));
@@ -141,6 +145,14 @@ describe('google_update_keyword_urls', () => {
     // Clearing both together is allowed.
     await f.provider.previewWrite(op('google_update_keyword_urls', { keywords: [{ ad_group_id: '22', criterion_id: '101', final_urls: [], final_mobile_urls: [] }] }), guard);
     expect(mutations(f)).toHaveLength(1);
+  });
+
+  it('preserves omitted tracking fields and permits an explicit clear of all URL fields', async () => {
+    const f = fixture(), keyword = { ad_group_id: '33', criterion_id: '202', final_urls: [] };
+    await expect(f.provider.previewWrite(op('google_update_keyword_urls', { keywords: [keyword] }), guard))
+      .rejects.toMatchObject({ code: 'INVALID_INPUT', message: expect.stringContaining('tracking_url_template without final_urls') });
+    await f.provider.previewWrite(op('google_update_keyword_urls', { keywords: [{ ...keyword, tracking_url_template: null, final_url_suffix: null }] }), guard);
+    expect(mutations(f)[0]!.body.operations).toEqual([{ update: { resourceName: ROOT + '/adGroupCriteria/33~202' }, updateMask: 'final_urls,tracking_url_template,final_url_suffix' }]);
   });
 
   it('validates the payload at the registry boundary', async () => {

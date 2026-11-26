@@ -35,7 +35,16 @@ const show = (value: unknown) => Array.isArray(value) ? (value.length ? value.jo
 
 export const GOOGLE_KEYWORD_WRITES = new Set(['google_update_keyword_urls']);
 
+/** Google requires a keyword-level final URL for each of the other URL options. */
+export function fieldMissingFinalUrls(fields: Partial<Record<UrlKey, unknown>>): UrlKey | undefined {
+  const populated = (value: unknown) => (typeof value === 'string' || Array.isArray(value)) && value.length > 0;
+  if (populated(fields.final_urls)) return undefined;
+  return URL_KEYS.find(key => key !== 'final_urls' && populated(fields[key]));
+}
+
 export function keywordUrlCreateFields(keyword: Partial<Record<UrlKey, string[] | string>>): Row {
+  const missing = fieldMissingFinalUrls(keyword);
+  if (missing) throw new AdportError('INVALID_INPUT', 'google: ' + missing + ' requires final_urls on the same keyword');
   return Object.fromEntries(URL_KEYS.flatMap(key => keyword[key] !== undefined && keyword[key].length ? [[WIRE[key], keyword[key]]] : []));
 }
 
@@ -71,8 +80,11 @@ export class GoogleKeywordService {
         changes.push(`~ keyword ${label} ${key} ${show(before[WIRE[key]])} → ${after}`);
         if (fieldChanges.length < 100) fieldChanges.push({ field: `${label} ${key}`, before: show(before[WIRE[key]]), after });
       }
-      const finalUrls = keyword.final_urls ?? (before.finalUrls as string[] | undefined) ?? [], mobileUrls = keyword.final_mobile_urls ?? (before.finalMobileUrls as string[] | undefined) ?? [];
-      if (mobileUrls.length && !finalUrls.length) problems.push(`${keyword.ad_group_id}~${keyword.criterion_id} would keep final_mobile_urls without final_urls`);
+      const effective = Object.fromEntries(URL_KEYS.map(key => [
+        key, keyword[key] === undefined ? before[WIRE[key]] : keyword[key],
+      ]));
+      const missing = fieldMissingFinalUrls(effective);
+      if (missing) problems.push(`${keyword.ad_group_id}~${keyword.criterion_id} would keep ${missing} without final_urls; supply a keyword landing page or clear that field`);
       operations.push({ update, updateMask: mask.join(',') });
     }
     if (problems.length) throw new AdportError('INVALID_INPUT', `google: keyword URL update rejected: ${problems.join('; ')}`);

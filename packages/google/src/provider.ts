@@ -685,9 +685,6 @@ export class GoogleAdsProvider implements AdProvider {
     if (payload.negative && urls.some(fields => Object.keys(fields).length)) {
       throw new AdportError('INVALID_INPUT', 'google: negative keywords cannot have final URLs, tracking templates or URL suffixes');
     }
-    if (urls.some(fields => fields.finalMobileUrls && !fields.finalUrls)) {
-      throw new AdportError('INVALID_INPUT', 'google: final_mobile_urls require final_urls on the same keyword');
-    }
     const operations = payload.keywords.map((kw, index) => ({
       create: {
         adGroup: `customers/${cid}/adGroups/${payload.ad_group_id}`,
