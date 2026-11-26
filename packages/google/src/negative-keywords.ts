@@ -34,6 +34,14 @@ export const formatKeyword = (value: Keyword) => value.match_type === 'EXACT' ? 
 const sample = (values: Keyword[]) => values.length <= SAMPLE ? values.map(formatKeyword) : [...values.slice(0, SAMPLE).map(formatKeyword), `… and ${values.length - SAMPLE} more`];
 const chunks = <T>(values: T[], size: number) => Array.from({ length: Math.ceil(values.length / size) }, (_, index) => values.slice(index * size, (index + 1) * size));
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
+/** Per-campaign inventory reads run in parallel up to this bound, so 100 campaigns fit the approval timeout. */
+const INVENTORY_CONCURRENCY = 10;
+async function mapBounded<T, R>(values: T[], limit: number, map: (value: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, values.length) }, async () => { while (next < values.length) { const index = next++; results[index] = await map(values[index]!); } }));
+  return results;
+}
 
 /** A request Google answered, but whose receipt could not be confirmed: it may have been applied. */
 class ReceiptMismatch extends AdportError {
@@ -287,13 +295,13 @@ export class GoogleNegativeKeywordService {
 
   private async planCampaignNegatives(account: string, input: z.infer<typeof campaignNegatives>): Promise<Plan> {
     const { unique, duplicates } = dedupeKeywords(input.keywords), campaigns = await this.campaigns(account, input.campaign_ids);
-    const perCampaign: Array<{ campaign: Campaign; additions: Keyword[]; present: Keyword[] }> = [];
-    for (const campaign of campaigns) {
-      const existing = new Set((await this.campaignNegatives(account, campaign)).map(keyOf));
+    const inventories = await mapBounded(campaigns, INVENTORY_CONCURRENCY, campaign => this.campaignNegatives(account, campaign));
+    const perCampaign = campaigns.map((campaign, index) => {
+      const existing = new Set(inventories[index]!.map(keyOf));
       const additions = unique.filter(value => !existing.has(keyOf(value))), present = unique.filter(value => existing.has(keyOf(value)));
       if (existing.size + additions.length > CAMPAIGN_LIMIT) throw new AdportError('INVALID_INPUT', `google: campaign ${campaign.id} would exceed ${CAMPAIGN_LIMIT} negative keywords; consider a negative keyword list`);
-      perCampaign.push({ campaign, additions, present });
-    }
+      return { campaign, additions, present };
+    });
     const operations = perCampaign.flatMap(({ campaign, additions }) => additions.map(value => ({ create: { campaign: campaign.resourceName, negative: true, keyword: { text: value.text, matchType: value.match_type } } })));
     if (!operations.length) throw new AdportError('INVALID_INPUT', 'google: every keyword is already a negative keyword in every selected campaign');
     if (operations.length > OPERATION_BOUND) throw new AdportError('INVALID_INPUT', `google: ${operations.length} operations exceed the ${OPERATION_BOUND} per-call bound; split campaigns across calls or use a negative keyword list`);

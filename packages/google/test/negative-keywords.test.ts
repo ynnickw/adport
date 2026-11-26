@@ -29,6 +29,7 @@ function fixture() {
     campaignNegatives: [{ campaign: '12', id: '7001', text: 'Cheap', matchType: 'EXACT' }] as Row[],
     fail: undefined as undefined | ((url: string, body: Row) => boolean),
     receipt: undefined as undefined | ((url: string, response: Row) => Row),
+    inventoryReads: { active: 0, peak: 0 },
   };
   const calls: Array<{ url: string; method: string; body: Row; headers: Row }> = [];
   let next = 100000;
@@ -44,6 +45,7 @@ function fixture() {
       if (from === 'shared_criterion') { const set = query.match(/sharedSets\/(\d+)'/)![1]; return Response.json({ results: state.criteria.filter(row => row.set === set).map(row => ({ sharedCriterion: { resourceName: `${ROOT}/sharedCriteria/${row.set}~${row.id}`, sharedSet: `${ROOT}/sharedSets/${row.set}`, criterionId: row.id, type: 'KEYWORD', keyword: { text: row.text, matchType: row.matchType } } })) }); }
       if (from === 'campaign_shared_set') return Response.json({ results: state.links.filter(row => query.includes(`'${ROOT}/sharedSets/${row.set}'`)).map(row => ({ campaignSharedSet: { resourceName: `${ROOT}/campaignSharedSets/${row.campaign}~${row.set}`, campaign: `${ROOT}/campaigns/${row.campaign}`, sharedSet: `${ROOT}/sharedSets/${row.set}`, status: 'ENABLED' }, campaign: (({ id, name, status }) => ({ id, name, status }))(state.campaigns.find(value => value.id === row.campaign)!) })) });
       if (from === 'campaign') { const ids = query.match(/campaign\.id IN \(([^)]+)\)/)![1]!.split(', '); return Response.json({ results: state.campaigns.filter(row => ids.includes(row.id)).map(row => ({ campaign: row })) }); }
+      if (from === 'campaign_criterion') { const reads = state.inventoryReads; reads.peak = Math.max(reads.peak, ++reads.active); await new Promise(resolve => setTimeout(resolve, 1)); reads.active--; }
       if (from === 'campaign_criterion') { const id = query.match(/campaign\.id = (\d+)/)![1]; return Response.json({ results: state.campaignNegatives.filter(row => row.campaign === id).map(row => ({ campaign: { id }, campaignCriterion: { resourceName: `${ROOT}/campaignCriteria/${id}~${row.id}`, campaign: `${ROOT}/campaigns/${id}`, criterionId: row.id, negative: true, keyword: { text: row.text, matchType: row.matchType } } })) }); }
       throw new Error(`Unexpected query ${query}`);
     }
@@ -217,6 +219,17 @@ describe('Google negative keyword tools', () => {
     expect(mutates(f).map(call => [call.url, call.body])).toEqual([[`${base}/campaignCriteria:mutate`, { operations: [create('11', 'cheap', 'EXACT'), create('11', 'diy', 'PHRASE'), create('12', 'diy', 'PHRASE')], validateOnly: true, partialFailure: false }]]);
     expect(await f.provider.applyWrite(operation, guard)).toMatchObject({ resourceIds: [`${ROOT}/campaignCriteria/11~100000`, `${ROOT}/campaignCriteria/11~100001`, `${ROOT}/campaignCriteria/12~100002`], details: { added: 3, skipped_duplicates: 1 } });
     await expect(f.provider.previewWrite(op('google_add_campaign_negative_keywords', { campaign_ids: ['12'], keywords: [kw('CHEAP', 'EXACT')] }, 'create'), guard)).rejects.toThrow('already a negative keyword');
+  });
+
+  it('reads campaign negative inventories in parallel, at most 10 at a time, keeping campaign order', async () => {
+    const f = fixture(), ids = Array.from({ length: 25 }, (_, i) => String(20 + i));
+    f.state.campaigns.push(...ids.map(id => campaign(id, `Search ${id}`)));
+    f.state.campaignNegatives.push({ campaign: '44', id: '7002', text: 'cheap', matchType: 'EXACT' });
+    const preview = await f.provider.previewWrite(op('google_add_campaign_negative_keywords', { campaign_ids: ids, keywords: [kw('cheap', 'EXACT')] }, 'create'), guard);
+    expect(f.state.inventoryReads.peak).toBe(10);
+    expect(preview.summary).toBe('Add 24 campaign negative keywords to 24 Google campaigns');
+    expect(preview.changes.slice(0, 25).map(line => line.match(/\((\d+)\)/)![1])).toEqual(ids);
+    expect(preview.changes[24]).toContain('no change (skipped 1 already present)');
   });
 
   it('rejects campaign negatives over the 10,000 per-campaign limit and the 20,000 operation bound before any mutate', async () => {
