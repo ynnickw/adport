@@ -177,6 +177,16 @@ describe('conversion goal reads', () => {
 });
 
 describe('custom conversion goal writes', () => {
+  it('reports an uncertain create when the response is lost and does not retry it', async () => {
+    const f = fixture({ handler: (url, body) => {
+      if (url.pathname.endsWith('googleAds:mutate') && !body.validateOnly) throw new TypeError('connection closed');
+      return undefined;
+    } });
+    const write = op('google_create_custom_conversion_goal', { name: 'Trials', conversion_action_ids: ['501'] }, 'create');
+    await expect(f.provider.applyWrite(write, guard)).rejects.toMatchObject({ code: 'PROVIDER_ERROR', message: expect.stringContaining('check the goal name before retrying') });
+    expect(mutations(f)).toHaveLength(1);
+  });
+
   it('creates a goal from enabled actions with native validate_only and an exact receipt', async () => {
     const f = fixture(), write = op('google_create_custom_conversion_goal', { name: 'Leads and trials', conversion_action_ids: ['501', '502'] }, 'create');
     const preview = await f.provider.previewWrite(write, guard);

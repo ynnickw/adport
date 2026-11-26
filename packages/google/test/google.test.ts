@@ -142,6 +142,17 @@ describe('GoogleAdsRestClient', () => {
     });
   });
 
+  it.each([
+    { service: 'customConversionGoals', operation: { remove: 'customers/1234567890/customConversionGoals/1' } },
+    { service: 'campaignConversionGoals', operation: { update: { resourceName: 'customers/1234567890/campaignConversionGoals/11~PURCHASE~WEBSITE', biddable: true }, updateMask: 'biddable' } },
+    { service: 'customerConversionGoals', operation: { update: { resourceName: 'customers/1234567890/customerConversionGoals/PURCHASE~WEBSITE', biddable: true }, updateMask: 'biddable' } },
+    { service: 'conversionGoalCampaignConfigs', operation: { update: { resourceName: 'customers/1234567890/conversionGoalCampaignConfigs/11', goalConfigLevel: 'CUSTOMER' }, updateMask: 'goal_config_level' } },
+  ])('omits the unsupported partialFailure field for $service', async ({ service, operation }) => {
+    const { impl, calls } = fakeFetch([tokenRoute, { match: url => url.endsWith(service + ':mutate'), reply: {} }]);
+    await new GoogleAdsRestClient(CREDS, 'v25', impl).mutate('1234567890', service, [operation], { validateOnly: true });
+    expect(JSON.parse(String(calls.at(-1)!.init.body))).toEqual({ operations: [operation], validateOnly: true });
+  });
+
   it('paginates search until maxRows', async () => {
     let page = 0;
     const { impl } = fakeFetch([

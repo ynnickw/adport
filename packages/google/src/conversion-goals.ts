@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { AdportError, defineTool, guardedWriteTool, type AnyToolDefinition, type ReviewField, type WriteOperation, type WritePreview } from '@adport/core';
 import { z } from 'zod';
-import { GoogleAdsRestClient, normalizeCustomerId } from './client.js';
+import { GoogleAdsRestClient, isGoogleAdsRejection, normalizeCustomerId } from './client.js';
 import type { GoogleConversionService } from './conversions.js';
 import type { GoogleAdsProvider } from './provider.js';
 
@@ -33,11 +33,6 @@ const canonical = (value: unknown): unknown => Array.isArray(value) ? value.map(
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 const words = (value: string) => { const text = value.toLowerCase().replace(/_/g, ' '); return text.charAt(0).toUpperCase() + text.slice(1); };
 const standardLabel = (row: { category: string; origin: string }) => `${words(row.category)} · ${words(row.origin)}`;
-/** A clean Google Ads rejection (4xx with GoogleAdsFailure details) proves nothing was applied; anything else after sending is ambiguous. */
-const nativeRejection = (error: unknown) => {
-  const body = error instanceof AdportError ? object(object(error.details).error) : {};
-  return typeof body.code === 'number' && body.code >= 400 && body.code < 500 && Array.isArray(body.details) && body.details.some(detail => Array.isArray(object(detail).errors) && (object(detail).errors as unknown[]).length > 0);
-};
 const chunks = <T>(values: T[], size: number) => Array.from({ length: Math.ceil(values.length / size) }, (_, index) => values.slice(index * size, index * size + size));
 export const GOOGLE_CONVERSION_GOAL_WRITES = new Set(['google_create_custom_conversion_goal', 'google_set_campaign_conversion_goal']);
 
@@ -193,7 +188,13 @@ export class GoogleConversionGoalService {
     const fields: ReviewField[] = [{ label: 'Goal name', before: '(new)', after: input.name }, { label: 'Optimizes for', before: '(new)', after: actions.map(action => `${String(action.name)} [${String(action.id)}]`) }];
     const notes = ['A custom goal makes its actions biddable for every campaign that uses it, whether or not each action is primary_for_goal.', 'Creating a goal does not attach it to any campaign; use google_set_campaign_conversion_goal.'];
     return { summary: `Create Google custom conversion goal "${input.name}"`, changes: fields.map(field => `${field.label}: ${JSON.stringify(field.before)} → ${JSON.stringify(field.after)}`), fieldChanges: fields.map(field => ({ field: field.label, before: JSON.stringify(field.before), after: JSON.stringify(field.after) })), coercions: [], budgetDeltas: [], notes, review: { provider: 'google', accountId: account, kind: op.kind, title: 'Create custom conversion goal', fields, notices: notes }, execute: async validateOnly => {
-      const result = await this.client.googleAdsMutate(account, operations, { validateOnly });
+      let result: Awaited<ReturnType<GoogleAdsRestClient['googleAdsMutate']>>;
+      try {
+        result = await this.client.googleAdsMutate(account, operations, { validateOnly });
+      } catch (error) {
+        if (validateOnly || isGoogleAdsRejection(error)) throw error;
+        throw new AdportError('PROVIDER_ERROR', 'google: custom conversion goal creation could not be confirmed. Read google_custom_conversion_goals and check the goal name before retrying.');
+      }
       if (validateOnly) return [];
       const responses = result?.mutateOperationResponses, resource = Array.isArray(responses) && responses.length === 1 ? responses[0]?.customConversionGoalResult?.resourceName : undefined;
       if (typeof resource !== 'string' || !new RegExp(`^customers/${account}/customConversionGoals/[1-9]\\d*$`).test(resource)) throw new AdportError('PROVIDER_ERROR', 'google: custom conversion goal mutation receipt mismatch; reconcile before retrying', { resource_ids: typeof resource === 'string' ? [resource] : [] });
@@ -264,7 +265,7 @@ export class GoogleConversionGoalService {
         result = await this.client.googleAdsMutate(account, operations, { validateOnly });
       } catch (error) {
         // A clean native rejection means nothing was applied; a transport failure after sending is ambiguous.
-        if (validateOnly || nativeRejection(error)) throw error;
+        if (validateOnly || isGoogleAdsRejection(error)) throw error;
         throw unconfirmed();
       }
       try {

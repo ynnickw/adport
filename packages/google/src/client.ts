@@ -240,9 +240,10 @@ export class GoogleAdsRestClient {
     { validateOnly, responseContentType }: { validateOnly: boolean; responseContentType?: 'MUTABLE_RESOURCE' },
   ): Promise<{ results?: Array<{ resourceName?: string; experimentArm?: Record<string, unknown> }> }> {
     const body: Record<string, unknown> = { operations, validateOnly, ...(responseContentType ? { responseContentType } : {}) };
-    // These services omit partial_failure entirely; asset-group and product
-    // tree requests must be atomic rather than accept partial writes.
-    if (!['customerManagerLinks', 'assetGroups', 'assetGroupListingGroupFilters'].includes(service)) body.partialFailure = false;
+    // These v25 requests have no partial_failure field, even when set to false.
+    const atomicOnly = ['customerManagerLinks', 'assetGroups', 'assetGroupListingGroupFilters',
+      'customConversionGoals', 'campaignConversionGoals', 'customerConversionGoals', 'conversionGoalCampaignConfigs'];
+    if (!atomicOnly.includes(service)) body.partialFailure = false;
     return this.request(`customers/${normalizeCustomerId(customerId)}/${service}:mutate`, {
       method: 'POST',
       body,
