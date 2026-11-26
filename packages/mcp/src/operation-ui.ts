@@ -2,6 +2,10 @@ import { OPERATION_RECONCILIATION_UI } from './operation-reconciliation-ui.js';
 
 /** Runs inside the shared, offline iframe closure. */
 export const OPERATION_UI_SCRIPT = String.raw`
+    const bulkNegativeKeywordTools = new Set(['google_create_negative_keyword_list','google_update_negative_keyword_list','google_link_negative_keyword_list','google_add_campaign_negative_keywords']);
+    function callOperationTool(tool,args) {
+      return callTool(tool,args,bulkNegativeKeywordTools.has(tool) ? 180000 : undefined);
+    }
     const attempts = new Map(), pendingRequests = new Map();
     let cancelHold = () => {}, expiryTimer;
     const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -82,7 +86,7 @@ export const OPERATION_UI_SCRIPT = String.raw`
       const previewArgs={...args};delete previewArgs.pending_operation_id;
       attempt.refreshing=true;render(state.result);
       try {
-        const result=await callTool(tool,previewArgs),value=resultData(result),meta=value._adport;
+        const result=await callOperationTool(tool,previewArgs),value=resultData(result),meta=value._adport;
         if(result?.isError || value.error) throw new Error(value.message || 'The connection is not ready. Finish account selection before refreshing again.');
         if(value.applied!==false || value.status!=='pending_validation' || typeof value.pending_operation_id!=='string'
           || value.pending_operation_id===pending || meta?.tool!==tool || meta.context?.project_id!==attempt.recovery.project_id
@@ -158,7 +162,7 @@ export const OPERATION_UI_SCRIPT = String.raw`
       return 'unconfirmed';
     }
     function callHostTool(tool,args) {
-      return callTool(tool,args).catch(error=>{throw new Error((error?.message || 'No confirmation arrived.')+' The write may have succeeded; check its status before retrying.');});
+      return callOperationTool(tool,args).catch(error=>{throw new Error((error?.message || 'No confirmation arrived.')+' The write may have succeeded; check its status before retrying.');});
     }
     async function approve(tool,args,pending,expires) {
       if(attempts.has(pending) || pendingOf(state.result)!==pending) return;

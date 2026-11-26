@@ -26,6 +26,7 @@ import { GoogleDataManagerService } from './data-manager.js';
 import { GoogleExperimentService, GOOGLE_EXPERIMENT_WRITES } from './experiments.js';
 import { GooglePerformanceMaxService, GOOGLE_PMAX_WRITES } from './pmax.js';
 import { GoogleTargetingService } from './targeting.js';
+import { GoogleNegativeKeywordService, GOOGLE_NEGATIVE_KEYWORD_WRITES } from './negative-keywords.js';
 
 const LEVEL_RESOURCE = {
   account: 'customer',
@@ -61,6 +62,7 @@ export class GoogleAdsProvider implements AdProvider {
   readonly experiments: GoogleExperimentService;
   readonly performanceMax: GooglePerformanceMaxService;
   readonly targeting: GoogleTargetingService;
+  readonly negativeKeywords: GoogleNegativeKeywordService;
 
   constructor(private readonly client: GoogleAdsRestClient, media?: MediaResolver) {
     this.assets = new GoogleAssetService(client, media);
@@ -71,6 +73,7 @@ export class GoogleAdsProvider implements AdProvider {
     this.experiments = new GoogleExperimentService(client);
     this.performanceMax = new GooglePerformanceMaxService(client);
     this.targeting = new GoogleTargetingService(client);
+    this.negativeKeywords = new GoogleNegativeKeywordService(client);
   }
 
   keywordPlanning(customerId: string, method: 'generateKeywordIdeas' | 'generateKeywordHistoricalMetrics', body: Record<string, unknown>) {
@@ -359,6 +362,7 @@ export class GoogleAdsProvider implements AdProvider {
     if (GOOGLE_EXPERIMENT_WRITES.has(op.tool)) return this.experiments.plan(op, guard);
     if (GOOGLE_PMAX_WRITES.has(op.tool)) return this.performanceMax.plan(op, guard);
     if (op.tool === 'google_update_targeting') return this.targeting.plan(op);
+    if (GOOGLE_NEGATIVE_KEYWORD_WRITES.has(op.tool)) return this.negativeKeywords.plan(op);
     const cid = normalizeCustomerId(op.accountId);
     // Tool input was already zod-validated at the registry boundary.
     const payload = op.payload as never;

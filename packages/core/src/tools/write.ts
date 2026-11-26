@@ -6,7 +6,7 @@ import { reviewWrite } from './review.js';
 import { MEDIA_UPLOAD_TOOLS } from './media-distribution.js';
 
 const TWO_STEP_NOTE =
-  'Omit pending_operation_id to preview. To apply, repeat IDENTICAL arguments with the returned ID.';
+  'Apply with IDENTICAL arguments and the ID from preview.';
 
 /**
  * Wrap a provider mutation as a two-step (validate → apply) tool.
@@ -35,7 +35,7 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
     pending_operation_id: z
       .string()
       .optional()
-      .describe('Omit to get a dry-run preview; pass the returned id to apply.'),
+      .describe('Omit to preview. Supply to apply.'),
   };
 
   return defineTool({

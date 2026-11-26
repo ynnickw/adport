@@ -6,7 +6,7 @@ import { ADPORT_UI_HTML, structuredResult, viewForTool, type AdportView } from '
 // Execute the shipped iframe script, not a second implementation of its math.
 function widget(initialGlobals?: Record<string, unknown>) {
   const listeners = new Map<string, (event: unknown) => void>();
-  const timers = new Map<number, () => void>();
+  const timers = new Map<number, { fn: () => void; delay: number }>();
   let timerId = 0;
   const buttons: Array<{ dataset: { group: string }; click: () => void }> = [];
   const approvals: Array<{ click: () => void; fire: (name: string, event?: Record<string, unknown>) => void }> = [];
@@ -62,14 +62,14 @@ function widget(initialGlobals?: Record<string, unknown>) {
   const window = { parent, openai: initialGlobals, addEventListener: (name: string, fn: (event: unknown) => void) => { listeners.set(name, fn); } };
   runInNewContext(ADPORT_UI_HTML.match(/<script>([\s\S]+)<\/script>/)![1]!, {
     window, document: { getElementById: () => app, documentElement: root }, Intl,
-    setTimeout: (fn: () => void) => { const id = ++timerId; timers.set(id, fn); return id; },
+    setTimeout: (fn: () => void, delay: number) => { const id = ++timerId; timers.set(id, { fn, delay }); return id; },
     clearTimeout: (id: number) => timers.delete(id),
   });
   const message = (data: unknown, source: unknown = parent) => listeners.get('message')?.({ data, source });
   return {
     app, buttons, metrics, planningButtons, approvals, root, sent, message, details,
     globals: (globals: Record<string, unknown>) => listeners.get('openai:set_globals')?.({ detail: { globals } }),
-    elapse: () => { for (const [id, fn] of [...timers]) { if (timers.delete(id)) fn(); } },
+    elapse: (maxDelay = Infinity) => { for (const [id, { fn, delay }] of [...timers]) { if (delay <= maxDelay && timers.delete(id)) fn(); } },
     renderCount: () => renders,
     render: (view: AdportView, data: unknown, tool: string = view) => message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult(tool, view, data) } }),
   };
@@ -330,6 +330,21 @@ describe('shipped MCP iframe', () => {
     expect(ui.app.innerHTML).toContain('fill="#fff"');
     expect(ui.app.innerHTML).toContain('fill="#000"');
     expect(ui.app.innerHTML).not.toContain('>S</span>');
+  });
+
+  it('accepts a bulk Google approval response after the short read timeout without resending the write', async () => {
+    const ui = widget(), tool = 'google_add_campaign_negative_keywords';
+    ui.message({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: structuredResult(tool, 'operation', {
+      status: 'pending_validation', applied: false, expires_at: '2099-01-01T00:00:00Z', pending_operation_id: 'pending-bulk', preview: { summary: 'Add campaign negatives', changes: ['+ campaign negative keyword [demo]'] },
+    }, { arguments: { account_id: 'account', project_id: 'project', campaign_ids: ['11'], keywords: [{ text: 'demo', match_type: 'EXACT' }] } }) } });
+    ui.approvals[0]!.click();
+    const call = ui.sent.at(-1) as { id: number };
+    ui.elapse(30000);
+    for (let i = 0; i < 12; i++) await Promise.resolve();
+    ui.message({ jsonrpc: '2.0', id: call.id, result: { structuredContent: { status: 'applied', applied: true, result: { applied: true, resourceIds: ['resource'] } } } });
+    for (let i = 0; i < 12; i++) await Promise.resolve();
+    expect(ui.app.innerHTML).toContain('Applied');
+    expect(ui.sent.filter((value: any) => value.method === 'tools/call')).toHaveLength(1);
   });
 
   it('shows escaped provider error text and shares an unconfirmed outcome without an apply token', async () => {
