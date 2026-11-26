@@ -7,6 +7,7 @@ import { googleAssetLinkTools } from './asset-links.js';
 import { googleLabelTools } from './labels.js';
 import { googleFieldMetadataTools } from './field-metadata.js';
 import { googleConversionTools } from './conversions.js';
+import { googleConversionGoalTools } from './conversion-goals.js';
 import { googleDataManagerTools } from './data-manager.js';
 import { googleExperimentTools } from './experiments.js';
 import { googlePerformanceMaxTools } from './pmax.js';
@@ -25,6 +26,7 @@ export function googleTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
     ...googleLabelTools(provider),
     ...googleFieldMetadataTools(provider),
     ...googleConversionTools(provider),
+    ...googleConversionGoalTools(provider),
     ...googleDataManagerTools(provider),
     ...googleExperimentTools(provider),
     ...googlePerformanceMaxTools(provider),

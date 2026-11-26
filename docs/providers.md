@@ -100,6 +100,8 @@ Google can show an “unverified app” warning when your private OAuth project 
 
 See [Google conversion management](providers/google-conversions.md) for tracking ownership, conversion configuration, Data Manager event ingestion and asynchronous diagnostics, and legacy click/call/adjustment imports. Data Manager permission is an explicit opt-in through `adport connect google --data-manager` or the hosted Google connection's **Enable conversion imports** action.
 
+See [Google campaign conversion goals](providers/google-conversion-goals.md) to create custom conversion goals and to set, for one or many campaigns at once, whether they optimize for a custom goal, campaign-specific standard goals or the account defaults.
+
 See [Google experiments](providers/google-experiments.md) for system-managed draft setup, arm edits, native lifecycle actions and asynchronous status/errors. Scheduling remains blocked under paused creation. Drafts are available through the explicit `include_drafts` option on GAQL and ad reads.
 
 ## Agent-managed project media

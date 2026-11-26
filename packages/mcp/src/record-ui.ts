@@ -59,6 +59,7 @@ ${RECORD_COLLECTION_UI}
     }
     function recordPayload(data) {
       if(object(data)&&Array.isArray(data.records))return {records:data.records};
+      if(data._adport?.tool==='google_custom_conversion_goals' && Array.isArray(data.goals))return {records:data.goals};
       const value=data.value ?? data.data ?? data.result ?? data;
       if(!object(value))return value;
       for(const key of ['keyword','audience','pixel','capi_integration','mobile_app','dataset','board','campaign','ad_group','ad','asset','customer_list'])if(object(value[key]))return value[key];
@@ -146,6 +147,13 @@ ${RECORD_COLLECTION_UI}
         workflowCell(entityHeaders[i],esc(workflowText(value)||(i===0?'Record '+(index+1):'—')),i===0)).join('')+'</tr>';
     }
 
+    function campaignGoalSettings(data) {
+      if(data._adport?.tool!=='google_custom_conversion_goals'||!Array.isArray(data.campaigns)||!data.campaigns.length)return '';
+      const rows=data.campaigns.map(campaign=>'<article class="record-row"><div class="record-heading"><strong>'+
+        esc(campaign.name||campaign.campaign_id)+'</strong></div><p class="operation-note">'+esc(campaign.summary)+'</p></article>').join('');
+      return '<section aria-label="Campaign goal settings" data-campaign-goals><h3>Campaign goal settings</h3>'+rows+'</section>';
+    }
+
     function renderRecordPages(message='') {
       const pages=recordPages,area=app.querySelector('[data-record-pages]');if(!pages||!area)return;
       const next=pages.rows.length<1000 && galleryNext(pages.meta);
@@ -177,6 +185,7 @@ ${RECORD_COLLECTION_UI}
         pages.seen.add(key);pages.meta={...meta,...(!added||pages.rows.length>=1000?{next:undefined}:{})};pages.data=value;
         state.hasLocalResult=true;state.result={structuredContent:{...value,records:pages.rows.slice(),_adport:pages.meta}};
         const notes=app.querySelector('.record-notes');if(notes)notes.innerHTML=notices(value);
+        const settings=app.querySelector('[data-campaign-goals]');if(settings)settings.outerHTML=campaignGoalSettings(value);
         const details=app.querySelector('[data-record-details]');if(details){details.querySelector('summary').textContent='Details · '+pages.rows.length+' loaded';details.querySelector('pre').textContent=JSON.stringify({loaded_records:pages.rows,latest_page:Object.fromEntries(Object.entries(value).filter(([field])=>field!=='_adport'))},null,2);}
         pages.busy=false;renderRecordPages(pages.rows.length>=1000?'Showing 1,000 records. Ask your assistant if you need more results.':!added&&rows.length?'No new records were returned. Ask your assistant for a fresh view.':'');
       }catch(error){if(recordPages===pages){pages.busy=false;renderRecordPages(error?.message||'Could not load more records.');}}
@@ -198,8 +207,8 @@ ${RECORD_COLLECTION_UI}
       const markup=shown.map((row,index)=>recordEntryMarkup(row,index,displayMeta,table)).join('');
       const content=rows.length?table?'<div class="workflow-scroll" role="region" aria-label="Returned records" tabindex="0"><table class="workflow-table workflow-stack" role="table">'+workflowHeader(entityHeaders)+
         '<tbody data-record-list role="rowgroup">'+markup+'</tbody></table></div>':
-        '<div class="record-list" data-record-list role="region" aria-label="Returned records" tabindex="0">'+markup+'</div>':'<p class="operation-note">No results returned.</p>';
-      app.innerHTML=chrome(operationHeader(title,scope,meta.provider)+'<div class="record-notes">'+notices(data)+'</div>'+content+(rows.length>1000?'<p class="operation-note">Showing 1,000 of '+rows.length+' records. The full response is in Details.</p>':'')+'<div data-record-pages></div><details data-record-details><summary>Details'+(entries?' · '+entries.length+' results':'')+'</summary><pre>'+esc(JSON.stringify(clean,null,2))+'</pre></details>','');
+        '<div class="record-list" data-record-list role="region" aria-label="Returned records" tabindex="0">'+markup+'</div>':'<p class="operation-note">'+(meta.tool==='google_custom_conversion_goals'?'No custom conversion goals returned.':'No results returned.')+'</p>';
+      app.innerHTML=chrome(operationHeader(title,scope,meta.provider)+'<div class="record-notes">'+notices(data)+'</div>'+content+(rows.length>1000?'<p class="operation-note">Showing 1,000 of '+rows.length+' records. The full response is in Details.</p>':'')+'<div data-record-pages></div>'+campaignGoalSettings(data)+'<details data-record-details><summary>Details'+(entries?' · '+entries.length+' results':'')+'</summary><pre>'+esc(JSON.stringify(clean,null,2))+'</pre></details>','');
       if(Array.isArray(entries)&&rows.length&&galleryNext(meta)){
         recordPages={scope:galleryScope(meta),meta,data,table,rows:rows.slice(0,1000),items:new Map(),seen:new Set([galleryStable(meta.refresh.arguments)]),busy:false};
         const nodes=app.querySelectorAll('[data-record-list]>*');recordPages.rows.forEach((row,index)=>{const identity=object(row)&&(typeof row.id==='string'&&row.id||typeof row.id==='number'&&Number.isSafeInteger(row.id))?'id:'+String(row.id):galleryStable(meta.refresh.arguments)+':'+index;recordPages.items.set(identity,{row,index,node:nodes[index]});});
