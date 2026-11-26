@@ -11,6 +11,7 @@ import { googleDataManagerTools } from './data-manager.js';
 import { googleExperimentTools } from './experiments.js';
 import { googlePerformanceMaxTools } from './pmax.js';
 import { googleTargetingTools } from './targeting.js';
+import { googleNegativeKeywordTools } from './negative-keywords.js';
 import { fieldMissingFinalUrls, googleKeywordTools, keywordUrlFields } from './keywords.js';
 
 const statusSchema = z.enum(['ENABLED', 'PAUSED']);
@@ -28,6 +29,7 @@ export function googleTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
     ...googleExperimentTools(provider),
     ...googlePerformanceMaxTools(provider),
     ...googleTargetingTools(provider),
+    ...googleNegativeKeywordTools(provider),
     ...googleKeywordTools(),
     defineTool({
       name: 'google_ads', namespace: 'google',
@@ -157,7 +159,7 @@ export function googleTools(provider: GoogleAdsProvider): AnyToolDefinition[] {
     guardedWriteTool({
       name: 'google_add_keywords',
       namespace: 'google',
-      description: 'Add keywords (or negative keywords) to an ad group.',
+      description: 'Add keywords (or negative keywords) to an ad group. For campaign-level or shared negatives, use google_add_campaign_negative_keywords or negative keyword lists.',
       provider: 'google',
       kind: 'create',
       payload: z.object({

@@ -39,11 +39,10 @@ export function ConsentView({ clientName, redirectHost, scopes, projects, defaul
         <BrandLockup />
       </div>
       <h1>Connect {clientName} to Adport</h1>
-      <p className="consent-lede">Choose one project or all projects for {clientName}. Every change still goes through that project’s policy gate.</p>
 
       <ul className="consent-scopes" aria-label={`What ${clientName} can do`}>
         {scopes.includes('tools:read') ? <li><PiCheckCircleFill aria-hidden="true" /><span><strong>Read your ad accounts</strong>Accounts, campaigns and audit history.</span></li> : null}
-        {scopes.includes('tools:write') ? <li><PiCheckCircleFill aria-hidden="true" /><span><strong>Propose changes</strong>Previews first. Only changes that pass the policy gate run.</span></li> : null}
+        {scopes.includes('tools:write') ? <li><PiCheckCircleFill aria-hidden="true" /><span><strong>Propose and apply changes</strong>Requires a preview and project approval.</span></li> : null}
       </ul>
 
       <form className="consent-form" method="post" action="/oauth/authorize/consent">
@@ -51,7 +50,7 @@ export function ConsentView({ clientName, redirectHost, scopes, projects, defaul
         <div className="field">
           <span className="field-label" id="consent-project-label">Project</span>
           <Select name="project_id" aria-label="Project" options={options} value={projectId} onValueChange={setProjectId} required />
-          <span className="field-hint">All projects includes current and future projects you can access in that organization.</span>
+          {projectId.startsWith('all:') ? <span className="field-hint">Includes current and future projects you can access in this organization.</span> : null}
         </div>
         <ToolCatalogFields key={projectId} initialSelection={{ profile: 'standard', providers: suggestedProviders }} />
         <p className="consent-return"><PiArrowSquareOut aria-hidden="true" /><span>Returns to <strong>{redirectHost}</strong>. Only continue if you started this connection there.</span></p>

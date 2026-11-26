@@ -287,6 +287,14 @@ function safeJson(raw: string): unknown {
   }
 }
 
+/** A structured Google Ads 4xx rejection confirms an atomic request was rejected. */
+export function isGoogleAdsRejection(error: unknown): boolean {
+  if (!(error instanceof AdportError)) return false;
+  const failure = (error.details as { error?: { code?: number; details?: Array<{ errors?: unknown[] }> } } | null)?.error;
+  return typeof failure?.code === 'number' && failure.code >= 400 && failure.code < 500
+    && Array.isArray(failure.details) && failure.details.some(item => Array.isArray(item?.errors) && item.errors.length > 0);
+}
+
 /**
  * Render Google Ads failures with field paths and request id so an agent can
  * self-correct ("error at operations[0].create.name: ...").

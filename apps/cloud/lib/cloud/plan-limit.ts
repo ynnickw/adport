@@ -3,6 +3,13 @@ import catalog from './plan-catalog.json';
 export type PlanLimitKind = 'active_accounts' | 'members' | 'retention' | 'write_access';
 export type UpgradePlanId = 'operator' | 'premium' | 'agency' | 'enterprise';
 
+export const PLAN_LIMIT_TITLES: Record<PlanLimitKind, string> = {
+  active_accounts: 'More account slots',
+  members: 'More editing seats',
+  retention: 'Longer audit history',
+  write_access: 'Enable ad changes',
+};
+
 export interface PlanLimitDetails {
   kind: PlanLimitKind;
   currentPlan: string;

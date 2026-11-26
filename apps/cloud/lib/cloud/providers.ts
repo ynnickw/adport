@@ -11,6 +11,11 @@ export function usesAdAccountSlot(provider: string): boolean {
   return providerCategory(provider) === 'advertising';
 }
 
+export function providerResourceName(provider: string, count = 2): string {
+  const noun = provider === 'ga4' ? ['property', 'properties'] : provider === 'gsc' ? ['site', 'sites'] : provider === 'gtm' ? ['container', 'containers'] : ['account', 'accounts'];
+  return noun[count === 1 ? 0 : 1]!;
+}
+
 export function providerAccountsPath(provider: string): string {
   return `${usesAdAccountSlot(provider) ? '/dashboard/accounts' : '/dashboard/analytics'}?select_provider=${encodeURIComponent(provider)}`;
 }

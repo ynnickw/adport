@@ -2,10 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import type { ReportRow } from '@adport/core';
-import { Empty, Metric, Provider, formatMoney, formatNumber } from '@/components/ui';
+import { Empty, Metric, formatMoney, formatNumber } from '@/components/ui';
+import { CampaignTable } from '@/components/campaign-table';
+import { LoadingStatus, Notice, SkeletonRows } from '@/components/feedback';
+import { Button } from '@/components/controls';
 import { Select } from '@/components/select';
 import type { DashboardReportSummary } from '@/lib/report-summary';
 import { DateRangePicker } from '@/components/date-range-picker';
+import Link from 'next/link';
+import { ReportCoverage } from '@/components/report-coverage';
 import { overviewRangeLabel, overviewRangeParams, type OverviewRange } from '@/lib/overview-range';
 
 interface Summary {
@@ -20,6 +25,7 @@ export function LiveData({ organizationId, connected, initialRange = 'last_7_day
   const rangeQuery = overviewRangeParams(range).toString();
   const [result, setResult] = useState<{ query: string; data: Summary }>();
   const [failure, setFailure] = useState<{ query: string; message: string }>();
+  const [attempt, setAttempt] = useState(0);
   const summary = result?.query === rangeQuery ? result.data : undefined;
   const error = failure?.query === rangeQuery ? failure.message : undefined;
   const [groupKey, setGroupKey] = useState('');
@@ -36,7 +42,7 @@ export function LiveData({ organizationId, connected, initialRange = 'last_7_day
         if (!controller.signal.aborted) setFailure({ query: rangeQuery, message: reason instanceof Error ? reason.message : 'Unable to load campaign data.' });
       });
     return () => controller.abort();
-  }, [connected, organizationId, rangeQuery]);
+  }, [connected, organizationId, rangeQuery, attempt]);
 
   function changeRange(next: OverviewRange) {
     setRange(next);
@@ -51,15 +57,15 @@ export function LiveData({ organizationId, connected, initialRange = 'last_7_day
   const rows = (summary?.rows ?? []).filter(row => !group || (group.currency ? row.currency === group.currency : group.accounts.some(account => account.provider === row.provider && account.account_id === row.accountId)));
   const totals = group?.metrics;
   const loading = connected && !summary && !error;
+  const partial = Boolean(summary?.warnings?.length || summary?.truncated || summary?.summary?.complete === false);
   const number = (value: number | null | undefined) => loading ? '…' : value == null ? '—' : formatNumber(value);
   const spend = totals?.spend == null ? '—' : group?.currency ? formatMoney(totals.spend, group.currency) : formatNumber(totals.spend);
 
   return <>
-    {error ? <div className="error-callout" role="alert">{error}</div> : null}
-    {summary?.warnings?.map(warning => <div className="error-callout" role="alert" key={`${warning.provider}:${warning.message}`}>{warning.message}</div>)}
+    {error ? <Notice tone="error">{error}</Notice> : null}
     <div className="performance-toolbar"><DateRangePicker value={range} onChange={changeRange} />
       {groups.length > 1 ? <Select aria-label="Performance currency or account" value={group?.key} onValueChange={setGroupKey} options={groups.map(item => ({ value: item.key, label: item.currency ?? `Unlabelled · ${item.accounts[0]?.account_id ?? 'account'}` }))} /> : group?.currency ? <span className="card-note">{group.currency}</span> : group ? <span className="status warn">Currency unavailable</span> : null}
-      {summary?.truncated || summary?.summary?.complete === false ? <span className="status warn">Partial results</span> : null}
+      <ReportCoverage warnings={summary?.warnings} limited={Boolean(summary?.truncated || (summary?.summary?.complete === false && !summary.warnings?.length))} />
     </div>
     <section className="metrics" aria-label="Performance summary" aria-busy={loading}>
       <Metric label="Spend" value={loading ? '…' : spend} foot="Spend in the selected currency. Unlabelled currencies stay separate by account; no exchange-rate conversion is applied." />
@@ -68,17 +74,11 @@ export function LiveData({ organizationId, connected, initialRange = 'last_7_day
       <Metric label="ROAS" value={totals?.roas == null ? loading ? '…' : '—' : `${formatNumber(totals.roas)}×`} foot="Conversion value divided by spend in this currency group. Uses spend-weighted reported ROAS when conversion value is unavailable. A dash means the ratio cannot be calculated." />
     </section>
     <section className="card">
-      <div className="card-head"><h2>Campaign activity</h2><span className="card-note">{rows.length ? `${rows.length} campaigns` : overviewRangeLabel(range)}</span></div>
-      {loading ? <div className="card-body">{[0, 1, 2, 3].map(i => <div className="skeleton-line" style={{ width: '100%', height: '.7rem', marginBottom: i === 3 ? 0 : '1rem', opacity: 1 - i * .2 }} key={i} />)}</div>
-        : rows.length === 0 ? <Empty title="No campaign activity in this range" copy="Try a different date range or check that your ad accounts are enabled." />
-        : <div className="table-wrap"><table><thead><tr><th>Campaign</th><th>Platform</th><th>Status</th><th className="numeric">Spend</th><th className="numeric">Clicks</th><th className="numeric">Conv.</th><th className="numeric">ROAS</th></tr></thead><tbody>
-          {rows.slice(0, 12).map(row => <tr key={`${row.provider}:${row.accountId}:${row.entity.id}`}>
-            <td><strong>{row.entity.name || row.entity.id}</strong><div className="cell-sub">{row.accountId}</div></td><td><Provider name={row.provider} /></td>
-            <td>{row.entity.status ? <span className={`status ${/paused|disabled|removed/i.test(row.entity.status) ? 'neutral' : ''}`}>{row.entity.status}</span> : '—'}</td>
-            <td className="numeric">{row.metrics.spend == null ? '—' : row.currency ? formatMoney(row.metrics.spend, row.currency) : formatNumber(row.metrics.spend)}</td>
-            <td className="numeric">{number(row.metrics.clicks)}</td><td className="numeric">{number(row.metrics.conversions)}</td><td className="numeric">{row.metrics.roas == null ? '—' : `${formatNumber(row.metrics.roas)}×`}</td>
-          </tr>)}
-        </tbody></table></div>}
+      <div className="card-head"><h2>Campaign activity</h2><div className="report-links"><Link prefetch={false} href={'/dashboard/reports?' + rangeQuery}>Campaign report</Link><Link href="/dashboard/findings">Findings</Link></div></div>
+      {loading ? <div className="card-body"><LoadingStatus className="sr-only">Loading campaign activity…</LoadingStatus><SkeletonRows /></div>
+        : error ? <div className="empty"><h3>Campaign activity unavailable</h3><Button type="button" className="button secondary small" onClick={() => { setFailure(undefined); setAttempt(current => current + 1); }}>Retry report</Button></div>
+        : rows.length === 0 ? <Empty title={partial ? 'No rows from available sources' : 'No campaign activity in this range'} copy={partial ? 'Some data could not be read. Check your connections.' : 'Try a different date range or check that your ad accounts are enabled.'} />
+        : <><CampaignTable rows={rows.slice(0, 12)} responsive />{rows.length > 12 ? <div className="table-footnote">{`Showing 12 of ${rows.length} loaded campaigns${group?.currency ? ` in ${group.currency}` : ''}`}</div> : null}</>}
     </section>
   </>;
 }

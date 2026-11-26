@@ -15,6 +15,7 @@ export function BillingForm({ action, label, pendingLabel, className, confirmati
   const [state, formAction, pending] = useActionState(action, {});
   const [confirm, dialog] = useConfirm();
   function submit(event: FormEvent<HTMLFormElement>) {
+    if (pending) { event.preventDefault(); return; }
     if (!confirmation) return;
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -23,6 +24,6 @@ export function BillingForm({ action, label, pendingLabel, className, confirmati
   return <form action={formAction} onSubmit={submit} className="billing-action-form">
     {dialog}
     {state.error ? <p role="alert" className="field-error">{state.error}</p> : null}
-    <Button type="submit" disabled={pending} className={className}>{pending ? pendingLabel : label}</Button>
+    <Button type="submit" pending={pending} pendingLabel={pendingLabel} className={className}>{label}</Button>
   </form>;
 }
