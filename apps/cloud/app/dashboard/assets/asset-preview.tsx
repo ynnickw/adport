@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { MediaAsset } from '@adport/core';
 import { mediaAction } from './media-client';
 import styles from './assets.module.css';
+import { Button, Spinner } from '@/components/controls';
 
 type PreviewProps = { asset: MediaAsset; projectId: string; expanded?: boolean; onRefresh?(asset: MediaAsset): void };
 
@@ -15,8 +16,9 @@ function PreviewSource({ asset, projectId, expanded = false, onRefresh }: Previe
   const ref = useRef<HTMLDivElement>(null), currentSource = useRef(asset.preview_url), rejectedSources = useRef(new Set<string>());
   const mounted = useRef(true), refreshing = useRef(false), automaticRefresh = useRef(false);
   const [visible, setVisible] = useState(expanded), [failed, setFailed] = useState(false), [source, setSource] = useState(asset.preview_url), [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
-  function adopt(url: string) { currentSource.current = url; setSource(url); setFailed(false); }
+  function adopt(url: string) { currentSource.current = url; setSource(url); setFailed(false); setLoaded(false); }
   useEffect(() => {
     // Renewed signed URLs must not restart an already loaded video or image.
     if ((!source || failed) && asset.preview_url && asset.preview_url !== source && !rejectedSources.current.has(asset.preview_url)) adopt(asset.preview_url);
@@ -47,10 +49,13 @@ function PreviewSource({ asset, projectId, expanded = false, onRefresh }: Previe
     if (!automaticRefresh.current) { automaticRefresh.current = true; void retry(); }
   }
   return <div ref={ref} className={expanded ? styles.expandedPreview : styles.preview}>
-    {!failed && visible && (source || !expanded) && image ? <img src={expanded ? source : `/api/media/preview?project_id=${encodeURIComponent(projectId)}&media_id=${asset.id}`} alt={asset.name} loading="lazy" referrerPolicy="no-referrer" onError={unavailable} />
+    {!failed && visible && (source || !expanded) && image ? <>
+      <img src={expanded ? source : `/api/media/preview?project_id=${encodeURIComponent(projectId)}&media_id=${asset.id}`} alt={asset.name} loading={expanded ? 'eager' : 'lazy'} referrerPolicy="no-referrer" onLoad={() => setLoaded(true)} onError={unavailable} />
+      {!loaded ? <span className={styles.previewLoading}>{expanded ? <span role="status"><Spinner /> Loading preview…</span> : <span className="skeleton-line" aria-hidden="true" />}</span> : null}
+    </>
       : !failed && visible && source && video ? <><video key={expanded ? 'player' : 'thumbnail'} src={expanded ? source : `${source}#t=0.1`} controls={expanded} muted={!expanded} preload="metadata" playsInline aria-label={asset.name} onError={unavailable} onLoadedData={event => { if (!expanded && event.currentTarget.currentTime === 0 && event.currentTarget.duration > 0.1) event.currentTarget.currentTime = 0.1; }} />{!expanded ? <span className={styles.play} aria-hidden="true">▶</span> : null}</>
         : !failed && visible && source && audio && expanded ? <audio src={source} controls preload="metadata" aria-label={asset.name} onError={unavailable} />
-          : <div className={styles.filePlaceholder}><span aria-hidden="true">{video ? '▷' : audio ? '♫' : image ? '▧' : documentLabel}</span><small>{busy ? 'Refreshing preview…' : failed ? 'Preview unavailable' : video ? 'Video' : audio ? 'Audio' : image ? 'Image' : 'Document'}</small>{(failed || !source) && expanded && (image || video || audio) ? <button type="button" className="button secondary" disabled={busy} onClick={() => void retry()}>{busy ? 'Loading…' : 'Retry preview'}</button> : null}</div>}
+          : <div className={styles.filePlaceholder}><span aria-hidden="true">{video ? '▷' : audio ? '♫' : image ? '▧' : documentLabel}</span><small>{busy ? 'Refreshing preview…' : (image || video || audio) && (failed || expanded && !source) ? 'Preview unavailable' : video ? 'Video' : audio ? 'Audio' : image ? 'Image' : 'Document'}</small>{(failed || !source) && expanded && (image || video || audio) ? <Button type="button" className="button secondary" pending={busy} pendingLabel="Loading…" onClick={() => void retry()}>Retry preview</Button> : null}</div>}
     {!expanded ? <span className={styles.kindBadge}>{video ? 'Video' : audio ? 'Audio' : image ? 'Image' : documentLabel}</span> : null}
   </div>;
 }

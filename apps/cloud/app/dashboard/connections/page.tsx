@@ -1,14 +1,11 @@
 import { PageHeader } from '@/components/ui';
 import { canAdminister, requireDashboardTenant } from '@/lib/cloud/dashboard';
-import { oauthAvailability, REDDIT_CONVERSIONS_SCOPE } from '@/lib/cloud/provider-oauth';
 import { providerLabel, usesAdAccountSlot } from '@/lib/cloud/providers';
 import { listConnections } from '@/lib/cloud/repository';
-import { OAUTH_PROVIDERS } from '@/lib/cloud/types';
-import { ProviderConnections, type OAuthProviderView } from './provider-connections';
-import { GOOGLE_DATA_MANAGER_SCOPE } from '@/lib/cloud/google-oauth';
+import { ProviderConnections } from './provider-connections';
+import { connectionView, platformOptions } from './connection-view';
 import { isSyntheticReviewer } from '@/lib/cloud/synthetic-reviewer';
 import { SyntheticReviewer } from '@/components/synthetic-reviewer';
-import { PINTEREST_PIN_SCOPES, PINTEREST_SECRET_PIN_SCOPES, PINTEREST_CATALOG_SCOPES } from '@adport/provider-pinterest';
 
 export const metadata = { title: 'Platforms' };
 
@@ -16,8 +13,6 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   const tenant = await requireDashboardTenant();
   if (isSyntheticReviewer(tenant.organizationId)) return <SyntheticReviewer tenant={tenant} />;
   const [connections, params] = await Promise.all([listConnections(tenant.organizationId, tenant.userId), searchParams]);
-  const availability = oauthAvailability(tenant.organizationId);
-  const oauthProviders: OAuthProviderView[] = [...OAUTH_PROVIDERS.filter(usesAdAccountSlot).map((id) => ({ id, available: availability[id] })), { id: 'openai', available: true }];
   return (
     <main className="page">
       <PageHeader
@@ -30,23 +25,10 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
       </div>
       <ProviderConnections
         organizationId={tenant.organizationId}
+        projectName={tenant.organizationName}
         canManage={canAdminister(tenant)}
-        connections={connections.filter(connection => usesAdAccountSlot(connection.provider)).map((connection) => ({
-          provider: connection.provider,
-          status: connection.status,
-          accountSelectionId: connection.accountSelectionId,
-          accountSelectionUnavailable: connection.accountSelectionUnavailable,
-          dataManagerEnabled: connection.provider === 'google' && connection.scopes.includes(GOOGLE_DATA_MANAGER_SCOPE),
-          redditConversionsEnabled: connection.provider === 'reddit' && connection.scopes.includes(REDDIT_CONVERSIONS_SCOPE),
-          pinManagementEnabled: connection.provider === 'pinterest' && PINTEREST_PIN_SCOPES.every(scope => connection.scopes.includes(scope)),
-          secretPinsEnabled: connection.provider === 'pinterest' && PINTEREST_SECRET_PIN_SCOPES.every(scope => connection.scopes.includes(scope)),
-          catalogManagementEnabled: connection.provider === 'pinterest' && PINTEREST_CATALOG_SCOPES.every(scope => connection.scopes.includes(scope)),
-          externalLabel: connection.externalLabel,
-          lastError: connection.lastError,
-          connectedAt: connection.connectedAt.toISOString(),
-          lastVerifiedAt: connection.lastVerifiedAt?.toISOString() ?? null,
-        }))}
-        oauthProviders={oauthProviders}
+        connections={connections.filter(connection => usesAdAccountSlot(connection.provider)).map(connectionView)}
+        oauthProviders={platformOptions(tenant.organizationId, 'advertising')}
       />
     </main>
   );

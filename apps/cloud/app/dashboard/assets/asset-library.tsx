@@ -3,6 +3,10 @@
 import { useCallback, useId, useMemo, useRef, useState, type DragEvent } from 'react';
 import type { MediaAsset } from '@adport/core';
 import { Provider } from '@/components/ui';
+import { Button, Disclosure } from '@/components/controls';
+import { ListToolbar, SearchField } from '@/components/list-controls';
+import { LoadingStatus, Notice } from '@/components/feedback';
+import { Select } from '@/components/select';
 import { AssetCard } from './asset-card';
 import { AssetPreview } from './asset-preview';
 import { AssetRemoval } from './asset-removal';
@@ -12,6 +16,7 @@ import { useLibraryFiles } from './use-library-files';
 import styles from './assets.module.css';
 
 type UploadJob = { id: string; name: string; size: number; state: string; percent?: number; mediaId?: string; error?: string };
+const fileKinds = [{ value: '', label: 'All files' }, { value: 'image', label: 'Images' }, { value: 'video', label: 'Videos' }, { value: 'audio', label: 'Audio' }, { value: 'document', label: 'Documents' }];
 function UploadIcon() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5" /></svg>; }
 
 export function AssetLibrary({ projectId, projectName, connectedPlatforms, initialAssets, truncated, initialCursor, canUpload, acceptedTypes, maxBytes, storageOrigin }: {
@@ -63,23 +68,34 @@ export function AssetLibrary({ projectId, projectName, connectedPlatforms, initi
   }
   function fileDrag(event: DragEvent) { if (canUpload && event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; setDragging(true); } }
   const filtered = !!(query || kind || tag);
+  const showToolbar = filtered || files.assets.length > 0;
+  const clearFilters = () => { setQuery(''); setKind(''); setTag(''); };
+  const upload = () => picker.current?.click();
+  const uploadLimit = `Up to ${formatBytes(maxBytes)} per file`;
   return <section className={styles.library} aria-label="Creative files" onDragOver={fileDrag} onDragEnter={fileDrag} onDragLeave={event => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDragging(false); }} onDrop={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); setDragging(false); enqueue(Array.from(event.dataTransfer.files)); } }} onPaste={event => { if (event.clipboardData.files.length) { event.preventDefault(); enqueue(Array.from(event.clipboardData.files)); } }}>
     {dragging ? <div className={styles.dropOverlay} role="status"><UploadIcon />Drop files to upload</div> : null}
-    <div className={styles.libraryToolbar}>
-      <div className={styles.search}><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m13 13 4 4" /></svg><input type="search" aria-label="Search creatives" placeholder="Search files…" value={query} onChange={event => setQuery(event.target.value)} /></div>
-      <select aria-label="File type" value={kind} onChange={event => setKind(event.target.value)}>{[['', 'All files'], ['image', 'Images'], ['video', 'Videos'], ['audio', 'Audio'], ['document', 'Documents']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
-      {tags.length ? <select aria-label="Filter by tag" value={tag} onChange={event => setTag(event.target.value)}><option value="">All tags</option>{tags.map(value => <option key={value} value={value}>{value}</option>)}</select> : null}
-      {filtered ? <button type="button" className={styles.clearFilters} onClick={() => { setQuery(''); setKind(''); setTag(''); }}>Clear</button> : null}
+    {canUpload ? <input className={styles.hiddenInput} ref={picker} id={id} type="file" multiple accept={acceptedTypes.join(',')} onChange={event => { enqueue(Array.from(event.target.files ?? [])); event.target.value = ''; }} /> : null}
+    {showToolbar ? <ListToolbar className={styles.libraryToolbar}>
+      <SearchField aria-label="Search creatives" placeholder="Search files…" value={query} onChange={event => setQuery(event.target.value)} />
+      <Select aria-label="File type" value={kind} onValueChange={setKind} options={fileKinds} />
+      {tags.length ? <Select aria-label="Filter by tag" value={tag} onValueChange={setTag} options={[{ value: '', label: 'All tags' }, ...tags.map(value => ({ value, label: value }))]} /> : null}
+      {filtered && files.assets.length > 0 ? <button type="button" className={styles.clearFilters} onClick={clearFilters}>Clear</button> : null}
       <span className={styles.fileCount}>{files.assets.length} {files.truncated ? 'shown' : files.assets.length === 1 ? 'file' : 'files'}</span>
       <button type="button" className={styles.refreshButton} aria-label="Refresh library" title="Refresh library" disabled={files.loading || files.loadingMore} onClick={() => void files.refresh()}><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M16.5 8A6.7 6.7 0 1 0 17 12M16.5 3.5V8H12" /></svg></button>
-      {canUpload ? <><input className={styles.hiddenInput} ref={picker} id={id} type="file" multiple accept={acceptedTypes.join(',')} onChange={event => { enqueue(Array.from(event.target.files ?? [])); event.target.value = ''; }} /><button className="button" type="button" title={`Choose or drop files · up to ${Math.floor(maxBytes / 1024 / 1024)} MB each`} onClick={() => picker.current?.click()}><UploadIcon />Upload files</button></> : null}
-    </div>
+      {canUpload ? <button className="button" type="button" title={uploadLimit} onClick={upload}><UploadIcon />Upload files</button> : null}
+    </ListToolbar> : null}
     {uploadJobs.some(job => job.state !== 'Removed') ? <section className={styles.queue} aria-label="Upload queue"><div className={styles.queueHeading}><strong>{activeUploads ? `${activeUploads} ${activeUploads === 1 ? 'file' : 'files'} in progress` : 'Recent uploads'}</strong><button type="button" onClick={() => setUploadJobs(current => current.filter(job => !['Ready', 'Removed'].includes(job.state)))}>Clear completed</button></div><div className={styles.queueItems}>{uploadJobs.filter(job => job.state !== 'Removed').map(job => <div key={job.id} className={styles.queueItem}><div><strong>{job.name}</strong><small>{formatBytes(job.size)}{job.error ? ` · ${job.error}` : ''}</small></div><span data-status={job.state}>{job.state}{job.state === 'Uploading' && job.percent !== undefined ? ` ${job.percent}%` : ''}</span>{!['Ready', 'Needs review', 'Queued'].includes(job.state) ? <progress max={100} value={job.percent} aria-label={`Upload progress for ${job.name}`} /> : null}{job.state === 'Queued' ? <button type="button" aria-label={`Remove ${job.name} from queue`} onClick={() => { pendingFiles.current = pendingFiles.current.filter(value => value.job.id !== job.id); updateJob(job.id, { state: 'Removed' }); }}>×</button> : job.state === 'Needs review' && job.mediaId ? <button type="button" onClick={() => void verify(job)}>Verify upload</button> : null}</div>)}</div></section> : null}
-    {error || files.error ? <p role="alert" className={styles.error}>{error || files.error}</p> : null}
+    {error || files.error ? <Notice tone="error">{error || files.error}</Notice> : null}
     {files.assets.length ? <div className={styles.grid} aria-busy={files.loading}>{files.assets.map(asset => <AssetCard key={asset.id} asset={asset} projectId={projectId} connectedPlatforms={connectedPlatforms} canEdit={canUpload} onPreview={setPreview} onUpdate={updateAsset} onRemove={removeAsset} onTag={setTag} />)}</div>
-      : <section className={styles.empty}><UploadIcon /><h2>{files.loading ? 'Loading files…' : filtered ? 'No matching files' : 'No files yet'}</h2><p>{filtered ? 'Try another search or clear a filter.' : `Drop files here or upload them to ${projectName}. Your assistant handles the rest.`}</p></section>}
-    {files.truncated ? <button className={`button secondary ${styles.loadMore}`} type="button" disabled={files.loading || files.loadingMore || !files.next_cursor} onClick={() => void files.more()}>{files.loadingMore ? 'Loading…' : 'Load more'}</button> : null}
+      : files.loading ? <div className={styles.empty}><LoadingStatus>Loading files…</LoadingStatus></div>
+      : <section className={styles.empty}><UploadIcon /><h2>{files.error ? 'Files couldn’t load' : filtered ? 'No matching files' : 'No files yet'}</h2>
+        {files.error ? <button className="button secondary" type="button" onClick={() => void files.refresh()}>Try again</button>
+          : filtered ? <button className="button secondary" type="button" onClick={clearFilters}>Clear filters</button>
+          : canUpload ? <><p>Drop files here or choose files to upload. {uploadLimit}.</p><button className="button" type="button" onClick={upload}>Upload files</button></>
+          : <p>No files have been added to {projectName}.</p>}
+      </section>}
+    {files.truncated ? <Button className={`button secondary ${styles.loadMore}`} type="button" disabled={files.loading || !files.next_cursor} pending={files.loadingMore} pendingLabel="Loading…" onClick={() => void files.more()}>Load more</Button> : null}
     {removing ? <AssetRemoval projectId={projectId} assets={removing} onRemoved={files.remove} onClose={() => setRemoving(null)} /> : null}
-    {preview ? <LibraryDialog title={preview.name} onClose={() => setPreview(null)} wide><div className={styles.inspector}><AssetPreview asset={preview} projectId={projectId} expanded onRefresh={updateAsset} /><aside><p>{preview.content_type}</p><p>{formatBytes(preview.byte_length)}{preview.width && preview.height ? ` · ${preview.width} × ${preview.height}` : ''}</p>{preview.tags?.length ? <div className={styles.assetLabels}>{preview.tags.map(value => <span key={value}>{value}</span>)}</div> : null}{preview.preview_url ? <a href={preview.preview_url} target="_blank" rel="noreferrer" className="button secondary">Open original ↗</a> : null}<details className={styles.references}><summary>Details</summary>{preview.platforms?.length ? <p>{preview.platforms.map(value => <Provider key={value} name={value} />)}</p> : null}<p>Media ID<code>{preview.id}</code></p><p>SHA-256<code>{preview.sha256}</code></p></details></aside></div></LibraryDialog> : null}
+    {preview ? <LibraryDialog title={preview.name} onClose={() => setPreview(null)} wide><div className={styles.inspector}><AssetPreview asset={preview} projectId={projectId} expanded onRefresh={updateAsset} /><aside><p>{preview.content_type}</p><p>{formatBytes(preview.byte_length)}{preview.width && preview.height ? ` · ${preview.width} × ${preview.height}` : ''}</p>{preview.tags?.length ? <div className={styles.assetLabels}>{preview.tags.map(value => <span key={value}>{value}</span>)}</div> : null}{preview.preview_url ? <a href={preview.preview_url} target="_blank" rel="noreferrer" className="button secondary">Open original ↗</a> : null}<Disclosure label="Details" className={styles.references}>{preview.platforms?.length ? <p>{preview.platforms.map(value => <Provider key={value} name={value} />)}</p> : null}<p>Media ID<code>{preview.id}</code></p><p>SHA-256<code>{preview.sha256}</code></p></Disclosure></aside></div></LibraryDialog> : null}
   </section>;
 }

@@ -23,7 +23,7 @@ export function PopupComplete({ popupId, next }: { popupId?: string; next: strin
     <header className="onboarding-head"><BrandLockup /></header>
     <section className="card oauth-popup-complete">
       <h1>{failed ? 'Authorization needs attention' : 'Return to Adport'}</h1>
-      <p>{received ? 'Your main window is ready. You can close this popup.' : 'Returning you to the main window. If it is no longer open, continue here.'}</p>
+      <p>{received ? 'Adport is opening the next step in your main window. You can close this popup.' : 'Returning you to the main window. If it is no longer open, continue here.'}</p>
       <a className="button" href={next}>Continue in this window</a>
     </section>
   </main>;

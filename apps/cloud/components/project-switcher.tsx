@@ -1,18 +1,16 @@
 'use client';
 
-import { useEffect, useId, useLayoutEffect, useRef, useState, useTransition, type CSSProperties, type KeyboardEvent } from 'react';
+import { useEffect, useId, useRef, useState, useTransition, type KeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { selectProjectAction } from '@/app/dashboard/projects/actions';
 import type { ProjectAccess } from '@/lib/cloud/workspaces';
-import { Button, Input } from './controls';
+import { Button, Chevron } from './controls';
+import { SearchField } from './list-controls';
+import { useAnchoredLayer } from './anchored-layer';
 import { NewProjectDialog } from './new-project-dialog';
 import { NewOrganizationDialog } from './new-organization-dialog';
 import { WorkspaceLogo } from './workspace-logo';
 import { workspaceLogoUrl } from '@/lib/workspace-logos';
-
-function Chevron({ back = false }: { back?: boolean }) {
-  return <svg viewBox="0 0 16 16" aria-hidden="true"><path d={back ? 'm10 4-4 4 4 4' : 'm4 6 4 4 4-4'} /></svg>;
-}
 
 export function ProjectSwitcher({ projects, currentProjectId }: { projects: ProjectAccess[]; currentProjectId: string }) {
   const current = projects.find(project => project.id === currentProjectId);
@@ -24,7 +22,7 @@ export function ProjectSwitcher({ projects, currentProjectId }: { projects: Proj
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<'projects' | 'organizations'>('projects');
   const [query, setQuery] = useState('');
-  const [position, setPosition] = useState<CSSProperties>({});
+  const position = useAnchoredLayer(open, trigger, panel, { minWidth: 352, maxWidth: 352, heightLimit: 560 });
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState('');
   const [creating, setCreating] = useState<'project' | 'organization' | null>(null);
@@ -36,23 +34,6 @@ export function ProjectSwitcher({ projects, currentProjectId }: { projects: Proj
   const filteredOrganizations = organizations.filter(project => project.organizationName.toLocaleLowerCase().includes(normalizedQuery));
 
   useEffect(() => { if (open) search.current?.focus(); }, [open, view]);
-  useLayoutEffect(() => {
-    if (!open) return;
-    function place() {
-      if (!trigger.current || !panel.current) return;
-      const rect = trigger.current.getBoundingClientRect();
-      const width = Math.min(352, window.innerWidth - 24);
-      const height = Math.min(panel.current.scrollHeight, 560, window.innerHeight - 24);
-      const below = window.innerHeight - rect.bottom - 12;
-      const top = below >= height || below >= rect.top ? rect.bottom + 6 : rect.top - height - 6;
-      setPosition({ width, left: Math.max(12, Math.min(rect.left, window.innerWidth - width - 12)), top: Math.max(12, Math.min(top, window.innerHeight - height - 12)), maxHeight: Math.min(560, window.innerHeight - 24) });
-    }
-    place();
-    window.addEventListener('resize', place);
-    window.addEventListener('scroll', place, true);
-    return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); };
-  }, [open, view]);
-
   function close() {
     if (panel.current?.matches(':popover-open')) panel.current.hidePopover();
   }
@@ -96,7 +77,7 @@ export function ProjectSwitcher({ projects, currentProjectId }: { projects: Proj
     </Button>
     {pending ? <span className="sr-only" role="status">Switching project</span> : null}
     {error ? <span className="field-error" role="alert">{error}</span> : null}
-    <div ref={panel} id={menuId} popover="auto" role="dialog" aria-label="Switch organization or project" className="workspace-menu" style={position}
+    <div ref={panel} id={menuId} popover="auto" role="dialog" aria-label="Switch organization or project" className="floating-surface workspace-menu" style={position}
       onToggle={event => {
         const nextOpen = (event.nativeEvent as ToggleEvent).newState === 'open';
         setOpen(nextOpen);
@@ -106,8 +87,8 @@ export function ProjectSwitcher({ projects, currentProjectId }: { projects: Proj
       }}>
       {view === 'projects' ? <Button className="workspace-menu-heading" type="button" onClick={() => changeView('organizations')} aria-label={`Switch organization. Current organization: ${current?.organizationName}`}>
         <span className="workspace-heading-copy"><small>Organization</small><strong>{current?.organizationName}</strong></span><span className="workspace-change">Switch <Chevron /></span>
-      </Button> : <div className="workspace-menu-heading"><Button type="button" className="icon-button" aria-label="Back to projects" onClick={() => changeView('projects')}><Chevron back /></Button><strong>Switch organization</strong></div>}
-      <div className="workspace-search"><Input ref={search} type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={view === 'projects' ? 'Find a project…' : 'Find an organization…'} aria-label={view === 'projects' ? 'Search projects' : 'Search organizations'} /></div>
+      </Button> : <div className="workspace-menu-heading"><Button type="button" className="icon-button" aria-label="Back to projects" onClick={() => changeView('projects')}><Chevron direction="left" /></Button><strong>Switch organization</strong></div>}
+      <div className="workspace-search"><SearchField ref={search} value={query} onChange={event => setQuery(event.target.value)} placeholder={view === 'projects' ? 'Find a project…' : 'Find an organization…'} aria-label={view === 'projects' ? 'Search projects' : 'Search organizations'} /></div>
       <div className="workspace-menu-list">
         <p className="workspace-menu-label">{view === 'projects' ? 'Projects' : 'Your organizations'}</p>
         {view === 'projects' ? filteredProjects.map(project => <Button type="button" className="workspace-option" key={project.id} aria-current={project.id === currentProjectId ? 'true' : undefined} onClick={() => choose(project.id)}>

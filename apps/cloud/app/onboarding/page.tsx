@@ -4,11 +4,12 @@ import { getAccountSelection } from '@/lib/cloud/account-selection';
 import { canAdminister, requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { getOnboardingState } from '@/lib/cloud/onboarding';
 import { getOrganizationEntitlement } from '@/lib/cloud/plans';
-import { oauthAvailability, REDDIT_CONVERSIONS_SCOPE } from '@/lib/cloud/provider-oauth';
+import { oauthAvailability } from '@/lib/cloud/provider-oauth';
 import { listConnections, listOrganizationAdAccounts } from '@/lib/cloud/repository';
 import { OAUTH_PROVIDERS } from '@/lib/cloud/types';
 import { env } from '@/lib/env';
 import type { OAuthProviderView } from '../dashboard/connections/provider-connections';
+import { connectionView } from '../dashboard/connections/connection-view';
 import { OnboardingFlow } from './onboarding-flow';
 import { ProjectSwitcher } from '@/components/project-switcher';
 import { ProductAnalytics } from '@/components/product-analytics';
@@ -37,37 +38,35 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
   const selectionId = z.string().uuid().safeParse(params.selection_id);
   const selection = selectionId.success ? await getAccountSelection({ ...tenant, scopes: [] }, selectionId.data) : undefined;
   const selectionUnavailable = params.selection_unavailable || (params.selection_id && !selection);
+  const usableProviders = new Set(connections.filter(connection => connection.status === 'connected' && !connection.accountSelectionId).map(connection => connection.provider));
+  const enabledAccounts = accounts.filter(account => account.enabled && usableProviders.has(account.provider));
+  const requestedStep = params.step === 'connect' || params.step === 'accounts' || params.step === 'agent' ? params.step : undefined;
+  const resumeStep = state.currentStep !== 'welcome' ? state.currentStep : enabledAccounts.length ? 'agent'
+    : accounts.length || connections.some(connection => connection.status === 'connected' && connection.accountSelectionId) ? 'accounts' : 'connect';
   const availability = oauthAvailability(tenant.organizationId);
   const providers: OAuthProviderView[] = [...OAUTH_PROVIDERS.map((id) => ({ id, available: availability[id] })), { id: 'openai', available: true }];
   return (
     <UpgradeProvider value={{ planId: entitlement.plan.id, canManageBilling: tenant.organizationRole === 'owner', projectId: tenant.organizationId, billingOptions: upgradeBillingOptions(entitlement) }}>
     <main className="onboarding-page">
       <ProductAnalytics key={`${tenant.userId}:${tenant.organizationId}`} />
-      <OnboardingFlow key={tenant.organizationId + ':' + (selection?.id ?? (params.step === 'connect' ? 'connect' : ''))}
+      <OnboardingFlow key={JSON.stringify([tenant.organizationId, selection?.id, params.accounts_saved, params.access_enabled, params.connected, params.step === 'connect'])}
         organizationId={tenant.organizationId}
         projectName={tenant.organizationName}
         setupKind={usage.projects > 1 ? 'new_project' : 'first_project'}
         projectSwitcher={<ProjectSwitcher projects={tenant.projects} currentProjectId={tenant.organizationId} />}
         resuming={params.resume === '1'}
         canManage={canAdminister(tenant)}
-        initialStep={selection ? 'accounts' : params.step === 'connect' || params.step === 'accounts' || params.step === 'agent' ? params.step : state.currentStep}
+        initialStep={selection ? 'accounts' : requestedStep ?? resumeStep}
         initialAgent={state.selectedAgent}
         baseUrl={env().ADPORT_CLOUD_BASE_URL.replace(/\/$/, '')}
         listings={getAssistantListings()}
         connectedProvider={selection?.provider ?? params.accounts_saved ?? params.connected}
         pendingSelection={selection ? { id: selection.id, provider: selection.provider, accounts: selection.accounts, pages: selection.pages } : undefined}
         accountsSaved={Boolean(params.accounts_saved)}
-        accountsEnabled={params.access_enabled === '1'}
+        accountsEnabled={params.access_enabled === '1' && enabledAccounts.some(account => account.provider === params.accounts_saved)}
         oauthError={params.error ?? (selectionUnavailable ? 'This account selection is no longer available. Reconnect the platform to choose accounts again.' : undefined)}
         providers={providers}
-        connections={connections.map((connection) => ({
-          provider: connection.provider, status: connection.status, externalLabel: connection.externalLabel,
-          accountSelectionId: connection.accountSelectionId,
-          accountSelectionUnavailable: connection.accountSelectionUnavailable,
-          redditConversionsEnabled: connection.provider === 'reddit' && connection.scopes.includes(REDDIT_CONVERSIONS_SCOPE),
-          lastError: connection.lastError, connectedAt: connection.connectedAt.toISOString(),
-          lastVerifiedAt: connection.lastVerifiedAt?.toISOString() ?? null,
-        }))}
+        connections={connections.map(connectionView)}
         accounts={accounts.map((account) => ({
           provider: account.provider, accountId: account.accountId, name: account.name,
           currency: account.currency, status: account.status, enabled: account.enabled,

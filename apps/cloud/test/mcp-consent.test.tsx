@@ -37,7 +37,7 @@ describe('project consent', () => {
       { id: project, name: 'Client', organizationId: company, organizationName: 'Company' },
     ]} defaultProjectId={project} hidden={[]} />);
     expect(html).toContain(`name="project_id" value="all:${company}"`);
-    expect(html).toContain('All projects includes current and future projects you can access in that organization.');
+    expect(html).toContain('Includes current and future projects you can access in this organization.');
   });
 
   it('passes explicit organization consent to the issuer and preserves OAuth state', async () => {

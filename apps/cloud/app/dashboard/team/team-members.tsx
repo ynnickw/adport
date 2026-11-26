@@ -9,6 +9,8 @@ import { planLimitFromResponse, type PlanLimitDetails } from '@/lib/cloud/plan-l
 import { Select } from '@/components/select';
 import { useConfirm } from '@/components/use-confirm';
 import { TEAM_ROLES } from '@/lib/team-roles';
+import { PeopleTable } from '@/components/people-table';
+import { DialogTrigger } from '@/components/dialog';
 
 interface Member { userId: string; email: string; displayName: string; role: string; inheritedFromOrganization: boolean; }
 
@@ -22,11 +24,14 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
   const [confirm, confirmationDialog] = useConfirm();
   const [message, setMessage] = useState<{ error?: string; success?: string }>({});
   const [busy, setBusy] = useState(false);
+  const [operation, setOperation] = useState<string>();
   const [planLimit, setPlanLimit] = useState<PlanLimitDetails>();
   const canAdminister = currentRole === 'owner' || currentRole === 'admin';
   const roles = [...(currentRole === 'owner' ? [{ value: 'admin', label: 'Admin' }] : []), { value: 'member', label: 'Member' }, { value: 'viewer', label: 'Viewer' }];
 
   async function call(method: 'POST' | 'PATCH' | 'DELETE', body: Record<string, unknown>, success: string) {
+    if (busy) return false;
+    setOperation(method === 'POST' ? 'invite' : method === 'DELETE' ? String(body.userId) : 'role');
     setBusy(true);
     setMessage({});
     try {
@@ -42,6 +47,7 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
       return false;
     } finally {
       setBusy(false);
+      setOperation(undefined);
     }
   }
 
@@ -58,32 +64,27 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
       <PlanLimitModal limit={planLimit} onClose={() => setPlanLimit(undefined)} />
       {message.error ? <div className="card-body" style={{ paddingBottom: 0 }}><div className="error-callout" role="alert" style={{ marginBottom: 0 }}>{message.error}</div></div> : null}
       {message.success ? <div className="card-body" style={{ paddingBottom: 0 }}><div className="callout success" role="status">{message.success}</div></div> : null}
-      <div className="row-list">
-        {members.map((member) => (
-          <div className="row-item" key={member.userId}>
-            <div>
-              <strong>{member.displayName}{member.userId === currentUserId ? <span className="text-muted"> · you</span> : null}</strong>
-              <div className="cell-sub">{member.email}</div>
-              {member.inheritedFromOrganization ? <div className="cell-sub">Organization {member.role} · all projects</div> : null}
-            </div>
-            <div className="row-actions">
-              {canAdminister && !member.inheritedFromOrganization && member.role !== 'owner' && (currentRole === 'owner' || member.role !== 'admin')
+      <PeopleTable rows={members.map(member => ({
+        id: member.userId, name: member.displayName, email: member.email, isSelf: member.userId === currentUserId,
+        access: member.inheritedFromOrganization ? 'Inherited · All projects' : 'This project',
+        role: canAdminister && !member.inheritedFromOrganization && member.role !== 'owner' && (currentRole === 'owner' || member.role !== 'admin')
                 ? <Select aria-label={`Role for ${member.email}`} value={member.role} options={roles} disabled={busy} onValueChange={role => void call('PATCH', { userId: member.userId, role }, 'Member role updated.')} />
-                : <span className="status neutral">{TEAM_ROLES[member.role as keyof typeof TEAM_ROLES]?.label ?? member.role}</span>}
-              {canAdminister && !member.inheritedFromOrganization && member.userId !== currentUserId && member.role !== 'owner' && (currentRole === 'owner' || member.role !== 'admin')
-                ? <Button className="button danger small" disabled={busy} onClick={async () => { if (await confirm({ title: 'Remove project member?', description: `${member.email} will lose access to this project.`, confirmLabel: 'Remove member' })) void call('DELETE', { userId: member.userId }, 'Member removed.'); }}>Remove</Button>
-                : null}
-            </div>
-          </div>
-        ))}
-      </div>
+                : <span className="status neutral">{TEAM_ROLES[member.role as keyof typeof TEAM_ROLES]?.label ?? member.role}</span>,
+        action: canAdminister && !member.inheritedFromOrganization && member.userId !== currentUserId && member.role !== 'owner' && (currentRole === 'owner' || member.role !== 'admin')
+                ? <Button className="button danger small" aria-label={`Remove ${member.email} from this project`} disabled={busy} pending={operation === member.userId} pendingLabel="Removing…" onClick={async () => { if (await confirm({ title: 'Remove project member?', description: `${member.email} will lose access to this project.`, confirmLabel: 'Remove member' })) void call('DELETE', { userId: member.userId }, 'Member removed.'); }}>Remove</Button>
+                : null,
+      }))} />
       {canAdminister ? (
         <div className="card-body" style={{ borderTop: '1px solid var(--line-soft)' }}>
-          <form className="form-row" onSubmit={(event) => void invite(event)}>
-            <Input name="email" type="email" required placeholder="colleague@company.com" style={{ flex: 1, minWidth: '14rem' }} aria-label="Email" />
-            <Select name="role" defaultValue="member" aria-label="Role" options={roles} />
-            <Button className="button secondary" disabled={busy}>Invite</Button>
-          </form>
+          <DialogTrigger label="Invite to project" title="Invite to this project">
+            <form className="form" onSubmit={(event) => void invite(event)}>
+              <label>Email address<Input name="email" type="email" required placeholder="colleague@company.com" /></label>
+              <label>Role<Select name="role" defaultValue="member" aria-label="Role" options={roles} /></label>
+              {message.error ? <p className="field-error" role="alert">{message.error}</p> : null}
+              {message.success ? <p className="action-result" role="status">{message.success}</p> : null}
+              <div><Button className="button" disabled={busy} pending={operation === 'invite'} pendingLabel="Inviting…">Invite</Button></div>
+            </form>
+          </DialogTrigger>
         </div>
       ) : null}
     </>

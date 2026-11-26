@@ -133,6 +133,16 @@ describe('shared popup OAuth routes', () => {
     expect(result.headers.get('location')).toContain('/oauth/provider-complete?');
     expect(result.headers.get('location')).not.toContain('secret');
   });
+  it.each([true, false])('keeps Analytics as the start-failure destination (popup: %s)', async popup => {
+    mocks.session.mockRejectedValue(new Error('private failure detail'));
+    const result = await start(new Request(`https://app.adport.test/api/oauth/ga4/start?return_to=%2Fdashboard%2Fanalytics${popup ? '&popup_id=' + id : ''}`), { params: Promise.resolve({ provider: 'ga4' }) });
+    const location = new URL(result.headers.get('location')!);
+    const destination = new URL(popup ? location.searchParams.get('next')! : location.href, location.origin);
+    expect(destination.pathname).toBe('/dashboard/analytics');
+    expect(destination.searchParams.get('error')).toContain('Could not start authorization');
+    expect(location.toString()).not.toContain('private failure detail');
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
   it('returns verification errors to the same popup and original screen', async () => {
     mocks.list.mockRejectedValue(new Error('Account verification failed'));
     const result = await callback(new Request('https://app.adport.test/api/oauth/x/callback?code=code&state=state'), { params: Promise.resolve({ provider: 'x' }) });

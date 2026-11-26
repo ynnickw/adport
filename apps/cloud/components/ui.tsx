@@ -2,12 +2,12 @@ import Link from 'next/link';
 import { ProviderLogo, providerLabel } from '@/components/logos';
 import { InfoTooltip } from '@/components/info-tooltip';
 
-export function PageHeader({ title, description, action, showDescription = false }: { title: string; description: string; action?: React.ReactNode; showDescription?: boolean }) {
+export function PageHeader({ title, description, action, showDescription = false }: { title: string; description?: string; action?: React.ReactNode; showDescription?: boolean }) {
   return (
     <div className="page-head">
       <div>
-        <div className="page-title"><h1>{title}</h1>{!showDescription ? <InfoTooltip label={`About ${title}`}>{description}</InfoTooltip> : null}</div>
-        {showDescription ? <p className="subhead">{description}</p> : null}
+        <div className="page-title"><h1>{title}</h1>{description && !showDescription ? <InfoTooltip label={`About ${title}`}>{description}</InfoTooltip> : null}</div>
+        {description && showDescription ? <p className="subhead">{description}</p> : null}
       </div>
       {action ? <div className="page-head-actions">{action}</div> : null}
     </div>
@@ -27,12 +27,15 @@ export function Metric({ label, value, foot }: { label: string; value: string; f
   );
 }
 
-export function Empty({ title, copy, href, action }: { title: string; copy: string; href?: string; action?: string }) {
+export function Empty({ title, copy, href, action, children, heading: Heading = 'h2', className = '' }: {
+  title: string; copy?: string; href?: string; action?: string; children?: React.ReactNode; heading?: 'h2' | 'h3'; className?: string;
+}) {
   return (
-    <div className="empty">
-      <h2>{title}</h2>
-      <p>{copy}</p>
+    <div className={className ? `empty ${className}` : 'empty'}>
+      <Heading>{title}</Heading>
+      {copy ? <p>{copy}</p> : null}
       {href && action ? <Link className="button" href={href}>{action}</Link> : null}
+      {children}
     </div>
   );
 }

@@ -26,15 +26,16 @@ export default async function PoliciesPage({ searchParams }: { searchParams: Pro
   const setupHref = '/onboarding?' + new URLSearchParams({ resume: '1', return_to: safeDashboardReturnPath(params.return_to ?? null) });
   return (
     <main className="page policy-page">
-      <PageHeader title="Policies" description="Set the safeguards for this project’s cloud assistants. Local CLI and stdio MCP settings are configured separately."
+      <p className="workspace-context-label">{tenant.organizationName} · Cloud assistants</p>
+      <PageHeader title="Policies"
         action={<Link className="button secondary" href={params.setup === '1' ? setupHref : '/dashboard/accounts'} prefetch={false}>{params.setup === '1' ? 'Back to setup' : 'Manage accounts'}</Link>} />
       <section className="policy-overview" aria-label="Policy coverage">
-        <div><span>Write protection</span><strong><i className="policy-dot" />Preview required</strong><small>Always on for ad changes <InfoTooltip label="About write protection">Every advertising change must be previewed before it can be applied with its matching token and exact arguments. This step cannot be turned off.</InfoTooltip></small></div>
-        <div><span>Account scope</span><strong>{accounts.filter((account) => account.enabled).length} active</strong><small>{accounts.length} discovered across providers</small></div>
-        <div><span>Current plan</span><strong>{entitlement.plan.name}</strong><small>{entitlement.plan.writeAccess ? 'Guarded read and write' : 'Read-only agent access'}</small></div>
+        <div><span>Ad changes</span><strong><i className="policy-dot" />{entitlement.plan.writeAccess ? 'Preview required' : 'Read-only plan'}</strong></div>
+        <div><span>New campaigns</span><strong>{policy.paused_creation ? 'Start paused' : 'Use requested status'}</strong></div>
+        <div><span>Budget changes</span><strong>{policy.max_budget_delta_pct == null ? 'No percentage cap' : `${policy.max_budget_delta_pct}% cap per change`}</strong></div>
       </section>
       <section className="card policy-card">
-        <div className="card-head"><h2>{tenant.organizationName} policy <InfoTooltip label="About policy changes">Saved changes apply to this project’s cloud clients. Changing a safety setting requires fresh previews before pending changes can be applied.</InfoTooltip></h2></div>
+        <div className="card-head"><h2>Safeguards <InfoTooltip label="About policy scope">Applies to this project’s cloud assistants. Local CLI and stdio MCP settings are managed separately.</InfoTooltip></h2></div>
         <div className="card-body">
           <PolicyForm
             key={tenant.organizationId}

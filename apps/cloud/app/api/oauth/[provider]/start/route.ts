@@ -9,7 +9,7 @@ import { createOAuthTransaction } from '@/lib/cloud/repository';
 import { isOAuthProvider } from '@/lib/cloud/types';
 import { apiError } from '@/lib/http';
 import { safeReturnPath } from '@/lib/return-path';
-import { popupReturnPath, validPopupId } from '@/lib/oauth-popup';
+import { popupDestination, popupReturnPath, validPopupId } from '@/lib/oauth-popup';
 import { env } from '@/lib/env';
 
 /**
@@ -21,9 +21,11 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
   const url = new URL(request.url);
   const popupId = url.searchParams.get('popup_id');
   function failure(error: unknown, status: number) {
-    if (!validPopupId(popupId)) return apiError(error, status);
-    const next = `/dashboard/connections?${new URLSearchParams({ error: 'Could not start authorization. Please retry from Connections.' })}`;
-    return NextResponse.redirect(new URL(popupReturnPath(popupId, next), env().ADPORT_CLOUD_BASE_URL));
+    const returnTo = popupDestination(url.searchParams.get('return_to'));
+    if (!validPopupId(popupId) && !returnTo) return apiError(error, status);
+    const next = new URL(returnTo ?? '/dashboard/connections', env().ADPORT_CLOUD_BASE_URL);
+    next.searchParams.set('error', 'Could not start authorization. Try again from this project.');
+    return NextResponse.redirect(validPopupId(popupId) ? new URL(popupReturnPath(popupId, next.pathname + next.search), next.origin) : next);
   }
   try {
     const { provider } = await params;

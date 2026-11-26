@@ -22,7 +22,7 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
   ]);
   const connectedPlatforms = MEDIA_PLATFORMS.filter(platform => connections.some(connection => connection.provider === platform && connection.status === 'connected'));
   return <main className="page">
-    <PageHeader title={`Creative library · ${project.name}`} description="Upload files here. Manage your creatives through your assistant." />
+    <PageHeader title="Creative library" />
     <AssetLibrary key={project.id} projectId={project.id} projectName={project.name} connectedPlatforms={connectedPlatforms} initialAssets={result.assets} truncated={result.truncated} initialCursor={result.next_cursor}
       canUpload={principal.scopes.includes('tools:write')} maxBytes={MAX_MEDIA_BYTES} acceptedTypes={[...MEDIA_TYPES]} storageOrigin={new URL(env().NEXT_PUBLIC_SUPABASE_URL).origin} />
   </main>;

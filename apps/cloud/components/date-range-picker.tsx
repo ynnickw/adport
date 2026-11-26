@@ -1,17 +1,17 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { PiCalendarBlank, PiCaretDown } from 'react-icons/pi';
+import { PiCalendarBlank } from 'react-icons/pi';
 import { resolveDateRange } from '@adport/core/dates';
-import { Button, Input } from './controls';
+import { Button, Chevron, Input } from './controls';
 import { Dialog } from './dialog';
 import { OVERVIEW_RANGE_OPTIONS, overviewRangeLabel, validateOverviewRange, type OverviewRange } from '@/lib/overview-range';
 
 export function DateRangePicker({ value, onChange }: { value: OverviewRange; onChange: (value: OverviewRange) => void }) {
   const [open, setOpen] = useState(false);
   return <>
-    <Button type="button" className="button secondary date-range-trigger" aria-label={`Date range: ${overviewRangeLabel(value)}`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
-      <PiCalendarBlank aria-hidden="true" /><span>{overviewRangeLabel(value)}</span><PiCaretDown aria-hidden="true" />
+    <Button type="button" className="button secondary dropdown-trigger date-range-trigger" aria-label={`Date range: ${overviewRangeLabel(value)}`} aria-haspopup="dialog" aria-expanded={open} onClick={event => { event.currentTarget.focus({ preventScroll: true }); setOpen(true); }}>
+      <PiCalendarBlank aria-hidden="true" /><span>{overviewRangeLabel(value)}</span><Chevron />
     </Button>
     {open ? <RangeDialog value={value} onApply={range => { onChange(range); setOpen(false); }} onClose={() => setOpen(false)} /> : null}
   </>;
