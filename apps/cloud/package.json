@@ -52,7 +52,7 @@
     "dotenv": "17.4.2",
     "jsdom": "^26.1.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.10",
+    "vitest": "^5.1.1",
     "@modelcontextprotocol/client": "^2.4.0"
   }
 }
