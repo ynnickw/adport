@@ -63,6 +63,7 @@ describe('google_add_keywords landing pages', () => {
     await expect(call([{ text: 'cheap', match_type: 'BROAD', final_urls: ['https://shop.example'] }], true)).rejects.toMatchObject({ code: 'INVALID_INPUT' });
     await expect(call([{ text: 'cheap', match_type: 'BROAD', final_url_suffix: 'a=b' }], true)).rejects.toMatchObject({ code: 'INVALID_INPUT' });
     await expect(call([{ text: 'shoes', match_type: 'EXACT', final_urls: ['ftp://shop.example/file'] }])).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    await expect(call([{ text: 'shoes', match_type: 'EXACT', final_urls: ['not a URL'] }])).rejects.toMatchObject({ code: 'INVALID_INPUT' });
     await expect(call([{ text: 'shoes', match_type: 'EXACT', final_urls: ['https://user:secret@shop.example/'] }])).rejects.toMatchObject({ code: 'INVALID_INPUT' });
     await expect(call([{ text: 'shoes', match_type: 'EXACT', final_mobile_urls: ['https://m.shop.example/'] }])).rejects.toMatchObject({ code: 'INVALID_INPUT' });
     expect(f.calls).toEqual([]);
@@ -147,6 +148,7 @@ describe('google_update_keyword_urls', () => {
     const call = (keywords: Row[]) => rt.registry.call('google_update_keyword_urls', { account_id: A, keywords }, rt.ctx);
     await expect(call([{ ad_group_id: '22', criterion_id: '101' }])).rejects.toMatchObject({ code: 'INVALID_INPUT' });
     await expect(call([{ ad_group_id: '22', criterion_id: '101', final_urls: ['javascript:alert(1)'] }])).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    await expect(call([{ ad_group_id: '22', criterion_id: '101', final_urls: ['not a URL'] }])).rejects.toMatchObject({ code: 'INVALID_INPUT' });
     await expect(call([{ ad_group_id: '22', criterion_id: '101', final_urls: ['https://a.example'] }, { ad_group_id: '22', criterion_id: '101', final_url_suffix: 'x=1' }])).rejects.toMatchObject({ code: 'INVALID_INPUT' });
     expect(f.calls).toEqual([]);
   });

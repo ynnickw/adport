@@ -6,7 +6,7 @@ type Row = Record<string, unknown>;
 interface Plan extends Omit<WritePreview, 'serverValidated'> { execute(validateOnly: boolean): Promise<string[]> }
 const id = z.string().regex(/^[1-9]\d*$/);
 /** Same rule as ad and asset final URLs: absolute http(s) without embedded credentials. */
-const landingUrl = z.string().url().refine(value => { const parsed = new URL(value); return ['https:', 'http:'].includes(parsed.protocol) && !parsed.username && !parsed.password; }, 'Use an http(s) URL without credentials');
+const landingUrl = z.string().url().refine(value => { try { const parsed = new URL(value); return ['https:', 'http:'].includes(parsed.protocol) && !parsed.username && !parsed.password; } catch { return false; } }, 'Use an http(s) URL without credentials');
 // Schemas stay compact for the hosted publisher metadata budget; Google checks lengths in the validate_only dry run.
 const urlList = z.array(landingUrl);
 /** Optional AdGroupCriterion URL fields accepted when creating keywords. */
