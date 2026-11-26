@@ -271,6 +271,27 @@ describe('campaign conversion goal writes', () => {
     expect(f.state.configs.slice(0, 2).map((row: Row) => row.goalConfigLevel)).toEqual(['CAMPAIGN', 'CAMPAIGN']);
   });
 
+  it('clears a custom goal retained at account level when only standard goals are toggled', async () => {
+    const f = fixture(); Object.assign(f.state.configs[0], { goalConfigLevel: 'CUSTOMER', customConversionGoal: goalResource('701') });
+    const write = await setOp(f, ['11'], { standard_goals: [{ category: 'PURCHASE', origin: 'WEBSITE', biddable: false }] });
+    const preview = await f.provider.previewWrite(write, guard);
+    expect(preview.fieldChanges![0]!.after).toBe('Campaign-specific goals: standard goals used for bidding: Submit lead form · Website');
+    expect(mutations(f)[0]!.body.mutateOperations[0]).toEqual({ conversionGoalCampaignConfigOperation: { update: { resourceName: `${ROOT}/conversionGoalCampaignConfigs/11`, goalConfigLevel: 'CAMPAIGN' }, updateMask: 'goal_config_level,custom_conversion_goal' } });
+    expect(await f.provider.applyWrite(write, guard)).toMatchObject({ applied: true, details: { readback_verified: true } });
+    expect(f.state.configs[0]).toMatchObject({ goalConfigLevel: 'CAMPAIGN', customConversionGoal: undefined });
+  });
+
+  it('does not certify a standard-goal apply when a custom goal is still set after readback', async () => {
+    let applied = false;
+    const f = fixture({ handler: (url, body) => {
+      if (url.pathname.endsWith('googleAds:mutate') && !body.validateOnly) applied = true;
+      if (applied && body.query?.includes('FROM conversion_goal_campaign_config')) f.state.configs[0].customConversionGoal = goalResource('701');
+      return undefined;
+    } });
+    const write = await setOp(f, ['11'], { standard_goals: [{ category: 'PURCHASE', origin: 'WEBSITE', biddable: false }] });
+    await expect(f.provider.applyWrite(write, guard)).rejects.toMatchObject({ code: 'PROVIDER_ERROR', message: expect.stringContaining('not confirmed') });
+  });
+
   it.each(['stale', 'no-change', 'missing-pair', 'removed-goal', 'stale-goal'] as const)('rejects before any mutate: %s', async mode => {
     const f = fixture(), hash = await goalHash(f);
     if (mode === 'removed-goal') f.state.goals[0].status = 'REMOVED';

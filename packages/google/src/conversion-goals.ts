@@ -224,8 +224,9 @@ export class GoogleConversionGoalService {
         else if (currentGoal !== target.resourceName) configOps.push({ conversionGoalCampaignConfigOperation: { update: { resourceName: entry.config.resourceName, customConversionGoal: target.resourceName }, updateMask: 'custom_conversion_goal' } });
         level = 'CAMPAIGN'; goalResource = target.resourceName;
       } else if (input.standard_goals && entry.config.level !== 'CAMPAIGN') {
-        // Standard-goal toggles only: switch the level first, in the same atomic request.
-        configOps.push({ conversionGoalCampaignConfigOperation: { update: { resourceName: entry.config.resourceName, goalConfigLevel: 'CAMPAIGN' }, updateMask: 'goal_config_level' } });
+        // Standard-goal toggles only: switch the level first, in the same atomic request. A custom goal kept from
+        // before ACCOUNT_DEFAULT would apply again at CAMPAIGN level, so the mask clears it.
+        configOps.push({ conversionGoalCampaignConfigOperation: { update: { resourceName: entry.config.resourceName, goalConfigLevel: 'CAMPAIGN' }, updateMask: entry.config.goal ? 'goal_config_level,custom_conversion_goal' : 'goal_config_level' } });
       }
       const biddable = new Map<string, boolean>(), standardAfter = entry.standard.map(row => ({ ...row }));
       if (input.standard_goals) {
@@ -275,7 +276,7 @@ export class GoogleConversionGoalService {
         const after = await this.campaignContext(account, input.campaign_ids, owners);
         for (const expectation of expectations) {
           const observed = after.campaigns.get(expectation.campaignId)!;
-          if (observed.config.level !== expectation.level || (expectation.goal && observed.config.goal !== expectation.goal) || [...expectation.biddable].some(([resource, value]) => observed.standard.find(row => row.resourceName === resource)?.biddable !== value)) throw new Error('readback mismatch');
+          if (observed.config.level !== expectation.level || (expectation.level === 'CAMPAIGN' && observed.config.goal !== (expectation.goal ?? null)) || [...expectation.biddable].some(([resource, value]) => observed.standard.find(row => row.resourceName === resource)?.biddable !== value)) throw new Error('readback mismatch');
         }
         details = { snapshot_hash: after.snapshot_hash, campaigns_changed: changed, operations: operations.length, readback_verified: true };
         return [...known];
