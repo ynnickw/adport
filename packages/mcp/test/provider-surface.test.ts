@@ -101,7 +101,7 @@ describe('all-provider shared tool surface', () => {
       'snapchat_list_campaigns', 'snapchat_create_campaign', 'snapchat_set_campaign_status', 'snapchat_set_budget',
       'openai_conversion_sources', 'openai_conversion_event_settings', 'openai_conversion_events', 'openai_conversion_insights',
       'openai_list_campaigns', 'openai_ad_groups', 'openai_ads', 'openai_create_campaign', 'openai_set_campaign_status', 'openai_set_ad_group_status', 'openai_set_ad_status', 'openai_set_budget',
-      'gravity_list_campaigns', 'gravity_ad_groups', 'gravity_conversions', 'gravity_billing', 'gravity_create_campaign', 'gravity_set_campaign_status', 'gravity_set_ad_group_status', 'gravity_set_ad_status', 'gravity_set_budget',
+      'gravity_list_campaigns', 'gravity_ad_groups', 'gravity_get_ad', 'gravity_pixels', 'gravity_conversion_stats', 'gravity_conversions', 'gravity_billing', 'gravity_create_ad_group', 'gravity_create_ad', 'gravity_create_pixel', 'gravity_create_campaign', 'gravity_set_campaign_status', 'gravity_set_ad_group_status', 'gravity_set_ad_status', 'gravity_set_budget',
       'spotify_list_campaigns', 'spotify_get_ad_set', 'spotify_create_campaign_draft', 'spotify_set_campaign_status', 'spotify_set_budget', 'spotify_set_ad_set_delivery',
       'pinterest_list_campaigns', 'pinterest_create_campaign', 'pinterest_set_campaign_status', 'pinterest_set_budget',
       'pinterest_measurement_context', 'pinterest_conversion_tags', 'pinterest_get_conversion_tag', 'pinterest_create_conversion_tag', 'pinterest_conversion_tag_eligible_events', 'pinterest_conversion_tag_page_visits', 'pinterest_event_quality', 'pinterest_send_conversion_events',

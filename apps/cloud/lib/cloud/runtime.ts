@@ -8,6 +8,7 @@ import { GtmClient, GtmProvider, gtmTools } from '@adport/provider-gtm';
 import { GoogleAdsProvider, GoogleAdsRestClient, googleTools } from '@adport/provider-google';
 import { MetaAdsProvider, MetaGraphClient, metaTools } from '@adport/provider-meta';
 import { MicrosoftAdsClient, MicrosoftAdsProvider, microsoftTools } from '@adport/provider-microsoft';
+import { GravityClient, GravityProvider, gravityTools } from '@adport/provider-gravity';
 import { createHostedMatomoProvider } from './matomo';
 import { matomoTools } from '@adport/provider-matomo';
 import { OpenAIAdsClient, OpenAIAdsProvider, openaiTools } from '@adport/provider-openai';
@@ -152,6 +153,10 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     const provider = createHostedMatomoProvider(credentials.matomo);
     modules.push({ provider: scopeProvider(provider), tools: matomoTools(provider) });
   }
+  if (credentials.gravity) {
+    const provider = new GravityProvider(new GravityClient(credentials.gravity));
+    modules.push({ provider: scopeProvider(provider), tools: gravityTools(provider) });
+  }
   if (credentials.openai) {
     const provider = new OpenAIAdsProvider(new OpenAIAdsClient(credentials.openai));
     modules.push({ provider: scopeProvider(provider), tools: openaiTools(provider) });
@@ -221,7 +226,7 @@ function completeMcpCatalog(runtime: AdportRuntime, organizationId: string): voi
     ...unavailableTools('google', googleTools), ...unavailableTools('meta', metaTools),
     ...unavailableTools('tiktok', tiktokTools), ...unavailableTools('apple', appleTools),
     ...unavailableTools('microsoft', microsoftTools), ...unavailableTools('reddit', redditTools),
-    ...unavailableTools('openai', openaiTools),
+    ...unavailableTools('openai', openaiTools), ...unavailableTools('gravity', gravityTools),
     ...unavailableTools('matomo', matomoTools),
     ...unavailableTools('snapchat', snapchatTools), ...unavailableTools('spotify', spotifyTools),
     ...unavailableTools('pinterest', pinterestTools), ...unavailableTools('linkedin', linkedinTools),

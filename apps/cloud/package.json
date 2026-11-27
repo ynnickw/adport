@@ -19,6 +19,7 @@
     "@adport/provider-matomo": "workspace:*",
     "@adport/provider-meta": "workspace:*",
     "@adport/provider-microsoft": "workspace:*",
+    "@adport/provider-gravity": "workspace:*",
     "@adport/provider-openai": "workspace:*",
     "@adport/provider-reddit": "workspace:*",
     "@adport/provider-tiktok": "workspace:*",

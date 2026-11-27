@@ -28,6 +28,7 @@ export const campaignListSchema = z.looseObject({ campaigns: z.array(campaignSch
 export const adSchema = z.looseObject({
   id: gravityId, ad_group_id: gravityId.optional(), campaign_id: gravityId.optional(), name: z.string().nullable().optional(),
   headline: z.string().nullable().optional(), status: z.string(), source: z.string().nullable().optional(), review_status: z.string().nullable().optional(),
+  copy: z.string().nullable().optional(), cta: z.string().nullable().optional(), landing_page: z.string().nullable().optional(),
 });
 export const adGroupSchema = z.looseObject({
   id: gravityId, campaign_id: gravityId, name: z.string(), group_type: z.string().optional(), status: z.string(),
@@ -71,11 +72,29 @@ export const listConversionsSchema = z.object({
   limit: z.number().int().min(1).max(500).default(100),
 });
 export const billingInputSchema = z.object({ account_id: gravityId });
+export const getAdSchema = z.object({ account_id: gravityId, ad_id: gravityId });
+const webUrl = z.url({ protocol: /^https?$/ }).max(2000);
+export const pixelSchema = z.object({
+  pixel_id: gravityId, name: z.string(), url: webUrl, is_active: z.boolean(), is_functional: z.boolean().nullable(),
+});
+export const createPixelSchema = z.object({ url: webUrl, name: z.string().trim().min(1).max(255).optional() }).strict();
+export const conversionStatsInput = z.object({
+  account_id: gravityId, days: z.number().int().min(1).max(365).optional(),
+  start_date: z.iso.date().optional(), end_date: z.iso.date().optional(), event_type: z.string().trim().min(1).max(100).optional(),
+}).refine(input => {
+  if (!input.start_date && !input.end_date) return true;
+  return Boolean(!input.days && input.start_date && input.end_date && input.start_date <= input.end_date);
+}, 'Supply days or an ordered start_date and end_date pair');
+export const conversionStatsSchema = z.object({
+  time_series: z.array(z.object({ date: z.string(), conversions: z.number().int().nonnegative() })),
+  total: z.number().int().nonnegative(),
+  by_event_type: z.array(z.object({ event_type: z.string(), total: z.number().int().nonnegative() })),
+});
 
 const countries = z.array(z.string().regex(/^[A-Z]{2}$/)).min(1).max(250).refine(ids => new Set(ids).size === ids.length, 'Use unique countries');
 export const createCampaignSchema = z.object({
   name: z.string().min(1).max(255).refine(value => value.trim().length > 0, 'Name cannot be blank'),
-  landing_page: z.url({ protocol: /^https?$/ }).max(2000),
+  landing_page: webUrl,
   status: z.enum(['draft', 'paused', 'active']).default('draft'),
   campaign_objective: z.enum(['clicks', 'reach', 'conversions']),
   conversion_type: z.string().min(1).max(100).optional().describe('Conversion event, for example purchase; required for conversions'),
@@ -98,6 +117,17 @@ export const createCampaignSchema = z.object({
 export const setCampaignStatusSchema = z.object({ campaign_id: gravityId, status: gravityStatus });
 export const setAdGroupStatusSchema = z.object({ ad_group_id: gravityId, status: gravityStatus });
 export const setAdStatusSchema = z.object({ ad_id: gravityId, status: gravityStatus });
+export const createAdGroupSchema = z.object({
+  campaign_id: gravityId, name: z.string().trim().min(1).max(500), group_type: z.enum(['generative', 'manual']),
+  context: z.string().trim().min(1).max(5000).optional(), negative_context: z.string().trim().min(1).max(5000).optional(),
+  brand_name: z.string().trim().min(1).max(500).optional(), landing_page: webUrl.optional(), image_url: webUrl.optional(),
+  allowed_countries: countries.optional(), status: gravityStatus.default('paused'),
+}).strict().refine(input => input.group_type === 'manual' || Boolean(input.context), 'Generative groups require a target context');
+export const createAdSchema = z.object({
+  ad_group_id: gravityId, headline: z.string().trim().min(1).max(50), copy: z.string().trim().min(1).max(500),
+  cta: z.string().trim().min(1).max(80), landing_page: webUrl, image_url: webUrl.optional(),
+  name: z.string().trim().min(1).max(500).optional(), status: gravityStatus.default('paused'),
+}).strict();
 export const setBudgetSchema = z.object({
   campaign_id: gravityId,
   field: z.enum(['daily_budget', 'total_budget']).default('daily_budget'),

@@ -106,7 +106,7 @@ All 13 advertising providers have local connection commands, normalized reports,
 | LinkedIn Ads | `linkedin` | [Campaigns/groups, targeting, bids, text creatives and image library](docs/providers/linkedin.md) |
 | X Ads | `x` | [Campaigns, line items, targeting, draft creatives, cards/media and analytics](docs/providers/x.md) |
 | OpenAI Ads | `openai` | [Ads in ChatGPT: reports, campaigns, ad groups, ads, status, spend limits](docs/providers/openai.md) |
-| Gravity | `gravity` | [Ads in AI assistants: reports, campaigns, ad groups, conversions, billing, status, budgets](docs/providers/gravity.md) |
+| Gravity | `gravity` | [Ads in AI assistants, campaigns, ads, budgets, conversion tracking and reporting](docs/providers/gravity.md) |
 
 Read-only analytics sources:
 

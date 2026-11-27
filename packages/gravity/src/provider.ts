@@ -7,7 +7,8 @@ import {
 import type { GravityClient } from './client.js';
 import {
   adGroupMetricsSchema, adGroupSchema, adSchema, adUnitMetricsSchema, advertiserSchema, campaignListSchema, campaignSchema,
-  createCampaignSchema, gravityId, metricsSchema, setAdGroupStatusSchema, setAdStatusSchema, setBudgetSchema, setCampaignStatusSchema,
+  createAdGroupSchema, createAdSchema, createCampaignSchema, createPixelSchema, gravityId, metricsSchema, pixelSchema,
+  setAdGroupStatusSchema, setAdStatusSchema, setBudgetSchema, setCampaignStatusSchema,
   type GravityAdvertiser, type GravityTotals,
 } from './schemas.js';
 
@@ -141,6 +142,9 @@ export class GravityProvider implements AdProvider {
     if (op.provider !== this.id) throw new AdportError('INVALID_INPUT', 'gravity: provider mismatch');
     await this.assertAccount(op.accountId);
     if (op.tool === 'gravity_create_campaign' && op.kind === 'create') return this.planCreate(op, guard);
+    if (op.tool === 'gravity_create_ad_group' && op.kind === 'create') return this.planAdGroup(op, guard);
+    if (op.tool === 'gravity_create_ad' && op.kind === 'create') return this.planAd(op, guard);
+    if (op.tool === 'gravity_create_pixel' && op.kind === 'create') return this.planPixel(op);
     if (op.tool === 'gravity_set_budget' && op.kind === 'update') return this.planBudget(op);
     if (op.kind === 'update' && Object.hasOwn(STATUS_TOOLS, op.tool)) return this.planStatus(op);
     throw new AdportError('INVALID_INPUT', `gravity: unsupported write ${op.tool}`);
@@ -184,6 +188,48 @@ export class GravityProvider implements AdProvider {
           throw new AdportError('PROVIDER_ERROR', 'gravity: campaign creation receipt mismatch; reconcile before retrying', { resource_ids: [created.campaign_id] });
         }
         return { applied: true, resourceIds: [created.campaign_id, group.id] };
+      },
+    };
+  }
+
+  private async planAdGroup(op: WriteOperation, guard: WriteGuard): Promise<Plan> {
+    const input = createAdGroupSchema.parse(op.payload);
+    const campaign = await this.client.get(`campaigns/${input.campaign_id}`, campaignSchema);
+    if (campaign.campaign_id !== input.campaign_id) throw new AdportError('PROVIDER_ERROR', 'gravity: campaign response does not match the parent campaign');
+    return creativePlan(`ad group "${input.name}" in "${campaign.name}"`, input, guard, async body => {
+      const group = await this.client.post('ad-groups', adGroupSchema, body);
+      if (group.campaign_id !== campaign.campaign_id || group.name !== input.name || group.group_type !== input.group_type || group.status !== body.status) {
+        throw new AdportError('PROVIDER_ERROR', 'gravity: ad group creation receipt mismatch; reconcile before retrying', { resource_ids: [group.id] });
+      }
+      return { applied: true, resourceIds: [group.id] };
+    });
+  }
+
+  private async planAd(op: WriteOperation, guard: WriteGuard): Promise<Plan> {
+    const { ad_group_id, ...input } = createAdSchema.parse(op.payload);
+    const group = await this.client.get(`ad-groups/${ad_group_id}`, adGroupSchema);
+    if (group.id !== ad_group_id) throw new AdportError('PROVIDER_ERROR', 'gravity: ad group response does not match the parent ad group');
+    if (group.group_type !== 'manual') throw new AdportError('INVALID_INPUT', 'gravity: authored ads require a manual ad group');
+    return creativePlan(`ad "${input.headline}" in "${group.name}"`, input, guard, async body => {
+      const ad = await this.client.post(`ad-groups/${group.id}/ads`, adSchema, body);
+      if (ad.ad_group_id !== group.id || ad.campaign_id !== group.campaign_id || ad.source !== 'manual' || ad.status !== body.status
+        || ad.headline !== body.headline || ad.copy !== body.copy || ad.cta !== body.cta || !sameWebUrl(ad.landing_page, body.landing_page)) {
+        throw new AdportError('PROVIDER_ERROR', 'gravity: ad creation receipt mismatch; reconcile before retrying', { resource_ids: [ad.id] });
+      }
+      return { applied: true, resourceIds: [ad.id] };
+    });
+  }
+
+  private planPixel(op: WriteOperation): Plan {
+    const body = createPixelSchema.parse(op.payload);
+    return {
+      summary: `Register Gravity conversion pixel for ${body.url}`, changes: [`+ ${JSON.stringify(body)}`], coercions: [], budgetDeltas: [],
+      execute: async () => {
+        const pixel = await this.client.post('pixels', pixelSchema, body);
+        if (!sameWebUrl(pixel.url, body.url) || (body.name !== undefined && pixel.name !== body.name)) {
+          throw new AdportError('PROVIDER_ERROR', 'gravity: pixel creation receipt mismatch; reconcile before retrying', { resource_ids: [pixel.pixel_id] });
+        }
+        return { applied: true, resourceIds: [pixel.pixel_id] };
       },
     };
   }
@@ -241,6 +287,20 @@ export class GravityProvider implements AdProvider {
       },
     };
   }
+}
+
+function creativePlan<T extends { status: 'active' | 'paused' }>(label: string, input: T, guard: WriteGuard, submit: (body: T) => Promise<WriteResult>): Plan {
+  const status = guard.forcePausedCreation ? 'paused' : input.status;
+  const body = { ...input, status };
+  return {
+    summary: `Create Gravity ${label} (${status})`, changes: [`+ ${JSON.stringify(body)}`], budgetDeltas: [],
+    coercions: status !== input.status ? ['status coerced to paused by policy (paused_creation)'] : [],
+    execute: () => submit(body),
+  };
+}
+
+function sameWebUrl(actual: string | null | undefined, expected: string) {
+  return Boolean(actual && URL.canParse(actual) && new URL(actual).href === new URL(expected).href);
 }
 
 const dollars = (value: number) => value / 1_000_000;

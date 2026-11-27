@@ -57,6 +57,18 @@ suite('analytics accounts do not consume advertising capacity', () => {
     await expect(admin`update public.organization_ad_accounts set enabled = true where organization_id = ${principal.organizationId} and provider = 'google' and account_id = '3'`).rejects.toThrow('Organization active account limit');
   });
 
+  it('requires an available advertising slot to enable a Gravity advertiser', async () => {
+    const selectionId = randomUUID(), provider = 'gravity' as const;
+    const connectionId = await upsertProviderConnection({ organizationId: principal.organizationId, userId, provider, credential: { apiKey: 'local-fixture' }, selectionId });
+    const account = { provider, id: 'fixture-advertiser', name: 'Local advertiser' };
+    await stageAccountSelection({ principal, id: selectionId, connectionId, provider, accounts: [account], returnPath: '/dashboard/connections' });
+    const limit = { maxActiveAccounts: 3, currentPlan: 'Free', currentPlanId: 'reader' } as const;
+    await expect(saveAccountSelection(principal, selectionId, [account.id], undefined, limit)).rejects.toMatchObject({ code: 'PLAN_LIMIT' });
+    expect(await organizationActiveAccounts(principal.organizationId)).toBe(3);
+    await saveAccountSelection(principal, selectionId, [account.id]);
+    await expect(admin`update public.organization_ad_accounts set enabled = true where organization_id = ${principal.organizationId} and provider = 'gravity'`).rejects.toThrow('Organization active account limit');
+  });
+
   it('preserves analytics on downgrade across projects while limiting only advertising accounts', async () => {
     for (const provider of ['gtm', 'ga4', 'gsc', 'matomo'] as const) {
       const connectionId = await upsertProviderConnection({ organizationId: sibling, userId, provider, credential: provider === 'matomo' ? { url: 'https://sibling.example.test', tokenAuth: 'local-matomo-fixture' } : { refreshToken: 'local-sibling-fixture' } });

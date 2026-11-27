@@ -1,4 +1,5 @@
 [
+  {"tool":"gravity_conversion_stats","name":"2026-11-02","values":["12"],"data":{"time_series":[{"date":"2026-11-02","conversions":12}],"total":12,"by_event_type":[{"event_type":"lead","total":12}]}},
   {"tool":"ga4_report","name":"google / cpc","values":["12.345 EUR","20%"],"data":{"metadata":{"currencyCode":"EUR"},"metric_headers":[{"name":"totalRevenue","type":"TYPE_CURRENCY"}],"rows":[{"dimensions":{"sessionSourceMedium":"google / cpc"},"metrics":{"totalRevenue":"12.345","engagementRate":"0.2"}}]}},
   {"tool":"ga4_realtime_report","name":"Germany","values":["2"],"data":{"rows":[{"dimensions":{"country":"Germany"},"metrics":{"activeUsers":"2"}}]}},
   {"tool":"gsc_search_analytics","name":"adport","values":["10","2","20%","3.5"],"data":{"rows":[{"dimensions":{"query":"adport"},"metrics":{"clicks":2,"impressions":10,"ctr":0.2,"position":3.5}}]}},

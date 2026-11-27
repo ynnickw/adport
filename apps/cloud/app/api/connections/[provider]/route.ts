@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { OpenAIAdsClient, OpenAIAdsProvider } from '@adport/provider-openai';
+import { GravityClient, GravityProvider } from '@adport/provider-gravity';
 import { matomoBaseUrl } from '@adport/provider-matomo';
 import { createHostedMatomoProvider } from '@/lib/cloud/matomo';
 import { providerLabel } from '@/lib/cloud/providers';
@@ -15,42 +16,52 @@ import {
 } from '@/lib/cloud/repository';
 import { stageAccountSelection } from '@/lib/cloud/account-selection';
 import { providerAllowedForOrganization } from '@/lib/cloud/provider-rollout';
-import { isCloudProvider, isOAuthProvider } from '@/lib/cloud/types';
+import { isCloudProvider, isOAuthProvider, type CredentialProvider } from '@/lib/cloud/types';
 import { env } from '@/lib/env';
 import { HttpError, apiError, noStoreJson } from '@/lib/http';
 
 const project = z.object({ organization_id: z.string().uuid(), return_to: z.string().max(2048).optional() });
 const token = z.string().trim().min(1).max(4096);
-const openaiConnection = project.extend({ api_key: token }).strict();
+const advertiserConnection = project.extend({ api_key: token }).strict();
 const matomoConnection = project.extend({ url: matomoBaseUrl, token_auth: token }).strict();
+
+function parseConnection(provider: CredentialProvider, value: unknown) {
+  if (provider === 'matomo') {
+    const { url, token_auth, ...project } = matomoConnection.parse(value);
+    const credential = { url, tokenAuth: token_auth };
+    return { ...project, provider, credential, listAccounts: () => createHostedMatomoProvider(credential).listAccounts() };
+  }
+  const { api_key, ...project } = advertiserConnection.parse(value);
+  const credential = { apiKey: api_key };
+  const advertisers = {
+    openai: () => new OpenAIAdsProvider(new OpenAIAdsClient(credential)),
+    gravity: () => new GravityProvider(new GravityClient(credential)),
+  };
+  return { ...project, provider, credential, listAccounts: () => advertisers[provider]().listAccounts() };
+}
 
 /** Verify provider tokens before storing them, then use the shared project account selection. */
 export async function POST(request: Request, { params }: RouteContext<'/api/connections/[provider]'>) {
   const { provider } = await params;
-  if (provider !== 'openai' && provider !== 'matomo') return noStoreJson({ error: 'This platform connects through OAuth.' }, 405);
+  if (!isCloudProvider(provider) || isOAuthProvider(provider)) return noStoreJson({ error: 'This platform connects through OAuth.' }, 405);
   const origin = request.headers.get('origin');
   if (origin !== new URL(request.url).origin && origin !== new URL(env().ADPORT_CLOUD_BASE_URL).origin) {
     return noStoreJson({ error: 'Same-origin request required.' }, 403);
   }
   const raw = await request.text();
   if (raw.length > 8192) return noStoreJson({ error: 'Connection request is too large.' }, 413);
-  let input: z.infer<typeof openaiConnection> | z.infer<typeof matomoConnection>;
-  try { input = (provider === 'matomo' ? matomoConnection : openaiConnection).parse(JSON.parse(raw)); }
+  let input: ReturnType<typeof parseConnection>;
+  try { input = parseConnection(provider, JSON.parse(raw)); }
   catch { return noStoreJson({ error: provider === 'matomo' ? 'Supply a project, an HTTPS Matomo URL and an auth token.' : 'Supply a project and an Advertiser API key.' }, 400); }
   try {
     const principal = await sessionPrincipal(input.organization_id);
     if (!['owner', 'admin'].includes(principal.role ?? '')) return noStoreJson({ error: 'Owner or admin access is required.' }, 403);
     if (!providerAllowedForOrganization(provider, principal.organizationId)) return noStoreJson({ error: 'This platform is unavailable for this project.' }, 403);
-    const connection = 'token_auth' in input
-      ? { provider: 'matomo' as const, credential: { url: input.url, tokenAuth: input.token_auth } }
-      : { provider: 'openai' as const, credential: { apiKey: input.api_key } };
-    const reader = connection.provider === 'matomo' ? createHostedMatomoProvider(connection.credential)
-      : new OpenAIAdsProvider(new OpenAIAdsClient(connection.credential));
-    const accounts = await reader.listAccounts();
+    const accounts = await input.listAccounts();
     if (provider === 'matomo' && !accounts.length) return noStoreJson({ error: 'This token has view access to no Matomo sites.' }, 422);
     const selectionId = randomUUID();
     const label = provider === 'matomo' ? 'Choose sites to finish connecting' : 'Choose accounts to finish connecting';
-    const connectionId = await upsertProviderConnection({ ...connection, organizationId: principal.organizationId, userId: principal.userId!,
+    const connectionId = await upsertProviderConnection({ provider, credential: input.credential, organizationId: principal.organizationId, userId: principal.userId!,
       scopes: [], externalLabel: label, selectionId });
     await stageAccountSelection({ principal, id: selectionId, connectionId, provider, accounts,
       returnPath: input.return_to ?? (provider === 'matomo' ? '/dashboard/analytics' : '/dashboard/connections') });
@@ -59,7 +70,7 @@ export async function POST(request: Request, { params }: RouteContext<'/api/conn
     return noStoreJson({ redirect: `/account-selection?selection_id=${selectionId}` });
   } catch (error) {
     if (error instanceof HttpError && (error.status === 401 || error.status === 403)) return noStoreJson({ error: error.message }, error.status);
-    return noStoreJson({ error: provider === 'matomo' ? 'Matomo connection failed. Check the public HTTPS instance URL and the token’s site view access.' : 'OpenAI Ads connection failed. Verify the Advertiser API key and your project access, then retry.' }, 502);
+    return noStoreJson({ error: provider === 'matomo' ? 'Matomo connection failed. Check the public HTTPS instance URL and the token’s site view access.' : `${providerLabel(provider)} connection failed. Verify the Advertiser API key and your project access, then retry.` }, 502);
   }
 }
 

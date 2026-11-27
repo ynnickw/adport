@@ -1,10 +1,20 @@
 # Gravity
 
 Provider for the [Gravity advertiser API](https://docs.trygravity.com), which manages
-ads shown inside AI assistants and chat apps. The local CLI and MCP share the same
-provider and tools; the hosted Cloud runtime does not include Gravity yet. Tests use
-synthetic responses shaped after the official API reference. The provider has not
-been verified against a live account yet; see [remaining coverage](#not-verified-yet).
+ads shown inside AI assistants and chat apps. The CLI, MCP server and Adport Cloud
+share one set of provider tools.
+
+## Connect in Adport Cloud
+
+1. An owner or admin opens **Connections → Gravity → Connect** in the project.
+2. Copy the advertiser API key from **Settings → Organization** in the Gravity dashboard and enter it in Adport.
+3. Choose the advertiser returned by Gravity and enable account access. The key
+   is encrypted for this project. An enabled Gravity account uses an advertising
+   account slot. Reporting access permits reads. Authorized writes use the
+   project's standard preview and approval flow.
+
+Disconnecting removes the encrypted key from the project. An advertiser admin can
+rotate the key in Gravity to invalidate it everywhere.
 
 ## Connect locally
 
@@ -28,8 +38,14 @@ login email; Adport never surfaces it.
 | `gravity_list_campaigns` | read | Every campaign with status, delivery status, budgets in dollars and lifetime totals; optional `status` filter |
 | `gravity_ad_groups` | read | Generative or manual ad groups with up to 100 ads each; optional `campaign_id` filter and `include_archived` |
 | `gravity_conversions` | read | Recent conversions (event type, value in cents, source, click- or view-through), to check that pixel or server tracking arrives; follows the cursor up to `limit` (max 500) |
+| `gravity_get_ad` | read | Fetch one generated or manual ad, including creative content and review status |
+| `gravity_pixels` | read | Sites with registered pixels, activation and installation check status |
+| `gravity_conversion_stats` | read | Daily conversion counts and totals by event type over a date range or lookback |
 | `gravity_billing` | read | Total spend, billed, unbilled and credits in dollars |
 | `gravity_create_campaign` | guarded create | Draft by default; `active` is forced to paused by policy. Exactly one daily or total budget in micros (whole cents); a total budget needs `end_time`; a `conversions` objective needs `conversion_type`. Creates one generative ad group from a target `context` (optional negative context and brand name); optional schedule, countries, devices and English-only |
+| `gravity_create_ad_group` | guarded create | Create a manual or generative group under an existing campaign. Generative groups need target context. Defaults to paused |
+| `gravity_create_ad` | guarded create | Add a headline, copy, call to action and destination to a manual group. Defaults to paused |
+| `gravity_create_pixel` | guarded create | Register a site's conversion pixel. Gravity checks installation in the background |
 | `gravity_set_campaign_status` | guarded update | `active` or `paused`; reads the current status first. Gravity checks billing and the conversion event on activation and may send the campaign to review again |
 | `gravity_set_ad_group_status` | guarded update | Same, for ad groups |
 | `gravity_set_ad_status` | guarded update | Same, for manual ads only; generated ads are refused (pause their generative ad group instead) |
@@ -76,16 +92,19 @@ after Gravity accepted it, a retry can create a second campaign; check
 
 | Area | Source |
 | --- | --- |
-| Overview, authentication, errors | [Advertiser API](https://docs.trygravity.com/llms.txt) |
-| Campaigns, ad groups, ads | [API reference](https://docs.trygravity.com/api-reference/advertiser/) |
-| Metrics, conversions, billing | [API reference](https://docs.trygravity.com/api-reference/advertiser/) |
+| Authentication and key rotation | [Advertiser API overview](https://docs.trygravity.com/api-reference/advertiser/overview) |
+| Creating and updating campaigns | [Campaign API](https://docs.trygravity.com/api-reference/advertiser/campaigns) |
+| Manual and generative groups, authored ads | [Ad group and ad API](https://docs.trygravity.com/api-reference/advertiser/ad-groups) |
+| Metrics, conversions and billing | [Reporting API](https://docs.trygravity.com/api-reference/advertiser/reports) |
+| Pixel registration and installation status | [Pixel API](https://docs.trygravity.com/api-reference/advertiser/pixels) |
 
-## Not verified yet
+## Verification
 
-All tools are covered by contract tests only. Live reads, paused writes, populated
-delivery metrics and activation are untested.
+The public advertiser API returned HTTP 401 with code `auth_missing` without a
+key. Authenticated reads and changes are covered by wire-contract tests using the
+published API examples. Live delivery, spend and provider acceptance of writes
+require an approved Gravity advertiser account.
 
-## Not covered yet
-
-Manual ad and ad group creation, ad copy and targeting updates, pixel and
-Conversions API setup, campaign deletion, and Cloud connection.
+Adport currently supports creative creation and status changes. Editing existing
+copy or targeting, delivering server-side conversion events and archiving campaigns
+remain available through Gravity's dashboard or API.

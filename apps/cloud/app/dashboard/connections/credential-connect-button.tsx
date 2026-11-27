@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import { Button, Input } from '@/components/controls';
 import { Dialog } from '@/components/dialog';
 import { providerLabel } from '@/lib/cloud/providers';
+import type { CredentialProvider } from '@/lib/cloud/types';
 
-interface ConnectionProps { organizationId: string; provider: 'openai' | 'matomo'; returnTo?: string }
+interface ConnectionProps { organizationId: string; provider: CredentialProvider; returnTo?: string }
 
 export function CredentialConnectButton({ connected, ...connection }: ConnectionProps & { connected: boolean }) {
   const [open, setOpen] = useState(false);
@@ -37,6 +38,7 @@ function KeyDialog({ organizationId, provider, returnTo, onClose }: ConnectionPr
   }
   return <Dialog title={`Connect ${providerLabel(provider)}`} onClose={() => { if (!busy) onClose(); }}>
     {matomo ? <p>Create an auth token in Matomo under Administration → Personal → Security. The token needs view access to the sites you choose.</p>
+      : provider === 'gravity' ? <p>An owner or admin can copy the advertiser API key from Settings → Organization in the <a href="https://app.trygravity.com" target="_blank" rel="noreferrer">Gravity dashboard</a>. Each key connects one advertiser.</p>
       : <p>Create an Advertiser API key in <a href="https://ads.openai.com/settings" target="_blank" rel="noreferrer">OpenAI Ads Manager settings</a>. Each key connects one ad account.</p>}
     <form className="stack" onSubmit={submit}>
       {matomo ? <label className="field"><span className="field-label">Matomo instance URL</span><Input type="url" name="url" placeholder="https://analytics.example.com/matomo" required maxLength={2048} autoComplete="off" spellCheck={false} disabled={busy} /></label> : null}

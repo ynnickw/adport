@@ -28,6 +28,7 @@ const STANDARD_TOOLS = new Set([
   'media_import_file', 'media_inspect_file', 'media_distribution_plan', 'media_distributions',
   'media_rename', 'media_update_metadata', 'media_delete',
   'google_upload_image_asset', 'google_assets', 'apple_upload_asset',
+  'gravity_conversions', 'gravity_conversion_stats', 'gravity_pixels', 'gravity_create_pixel',
   'reddit_profiles', 'reddit_assets', 'reddit_asset_upload_status', 'reddit_upload_asset',
   'snapchat_media', 'snapchat_create_media', 'snapchat_upload_media', 'snapchat_get_entity',
   'spotify_assets', 'spotify_get_asset', 'spotify_create_asset', 'spotify_upload_asset',

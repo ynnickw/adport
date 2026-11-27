@@ -29,6 +29,9 @@ importers:
       '@adport/provider-google':
         specifier: workspace:*
         version: link:../../packages/google
+      '@adport/provider-gravity':
+        specifier: workspace:*
+        version: link:../../packages/gravity
       '@adport/provider-gtm':
         specifier: workspace:*
         version: link:../../packages/gtm

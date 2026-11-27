@@ -173,9 +173,42 @@ describe('Gravity conversions and billing', () => {
     await expect(billing.handler({ account_id: 'abc-123' } as never, {} as never)).resolves.toMatchObject({ unbilled_dollars: 75.5 });
     await expect(billing.handler({ account_id: 'nope' } as never, {} as never)).rejects.toThrow(/does not match/);
   });
+  it('reads a specific ad, pixel health and dated conversion totals using the advertiser API contracts', async () => {
+    const ad = { id: 'ad-901', source: 'manual', status: 'paused', review_status: 'pending', headline: 'Trail shoes' };
+    const pixel = { pixel_id: 'pix-123', name: 'Shop', url: 'https://example.org', is_active: true, is_functional: null };
+    const stats = { total: 12, time_series: [{ date: '2026-11-02T00:00:00', conversions: 12 }], by_event_type: [{ event_type: 'lead', total: 12 }] };
+    const { provider, calls } = fixture([infoRoute, { path: 'ads/ad-901', reply: ad }, { path: 'pixels', reply: [{ ...pixel, internal: 'private' }] },
+      { path: 'events/conversion-stats', reply: stats }]);
+    const runtime = await createContext({ providerModules: [{ provider, tools: gravityTools(provider) }] });
+    const read = (name: string, fields: object) => runtime.registry.call(name, { account_id: info.advertiser_id, ...fields }, runtime.ctx);
+    expect(await read('gravity_get_ad', { ad_id: ad.id })).toEqual(ad);
+    expect(await read('gravity_pixels', {})).toEqual({ items: [pixel] });
+    expect(await read('gravity_conversion_stats', { start_date: '2026-11-01', end_date: '2026-11-03', event_type: 'lead' })).toEqual(stats);
+    expect(Object.fromEntries(calls.at(-1)!.url.searchParams)).toEqual({ start_date: '2026-11-01', end_date: '2026-11-03', event_type: 'lead' });
+    await expect(read('gravity_conversion_stats', { days: 2, start_date: '2026-11-01' })).rejects.toThrow();
+    await expect(read('gravity_pixels', { account_id: 'unselected' })).rejects.toThrow(/does not match/);
+  });
 });
 
 describe('Gravity guarded writes', () => {
+  it('refuses authored ads in generative groups and mismatched create receipts', async () => {
+    const ad = { headline: 'Trail shoes', copy: 'Grip every trail.', cta: 'Shop', landing_page: 'https://example.org/trail', ad_group_id: 'group' };
+    const group = { id: 'group', campaign_id: campaign.campaign_id, name: 'Trail', status: 'paused' };
+    const op = { provider: 'gravity', accountId: info.advertiser_id, kind: 'create' as const };
+    const wrongGroup = fixture([infoRoute, { path: 'ad-groups/group', reply: { ...group, group_type: 'generative' } }]);
+    await expect(wrongGroup.provider.previewWrite({ ...op, tool: 'gravity_create_ad', payload: ad }, guard)).rejects.toThrow(/manual ad group/);
+    expect(wrongGroup.calls.every(call => call.init.method === 'GET')).toBe(true);
+    const { provider } = fixture([infoRoute, { path: 'campaigns/camp-456', reply: campaign }, { path: 'ad-groups/group', reply: { ...group, group_type: 'manual' } },
+      { path: 'ad-groups', method: 'POST', reply: { ...group, group_type: 'manual', campaign_id: 'different' } },
+      { path: 'ad-groups/group/ads', method: 'POST', reply: { ...ad, id: 'created-ad', campaign_id: campaign.campaign_id, source: 'manual', status: 'active' } },
+      { path: 'pixels', method: 'POST', reply: { pixel_id: 'created-pixel', name: 'Another', url: 'https://wrong.example.org', is_active: true, is_functional: null } }]);
+    for (const [tool, payload, id] of [
+      ['gravity_create_ad_group', { campaign_id: campaign.campaign_id, name: group.name, group_type: 'manual' }, group.id],
+      ['gravity_create_ad', ad, 'created-ad'], ['gravity_create_pixel', { url: 'https://example.org' }, 'created-pixel'],
+    ] as const) {
+      await expect(provider.applyWrite({ ...op, tool, payload }, guard)).rejects.toMatchObject({ code: 'PROVIDER_ERROR', details: { resource_ids: [id] } });
+    }
+  });
   const createInput = { name: 'Launch', landing_page: 'https://example.com/launch', status: 'active', campaign_objective: 'clicks', daily_budget_micros: 50_000_000, context: 'Email signature software for teams', brand_name: 'Acme', allowed_countries: ['US', 'FR'] };
   it('creates a campaign with one generative ad group, coerces active to paused and converts micros to dollars', async () => {
     const { provider, calls } = fixture([infoRoute, { method: 'POST', path: 'campaigns', status: 201, reply: (_url: URL, init: RequestInit) => {
@@ -261,12 +294,16 @@ describe('Gravity module wiring', () => {
     const group = { id: 'adg-1', campaign_id: campaign.campaign_id, name: 'Generative group', group_type: 'generative', status: 'active' };
     const ad = { id: 'manual-1', ad_group_id: group.id, name: 'Manual ad', source: 'manual', status: 'active' };
     const update = (entity: object) => (_: URL, init: RequestInit) => ({ ...entity, ...JSON.parse(String(init.body)) });
+    const manual = { ...group, id: 'manual-group', name: 'Trail runners', group_type: 'manual' };
     const newCampaign = { ...campaign, campaign_id: 'qa-created', name: 'QA draft', daily_budget: 50, campaign_objective: 'clicks', status: 'paused',
       ad_groups: [{ ...group, campaign_id: 'qa-created', name: 'QA draft (Generative)' }] };
     const { provider, calls } = fixture([infoRoute, { path: 'campaigns', method: 'POST', reply: newCampaign },
       { path: 'campaigns/camp-456', reply: campaign }, { path: 'campaigns/camp-456', method: 'PATCH', reply: update(campaign) },
       { path: 'ad-groups/adg-1', reply: group }, { path: 'ad-groups/adg-1', method: 'PATCH', reply: update(group) },
       { path: 'ads/manual-1', reply: ad }, { path: 'ads/manual-1', method: 'PATCH', reply: update(ad) },
+      { path: 'ad-groups', method: 'POST', reply: update(manual) }, { path: 'ad-groups/manual-group', reply: manual },
+      { path: 'ad-groups/manual-group/ads', method: 'POST', reply: update({ ...ad, ad_group_id: manual.id, campaign_id: campaign.campaign_id }) },
+      { path: 'pixels', method: 'POST', reply: update({ pixel_id: 'px-1', is_active: true, is_functional: null }) },
     ]);
     const runtime = await createContext({ providerModules: [{ provider, tools: gravityTools(provider) }] });
     const cases = [
@@ -275,6 +312,9 @@ describe('Gravity module wiring', () => {
       ['gravity_set_ad_group_status', { ad_group_id: group.id, status: 'paused' }],
       ['gravity_set_ad_status', { ad_id: ad.id, status: 'paused' }],
       ['gravity_set_budget', { campaign_id: campaign.campaign_id, budget_micros: 110_000_000 }],
+      ['gravity_create_ad_group', { campaign_id: campaign.campaign_id, name: manual.name, group_type: 'manual', status: 'active' }],
+      ['gravity_create_ad', { ad_group_id: manual.id, headline: 'Trail shoes', copy: 'Grip every trail.', cta: 'Explore', landing_page: 'https://example.org/trail', status: 'active' }],
+      ['gravity_create_pixel', { name: 'Shop pixel', url: 'https://example.org' }],
     ] as const;
     const mutations = () => calls.filter(call => call.init.method !== 'GET').length;
     for (const [tool, fields] of cases) {
@@ -288,6 +328,9 @@ describe('Gravity module wiring', () => {
       expect(mutations()).toBe(before + 1);
     }
     expect(body(calls.find(call => call.init.method === 'POST')!)).toMatchObject({ status: 'paused' });
+    for (const call of calls.filter(call => call.init.method === 'POST' && /ad-groups/.test(call.url.pathname))) {
+      expect(body(call)).toMatchObject({ status: 'paused' });
+    }
     await expect(runtime.registry.call('gravity_set_budget', { account_id: info.advertiser_id, campaign_id: campaign.campaign_id, budget_micros: 200_000_000 }, runtime.ctx))
       .rejects.toMatchObject({ code: 'POLICY_VIOLATION' });
     expect(mutations()).toBe(cases.length);
@@ -302,8 +345,9 @@ describe('Gravity module wiring', () => {
     const module = await createGravityModule(store);
     expect(module?.provider.id).toBe('gravity');
     const names = module!.tools.map(tool => tool.name);
-    expect(names).toEqual(['gravity_list_campaigns', 'gravity_ad_groups', 'gravity_conversions', 'gravity_billing', 'gravity_create_campaign', 'gravity_set_campaign_status', 'gravity_set_ad_group_status', 'gravity_set_ad_status', 'gravity_set_budget']);
-    expect(module!.tools.filter(tool => tool.annotations?.readOnly).map(tool => tool.name)).toEqual(names.slice(0, 4));
+    expect(names).toEqual(['gravity_list_campaigns', 'gravity_ad_groups', 'gravity_get_ad', 'gravity_pixels', 'gravity_conversion_stats', 'gravity_conversions', 'gravity_billing',
+      'gravity_create_campaign', 'gravity_set_campaign_status', 'gravity_set_ad_group_status', 'gravity_set_ad_status', 'gravity_set_budget', 'gravity_create_ad_group', 'gravity_create_ad', 'gravity_create_pixel']);
+    expect(module!.tools.filter(tool => tool.annotations.readOnly).map(tool => tool.name)).toEqual(names.slice(0, 7));
     for (const tool of module!.tools.filter(t => !t.annotations?.readOnly)) expect(tool.input.shape.pending_operation_id).toBeDefined();
     vi.stubEnv('GRAVITY_API_KEY', '');
     await store.set({ provider: 'gravity', source: 'byo', data: { api_key: 'grv-stored' } });
