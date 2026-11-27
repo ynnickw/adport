@@ -9,7 +9,7 @@ import { MockProvider, mockTools } from './testing/mock-provider.js';
 import type { FindingsRepository } from './audit/store.js';
 import { mediaTools } from './tools/media.js';
 import type { MediaLibrary } from './media.js';
-import { toolInSelection, type ToolSelection } from './tools/catalog.js';
+import { toolInSelection, type ToolProvider, type ToolSelection } from './tools/catalog.js';
 import { capabilityTools } from './tools/capabilities.js';
 import type { ToolCatalogContext } from './tools/registry.js';
 
@@ -22,6 +22,8 @@ export interface CreateContextOptions {
   policyPath?: string;
   /** Extra providers with their tools (e.g. the Google provider from @adport/provider-google). */
   providerModules?: ProviderModule[];
+  /** Platforms this host can connect, including those with no credentials yet. */
+  capabilityProviders?: readonly ToolProvider[];
   /**
    * Include the credential-free mock provider. Disabled by default so a
    * misconfigured live runtime cannot silently substitute synthetic accounts.
@@ -78,7 +80,7 @@ export async function createContext(options: CreateContextOptions = {}): Promise
 
   const registry = new ToolRegistry();
   registry.register(builtinTools());
-  registry.register(capabilityTools());
+  registry.register(capabilityTools(options.capabilityProviders));
   registry.register(mediaTools());
   registry.register(auditTools());
 

@@ -5,6 +5,7 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import { expect, it, vi } from 'vitest';
 import { POST } from '@/app/mcp/route';
 import { resetEnvForTests } from '@/lib/env';
+import { CLOUD_PROVIDERS } from '@/lib/cloud/types';
 import mcpPackage from '../../../packages/mcp/package.json';
 
 const projectId = '11111111-1111-4111-8111-111111111111';
@@ -51,6 +52,10 @@ async function listCatalog(selection: ToolSelection, modern: boolean, inspectRes
     const result = await client.listTools();
     expect(result.nextCursor).toBeUndefined();
     expect(responseSizes).toHaveLength(1);
+    const capabilities = result.tools.find(tool => tool.name === 'capabilities_list')!;
+    expect(capabilities.inputSchema.properties?.provider).toMatchObject({ enum: [...CLOUD_PROVIDERS] });
+    const discovery = await client.callTool({ name: 'capabilities_list', arguments: { limit: 1 } });
+    expect(discovery.structuredContent).toMatchObject({ platforms: CLOUD_PROVIDERS.map(id => ({ id })) });
     const resources = inspectResources ? (await client.listResources()).resources : [];
     const resourcesByUri = new Map(resources.map(resource => [resource.uri, resource]));
     return { tools: result.tools, wireBytes: responseSizes[0]!, instructions: client.getInstructions(), resourcesByUri, serverVersion: client.getServerVersion()?.version };
