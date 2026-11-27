@@ -49,9 +49,9 @@ export const WORKFLOW_UI = String.raw`
         (status?'<span class="pill '+tone+'">'+esc(status)+'</span>':'')+'</div>'+body+'</'+tag+'>';
     }
 
-    function workflowHeader(labels) {
-      return '<thead role="rowgroup"><tr role="row">'+labels.map(label=>
-        '<th role="columnheader" scope="col">'+esc(label)+'</th>').join('')+'</tr></thead>';
+    function workflowHeader(labels,sorted=-1) {
+      return '<thead role="rowgroup"><tr role="row">'+labels.map((label,i)=>
+        '<th role="columnheader" scope="col"'+(i===sorted?' aria-sort="descending"':'')+'>'+esc(label)+'</th>').join('')+'</tr></thead>';
     }
 
     function workflowCell(label,html,heading=false) {
@@ -60,10 +60,10 @@ export const WORKFLOW_UI = String.raw`
         '<span class="workflow-cell-label" aria-hidden="true" data-label="'+esc(label)+'"></span><span>'+html+'</span></'+tag+'>';
     }
 
-    function workflowTable(labels,rows,description) {
+    function workflowTable(labels,rows,description,{compact=false,sorted=-1}={}) {
       if(!rows.length)return '';
-      return '<div class="workflow-scroll" role="region" aria-label="'+esc(description)+'" tabindex="0">'+
-        '<table class="workflow-table workflow-stack" role="table">'+workflowHeader(labels)+'<tbody role="rowgroup">'+
+      return '<div class="'+(compact?'collection-scroll':'workflow-scroll')+'" role="region" aria-label="'+esc(description)+'" tabindex="0">'+
+        '<table class="workflow-table'+(compact?'':' workflow-stack')+'" role="table">'+workflowHeader(labels,sorted)+'<tbody role="rowgroup">'+
         rows.map(row=>'<tr role="row">'+row.map((value,i)=>workflowCell(labels[i],esc(workflowText(value)||'—'),i===0)).join('')+'</tr>').join('')+
         '</tbody></table></div>';
     }

@@ -15,8 +15,8 @@ import { PLANNING_UI } from './planning-ui.js';
 import { READ_PAGE_UI } from './read-page-ui.js';
 import { REPORT_CHART_SCRIPT, REPORT_CHART_STYLES } from './report-chart-ui.js';
 
-export const ADPORT_UI_URI = 'ui://adport/insight-card-v36.html';
-export const ADPORT_SUMMARY_UI_URI = 'ui://adport/summary-card-v36.html';
+export const ADPORT_UI_URI = 'ui://adport/insight-card-v40.html';
+export const ADPORT_SUMMARY_UI_URI = 'ui://adport/summary-card-v40.html';
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
 export const ADPORT_UI_RESOURCE_DOMAINS = [
   ADPORT_UI_DOMAIN,

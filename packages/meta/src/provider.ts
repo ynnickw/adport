@@ -247,16 +247,18 @@ export class MetaAdsProvider implements AdProvider {
   async insights(input: {
     account_id: string;
     level: 'account' | 'campaign' | 'adset' | 'ad';
-    fields: string[];
+    fields?: string[];
     date_preset?: string;
     time_range?: { since: string; until: string };
     breakdowns?: string[];
     limit?: number;
   }): Promise<Array<Record<string, unknown>>> {
     const act = normalizeAccountId(input.account_id);
+    const campaignFields = input.level === 'adset' || input.level === 'ad' ? ['campaign_id', 'campaign_name'] : [];
+    const fields = input.fields ?? [...campaignFields, input.level + '_id', input.level + '_name', 'account_currency', 'spend', 'impressions', 'clicks'];
     const params: Record<string, string> = {
       level: input.level,
-      fields: input.fields.join(','),
+      fields: fields.join(','),
       limit: '100',
     };
     if (input.time_range) params.time_range = JSON.stringify(input.time_range);

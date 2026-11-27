@@ -33,6 +33,7 @@ export const apiReadOutput = z.union([z.array(apiObject), apiObject]);
 
 const actionMetric = z.object({ action_type: z.string(), value: z.string() }).passthrough();
 export const insightsOutput = z.object({
+  breakdowns: z.array(z.string()).optional(),
   rows: z.array(z.object({
     account_id: z.string().optional(), campaign_id: z.string().optional(), campaign_name: z.string().optional(),
     adset_id: z.string().optional(), ad_id: z.string().optional(),
