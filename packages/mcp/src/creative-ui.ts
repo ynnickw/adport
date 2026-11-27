@@ -42,10 +42,11 @@ export const CREATIVE_UI_SCRIPT = String.raw`
       };
       const unique=values=>[...new Set(arr(values).filter(value=>typeof value==='string'&&value.trim()))];
       return creatives.map(creative=>{
-        const name=creative.name || 'Untitled creative',status=statusOf(creative.status);
+        const name=creative.name || 'Untitled creative',delivery=creative.deliveryStatus || creative.status;
+        const status=statusOf(delivery==='ADSET_PAUSED'?'Ad set paused':delivery==='CAMPAIGN_PAUSED'?'Campaign paused':delivery);
         const destination=arr(creative.landing_urls).map(value=>safeUrl(value)).find(Boolean);
         const headline=unique(creative.headlines).filter(text=>text!==name).join(' · '),copy=unique(creative.descriptions).filter(text=>text!==name&&text!==headline).join('\n');
-        const active=/^(active|enabled|ready|approved)$/i.test(creative.status || '');
+        const active=/^(active|enabled|ready|approved)$/i.test(delivery || '');
         return '<article class="creative-card" data-media-id="'+esc(creative.id)+'"><div class="creative-heading">'+(providerSvg[creative.provider]?logo(creative.provider):'')+'<span class="creative-name" title="'+esc(name)+'">'+esc(name)+'</span>'+(menuFor?menuFor(creative):'')+'</div>'+mediaView(creative)+'<div class="creative-copy">'+(headline?'<strong title="'+esc(headline)+'">'+esc(headline)+'</strong>':'')+(copy?'<p title="'+esc(copy)+'">'+esc(copy)+'</p>':'')+'</div><div class="creative-footer"><span class="creative-status'+(active?' creative-status-active':'')+'">'+esc(status.label)+'</span>'+(destination?'<a class="creative-destination" href="'+esc(destination.href)+'" target="_blank" rel="noopener noreferrer">'+esc(destination.hostname.replace(/^www\./,''))+'</a>':'')+'</div></article>';
       }).join('');
     }

@@ -90,14 +90,17 @@ export const REPORT_CHART_SCRIPT = String.raw`
         return '<section class="report-chart" data-report-chart><div class="report-chart-head"><b>'+esc(title)+'</b>'+(unit?'<span>'+esc(unit)+'</span>':'')+'</div>'+body+(!trend&&model.returned>shown.length?'<p class="report-chart-foot">'+shown.length+' of '+model.returned+' returned rows · all rows in Details</p>':trend&&model.returned>points.length?'<p class="report-chart-foot">'+points.length+' of '+model.returned+' dated observations · all data in Details</p>':'')+'</section>';
       }).join('')+(groups.size>4?'<p class="report-chart-foot">Showing four units. All returned values are in Details.</p>':'');
       return {html,mount:()=>{
-        const elements=[...app.querySelectorAll('[data-native-line]')];
+        const elements=[...app.querySelectorAll('[data-native-line]')],widths=new Map();
         const draw=()=>elements.forEach(element=>{
           if(element.isConnected===false)return;
           const model=models[Number(element.dataset.nativeLine)];if(!model)return;
+          const width=Math.max(240,Math.floor(element.getBoundingClientRect?.().width||480));
+          if(widths.get(element)===width)return;
+          widths.set(element,width);
           const series=new Map();for(const point of model.points){const name=point.series||point.name;if(!series.has(name))series.set(name,[]);series.get(name).push(point);}
           const chosen=[...series.entries()].slice(0,3),valid=chosen.flatMap(([,points])=>points).filter(point=>available(point.value));
           if(!valid.length){element.innerHTML='<p class="operation-note">No complete dated values were returned.</p>';return;}
-          const width=Math.max(240,Math.floor(element.getBoundingClientRect?.().width||480)),height=178,left=46,right=12,top=12,bottom=30;
+          const height=178,left=46,right=12,top=12,bottom=30;
           const dates=[...new Set(model.points.map(point=>point.date))].sort(),start=Date.parse(dates[0]),end=Date.parse(dates.at(-1)),span=Math.max(86400000,end-start);
           const max=Math.max(1e-100,...valid.map(point=>point.value)),min=Math.min(0,...valid.map(point=>point.value)),range=max-min||1;
           const x=date=>left+(Date.parse(date)-start)/span*(width-left-right),y=value=>top+(max-value)/range*(height-top-bottom);
@@ -110,7 +113,7 @@ export const REPORT_CHART_SCRIPT = String.raw`
             return '<path d="'+line+'" fill="none" stroke="'+colors[index]+'" stroke-width="2" stroke-dasharray="'+dashes[index]+'"/>'+sorted.filter(point=>available(point.value)).map(point=>'<circle cx="'+x(point.date)+'" cy="'+y(point.value)+'" r="3" fill="'+colors[index]+'" tabindex="0"><title>'+esc(pretty(name)+' · '+point.date+' · '+point.display)+'</title></circle>').join('');
           }).join('');
           const axis=value=>new Intl.NumberFormat(state.host.locale||'en',{notation:Math.abs(value)>=1000?'compact':'standard',maximumFractionDigits:3}).format(value);
-          element.innerHTML='<svg viewBox="0 0 '+width+' '+height+'" role="img" aria-label="'+esc(model.label+' over reported dates')+'"><line class="chart-grid" x1="'+left+'" x2="'+(width-right)+'" y1="'+(height-bottom)+'" y2="'+(height-bottom)+'"/><text x="'+(left-8)+'" y="'+(top+4)+'" text-anchor="end">'+esc(axis(max))+'</text><text x="'+(left-8)+'" y="'+(height-bottom)+'" text-anchor="end">'+esc(axis(min))+'</text>'+paths+labels+'</svg>'+(chosen.length>1?'<div class="report-legend">'+chosen.map(([name],index)=>'<span><i style="border-color:'+colors[index]+';border-top-style:'+(index?'dashed':'solid')+'"></i>'+esc(pretty(name))+'</span>').join('')+'</div>':'')+(series.size>3?'<p class="report-chart-foot">3 of '+series.size+' series · all series in Details</p>':'');
+          element.innerHTML='<svg height="'+height+'" viewBox="0 0 '+width+' '+height+'" role="img" aria-label="'+esc(model.label+' over reported dates')+'"><line class="chart-grid" x1="'+left+'" x2="'+(width-right)+'" y1="'+(height-bottom)+'" y2="'+(height-bottom)+'"/><text x="'+(left-8)+'" y="'+(top+4)+'" text-anchor="end">'+esc(axis(max))+'</text><text x="'+(left-8)+'" y="'+(height-bottom)+'" text-anchor="end">'+esc(axis(min))+'</text>'+paths+labels+'</svg>'+(chosen.length>1?'<div class="report-legend">'+chosen.map(([name],index)=>'<span><i style="border-color:'+colors[index]+';border-top-style:'+(index?'dashed':'solid')+'"></i>'+esc(pretty(name))+'</span>').join('')+'</div>':'')+(series.size>3?'<p class="report-chart-foot">3 of '+series.size+' series · all series in Details</p>':'');
         });
         draw();if(typeof ResizeObserver!=='undefined'&&models.some(model=>model.trend)){trendResize=new ResizeObserver(draw);elements.forEach(element=>trendResize.observe(element));}
       }};
