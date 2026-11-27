@@ -58,8 +58,10 @@ after Gravity accepted it, a retry can create a second campaign; check
   is zero.
 - `null` metrics mean unavailable and stay absent; they are never reported as zero.
 - The `ad` level reads ad units (`ad-unit-metrics`), which return impressions,
-  clicks and spend; conversions and revenue are absent when the API omits them.
-  It is not yet confirmed that these IDs match the ads returned in ad groups.
+  clicks and spend. Each row represents one campaign and ad unit, with reporting ID
+  `campaign_id/ad_unit_id`. Rows sourced from campaign totals are labeled. For ad
+  status changes, use the manual ad ID from `gravity_ad_groups`. Conversion and
+  revenue metrics are available at campaign level.
 
 ## API behavior
 

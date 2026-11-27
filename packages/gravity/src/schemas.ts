@@ -17,7 +17,7 @@ export const campaignSchema = z.looseObject({
   campaign_id: gravityId, name: z.string(), status: z.string(), is_active: z.boolean().optional(),
   daily_budget: money, total_budget: money, budget_type: z.string().nullable().optional(),
   landing_page: z.string().nullable().optional(), campaign_objective: z.string().nullable().optional(),
-  billing_model: z.string().nullable().optional(), conversion_type: z.string().nullable().optional(),
+  billing_model: z.string().nullable().optional(), bid_strategy: z.string().nullable().optional(), conversion_type: z.string().nullable().optional(),
   delivery_status: z.string().nullable().optional(), delivery_issues: z.array(z.string()).nullable().optional(),
   start_time: z.string().nullable().optional(), end_time: z.string().nullable().optional(),
   impressions: count, clicks: count, spend: money, conversions: count, conversion_value: money,

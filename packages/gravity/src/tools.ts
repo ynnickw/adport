@@ -9,21 +9,25 @@ import type { GravityProvider } from './provider.js';
 /** Follows `next_cursor` until `has_more` is false or `limit` rows were read. */
 export async function listConversions(provider: GravityProvider, input: z.infer<typeof listConversionsSchema>) {
   await provider.assertAccount(input.account_id);
-  const items: z.infer<typeof conversionPageSchema>['conversions'] = [], seen = new Set<string>();
+  const items: z.infer<typeof conversionPageSchema>['conversions'] = [];
+  const seen = new Set<string>(), ids = new Set<string>();
+  const totalKeys = ['total_conversions', 'total_click_through_conversions', 'total_view_through_conversions'] as const;
+  const totals: Partial<Record<typeof totalKeys[number], number>> = {};
   let cursor: string | undefined;
   while (true) {
     const page = await provider.api.get('conversions', conversionPageSchema, {
       limit: String(Math.min(100, input.limit - items.length)), cursor,
       campaign_id: input.campaign_id, event_type: input.event_type, attribution_type: input.attribution_type,
     });
-    items.push(...page.conversions);
-    const totals = {
-      ...(page.total_conversions !== undefined ? { total_conversions: page.total_conversions } : {}),
-      ...(page.total_click_through_conversions !== undefined ? { total_click_through_conversions: page.total_click_through_conversions } : {}),
-      ...(page.total_view_through_conversions !== undefined ? { total_view_through_conversions: page.total_view_through_conversions } : {}),
-    };
+    for (const conversion of page.conversions) {
+      if (ids.has(conversion.conversion_id)) throw new AdportError('PROVIDER_ERROR', 'gravity: conversion pagination returned overlapping rows');
+      ids.add(conversion.conversion_id);
+      items.push(conversion);
+    }
+    for (const key of totalKeys) if (page[key] !== undefined) totals[key] ??= page[key];
+    if (items.length > input.limit || (items.length === input.limit && page.has_more)) return { items: items.slice(0, input.limit), truncated: true, ...totals };
     if (!page.has_more) return { items, ...totals };
-    if (items.length >= input.limit) return { items: items.slice(0, input.limit), truncated: true, ...totals };
+    if (!page.conversions.length) throw new AdportError('PROVIDER_ERROR', 'gravity: conversion pagination returned an empty intermediate page');
     const next = page.next_cursor ?? undefined;
     if (!next || seen.has(next) || seen.size >= 1000) throw new AdportError('PROVIDER_ERROR', 'gravity: pagination did not terminate; refusing incomplete results');
     seen.add(next);

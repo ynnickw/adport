@@ -100,17 +100,29 @@ export class GravityProvider implements AdProvider {
     }
     if (query.level === 'ad_group') return this.adGroupReport(window, limit, row);
     const { ad_units } = await this.client.get('ad-unit-metrics', adUnitMetricsSchema, window);
-    return { rows: ad_units.slice(0, limit).map(unit => row('ad', unit.ad_unit_id, unit.name, undefined, unit)), ...(ad_units.length > limit ? { truncated: true } : {}) };
+    const rows = ad_units.slice(0, limit).map(unit => {
+      // Gravity reports campaign/unit links. The same unit can serve in multiple campaigns.
+      const name = `${unit.name || unit.ad_unit_id} · ${unit.campaign_id}${unit.data_source === 'campaign_fallback' ? ' (campaign totals)' : ''}`;
+      const totals = { total_impressions: unit.total_impressions, total_clicks: unit.total_clicks, total_spend: unit.total_spend };
+      return row('ad', `${unit.campaign_id}/${unit.ad_unit_id}`, name, undefined, totals);
+    });
+    return { rows, ...(ad_units.length > limit ? { truncated: true } : {}) };
   }
 
   private async adGroupReport(window: Record<string, string>, limit: number,
     row: (level: EntityLevel, id: string, name: string | null | undefined, status: string | null | undefined, totals: GravityTotals) => ReportRow): Promise<Report> {
     const rows: ReportRow[] = [];
+    const seen = new Set<string>();
     for (let offset = 0, pages = 0; ; pages++) {
       if (pages >= 100) throw new AdportError('PROVIDER_ERROR', 'gravity: pagination did not terminate; refusing incomplete results');
       const page = await this.client.get('ad-group-metrics', adGroupMetricsSchema, { ...window, offset: String(offset) });
-      for (const group of page.ad_groups) rows.push(row('ad_group', group.ad_group_id, group.name, group.status, group));
-      if (rows.length > limit) return { rows: rows.slice(0, limit), truncated: true };
+      if (page.offset !== undefined && page.offset !== offset) throw new AdportError('PROVIDER_ERROR', 'gravity: ad group metrics returned the wrong page offset');
+      for (const group of page.ad_groups) {
+        if (seen.has(group.ad_group_id)) throw new AdportError('PROVIDER_ERROR', 'gravity: ad group metrics returned overlapping rows');
+        seen.add(group.ad_group_id);
+        rows.push(row('ad_group', group.ad_group_id, group.name, group.status, group));
+      }
+      if (rows.length > limit || (rows.length === limit && page.truncated)) return { rows: rows.slice(0, limit), truncated: true };
       if (!page.truncated) return { rows };
       if (!page.ad_groups.length) throw new AdportError('PROVIDER_ERROR', 'gravity: ad group metrics are truncated but the page is empty');
       offset += page.ad_groups.length;
@@ -165,11 +177,13 @@ export class GravityProvider implements AdProvider {
       execute: async () => {
         const created = await this.client.post('campaigns', campaignSchema.extend({ ad_groups: z.array(adGroupSchema).optional() }), body);
         const amount = created[budgetField];
+        const [group] = created.ad_groups ?? [];
         if (created.name !== body.name || created.status !== status || typeof amount !== 'number' || micros(amount) !== (input.daily_budget_micros ?? input.total_budget_micros)
-          || created.campaign_objective !== body.campaign_objective || created.ad_groups?.length !== 1) {
+          || created.campaign_objective !== body.campaign_objective || created.ad_groups?.length !== 1
+          || group?.campaign_id !== created.campaign_id || group.name !== adGroup.name || group.group_type !== 'generative') {
           throw new AdportError('PROVIDER_ERROR', 'gravity: campaign creation receipt mismatch; reconcile before retrying', { resource_ids: [created.campaign_id] });
         }
-        return { applied: true, resourceIds: [created.campaign_id, ...created.ad_groups.map(group => group.id)] };
+        return { applied: true, resourceIds: [created.campaign_id, group.id] };
       },
     };
   }
@@ -178,9 +192,16 @@ export class GravityProvider implements AdProvider {
     const input = setBudgetSchema.parse(op.payload);
     const current = await this.client.get(`campaigns/${input.campaign_id}`, campaignSchema);
     if (current.campaign_id !== input.campaign_id) throw new AdportError('PROVIDER_ERROR', 'gravity: campaign response does not match the requested campaign');
-    const type = current.budget_type ?? 'daily';
+    const available = (['daily', 'total'] as const).filter(type => typeof current[`${type}_budget`] === 'number');
+    const uncappedDaily = current.bid_strategy === 'target_cpa' && current.daily_budget === null && current.total_budget == null;
+    const type = current.budget_type ?? (available.length === 1 ? available[0] : uncappedDaily ? 'daily' : undefined);
+    if (type !== 'daily' && type !== 'total') throw new AdportError('PROVIDER_ERROR', 'gravity: could not establish the current campaign budget type');
     if (`${type}_budget` !== input.field) throw new AdportError('INVALID_INPUT', `gravity: campaign uses a ${type} budget; update ${type}_budget instead (budget-type changes are not supported)`);
-    const previous = typeof current[input.field] === 'number' ? micros(current[input.field]!) : undefined;
+    const currentAmount = current[input.field];
+    if (typeof currentAmount !== 'number' && !(type === 'daily' && uncappedDaily)) {
+      throw new AdportError('PROVIDER_ERROR', 'gravity: could not establish the current campaign budget for policy checks');
+    }
+    const previous = typeof currentAmount === 'number' ? micros(currentAmount) : undefined;
     const amount = dollars(input.budget_micros);
     return {
       summary: `Change Gravity campaign "${current.name}" ${input.field}`,
