@@ -64,14 +64,15 @@ function toolArguments(tool: Tool, ids: Arguments, fields: Arguments, mutation: 
 }
 
 function receipt<T>(raw: unknown, schema: z.ZodType<T>, mutation: boolean): T {
-  if (mutation && record(raw) && ('plan_id' in raw || 'plan' in raw || raw.requires_confirmation === true || raw.applied === false)) {
-    throw new AdportError('PROVIDER_ERROR', 'Gravity returned a plan requiring its own approval. Verify the change in Gravity before retrying.');
-  }
   const candidates = [raw];
   if (record(raw)) {
     for (const field of ['result', 'data', 'advertiser', 'campaign', 'ad_group', 'ad', 'pixel', 'ad_groups', 'pixels']) {
       if (Object.hasOwn(raw, field)) candidates.push(raw[field]);
     }
+  }
+  if (mutation && candidates.some(value => record(value) && ('plan_id' in value || 'plan' in value ||
+    value.requires_confirmation === true || value.requires_approval === true || value.applied === false))) {
+    throw new AdportError('PROVIDER_ERROR', 'Gravity returned a plan requiring its own approval. Verify the change in Gravity before retrying.');
   }
   for (const value of candidates) {
     const parsed = schema.safeParse(value);

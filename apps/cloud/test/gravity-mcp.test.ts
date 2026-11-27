@@ -29,6 +29,9 @@ it('never dispatches an unknown or incompatible operation and never treats an ap
   f.discover.mockResolvedValueOnce({ tools: [descriptor] });
   f.call.mockResolvedValueOnce({ content: [{ type: 'text', text: JSON.stringify({ ...entity, plan_id: 'p' }) }] });
   await expect(client().patch('campaigns/c', schema, { status: 'paused' })).rejects.toThrow(/approval/);
-  expect(f.call).toHaveBeenCalledTimes(1);
+  f.discover.mockResolvedValueOnce({ tools: [descriptor] });
+  f.call.mockResolvedValueOnce({ content: [], structuredContent: { result: { ...entity, requires_approval: true } } });
+  await expect(client().patch('campaigns/c', schema, { status: 'paused' })).rejects.toThrow(/approval/);
+  expect(f.call).toHaveBeenCalledTimes(2);
   await expect(client().get('https://untrusted.example', schema)).rejects.toThrow(/Unsupported/);
 });
