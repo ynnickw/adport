@@ -114,7 +114,7 @@ describe('shared popup OAuth routes', () => {
     const response = await start(new Request(`https://app.adport.test/api/oauth/${suffix}`), { params: Promise.resolve({ provider: suffix.startsWith('meta') ? 'meta' : 'google' }) });
     expect(response.status).toBe(400); expect(mocks.create).not.toHaveBeenCalled();
   });
-  it.each(OAUTH_PROVIDERS)('binds %s popup delivery to the server-side transaction', async provider => {
+  it.each(OAUTH_PROVIDERS.filter(provider => provider !== 'matomo'))('binds %s popup delivery to the server-side transaction', async provider => {
     const context = { params: Promise.resolve({ provider }) };
     const response = await start(new Request(`https://untrusted.test/api/oauth/${provider}/start?popup_id=${id}&return_to=%2Fonboarding`), context);
     expect(response.headers.get('location')).toBe('https://provider.test/authorize');

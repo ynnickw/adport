@@ -43,6 +43,7 @@ const schema = z.object({
   // Optional independent application keeps analytics review separate from Ads/GTM.
   GOOGLE_ANALYTICS_CLIENT_ID: z.string().min(10).optional(),
   GOOGLE_ANALYTICS_CLIENT_SECRET: z.string().min(8).optional(),
+  MATOMO_OAUTH_APPLICATIONS: z.string().optional(),
   GA4_OAUTH_ENABLED: z.enum(['true', 'false']).default('false'),
   ANALYTICS_TEST_ORGANIZATION_IDS: z.string().optional(),
   GOOGLE_ADS_LOGIN_CUSTOMER_ID: z.string().regex(/^\d{10}$/).optional(),

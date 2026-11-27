@@ -90,7 +90,8 @@ export async function DELETE(request: Request, { params }: RouteContext<'/api/co
     if (!stored) return noStoreJson({ disconnected: false });
 
     let revokedAtProvider = false;
-    if (isOAuthProvider(provider)) {
+    const oauth = isOAuthProvider(provider) && !(provider === 'matomo' && 'tokenAuth' in stored);
+    if (oauth && isOAuthProvider(provider)) {
       const sharedGoogleGrant = provider === 'google' && (await Promise.all(['gtm', 'ga4', 'gsc'].map(id => loadProviderCredential(principal.organizationId, id as 'gtm' | 'ga4' | 'gsc')))).some(Boolean);
       if (oauthAdapter(provider).configured() && !sharedGoogleGrant) {
         // Throws on transient failure and keeps the encrypted credential for a retry.
@@ -100,7 +101,7 @@ export async function DELETE(request: Request, { params }: RouteContext<'/api/co
     const removed = await removeProviderConnection(principal.organizationId, provider, stored.connectionId);
     if (!removed) throw new Error('The connection changed while it was being disconnected. Please retry.');
     await recordAudit(principal, {
-      event: 'revoked', provider, tool: isOAuthProvider(provider) ? 'oauth_disconnect' : 'credential_disconnect', accountId: '*',
+      event: 'revoked', provider, tool: oauth ? 'oauth_disconnect' : 'credential_disconnect', accountId: '*',
       summary: revokedAtProvider
         ? `Revoked and removed ${provider} connection`
         : `Removed encrypted ${provider} credentials; provider-side revocation remains required`,

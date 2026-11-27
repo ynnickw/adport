@@ -66,7 +66,7 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
     if (!providerAllowedForOrganization(provider, transaction.organizationId)) throw new Error('This provider is not enabled for this organization.');
 
     // The optional scope is bound to the consumed encrypted transaction, never callback parameters.
-    const exchangeAdapter = oauthAdapter(provider, { googleDataManager: transaction.googleDataManager === true, redditConversions: transaction.redditConversions === true, pinterestPinManagement: transaction.pinterestPinManagement === true, pinterestSecretPins: transaction.pinterestSecretPins === true, pinterestCatalogManagement: transaction.pinterestCatalogManagement === true });
+    const exchangeAdapter = oauthAdapter(provider, { matomoApplication: transaction.matomoApplication, googleDataManager: transaction.googleDataManager === true, redditConversions: transaction.redditConversions === true, pinterestPinManagement: transaction.pinterestPinManagement === true, pinterestSecretPins: transaction.pinterestSecretPins === true, pinterestCatalogManagement: transaction.pinterestCatalogManagement === true });
     const credential = await exchangeAdapter.exchange({ code: code!, verifier: transaction.verifier, state });
     const selectionId = randomUUID();
     const connectionId = await upsertProviderConnection({
@@ -103,7 +103,7 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
       captureProductEvent(principal, { event: 'provider_connection_verified', provider });
       await setConnectionVerification(transaction.organizationId, provider, {
         ok: true,
-        label: 'Choose accounts to finish connecting',
+        label: provider === 'matomo' ? 'Choose sites to finish connecting' : 'Choose accounts to finish connecting',
       }, selectionId);
       await recordAudit(principal, {
         event: 'connected', provider, tool: 'oauth_connect', accountId: '*',

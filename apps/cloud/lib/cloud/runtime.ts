@@ -9,6 +9,8 @@ import { GoogleAdsProvider, GoogleAdsRestClient, googleTools } from '@adport/pro
 import { MetaAdsProvider, MetaGraphClient, metaTools } from '@adport/provider-meta';
 import { MicrosoftAdsClient, MicrosoftAdsProvider, microsoftTools } from '@adport/provider-microsoft';
 import { GravityClient, GravityProvider, gravityTools } from '@adport/provider-gravity';
+import { hostedAccessToken } from './hosted-grant';
+import { matomoTokens } from './matomo-oauth';
 import { createHostedMatomoProvider } from './matomo';
 import { OpenAIAdsClient, OpenAIAdsProvider, openaiTools } from '@adport/provider-openai';
 import { RedditAdsClient, RedditAdsProvider, redditTools } from '@adport/provider-reddit';
@@ -149,7 +151,11 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     modules.push({ provider: scopeProvider(provider), tools: appleTools(provider) });
   }
   if (credentials.matomo) {
-    const provider = createHostedMatomoProvider(credentials.matomo);
+    const grant = credentials.matomo;
+    const provider = createHostedMatomoProvider('grantId' in grant ? { url: grant.url,
+      accessToken: hostedAccessToken(principal.organizationId, 'matomo', grant, refreshToken =>
+        matomoTokens(grant, { grant_type: 'refresh_token', refresh_token: refreshToken })),
+    } : grant);
     modules.push({ provider: scopeProvider(provider), tools: [] });
   }
   if (credentials.gravity) {
