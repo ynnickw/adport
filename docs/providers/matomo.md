@@ -1,6 +1,6 @@
 # Matomo
 
-Matomo Cloud and self-hosted sites use the same two website analytics tools as GA4. The adapter reads aggregate reports and goal definitions through a view token. [Website analytics contract and examples](website-analytics.md)
+Matomo Cloud and self-hosted sites use the same two website analytics tools as GA4. The adapter reads aggregate reports and goal definitions with read access. [Website analytics contract and examples](website-analytics.md)
 
 ## Create a token
 
@@ -12,7 +12,11 @@ always sends it in the POST body.
 
 ## Connect in Adport Cloud
 
-In **Analytics & tracking**, choose **Add source → Matomo** and enter the instance URL and a token with view access. Adport verifies the token, stores it in the encrypted project vault and asks you to choose sites. Enable the selected sites for assistants. Analytics sites do not consume advertising account slots.
+In **Analytics & tracking**, choose **Add source → Matomo**, enter the instance URL and continue to Matomo. Sign in and approve read access, then choose the sites available to the project. Adport stores the grant in its encrypted project vault and refreshes it on the server.
+
+Each instance needs the Matomo OAuth 2.0 plugin and one confidential client with authorization code, refresh tokens, the exact callback `https://<your-adport-host>/api/oauth/matomo/callback` and the `matomo:read` scope. An administrator can enter its client ID and secret during setup or preconfigure the registration through `MATOMO_OAUTH_APPLICATIONS` on the Adport host. A reverse proxy in front of Matomo must forward the Authorization header. For instances without OAuth, select **Auth token** and use a token with view access. [Matomo OAuth setup](https://developer.matomo.org/guides/oauth2/authorization-code)
+
+ Enable the selected sites for assistants. Analytics sites do not consume advertising account slots.
 
 Use a publicly reachable HTTPS domain for Matomo Cloud or a self-hosted installation. For a private-network installation, use the local CLI or stdio MCP on that network. Reconnecting to a different instance clears its predecessor’s site selections because each instance assigns its own site IDs. Disconnect removes the project’s credentials. Revoke the token in Matomo to invalidate it there.
 
@@ -37,8 +41,7 @@ error. `adport doctor` checks the connection;
 `adport disconnect matomo` removes the local copy only, so delete the token in
 Matomo to revoke it.
 
-Every request is `POST <base>/index.php` with `module=API`, `format=JSON` and
-`token_auth` in the form body. The token never appears in a URL. Redirects are
+Every request is `POST <base>/index.php` with `module=API`, `format=JSON` and a bearer header for OAuth or `token_auth` in the form body for token connections. The token never appears in a URL. Redirects are
 refused and requests time out after 30 seconds.
 
 ## Acquisition data

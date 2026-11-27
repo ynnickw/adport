@@ -4,7 +4,7 @@ import { isIP, type LookupFunction } from 'node:net';
 import ipaddr from 'ipaddr.js';
 import { Agent, fetch as fetchPublic } from 'undici';
 import { AdportError } from '@adport/core';
-import { MatomoClient, MatomoProvider, normalizeMatomoUrl, type MatomoCredentials } from '@adport/provider-matomo';
+import { MatomoClient, MatomoProvider, normalizeMatomoUrl, type MatomoCredentials, type MatomoBearerCredentials } from '@adport/provider-matomo';
 
 function publicAddress(address: string): boolean {
   const ip = ipaddr.parse(address);
@@ -25,13 +25,21 @@ const publicLookup: LookupFunction = (hostname, options, callback) => {
 };
 const dispatcher = new Agent({ connect: { lookup: publicLookup }, maxResponseSize: 16 * 1024 * 1024 });
 
-export function createHostedMatomoProvider(credentials: MatomoCredentials) {
-  const url = new URL(normalizeMatomoUrl(credentials.url));
+export function hostedMatomoUrl(value: string): string {
+  const url = new URL(normalizeMatomoUrl(value));
   const hostname = url.hostname.replace(/^\[|\]$/g, '');
   // Node skips the resolver for literal addresses.
   if (!hostname.includes('.') || hostname.endsWith('.') || isIP(hostname)) {
     throw new AdportError('INVALID_INPUT', 'Enter the HTTPS domain of a publicly reachable Matomo instance.');
   }
-  return new MatomoProvider(new MatomoClient(credentials, (input, init) =>
-    fetchPublic(input, { ...init, dispatcher, headers: { ...init.headers, 'accept-encoding': 'identity' } })));
+  return normalizeMatomoUrl(url.href);
+}
+
+export function matomoFetch(input: string, init: { body: URLSearchParams; headers: Record<string, string>; method: 'POST'; redirect: 'error'; signal: AbortSignal }) {
+  return fetchPublic(input, { ...init, dispatcher, headers: { ...init.headers, 'accept-encoding': 'identity' } });
+}
+
+export function createHostedMatomoProvider(credentials: MatomoCredentials | MatomoBearerCredentials) {
+  hostedMatomoUrl(credentials.url);
+  return new MatomoProvider(new MatomoClient(credentials, matomoFetch));
 }

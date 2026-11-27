@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Input } from '@/components/controls';
+import { MatomoOAuthForm } from './matomo-oauth-form';
 import { Dialog } from '@/components/dialog';
 import { providerLabel } from '@/lib/cloud/providers';
 
@@ -20,6 +21,7 @@ function KeyDialog({ organizationId, provider, returnTo, onClose }: ConnectionPr
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const matomo = provider === 'matomo';
+  const [useToken, setUseToken] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -36,6 +38,8 @@ function KeyDialog({ organizationId, provider, returnTo, onClose }: ConnectionPr
     finally { setBusy(false); }
   }
   return <Dialog title={`Connect ${providerLabel(provider)}`} onClose={() => { if (!busy) onClose(); }}>
+    {matomo && <label className="field"><span className="field-label">Connection method</span><select value={useToken ? 'token' : 'oauth'} onChange={event => setUseToken(event.target.value === 'token')} disabled={busy}><option value="oauth">Sign in with Matomo</option><option value="token">Use a personal auth token</option></select></label>}
+    {matomo && !useToken ? <MatomoOAuthForm organizationId={organizationId} returnTo={returnTo} /> : <>
     {matomo ? <p>Create an auth token in Matomo under Administration → Personal → Security. The token needs view access to the sites you choose.</p>
       : <p>Create an Advertiser API key in <a href="https://ads.openai.com/settings" target="_blank" rel="noreferrer">OpenAI Ads Manager settings</a>. Each key connects one ad account.</p>}
     <form className="stack" onSubmit={submit}>
@@ -44,6 +48,6 @@ function KeyDialog({ organizationId, provider, returnTo, onClose }: ConnectionPr
       <p className="field-hint">{matomo ? 'Your token is stored encrypted. You choose which sites assistants can read.' : 'Your key is stored encrypted for this project. You’ll choose account access before assistants can use it.'}</p>
       {error ? <p className="error-callout" role="alert">{error}</p> : null}
       <Button className="button" type="submit" pending={busy} pendingLabel="Verifying…">{matomo ? 'Verify and choose sites' : 'Verify and choose account'}</Button>
-    </form>
+    </form></>}
   </Dialog>;
 }

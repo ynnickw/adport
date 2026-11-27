@@ -1,7 +1,7 @@
 import { normalizeMatomoUrl, type CredentialStore, type ProviderModule } from '@adport/core';
 import { MatomoClient, type MatomoCredentials } from './client.js';
 import { MatomoProvider } from './provider.js';
-export { MatomoClient, MATOMO_READ_METHODS, type MatomoCredentials } from './client.js';
+export { MatomoClient, MATOMO_READ_METHODS, type MatomoBearerCredentials, type MatomoCredentials } from './client.js';
 export { MatomoProvider, matomoSiteId, type MatomoSite } from './provider.js';
 export { matomoBaseUrl, normalizeMatomoUrl } from '@adport/core';
 
