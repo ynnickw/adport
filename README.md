@@ -108,6 +108,14 @@ All 13 advertising providers have local connection commands, normalized reports,
 | OpenAI Ads | `openai` | [Ads in ChatGPT: reports, campaigns, ad groups, ads, status, spend limits](docs/providers/openai.md) |
 | Gravity | `gravity` | [Ads in AI assistants: reports, campaigns, ad groups, conversions, billing, status, budgets](docs/providers/gravity.md) |
 
+Read-only analytics sources:
+
+| Source | Connection ID | Capabilities and setup |
+| --- | --- | --- |
+| Google Analytics 4 | `ga4` | [Property settings, metadata, reports, realtime](docs/providers/google-analytics.md) |
+| Google Search Console | `gsc` | [Search analytics, sitemaps, URL inspection](docs/providers/google-analytics.md) |
+| Matomo | `matomo` | [Sites, campaigns, goals, realtime activity and segment filters](docs/providers/matomo.md) |
+
 Provider application approval, account access, and available metrics depend on the platform. The [connection guides](docs/providers.md) record prerequisites and testing limits. Reports preserve currency and attribution differences; see [reporting semantics](docs/reporting-semantics.md) before comparing providers.
 
 ## Local or Cloud

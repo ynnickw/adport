@@ -15,8 +15,8 @@ import { PLANNING_UI } from './planning-ui.js';
 import { READ_PAGE_UI } from './read-page-ui.js';
 import { REPORT_CHART_SCRIPT, REPORT_CHART_STYLES } from './report-chart-ui.js';
 
-export const ADPORT_UI_URI = 'ui://adport/insight-card-v37.html';
-export const ADPORT_SUMMARY_UI_URI = 'ui://adport/summary-card-v37.html';
+export const ADPORT_UI_URI = 'ui://adport/insight-card-v38.html';
+export const ADPORT_SUMMARY_UI_URI = 'ui://adport/summary-card-v38.html';
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
 export const ADPORT_UI_RESOURCE_DOMAINS = [
   ADPORT_UI_DOMAIN,
@@ -44,6 +44,7 @@ export type AdportView = 'accounts' | 'report' | 'operation' | 'insights' | 'cre
 const providerNames: Record<string, string> = {
   ga4: 'Google Analytics 4',
   gsc: 'Google Search Console',
+  matomo: 'Matomo',
   gtm: 'Google Tag Manager',
   google: 'Google Ads',
   meta: 'Meta Ads',

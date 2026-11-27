@@ -71,6 +71,7 @@ export interface StoredAppleCredential {
 
 export interface ProviderCredentialMap {
   openai: { apiKey: string };
+  matomo: { url: string; tokenAuth: string };
   ga4: { refreshToken: string };
   gsc: { refreshToken: string };
   gtm: { refreshToken: string };
@@ -90,7 +91,7 @@ export interface ProviderCredentialMap {
 export type CloudProvider = keyof ProviderCredentialMap;
 export type StoredProviderCredential = ProviderCredentialMap[CloudProvider];
 
-export const CLOUD_PROVIDERS = ['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'microsoft', 'reddit', 'apple', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai'] as const satisfies readonly CloudProvider[];
+export const CLOUD_PROVIDERS = ['ga4', 'gsc', 'matomo', 'gtm', 'google', 'meta', 'tiktok', 'microsoft', 'reddit', 'apple', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai'] as const satisfies readonly CloudProvider[];
 /** Providers whose connection is established through the Adport-owned OAuth application. */
 export const OAUTH_PROVIDERS = ['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'microsoft', 'reddit', 'apple', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const satisfies readonly CloudProvider[];
 export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];

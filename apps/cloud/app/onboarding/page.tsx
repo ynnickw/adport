@@ -6,7 +6,7 @@ import { getOnboardingState } from '@/lib/cloud/onboarding';
 import { getOrganizationEntitlement } from '@/lib/cloud/plans';
 import { oauthAvailability } from '@/lib/cloud/provider-oauth';
 import { listConnections, listOrganizationAdAccounts } from '@/lib/cloud/repository';
-import { OAUTH_PROVIDERS } from '@/lib/cloud/types';
+import { CLOUD_PROVIDERS, isOAuthProvider } from '@/lib/cloud/types';
 import { env } from '@/lib/env';
 import type { OAuthProviderView } from '../dashboard/connections/provider-connections';
 import { connectionView } from '../dashboard/connections/connection-view';
@@ -44,7 +44,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
   const resumeStep = state.currentStep !== 'welcome' ? state.currentStep : enabledAccounts.length ? 'agent'
     : accounts.length || connections.some(connection => connection.status === 'connected' && connection.accountSelectionId) ? 'accounts' : 'connect';
   const availability = oauthAvailability(tenant.organizationId);
-  const providers: OAuthProviderView[] = [...OAUTH_PROVIDERS.map((id) => ({ id, available: availability[id] })), { id: 'openai', available: true }];
+  const providers: OAuthProviderView[] = CLOUD_PROVIDERS.map(id => ({ id, available: isOAuthProvider(id) ? availability[id] : true }));
   return (
     <UpgradeProvider value={{ planId: entitlement.plan.id, canManageBilling: tenant.organizationRole === 'owner', projectId: tenant.organizationId, billingOptions: upgradeBillingOptions(entitlement) }}>
     <main className="onboarding-page">

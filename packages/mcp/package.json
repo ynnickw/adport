@@ -44,7 +44,8 @@
     "zod": "^4.6.7",
     "@modelcontextprotocol/server": "^2.4.0",
     "@adport/provider-gtm": "workspace:*",
-    "@adport/provider-analytics": "workspace:*"
+    "@adport/provider-analytics": "workspace:*",
+    "@adport/provider-matomo": "workspace:*"
   },
   "devDependencies": {
     "@types/jsdom": "^21.1.7",

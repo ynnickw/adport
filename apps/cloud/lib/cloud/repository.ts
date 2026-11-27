@@ -170,6 +170,15 @@ export async function upsertProviderConnection<P extends CloudProvider>(input: {
     const connectionId = rows[0]!.id;
     await sql`delete from private.provider_account_selections where connection_id = ${connectionId}`;
     const aad = `connection:${input.organizationId}:${input.provider}`;
+    if (input.provider === 'matomo' && 'url' in input.credential) {
+      // Site IDs are local to an instance. A different instance needs a fresh site selection.
+      const [previous] = await sql<Array<{ ciphertext: string }>>`
+        select ciphertext from private.provider_credentials where connection_id = ${connectionId}`;
+      if (previous && decryptSecret<ProviderCredentialMap['matomo']>(previous.ciphertext, aad).url !== input.credential.url) {
+        await sql`delete from public.organization_ad_accounts where organization_id = ${input.organizationId}
+          and connection_id = ${connectionId} and provider = 'matomo'`;
+      }
+    }
     await sql`
       insert into private.provider_credentials (connection_id, organization_id, provider, ciphertext)
       values (${connectionId}, ${input.organizationId}, ${input.provider}, ${encryptSecret(input.credential, aad)})

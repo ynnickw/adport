@@ -1,5 +1,5 @@
 import { FaLinkedin } from 'react-icons/fa';
-import { SiGoogleanalytics, SiGooglesearchconsole, SiGoogletagmanager, SiPinterest, SiSpotify, SiX } from 'react-icons/si';
+import { SiMatomo, SiGoogleanalytics, SiGooglesearchconsole, SiGoogletagmanager, SiPinterest, SiSpotify, SiX } from 'react-icons/si';
 import { RiOpenaiFill } from 'react-icons/ri';
 import { SnapchatLogo } from './snapchat-logo';
 
@@ -22,6 +22,8 @@ export function ProviderLogo({ name }: { name: string }) {
   switch (name) {
     case 'openai':
       return <RiOpenaiFill color="#111" aria-hidden="true" />;
+    case 'matomo':
+      return <SiMatomo color="#3152a0" aria-hidden="true" />;
     case 'ga4':
       return <SiGoogleanalytics color="#e37400" aria-hidden="true" />;
     case 'gsc':

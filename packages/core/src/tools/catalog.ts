@@ -1,6 +1,9 @@
 import type { AnyToolDefinition } from './registry.js';
 
-export const TOOL_PROVIDERS = ['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai', 'gravity'] as const;
+export const TOOL_PROVIDERS = ['ga4', 'gsc', 'matomo', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai', 'gravity'] as const;
+export function isAnalyticsProvider(provider: string): boolean {
+  return ['ga4', 'gsc', 'gtm', 'matomo'].includes(provider);
+}
 export type ToolProvider = (typeof TOOL_PROVIDERS)[number];
 export type ToolProfile = 'standard' | 'reporting' | 'full';
 export const TOOL_CATEGORIES = {
@@ -52,8 +55,8 @@ const COMMON_OPERATIONS = /^(?:list_campaigns|get_campaign|campaigns|report|insi
 export function classifyTool(name: string, namespace: string): ToolCatalogMetadata {
   if (/_api_(read|create|update|delete|remove)$/.test(name)) return { category: 'administration', exposure: 'raw' };
   const operation = name.startsWith(`${namespace}_`) ? name.slice(namespace.length + 1) : name;
-  const standard = ['gtm', 'ga4', 'gsc'].includes(namespace) || STANDARD_TOOLS.has(name) || (TOOL_PROVIDERS.includes(namespace as ToolProvider) && COMMON_OPERATIONS.test(operation));
-  const category: ToolCatalogMetadata['category'] = ['ga4', 'gsc'].includes(namespace) ? 'reporting' : namespace === 'gtm' ? 'measurement' : /experiment|lift_test/.test(operation) ? 'experiments'
+  const standard = isAnalyticsProvider(namespace) || STANDARD_TOOLS.has(name) || (TOOL_PROVIDERS.includes(namespace as ToolProvider) && COMMON_OPERATIONS.test(operation));
+  const category: ToolCatalogMetadata['category'] = ['ga4', 'gsc', 'matomo'].includes(namespace) ? 'reporting' : namespace === 'gtm' ? 'measurement' : /experiment|lift_test/.test(operation) ? 'experiments'
     : /conversion|pixel|insight_tag|event_source|offline_event|measurement|web_event_tag|app_event_tag|tracking_tag/.test(operation) ? 'measurement'
     : /audience|targeting|demographic/.test(operation) ? 'audiences'
     : /report|insight|forecast|estimate|keyword_ideas|historical_metrics/.test(operation) ? 'reporting'

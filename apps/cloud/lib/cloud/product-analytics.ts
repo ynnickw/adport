@@ -1,4 +1,5 @@
 import 'server-only';
+import { providerCategory } from './providers';
 import { createHmac } from 'node:crypto';
 import { after } from 'next/server';
 import { db } from '@/lib/db';
@@ -32,7 +33,7 @@ export async function setAnalyticsPreference(userId: string, enabled: boolean): 
 /** Consent and membership are checked again at delivery, including hosted-agent calls. */
 export async function deliverProductEvent(principal: Pick<TenantPrincipal, 'userId' | 'organizationId'>, input: ProductEvent, timestamp = new Date().toISOString(), insertId?: string): Promise<void> {
   try {
-    if ('provider' in input && ['gtm', 'ga4', 'gsc'].includes(input.provider)) return;
+    if ('provider' in input && providerCategory(input.provider) === 'analytics') return;
     const config = analyticsConfig();
     const parsed = productEventSchema.safeParse(input);
     if (!config || !principal.userId || !parsed.success) return;
@@ -75,7 +76,7 @@ export async function deliverProductEvent(principal: Pick<TenantPrincipal, 'user
 }
 
 export function captureProductEvent(principal: Pick<TenantPrincipal, 'userId' | 'organizationId'>, event: ProductEvent, insertId?: string): void {
-  if ('provider' in event && ['gtm', 'ga4', 'gsc'].includes(event.provider)) return;
+  if ('provider' in event && providerCategory(event.provider) === 'analytics') return;
   if (!analyticsConfig() || !principal.userId) return;
   const timestamp = new Date().toISOString();
   try { after(() => deliverProductEvent(principal, event, timestamp, insertId)); } catch { /* Non-request callers and analytics failures must not affect product work. */ }

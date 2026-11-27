@@ -81,3 +81,4 @@ export {
 } from './context.js';
 
 export { ga4Tools, gscTools, ga4ReportSchema, ga4RealtimeSchema, gscReportSchema, searchConsoleSite, GA4_SCOPES, GSC_SCOPES, type Ga4Reader, type GscReader, type Ga4ReportInput, type Ga4RealtimeInput, type GscReportInput } from './tools/analytics.js';
+export { matomoTools, matomoCampaignReportSchema, type MatomoCampaignReportInput, matomoReportSchema, matomoReportMetadataSchema, matomoBaseUrl, normalizeMatomoUrl, MATOMO_BLOCKED_MODULES, MATOMO_BLOCKED_SEGMENTS, isMatomoBlockedModule, matomoSegmentNamesVisitor, type MatomoReader, type MatomoReportInput, type MatomoReportMetadataInput } from './tools/matomo.js';

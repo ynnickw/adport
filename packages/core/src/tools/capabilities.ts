@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { classifyTool, TOOL_CATEGORIES, TOOL_PROVIDERS, toolInSelection, type ToolCatalogMetadata, type ToolProvider } from './catalog.js';
+import { classifyTool, isAnalyticsProvider, TOOL_CATEGORIES, TOOL_PROVIDERS, toolInSelection, type ToolCatalogMetadata, type ToolProvider } from './catalog.js';
 import { defineTool, type AnyToolDefinition } from './registry.js';
 
 const categories = Object.keys(TOOL_CATEGORIES) as [ToolCatalogMetadata['category'], ...ToolCatalogMetadata['category'][]];
@@ -52,7 +52,10 @@ export function capabilityTools(providers: readonly ToolProvider[] = TOOL_PROVID
           blockers.push('platform_disabled'); next_steps.push(`Select ${tool.namespace} under Platforms in this connection’s Tool access settings.`);
         }
         if (platformTool && !connected.has(tool.namespace)) {
-          blockers.push('not_connected'); next_steps.push(`Connect ${tool.namespace} in this project, then enable its accounts under Accounts.`);
+          blockers.push('not_connected');
+          next_steps.push(isAnalyticsProvider(tool.namespace)
+            ? `Connect ${tool.namespace} under Analytics & tracking and enable the sources this assistant can read.`
+            : `Connect ${tool.namespace} in this project, then enable its accounts under Accounts.`);
         }
         if (!toolInSelection(tool, { ...selection, providers: null }, catalog?.includeRawTools)) {
           blockers.push('profile_disabled');
