@@ -5,13 +5,13 @@ import { defineTool, type AnyToolDefinition } from './registry.js';
 const categories = Object.keys(TOOL_CATEGORIES) as [ToolCatalogMetadata['category'], ...ToolCatalogMetadata['category'][]];
 const blocker = z.enum(['platform_disabled', 'not_connected', 'profile_disabled', 'write_permission_required']);
 
-export function capabilityTools(): AnyToolDefinition[] {
+export function capabilityTools(providers: readonly ToolProvider[] = TOOL_PROVIDERS): AnyToolDefinition[] {
   return [defineTool({
     name: 'capabilities_list', namespace: 'core',
     description: 'Look up availability and access requirements for named Adport tools. Returns connection settings and status; this lookup changes no settings and executes no operations.',
     input: z.object({
       query: z.string().trim().min(1).max(200).optional().describe('Keywords such as lookalike, offline conversions, experiments, or an exact tool name.'),
-      provider: z.enum(TOOL_PROVIDERS).optional(),
+      provider: z.enum(providers).optional(),
       category: z.enum(categories).optional(),
       limit: z.number().int().positive().max(30).default(10),
     }),
@@ -66,7 +66,7 @@ export function capabilityTools(): AnyToolDefinition[] {
       });
       return {
         profile: selection.profile, selected_providers: selection.providers,
-        platforms: TOOL_PROVIDERS.map(id => ({ id, selected: selection.providers === null || selection.providers.includes(id), connected: connected.has(id) })),
+        platforms: providers.map(id => ({ id, selected: selection.providers === null || selection.providers.includes(id), connected: connected.has(id) })),
         categories: categories.map(id => {
           const group = tools.filter(tool => tool.category === id);
           return { id, label: TOOL_CATEGORIES[id], enabled_tools: group.filter(tool => tool.enabled).length, disabled_tools: group.filter(tool => !tool.enabled).length };

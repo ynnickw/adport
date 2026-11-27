@@ -32,7 +32,7 @@ import {
   PostgresPendingStore,
   updateProviderCredential,
 } from './repository';
-import type { ProviderCredentialMap, TenantPrincipal } from './types';
+import { CLOUD_PROVIDERS, type ProviderCredentialMap, type TenantPrincipal } from './types';
 import { isSyntheticReviewer } from './synthetic-reviewer';
 import { HttpError } from '@/lib/http';
 import { ProjectMediaLibrary } from './media';
@@ -176,6 +176,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
   const connected = new Set(modules.map(module => module.provider.id));
   const runtime = await createContext({
     providerModules: modules,
+    capabilityProviders: CLOUD_PROVIDERS,
     engine,
     authorizeToolCall: enforceAccountScope ? (tool, input) => {
       if (tool.namespace !== 'core' && tool.namespace !== 'audit' && !connected.has(tool.namespace)) {
