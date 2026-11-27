@@ -174,6 +174,30 @@ describe('Meta E2E over MCP with doc-faithful Graph mocks', () => {
     expect(textOf(result as never)).toEqual({ rows, row_count: rows.length });
   });
 
+  it.each(['account','campaign','adset','ad'])('requests names and currency for the default %s insights projection', async level => {
+    readResponse = { data: [] };
+    const result = await client.callTool({ name: 'meta_insights', arguments: { account_id: '426197654150180', level } });
+    expect(result.isError).not.toBe(true);
+    const url = new URL(graphCalls.find(call => call.url.includes('/insights'))!.url);
+    expect(url.searchParams.get('level')).toBe(level);
+    expect(url.searchParams.get('fields')?.split(',')).toEqual([
+      ...(['ad','adset'].includes(level) ? ['campaign_id','campaign_name'] : []),
+      level + '_id', level + '_name', 'account_currency', 'spend', 'impressions', 'clicks',
+    ]);
+  });
+
+  it('preserves an explicit insights projection and carries the requested breakdown names with the rows', async () => {
+    const rows = [{ publisher_platform:'instagram', platform_position:'reels', spend:'8.011897' }];
+    readResponse = { data: rows };
+    const breakdowns = ['publisher_platform','platform_position'];
+    const result = await client.callTool({ name: 'meta_insights', arguments: { account_id:'426197654150180', level:'account', fields:['spend'], breakdowns } });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({ rows, breakdowns });
+    const url = new URL(graphCalls.find(call => call.url.includes('/insights'))!.url);
+    expect(url.searchParams.get('fields')).toBe('spend');
+    expect(url.searchParams.get('breakdowns')).toBe('publisher_platform,platform_position');
+  });
+
   it('lists Meta ad accounts through the MCP tool', async () => {
     const result = textOf((await client.callTool({ name: 'accounts_list', arguments: {} })) as never) as {
       accounts: Array<{ provider: string; id: string; status?: string }>;
