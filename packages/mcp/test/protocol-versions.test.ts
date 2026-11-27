@@ -19,11 +19,9 @@ describe('official MCP HTTP protocol entries', () => {
       const resource = (await client.readResource({ uri: ADPORT_UI_URI })).contents[0]!;
       expect(resource).toMatchObject({ mimeType: 'text/html;profile=mcp-app', _meta: { ui: { domain: 'fixture.claudemcpcontent.com' } } });
       if (!('text' in resource)) throw new Error('The UI resource must contain HTML text.');
-      const currentVersion = Number(ADPORT_UI_URI.match(/-v(\d+)\.html$/)![1]);
-      const cachedUri = ADPORT_UI_URI.replace(`-v${currentVersion}.html`, `-v${currentVersion - 1}.html`);
-      expect((await client.readResource({ uri: cachedUri })).contents[0]).toMatchObject({ mimeType: resource.mimeType, text: resource.text });
-      const cachedSummary = ADPORT_SUMMARY_UI_URI.replace(/-v[0-9]+\.html$/, '-v' + (currentVersion - 1) + '.html');
-      expect((await client.readResource({ uri: cachedSummary })).contents[0]).toMatchObject({ mimeType: resource.mimeType, text: resource.text });
+      for (const uri of ['ui://adport/insight-card-v36.html', 'ui://adport/summary-card-v36.html']) {
+        expect((await client.readResource({ uri })).contents[0]).toMatchObject({ mimeType: resource.mimeType, text: resource.text });
+      }
       expect(resource._meta).not.toHaveProperty('openai/widgetDomain');
       await expect(client.callTool({ name: 'mock_set_campaign_status', arguments: { account_id: 'mock-1', campaign_id: 'c1', status: 'PAUSED' } })).rejects.toThrow();
     } finally { await client.close(); await handler.close(); }
