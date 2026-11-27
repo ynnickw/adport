@@ -52,6 +52,13 @@ describe('Gravity transport and accounts', () => {
     expect(calls[0]!.init.headers).not.toHaveProperty('authorization');
     expect(calls[0]!.init.redirect).toBe('error');
   });
+  it('preserves the structured error code returned by the public advertiser endpoint', async () => {
+    const { provider } = fixture([{ path: 'info', status: 401, reply: { detail: 'Missing API key',
+      error: { code: 'auth_missing', message: 'No API key was sent with this request.', retryable: false } } }]);
+    await expect(provider.listAccounts()).rejects.toMatchObject({ details: { http_status: 401, provider_code: 'auth_missing' } });
+    const offline = new GravityProvider(new GravityClient({ apiKey: 'fixture' }, async () => { throw new TypeError('fetch failed'); }));
+    await expect(offline.listAccounts()).rejects.toMatchObject({ code: 'PROVIDER_ERROR' });
+  });
   it('redacts the API key and surfaces detail messages and codes', async () => {
     const { provider } = fixture([{ path: 'info', status: 401, reply: { detail: 'Invalid API key grv-test-secret' } }]);
     const error = await provider.listAccounts().then(() => new Error('expected failure'), (e: Error) => e);

@@ -68,7 +68,8 @@ after Gravity accepted it, a retry can create a second campaign; check
 - Base URL `https://platform.trygravity.com/advertiser-dashboard/`, header `X-API-Key`.
 - About 100 requests per second per IP. HTTP 429 is not retried automatically;
   the error reports the `Retry-After` delay.
-- Errors carry `detail`, sometimes as `{ code, message }`. HTTP 402 means billing
+- The advertiser endpoint returns structured `error.code` values such as
+  `auth_missing`. Older responses carry `detail`, sometimes as `{ code, message }`. HTTP 402 means billing
   is not set up or has failed.
 
 ## Contract sources

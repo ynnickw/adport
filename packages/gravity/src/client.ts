@@ -46,16 +46,21 @@ export class GravityClient {
   }
 
   private async send(url: URL, method: 'GET' | 'POST' | 'PATCH', body?: unknown): Promise<unknown> {
-    const response = await this.fetchImpl(url.href, {
-      method,
-      headers: {
-        'x-api-key': this.credentials.apiKey,
-        accept: 'application/json',
-        ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
-      },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-      redirect: 'error', signal: AbortSignal.timeout(30_000),
-    });
+    let response: Response;
+    try {
+      response = await this.fetchImpl(url.href, {
+        method,
+        headers: {
+          'x-api-key': this.credentials.apiKey,
+          accept: 'application/json',
+          ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+        },
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+        redirect: 'error', signal: AbortSignal.timeout(30_000),
+      });
+    } catch {
+      throw new AdportError('PROVIDER_ERROR', 'gravity: request failed before a response was received. Check connectivity and reconcile any pending write.');
+    }
     const raw: unknown = await response.json().catch(() => undefined);
     if (!response.ok) {
       const retryAfter = response.headers.get('retry-after');
@@ -63,8 +68,9 @@ export class GravityClient {
         : response.status === 402 ? ' Billing is not ready for activation; add a payment method in the Gravity dashboard.'
         : response.status === 429 ? ` Rate limited; retry after ${retryAfter && /^\d+$/.test(retryAfter) ? `${retryAfter} s` : 'a short wait'}.` : '';
       const message = errorMessage(raw);
+      const code = errorCode(raw);
       throw new AdportError('PROVIDER_ERROR', `gravity: HTTP ${response.status}.${advice}${message ? ` ${this.redact(message)}` : ''}`, {
-        http_status: response.status, ...(errorCode(raw) ? { provider_code: errorCode(raw) } : {}),
+        http_status: response.status, ...(code ? { provider_code: code } : {}),
       });
     }
     return raw;
@@ -82,7 +88,12 @@ function errorMessage(raw: unknown): string | undefined {
 }
 
 function errorCode(raw: unknown): string | undefined {
-  const detail = raw && typeof raw === 'object' ? (raw as Record<string, unknown>).detail : undefined;
-  const code = detail && typeof detail === 'object' && !Array.isArray(detail) ? (detail as Record<string, unknown>).code : undefined;
-  return typeof code === 'string' && /^[a-z0-9_]{1,64}$/.test(code) ? code : undefined;
+  if (!raw || typeof raw !== 'object') return undefined;
+  const { error, detail } = raw as Record<string, unknown>;
+  for (const envelope of [error, detail]) {
+    if (!envelope || typeof envelope !== 'object') continue;
+    const code = (envelope as Record<string, unknown>).code;
+    if (typeof code === 'string' && /^[a-z0-9_]{1,64}$/.test(code)) return code;
+  }
+  return undefined;
 }
