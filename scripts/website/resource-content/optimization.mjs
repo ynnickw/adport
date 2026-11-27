@@ -1,4 +1,5 @@
 import { cite, prompt, section } from './shared.mjs';
+import { pacingCalculator } from './calculator-blocks.mjs';
 
 export const optimizationArticles = [
   {
@@ -35,13 +36,17 @@ export const optimizationArticles = [
     ],
   },
   {
-    slug: 'google-ads-budget-pacing', cluster: 'google-ads-optimization', relatedClusters: ['paid-search-reporting'], updated: '2026-11-21', keyword: 'Google Ads budget pacing',
-    title: 'Google Ads budget pacing: track the month before changing the daily budget',
-    description: 'Compare actual spend with a monthly plan, understand Google daily spending limits, and review budget changes with a clear remaining-month calculation.',
-    summary: 'A worked monthly pacing example, plus the difference between a budget setting and actual spend.',
+    slug: 'google-ads-budget-pacing', cluster: 'google-ads-optimization', relatedClusters: ['paid-search-reporting'], updated: '2026-11-28', keyword: 'Google Ads budget pacing', calculator: true,
+    title: 'Google Ads budget pacing calculator and spreadsheet',
+    description: 'Enter your monthly PPC budget and spend to see planned spend, a month-end forecast and the daily budget remaining. Download the editable pacing spreadsheet.',
+    summary: 'Check where spend is heading this month, then take the same formulas into a weekly budget review.',
     marks: ['google'], sources: ['budget', 'limits', 'learning'],
-    intro: `Budget pacing compares actual spending with an operating plan over time. It answers a different question from “what is the campaign’s daily budget?” A useful review checks how much of the month has elapsed, how much budget remains, and whether the business wants an even or deliberately seasonal spending pattern.`,
+    intro: 'Will your Google Ads account finish the month within budget? Enter the monthly plan and spend through yesterday to see where you stand, where the current pace would take you and how much you can spend per remaining day.',
     sections: [
+      section('calculator', 'Check your monthly budget pace', `<p>Use one account currency and spend through the last full day in the account’s reporting time zone. The example starts with €600 spent in ten days of a €1,520 plan. Replace those figures with yours.</p>${pacingCalculator}
+        <noscript><p>The interactive calculator uses JavaScript. The spreadsheet and worked example below use the same formulas.</p></noscript>
+        <p><a href="/downloads/google-ads-budget-pacing.xlsx" download>Download the PPC budget pacing spreadsheet (.xlsx)</a> for Excel or import it into Google Sheets. Enter the same four numbers in the shaded cells. Duplicate the tab for each client or month.</p>
+        <p>Planned spend assumes an even month. The forecast extends your average spend per completed day through the last day. The remaining daily amount spreads unspent budget across the days left. Changing the display currency keeps the amounts you entered.</p>`),
       section('separate-plan-and-limit', 'Separate the client plan from platform limits', `<p>For most Google campaigns, an average daily budget is not a strict daily invoice cap. ${cite('budget', 'Google documents average daily budgets')}, including a daily spending limit of twice that budget for most campaigns and a monthly limit based on 30.4 times the average daily amount. Budget changes and campaign-specific rules can affect the result.</p><p>For example, an unchanged €50 average daily budget corresponds to €1,520 at the 30.4 multiplier; a day can reach €100 for most campaigns. Check the ${cite('limits', 'current spending-limit rules')} for the campaign you are reviewing.</p><p>Your client's operating plan can still use calendar days, launch dates, or weekly demand. Label that plan separately from Google's billing limits so no one mistakes a forecast for a platform guarantee.</p>`),
       section('worked-example', 'Calculate the current pacing position', `<p>Suppose a client has a €1,520 operating plan for a 30-day month, ten full days have elapsed, and actual spend is €600. Assume an even pacing plan for this example.</p><div class="guide-table"><table><thead><tr><th>Measure</th><th>Calculation</th><th>Result</th></tr></thead><tbody><tr><td>Expected spend so far</td><td>€1,520 × 10 ÷ 30</td><td>€506.67</td></tr><tr><td>Variance</td><td>€600 − €506.67</td><td>€93.33 above plan</td></tr><tr><td>Pacing variance</td><td>€93.33 ÷ €506.67</td><td>18.4% above plan</td></tr><tr><td>Remaining budget</td><td>€1,520 − €600</td><td>€920</td></tr><tr><td>Remaining daily operating average</td><td>€920 ÷ 20 days</td><td>€46</td></tr></tbody></table></div><p>The €46 figure describes the remaining operating plan. It is not an instruction to set every campaign's daily budget to €46, and it is not a promise that Google will spend exactly that amount each day.</p>`),
       section('investigate-variance', 'Investigate the variance before reallocating', `<p>Check whether the plan was meant to be even. A promotion, a product launch, or a change in available stock can justify front-loaded spending. Compare the intended shape of the month with actual activity rather than treating every variance as a failure.</p><p>Identify which campaigns explain the difference. Review shared budgets, recent budget edits, delivery changes, conversion quality, and the remaining business opportunity. A campaign spending less may be limited by demand or eligibility, not simply by its budget.</p><p>For a portfolio, keep currencies and client budgets separate. A surplus in one client's account is not permission to move another client's spending plan. See the <a href="/resources/agency-multi-client-ad-management">agency operations guide</a> for the project and approval structure.</p>`),
