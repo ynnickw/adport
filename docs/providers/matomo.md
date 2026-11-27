@@ -61,7 +61,7 @@ refused and requests time out after 30 seconds.
 | `matomo_report_metadata` | `API.getReportMetadata` | Available reports: module, action, dimension, metrics, parameters |
 | `matomo_report` | `API.getProcessedReport` | Any aggregated report, normalized into rows, totals and metric labels |
 | `matomo_goals` | `Goals.getGoals` | Goal definitions |
-| `matomo_segments` | `SegmentEditor.getAll` | Stored segment definitions (creator logins omitted) |
+| `matomo_segments` | `SegmentEditor.getAll` | Stored aggregate segment definitions. Segments that identify a visitor and their names are omitted. |
 
 The generic `report` tool does not cover Matomo; use `matomo_report`. Examples of
 `module`/`action` pairs: `VisitsSummary`/`get`, `Referrers`/`getReferrerType`,
@@ -78,9 +78,8 @@ Matomo's own label, which depends on the token user's language. Daily rows are
 limited to 93 days.
 Optional inputs: `segment`, `id_goal` (only with module `Goals`), `flat` (on by
 default for `Actions` reports), `filter_sort_column`/`filter_sort_order`, `limit`
-(1–1,000, default 100) and `offset`. When a page of rows is full, the result has
-`next_offset` and `truncated: true`; if the last page is exactly full, the next page
-is empty. Reports with a single row and no dimension (such as `VisitsSummary`/`get`)
+(1–1,000, default 100) and `offset`. The result includes `next_offset` and `truncated: true` only when
+Matomo returns another row in at least one requested period. Reports with a single row and no dimension (such as `VisitsSummary`/`get`)
 are never paged.
 
 ## Units, time zone and currency

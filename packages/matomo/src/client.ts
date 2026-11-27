@@ -53,7 +53,9 @@ export class MatomoClient {
 }
 
 function classify(message: string, method: string): AdportError {
-  if (/token_auth|authenticat|not logged in|login/i.test(message)) {
+  const authFailure = /\b(?:unable to authenticate|authentication (?:failed|required)|not logged in|(?:must|please|need to) (?:log in|login))\b/i;
+  const badToken = /\btoken_auth\b.{0,60}\b(?:invalid|not valid|expired|missing)|\b(?:invalid|expired|missing) (?:authentication token|token_auth)\b/i;
+  if (authFailure.test(message) || badToken.test(message)) {
     return new AdportError('NOT_CONNECTED', 'Matomo rejected the auth token. Create a new token and reconnect Matomo.', { reason: 'auth' });
   }
   // Before access: "not enough permission to access the segment X" is a segment problem, not a bad token.

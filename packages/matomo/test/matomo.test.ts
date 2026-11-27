@@ -119,7 +119,7 @@ describe('Matomo provider', () => {
       website: 'Example', prettyDate: 'Nov 1 – Nov 7, 2026',
       metadata: { name: 'Page URLs', module: 'Actions', action: 'getPageUrls', dimension: 'Page URL', metricTypes: { nb_hits: 'number', revenue: 'money', bounce_rate: 'percent' } },
       columns: { label: 'Page URL', nb_hits: 'Pageviews', bounce_rate: 'Bounce rate' },
-      reportData: [{ label: '/pricing', nb_hits: 12, bounce_rate: 0.45, idsubdatatable: 3, url: 'https://www.example.com/pricing', goals: { 'idgoal=1': {} } }, { label: '/blog', nb_hits: 3, bounce_rate: 0.1 }],
+      reportData: [{ label: '/pricing', nb_hits: 12, bounce_rate: 0.45, idsubdatatable: 3, url: 'https://www.example.com/pricing', goals: { 'idgoal=1': {} } }, { label: '/blog', nb_hits: 3, bounce_rate: 0.1 }, { label: '/more', nb_hits: 1 }],
       reportMetadata: [{}, {}], reportTotal: { nb_hits: 15 },
     };
     const { provider, fetchMock } = setup(report, site);
@@ -127,7 +127,7 @@ describe('Matomo provider', () => {
       segment: 'deviceType==smartphone;countryCode==fr', limit: 2, offset: 4, filter_sort_column: 'nb_hits', filter_sort_order: 'desc' });
     const result = await provider.processedReport(input);
     expect(Object.fromEntries(form(fetchMock, 0))).toEqual({ module: 'API', method: 'API.getProcessedReport', format: 'JSON', token_auth: 'test-token',
-      idSite: '1', apiModule: 'Actions', apiAction: 'getPageUrls', period: 'range', date: '2026-11-01,2026-11-07', filter_limit: '2', filter_offset: '4',
+      idSite: '1', apiModule: 'Actions', apiAction: 'getPageUrls', period: 'range', date: '2026-11-01,2026-11-07', filter_limit: '3', filter_offset: '4',
       hideMetricsDoc: '1', showTimer: '0', format_metrics: '0', segment: 'deviceType==smartphone;countryCode==fr', flat: '1', filter_sort_column: 'nb_hits', filter_sort_order: 'desc' });
     expect(Object.fromEntries(form(fetchMock, 1))).toMatchObject({ method: 'SitesManager.getSiteFromId', idSite: '1' });
     expect(result.rows).toEqual([
@@ -151,6 +151,12 @@ describe('Matomo provider', () => {
     expect(result).not.toHaveProperty('next_offset'); expect(result).not.toHaveProperty('truncated');
   });
 
+  it('rejects settings for the wrong site and retries the read', async () => {
+    const { provider } = setup({ ...site, idsite: '2' }, site);
+    await expect(provider.site('1')).rejects.toThrow(/different site/);
+    await expect(provider.site('1')).resolves.toMatchObject({ id: '1' });
+  });
+
   it('sends id_goal only with Goals reports', async () => {
     const { provider, fetchMock } = setup({ metadata: { name: 'Goal Signup' }, reportData: { nb_conversions: 7, revenue: 70.5, conversion_rate: 0.0125 } }, site);
     const result = await provider.processedReport(matomoReportSchema.parse({ account_id: '1', module: 'Goals', action: 'get', start_date: '2026-11-01', end_date: '2026-11-07', id_goal: 2 }));
@@ -162,7 +168,7 @@ describe('Matomo provider', () => {
     // Matomo keys multi-period data by localized labels (thin spaces around the dash in week labels).
     const week1 = 'week October 26\u2009–\u2009November 1, 2026', week2 = 'week November 2\u2009–\u20098, 2026';
     const { provider, fetchMock } = setup(
-      { metadata: { name: 'Channel Type' }, columns: { label: 'Channel Type', nb_visits: 'Visits' }, reportData: { [week1]: [{ label: 'Search Engines', nb_visits: 5 }], [week2]: [] } },
+      { metadata: { name: 'Channel Type' }, columns: { label: 'Channel Type', nb_visits: 'Visits' }, reportData: { [week1]: [{ label: 'Search Engines', nb_visits: 5 }, { label: 'Websites', nb_visits: 1 }], [week2]: [] } },
       site,
       { metadata: { name: 'Channel Type' }, reportData: { [week1]: [{ label: 'Websites', nb_visits: 1 }], [week2]: [] } },
     );
@@ -171,7 +177,9 @@ describe('Matomo provider', () => {
     expect(form(fetchMock, 0).get('period')).toBe('week'); expect(form(fetchMock, 0).get('date')).toBe('2026-10-29,2026-11-03');
     expect(result.rows).toEqual([{ dimensions: { date: '2026-10-26', period_label: week1, label: 'Search Engines' }, metrics: { nb_visits: 5 } }]);
     expect(result.next_offset).toBe(1); expect(result.notes.join(' ')).toContain('per week');
-    await provider.processedReport(input);
+    const last = await provider.processedReport({ ...input, offset: 1 });
+    expect(last.rows).toHaveLength(1);
+    expect(last.next_offset).toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
@@ -218,7 +226,8 @@ describe('Matomo provider', () => {
   it('reads site settings, goals and segments without creator logins', async () => {
     const { provider, fetchMock } = setup(site,
       { 1: { idsite: '1', idgoal: '1', name: 'Signup', description: '', match_attribute: 'url', pattern: '/thanks', pattern_type: 'contains', revenue: '10', allow_multiple: '0', case_sensitive: '0' } },
-      [{ idsegment: '4', name: 'Mobile', definition: 'deviceType==smartphone', login: 'person@example.com', enable_only_idsite: '0', auto_archive: '1' }]);
+      [{ idsegment: '4', name: 'Mobile', definition: 'deviceType==smartphone', login: 'person@example.com', enable_only_idsite: '0', auto_archive: '1' },
+       { idsegment: '5', name: 'Private visitor', definition: 'visitorId==fixture' }]);
     expect(await provider.site('1')).toEqual({ id: '1', name: 'Example', main_url: 'https://www.example.com', timezone: 'Europe/Paris', currency: 'EUR', ecommerce: true, site_search: false, type: 'website', created: '2024-01-01 00:00:00' });
     expect((await provider.goals('1')).goals).toEqual([{ id: '1', name: 'Signup', description: undefined, match_attribute: 'url', pattern: '/thanks', pattern_type: 'contains', revenue: '10', allow_multiple: false, case_sensitive: false }]);
     const segments = await provider.segments('1');
@@ -229,9 +238,12 @@ describe('Matomo provider', () => {
 
   it.each([
     ["You can't access this resource as it requires 'view' access for the website id = 1.", 'PROVIDER_ERROR', 'access_denied'],
+    ['Unable to authenticate with the provided token. It is either invalid, expired or provided as a GET parameter.', 'NOT_CONNECTED', 'auth'],
     ['token_auth is not valid for user@example.com', 'NOT_CONNECTED', 'auth'],
     ['The segment condition foo==test-token is not valid.', 'PROVIDER_ERROR', 'segment'],
     ['API returned an error: You do not have enough permission to access the segment userId at Segment.php:250', 'PROVIDER_ERROR', 'segment'],
+    ['Requested report Login.getTrend for Website id=1 not found in the list of available reports.', 'PROVIDER_ERROR', 'report_not_found'],
+    ['You do not have enough permission to access the segment Login sessions.', 'PROVIDER_ERROR', 'segment'],
     ['Requested report Foo.bar for Website id=1 not found in the list of available reports.', 'PROVIDER_ERROR', 'report_not_found'],
   ])('maps Matomo error envelopes without leaking the message or token (%s)', async (message, code, reason) => {
     const { client } = setup({ result: 'error', message });

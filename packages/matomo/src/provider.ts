@@ -1,4 +1,4 @@
-import { AdportError, isMatomoBlockedModule, matomoReportMetadataSchema, matomoReportSchema,
+import { AdportError, isMatomoBlockedModule, matomoSegmentNamesVisitor, matomoReportMetadataSchema, matomoReportSchema,
   type AdProvider, type Account, type NormalizedQuery, type Report, type WriteOperation, type WritePreview, type WriteResult,
   type MatomoReportInput, type MatomoReportMetadataInput } from '@adport/core';
 import type { MatomoClient } from './client.js';
@@ -71,7 +71,9 @@ export class MatomoProvider implements AdProvider {
     if (!cached) {
       cached = this.client.call('SitesManager.getSiteFromId', { idSite: id }).then(raw => {
         if (!object(raw)) throw new AdportError('PROVIDER_ERROR', 'Matomo returned no site settings.');
-        return toSite(raw);
+        const site = toSite(raw);
+        if (site.id !== id) throw new AdportError('PROVIDER_ERROR', 'Matomo returned settings for a different site.');
+        return site;
       });
       cached.catch(() => this.siteCache.delete(id));
       this.siteCache.set(id, cached);
@@ -101,7 +103,7 @@ export class MatomoProvider implements AdProvider {
       idSite: i.account_id, apiModule: i.module, apiAction: i.action,
       period: multi ? i.period : i.start_date === i.end_date ? 'day' : 'range',
       date: multi || i.start_date !== i.end_date ? `${i.start_date},${i.end_date}` : i.start_date,
-      filter_limit: String(i.limit), filter_offset: String(i.offset), hideMetricsDoc: '1', showTimer: '0', format_metrics: '0',
+      filter_limit: String(i.limit + 1), filter_offset: String(i.offset), hideMetricsDoc: '1', showTimer: '0', format_metrics: '0',
       ...(i.segment ? { segment: i.segment } : {}), ...(i.id_goal !== undefined ? { idGoal: String(i.id_goal) } : {}),
       ...(flat ? { flat: '1' } : {}),
       ...(i.filter_sort_column ? { filter_sort_column: i.filter_sort_column } : {}), ...(i.filter_sort_order ? { filter_sort_order: i.filter_sort_order } : {}),
@@ -120,11 +122,11 @@ export class MatomoProvider implements AdProvider {
     const groups: Group[] = labels
       ? labels.map((label, index) => ({ label, ...(datesMatch ? { date: starts[index] } : {}), ...group((raw.reportData as Row)[label]) }))
       : [group(raw.reportData)];
-    const rows = groups.flatMap(({ label, date, entries }) => entries.filter(object).map(row => ({
+    const rows = groups.flatMap(({ label, date, entries }) => entries.slice(0, i.limit).filter(object).map(row => ({
       dimensions: { ...(date ? { date } : {}), ...(label !== undefined ? { period_label: label } : {}), ...(row.label !== undefined ? { label: text(row.label) ?? '' } : {}) },
       metrics: Object.fromEntries(Object.entries(row).filter(([key, value]) => !ROW_METADATA.has(key) && scalar(value))),
     })));
-    const full = groups.some(({ entries, pageable }) => pageable && entries.length >= i.limit);
+    const full = groups.some(({ entries, pageable }) => pageable && entries.length > i.limit);
     const columns = object(raw.columns) ? raw.columns : {};
     return {
       provider: this.id, account_id: i.account_id,
@@ -157,8 +159,8 @@ export class MatomoProvider implements AdProvider {
 
   async segments(accountId: string) {
     const id = matomoSiteId(accountId);
-    // Creator logins are omitted: they identify Matomo users.
-    const segments = list(await this.client.call('SegmentEditor.getAll', { idSite: id })).filter(object).map(segment => ({
+    const stored = list(await this.client.call('SegmentEditor.getAll', { idSite: id })).filter(object);
+    const segments = stored.filter(segment => typeof segment.definition === 'string' && !matomoSegmentNamesVisitor(segment.definition)).map(segment => ({
       id: text(segment.idsegment), name: text(segment.name), definition: text(segment.definition),
       all_sites: Number(segment.enable_only_idsite ?? 0) === 0, auto_archive: Number(segment.auto_archive) === 1,
     }));

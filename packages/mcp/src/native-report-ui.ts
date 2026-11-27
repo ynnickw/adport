@@ -72,7 +72,7 @@ export const NATIVE_REPORT_UI_SCRIPT = String.raw`
       const googleEntity=googleDimensions&&[...gaqlEntities.keys()].find(path=>googleDimensions.has(path));
       const googleName=googleDimensions?.get(googleEntity);
       const bucket=dimensions.conversionLagBucket??dimensions.conversionOrAdjustmentLagBucket;
-      const analyticsName=['ga4','gsc','matomo'].includes(provider)?Object.entries(dimensions).filter(([key])=>key!=='period_label').map(([,value])=>value).filter(value=>typeof value==='string'&&value).join(' · '):null;
+      const analyticsName=['ga4','gsc','matomo'].includes(provider)?Object.entries(dimensions).filter(([key])=>key!=='period_label').map(([,value])=>value).filter(value=>typeof value==='string'&&value).join(' · ')||first(['period_label'],[dimensions])||first(['name'],[payload.report||{}]):null;
       const name=bucket?reportBucket(bucket):googleName??analyticsName??first(names,[row,metrics,dimensions]) ?? first(ids,[row,dimensions]) ?? (provider==='google'?'Report':'Result '+(index+1));
       const status=first(['entity_status','status'],[row]);
       const dimensionKeys=['date','day','week','month','stat_time_day','stat_time_hour','country','countryOrRegion','countryCode','country_code','country_id','deviceClass','device_platform','age','gender','platform','placement','insight_value','genre','BidMatchType','match_type','date_start','date_stop','start_time','end_time'];
