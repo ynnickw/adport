@@ -20,6 +20,8 @@ on the artwork rather than inheriting surrounding text color.
   [Branding reference](https://business.pinterest.com/en-us/brand-guidelines/).
 - LinkedIn: Font Awesome LinkedIn mark, LinkedIn blue (#0A66C2).
 - OpenAI: monochrome knot mark (Remix Icon, black on white in Cloud; Simple Icons, white on black in MCP).
+- Matomo: Simple Icons geometry, Matomo blue (#3152A0), MCP card only.
+  [Brand assets](https://matomo.org/media/).
 - X and Apple remain black because their marks are monochrome.
 - The existing Google, Meta, TikTok, Microsoft and Reddit brand colors remain.
 

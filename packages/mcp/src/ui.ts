@@ -44,6 +44,7 @@ export type AdportView = 'accounts' | 'report' | 'operation' | 'insights' | 'cre
 const providerNames: Record<string, string> = {
   ga4: 'Google Analytics 4',
   gsc: 'Google Search Console',
+  matomo: 'Matomo',
   gtm: 'Google Tag Manager',
   google: 'Google Ads',
   meta: 'Meta Ads',
