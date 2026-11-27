@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { GoogleAdsProvider } from '@adport/provider-google';
 import { MetaAdsProvider } from '@adport/provider-meta';
 import { sessionPrincipal } from '@/lib/cloud/auth';
+import { matomoRedirectUri } from '@/lib/cloud/matomo-oauth';
 import { oauthAdapter } from '@/lib/cloud/provider-oauth';
 import { providerAllowedForOrganization } from '@/lib/cloud/provider-rollout';
 import { describeProviderError } from '@/lib/cloud/provider-errors';
@@ -64,6 +65,12 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
     }
     if (oauthError) throw new Error(`${label} authorization was not completed.`);
     if (!providerAllowedForOrganization(provider, transaction.organizationId)) throw new Error('This provider is not enabled for this organization.');
+
+    if (provider === 'matomo') {
+      const instance = transaction.matomoApplication?.url;
+      const markers = url.searchParams.getAll('instance');
+      if (!instance || markers.length !== 1 || markers[0] !== new URL(matomoRedirectUri(instance)).searchParams.get('instance')) throw new Error('Unexpected Matomo callback instance.');
+    }
 
     // The optional scope is bound to the consumed encrypted transaction, never callback parameters.
     const exchangeAdapter = oauthAdapter(provider, { matomoApplication: transaction.matomoApplication, googleDataManager: transaction.googleDataManager === true, redditConversions: transaction.redditConversions === true, pinterestPinManagement: transaction.pinterestPinManagement === true, pinterestSecretPins: transaction.pinterestSecretPins === true, pinterestCatalogManagement: transaction.pinterestCatalogManagement === true });

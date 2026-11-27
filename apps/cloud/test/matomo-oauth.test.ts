@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { resetEnvForTests } from '@/lib/env';
-import { matomoApplication, matomoOAuth, matomoTokens } from '@/lib/cloud/matomo-oauth';
+import { matomoApplication, matomoOAuth, matomoRedirectUri, matomoTokens } from '@/lib/cloud/matomo-oauth';
+import { GET as registration } from '@/app/api/oauth/matomo/registration/route';
 import { GET, POST } from '@/app/api/oauth/[provider]/start/route';
 
 const mocks = vi.hoisted(() => ({ send: vi.fn(), session: vi.fn(), previous: vi.fn(), create: vi.fn() }));
@@ -28,8 +29,9 @@ it('binds the confidential registration and verifier to the signed-in project, o
   const auth = new URL((await result.json()).redirect);
   expect(auth.href).not.toContain('test-only');
   expect(auth.pathname).toBe('/site/index.php');
+  expect(matomoRedirectUri(url)).not.toBe(matomoRedirectUri(url + '/other'));
   expect(Object.fromEntries(auth.searchParams)).toMatchObject({ client_id: 'client', scope: 'matomo:read', code_challenge_method: 'S256',
-    redirect_uri: 'https://app.example.test/api/oauth/matomo/callback' });
+    redirect_uri: matomoRedirectUri(url) });
   expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ provider: 'matomo', matomoApplication: app, state: auth.searchParams.get('state'), organizationId: organization }));
   expect(mocks.create.mock.calls[0]![0].verifier).not.toBe(auth.searchParams.get('code_challenge'));
 });
@@ -61,4 +63,12 @@ it('keeps client secrets instance-bound and rejects excess scopes or anonymous g
   await expect(matomoTokens(app, {})).rejects.toThrow(/read-only/);
   mocks.send.mockResolvedValueOnce(Response.json(response)).mockResolvedValueOnce(Response.json([]));
   await expect(matomoOAuth(app).exchange({ code: 'code', state: '', verifier: 'v' })).rejects.toThrow(/visible sites/);
+});
+
+it('publishes the registered callback for a canonical instance and rejects malformed instance selectors', async () => {
+  const endpoint = 'https://app.example.test/api/oauth/matomo/registration?';
+  const get = (instance: string) => registration(new Request(endpoint + new URLSearchParams({ instance })));
+  expect(await get(url + '/index.php').json()).toEqual({ redirect_uri: matomoRedirectUri(url) });
+  expect(get('https://127.0.0.1').status).toBe(400);
+  expect(registration(new Request(endpoint + 'instance=a&instance=b')).status).toBe(400);
 });

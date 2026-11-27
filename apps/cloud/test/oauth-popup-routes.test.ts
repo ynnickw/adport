@@ -114,6 +114,15 @@ describe('shared popup OAuth routes', () => {
     const response = await start(new Request(`https://app.adport.test/api/oauth/${suffix}`), { params: Promise.resolve({ provider: suffix.startsWith('meta') ? 'meta' : 'google' }) });
     expect(response.status).toBe(400); expect(mocks.create).not.toHaveBeenCalled();
   });
+  it('rejects a callback for a different Matomo instance before exchanging any code', async () => {
+    const context = { params: Promise.resolve({ provider: 'matomo' }) };
+    mocks.consume.mockResolvedValue({ organizationId: 'org', verifier: 'v', returnPath: '/dashboard/analytics',
+      matomoApplication: { url: 'https://analytics.example.test/shop', clientId: 'c', clientSecret: 's' } });
+    const response = await callback(new Request('https://app.adport.test/api/oauth/matomo/callback?code=c&state=s&instance=another'), context);
+    expect(new URL(response.headers.get('location')!).searchParams.has('error')).toBe(true);
+    expect(mocks.exchange).not.toHaveBeenCalled();
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
   it.each(OAUTH_PROVIDERS.filter(provider => provider !== 'matomo'))('binds %s popup delivery to the server-side transaction', async provider => {
     const context = { params: Promise.resolve({ provider }) };
     const response = await start(new Request(`https://untrusted.test/api/oauth/${provider}/start?popup_id=${id}&return_to=%2Fonboarding`), context);

@@ -14,7 +14,7 @@ always sends it in the POST body.
 
 In **Analytics & tracking**, choose **Add source → Matomo**, enter the instance URL and continue to Matomo. Sign in and approve read access, then choose the sites available to the project. Adport stores the grant in its encrypted project vault and refreshes it on the server.
 
-Each instance needs the Matomo OAuth 2.0 plugin and one confidential client with authorization code, refresh tokens, the exact callback `https://<your-adport-host>/api/oauth/matomo/callback` and the `matomo:read` scope. An administrator can enter its client ID and secret during setup or preconfigure the registration through `MATOMO_OAUTH_APPLICATIONS` on the Adport host. A reverse proxy in front of Matomo must forward the Authorization header. For instances without OAuth, select **Auth token** and use a token with view access. [Matomo OAuth setup](https://developer.matomo.org/guides/oauth2/authorization-code)
+Each instance needs the Matomo OAuth 2.0 plugin and one confidential client with authorization code, refresh tokens, the exact callback shown under **Set up this instance for the first time** (including its instance identifier) and the `matomo:read` scope. An administrator can enter its client ID and secret during setup or preconfigure the registration through `MATOMO_OAUTH_APPLICATIONS` on the Adport host. A reverse proxy in front of Matomo must forward the Authorization header. For instances without OAuth, select **Auth token** and use a token with view access. [Matomo OAuth setup](https://developer.matomo.org/guides/oauth2/authorization-code)
 
  Enable the selected sites for assistants. Analytics sites do not consume advertising account slots.
 
