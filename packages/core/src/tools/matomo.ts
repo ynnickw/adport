@@ -24,14 +24,14 @@ const day = z.string().date();
  * Visitor-level modules expose personal data, and MultiSites reads every site the
  * token can view regardless of account_id. Adport reads aggregated, per-site reports only.
  */
-export const MATOMO_BLOCKED_MODULES = ['Live', 'UserId', 'MultiSites'] as const;
+export const MATOMO_BLOCKED_MODULES = ['Live', 'UserId', 'MultiSites', 'HeatmapSessionRecording', 'AbTesting'] as const;
 const BLOCKED_MODULES = new Set(MATOMO_BLOCKED_MODULES.map(name => name.toLowerCase()));
 /** Case-insensitive, since Matomo's module matching may change between versions. */
 export function isMatomoBlockedModule(value: unknown): boolean {
   return typeof value === 'string' && BLOCKED_MODULES.has(value.toLowerCase());
 }
 const reportModule = z.string().regex(/^[A-Z][A-Za-z0-9]{0,63}$/)
-  .refine(value => !isMatomoBlockedModule(value), 'Visitor-level and cross-site modules (Live, UserId, MultiSites) are not available; use aggregated reports.');
+  .refine(value => !isMatomoBlockedModule(value), 'This module is outside the supported per-site analytics reports.');
 /**
  * Segments that narrow a report to one visitor or visit: the ones Matomo's segment
  * metadata restricts to higher permissions (User ID, Visitor ID, Visit ID, Visitor IP, Fingerprint).

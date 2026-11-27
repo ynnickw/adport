@@ -52,7 +52,6 @@ function toSite(raw: Row): MatomoSite {
 /** Read-only Matomo analytics. Visitor-level and cross-site APIs (Live, UserId, MultiSites) are never called. */
 export class MatomoProvider implements AdProvider {
   readonly id = 'matomo';
-  private readonly siteCache = new Map<string, Promise<MatomoSite>>();
   constructor(private readonly client: MatomoClient) {}
   capabilities() { return { serverDryRun: false, reporting: false }; }
   async report(_query: NormalizedQuery): Promise<Report> { throw new AdportError('INVALID_INPUT', 'Use matomo_report for Matomo reports.'); }
@@ -65,20 +64,13 @@ export class MatomoProvider implements AdProvider {
       ...(site.currency ? { currency: site.currency } : {}), ...(site.timezone ? { timezone: site.timezone } : {}) }));
   }
 
-  site(accountId: string): Promise<MatomoSite> {
+  async site(accountId: string): Promise<MatomoSite> {
     const id = matomoSiteId(accountId);
-    let cached = this.siteCache.get(id);
-    if (!cached) {
-      cached = this.client.call('SitesManager.getSiteFromId', { idSite: id }).then(raw => {
-        if (!object(raw)) throw new AdportError('PROVIDER_ERROR', 'Matomo returned no site settings.');
-        const site = toSite(raw);
-        if (site.id !== id) throw new AdportError('PROVIDER_ERROR', 'Matomo returned settings for a different site.');
-        return site;
-      });
-      cached.catch(() => this.siteCache.delete(id));
-      this.siteCache.set(id, cached);
-    }
-    return cached;
+    const raw = await this.client.call('SitesManager.getSiteFromId', { idSite: id });
+    if (!object(raw)) throw new AdportError('PROVIDER_ERROR', 'Matomo returned no site settings.');
+    const site = toSite(raw);
+    if (site.id !== id) throw new AdportError('PROVIDER_ERROR', 'Matomo returned settings for a different site.');
+    return site;
   }
 
   async reportMetadata(input: MatomoReportMetadataInput) {
@@ -109,7 +101,9 @@ export class MatomoProvider implements AdProvider {
       ...(i.filter_sort_column ? { filter_sort_column: i.filter_sort_column } : {}), ...(i.filter_sort_order ? { filter_sort_order: i.filter_sort_order } : {}),
     };
     const [raw, site] = await Promise.all([this.client.call('API.getProcessedReport', params), this.site(i.account_id)]);
-    if (!object(raw)) throw new AdportError('PROVIDER_ERROR', 'Matomo returned an unexpected report response.');
+    if (!object(raw) || (!Array.isArray(raw.reportData) && !object(raw.reportData))) {
+      throw new AdportError('PROVIDER_ERROR', 'Matomo returned an unexpected report response.');
+    }
     const metadata = object(raw.metadata) ? raw.metadata : {};
     // Single periods return an array of rows (or one row object for reports without dimension); several periods
     // return an object keyed by localized period labels, in order. Only array-shaped data is pageable.

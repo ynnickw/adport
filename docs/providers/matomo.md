@@ -11,7 +11,8 @@ aggregated reports. There are no write tools: Adport never changes sites, goals,
 segments, users or tracking settings. Visitor-level data is refused: the `Live`
 visitor log, `UserId` reports, and segments on `userId`, `visitorId`, `visitId`,
 `visitIp` or `fingerprint`. `MultiSites` is refused too, since it reads every site
-the token can view regardless of `account_id`.
+the token can view regardless of `account_id`. Discovery and reports also exclude
+heatmaps, session recordings and A/B tests.
 
 Tests use synthetic responses shaped after the
 [Reporting API](https://developer.matomo.org/api-reference/reporting-api),

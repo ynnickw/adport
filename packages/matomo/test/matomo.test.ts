@@ -97,7 +97,7 @@ describe('Matomo provider', () => {
     const range = { account_id: '1', start_date: '2026-11-01', end_date: '2026-11-07' };
     for (const args of [{ module: 'Live', action: 'getLastVisitsDetails' }, { module: 'UserId', action: 'getUsers' }, { module: 'Referrers', action: 'get&method=x' },
       { module: 'referrers', action: 'get' }, { module: 'API', action: 'Get' }, { module: 'LIVE', action: 'getLastVisitsDetails' }, { module: 'USERID', action: 'getUsers' },
-      { module: 'MultiSites', action: 'getAll' }, { module: 'MULTISITES', action: 'getAll' }]) {
+      { module: 'HeatmapSessionRecording', action: 'get' }, { module: 'AbTesting', action: 'get' }, { module: 'MultiSites', action: 'getAll' }, { module: 'MULTISITES', action: 'getAll' }]) {
       await expect(runtime.registry.call('matomo_report', { ...range, ...args }, runtime.ctx)).rejects.toMatchObject({ code: 'INVALID_INPUT' });
     }
     await expect(runtime.registry.call('matomo_report', { ...range, account_id: '0', module: 'VisitsSummary', action: 'get' }, runtime.ctx)).rejects.toMatchObject({ code: 'INVALID_INPUT' });
@@ -157,6 +157,13 @@ describe('Matomo provider', () => {
     await expect(provider.site('1')).resolves.toMatchObject({ id: '1' });
   });
 
+  it('distinguishes an empty report from a missing report payload', async () => {
+    const { provider } = setup({ reportData: [] }, site, { metadata: {} }, site);
+    const input = matomoReportSchema.parse({ account_id: '1', module: 'VisitsSummary', action: 'get', start_date: '2026-11-01', end_date: '2026-11-01' });
+    await expect(provider.processedReport(input)).resolves.toMatchObject({ rows: [], row_count: 0 });
+    await expect(provider.processedReport(input)).rejects.toMatchObject({ code: 'PROVIDER_ERROR' });
+  });
+
   it('sends id_goal only with Goals reports', async () => {
     const { provider, fetchMock } = setup({ metadata: { name: 'Goal Signup' }, reportData: { nb_conversions: 7, revenue: 70.5, conversion_rate: 0.0125 } }, site);
     const result = await provider.processedReport(matomoReportSchema.parse({ account_id: '1', module: 'Goals', action: 'get', start_date: '2026-11-01', end_date: '2026-11-07', id_goal: 2 }));
@@ -164,13 +171,13 @@ describe('Matomo provider', () => {
     expect(result.rows).toEqual([{ dimensions: {}, metrics: { nb_conversions: 7, revenue: 70.5, conversion_rate: 0.0125 } }]);
   });
 
-  it('derives ISO period start dates for localized per-period keys and caches site settings', async () => {
+  it('derives ISO period start dates for localized per-period keys and reads the current site currency on each page', async () => {
     // Matomo keys multi-period data by localized labels (thin spaces around the dash in week labels).
     const week1 = 'week October 26\u2009–\u2009November 1, 2026', week2 = 'week November 2\u2009–\u20098, 2026';
     const { provider, fetchMock } = setup(
       { metadata: { name: 'Channel Type' }, columns: { label: 'Channel Type', nb_visits: 'Visits' }, reportData: { [week1]: [{ label: 'Search Engines', nb_visits: 5 }, { label: 'Websites', nb_visits: 1 }], [week2]: [] } },
       site,
-      { metadata: { name: 'Channel Type' }, reportData: { [week1]: [{ label: 'Websites', nb_visits: 1 }], [week2]: [] } },
+      { metadata: { name: 'Channel Type' }, reportData: { [week1]: [{ label: 'Websites', nb_visits: 1 }], [week2]: [] } }, { ...site, currency: 'USD' },
     );
     const input = matomoReportSchema.parse({ account_id: '1', module: 'Referrers', action: 'getReferrerType', start_date: '2026-10-29', end_date: '2026-11-03', period: 'week', limit: 1 });
     const result = await provider.processedReport(input);
@@ -180,13 +187,14 @@ describe('Matomo provider', () => {
     const last = await provider.processedReport({ ...input, offset: 1 });
     expect(last.rows).toHaveLength(1);
     expect(last.next_offset).toBeUndefined();
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(last.currency).toBe('USD');
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
   it('keeps single-row per-period reports unpaged and falls back to period_label on a period count mismatch', async () => {
     const { provider } = setup(
       { reportData: { 'Sunday, November 1, 2026': { nb_visits: 4 }, 'Monday, November 2, 2026': { nb_visits: 6 } } }, site,
-      { reportData: { 'November 2026': { nb_visits: 9 } } },
+      { reportData: { 'November 2026': { nb_visits: 9 } } }, site,
     );
     const days = await provider.processedReport(matomoReportSchema.parse({ account_id: '1', module: 'VisitsSummary', action: 'get', start_date: '2026-11-01', end_date: '2026-11-02', period: 'day', limit: 1 }));
     expect(days.rows).toEqual([
