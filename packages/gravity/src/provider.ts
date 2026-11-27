@@ -333,4 +333,3 @@ function normalize(totals: GravityTotals, metrics: MetricName[]): Partial<Record
   }
   return Object.fromEntries(metrics.filter(metric => mapped[metric] !== undefined).map(metric => [metric, mapped[metric]]));
 }
-

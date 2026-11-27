@@ -1,23 +1,27 @@
 import { cite, prompt, section } from './shared.mjs';
+import { appleCalculator } from './calculator-blocks.mjs';
 
 const cluster = 'apple-ads-for-app-developers';
 const published = '2026-11-21';
 
 export const appleAcquisitionArticles = [
   {
-    slug: 'apple-ads-cost-per-install', cluster, published,
-    title: 'Calculate cost per install in Apple Ads',
-    description: 'Use Apple Ads spend, taps, new downloads and redownloads to calculate acquisition cost. Work through a sample week and compare the same measure across campaigns.',
-    summary: 'Work out what you paid for a first download and how that differs from the cost of a reported install.',
+    slug: 'apple-ads-cost-per-install', cluster, published, updated: '2026-11-28', calculator: true,
+    title: 'Apple Ads cost per install calculator',
+    description: 'Calculate Apple Search Ads cost per tap, total install, tap-through install and first download. Use your campaign’s spend and download counts to compare costs.',
+    summary: 'Use your own spend and download counts to see what a first download costs alongside Apple’s reported install costs.',
     marks: ['apple'], sources: ['appleReporting', 'appleDashboard'],
-    intro: 'If Apple Ads reports cheaper installs, did your app actually acquire more first-time downloaders? Redownloads and view-through installs can change the answer. Use Adport to pull one week of Apple Ads data, keep Apple’s metric labels and put the acquisition cost you care about beside the one in the dashboard.',
+    intro: 'How much did you pay for someone to download your app for the first time? This Apple Search Ads calculator puts that figure beside the cost per reported install. Redownloads and installs after an ad view can make the two prices quite different.',
     sections: [
+      section('calculator', 'Calculate CPI from your Apple Ads report', `<p>Use spend and counts from the same campaign, dates and storefront. Start with the sample week or enter your figures. Leave a count blank if Apple did not report it. A reported zero can be entered as zero.</p>${appleCalculator}
+        <noscript><p>The editable calculator uses JavaScript. Find all four calculations in the worked example below.</p></noscript>
+        <p>Total installs include view-through and tap-through installs. Within tap-through installs, Apple counts both new downloads and redownloads. Each result divides the same spend by its labeled count. Set the currency to match the report. ${cite('appleReporting', 'Apple defines these attribution measures in its reporting guide')}.</p>`),
       section('campaign', 'Choose one app, storefront and reporting week', `<p>Start with the <a href="/providers/apple-ads">Apple Ads integration</a>. Confirm the ad account and the numeric App Store app ID. Select a campaign for that app and one storefront, or label the report with all the storefronts it includes. Keep the placement in the heading. Search results and the Today tab reach people in different parts of the App Store.</p>
         <p>Use a completed week in the account’s reporting time zone and keep the currency next to spend. Record both dates. If you compare campaigns, check they refer to the same app and market before treating a difference as a change in the cost of acquiring users.</p>`),
       section('metrics', 'Choose the install count that fits the question', `<p>Apple reports total installs, tap-through installs, new downloads and redownloads. Total installs include downloads attributed to views as well as taps. A returning downloader can count as an install. For the question “What did we spend per first download after a tap?” use tap-through new downloads as the denominator. Label the result with that full name. ${cite('appleReporting')}</p>
         <p>Adport’s shared campaign report maps Apple taps to clicks and total installs to conversions. Use the native <code>apple_report</code> when you need the underlying Apple measures. If a split is missing, leave it open and check the same campaign in the Apple dashboard. ${cite('appleDashboard')}</p>`),
-      section('example', 'Calculate three costs from the same spend', `<p>In this illustrative week an app spent $120, received 60 taps, recorded 15 tap-through installs and had 12 tap-through new downloads. The other three tap-through installs were redownloads. The app also recorded three view-through installs, bringing total installs to 18. Each cost below answers a different question.</p>
-        <ul><li><strong>Average cost per tap.</strong> $120 divided by 60 taps is $2.</li><li><strong>Cost per total install.</strong> $120 divided by 18 total installs is $6.67.</li><li><strong>Cost per tap-through new download.</strong> $120 divided by 12 first downloads after a tap is $10.</li></ul>
+      section('example', 'Read four costs from the same week', `<p>In this illustrative week an app spent $120, received 60 taps, recorded 15 tap-through installs and had 12 tap-through new downloads. The other three tap-through installs were redownloads. The app also recorded three view-through installs, bringing total installs to 18.</p>
+        <ul><li><strong>Average cost per tap.</strong> $120 divided by 60 taps is $2.</li><li><strong>Cost per total install.</strong> $120 divided by 18 installs is $6.67.</li><li><strong>Cost per tap-through install.</strong> $120 divided by 15 installs after a tap is $8.</li><li><strong>Cost per tap-through new download.</strong> $120 divided by 12 first downloads after a tap is $10.</li></ul>
         <p>If no first downloads were reported, show the spend and the count. A dollar figure per first download cannot be calculated from a zero denominator.</p>`),
       section('ask', 'Get the figures in a reproducible report', `${prompt('Read my selected Apple Ads account for the last complete week in account time. For the selected app and campaign show spend, currency, taps, total installs, tap-through installs and tap-through new downloads where Apple returns them. Calculate cost per tap and per tap-through new download. Include the raw counts and flag unavailable fields. Make no changes.')}
         <p>Roll up a group of comparable campaigns by summing their spend and downloads before dividing. A small campaign with one download should not carry the same weight as a campaign with a hundred. Save the original rows so a teammate can check which market or placement contributed the difference.</p>`),
