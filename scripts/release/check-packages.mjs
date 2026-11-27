@@ -38,6 +38,8 @@ try {
   assert(JSON.parse(run(['--demo', 'accounts', '--json'])).length > 0);
   assert(JSON.parse(run(['--demo', 'report', '--json'])).rows.length > 0);
   run(['--demo', 'audit', 'run']);
+  const closed = spawnSync(process.execPath, [cli, '--demo', 'mcp'], { env, input: '', encoding: 'utf8', timeout: 10_000 });
+  assert.equal(closed.status, 0, closed.error?.message ?? closed.stderr);
   console.log(`Isolated install passed: ${packages.length} tarballs, CLI version, fail-closed reads, synthetic reports and audit.`);
 } finally {
   rmSync(temporary, { recursive: true, force: true });
