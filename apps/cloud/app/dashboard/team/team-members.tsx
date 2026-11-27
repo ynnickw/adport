@@ -11,6 +11,7 @@ import { useConfirm } from '@/components/use-confirm';
 import { TEAM_ROLES } from '@/lib/team-roles';
 import { PeopleTable } from '@/components/people-table';
 import { DialogTrigger } from '@/components/dialog';
+import { useToast } from '@/components/toast';
 
 interface Member { userId: string; email: string; displayName: string; role: string; inheritedFromOrganization: boolean; }
 
@@ -21,8 +22,9 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
   members: Member[];
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [confirm, confirmationDialog] = useConfirm();
-  const [message, setMessage] = useState<{ error?: string; success?: string }>({});
+  const [error, setError] = useState<{ operation: 'invite' | 'member'; message: string }>();
   const [busy, setBusy] = useState(false);
   const [operation, setOperation] = useState<string>();
   const [planLimit, setPlanLimit] = useState<PlanLimitDetails>();
@@ -33,17 +35,18 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
     if (busy) return false;
     setOperation(method === 'POST' ? 'invite' : method === 'DELETE' ? String(body.userId) : 'role');
     setBusy(true);
-    setMessage({});
+    setError(undefined);
+    const failedOperation = method === 'POST' ? 'invite' : 'member';
     try {
       const response = await fetch('/api/members', { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ organizationId, ...body }) });
       const result = await response.json().catch(() => ({})) as { error?: string };
       const limit = planLimitFromResponse(result);
       if (limit) setPlanLimit(limit);
-      else if (!response.ok) setMessage({ error: result.error ?? 'The request failed.' });
-      else { setMessage({ success }); router.refresh(); }
+      else if (!response.ok) setError({ operation: failedOperation, message: result.error ?? 'The request failed.' });
+      else { toast(success); router.refresh(); }
       return response.ok;
     } catch {
-      setMessage({ error: 'Could not save the change. Check your connection and try again.' });
+      setError({ operation: failedOperation, message: 'Could not save the change. Check your connection and try again.' });
       return false;
     } finally {
       setBusy(false);
@@ -62,8 +65,7 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
     <>
       {confirmationDialog}
       <PlanLimitModal limit={planLimit} onClose={() => setPlanLimit(undefined)} />
-      {message.error ? <div className="card-body" style={{ paddingBottom: 0 }}><div className="error-callout" role="alert" style={{ marginBottom: 0 }}>{message.error}</div></div> : null}
-      {message.success ? <div className="card-body" style={{ paddingBottom: 0 }}><div className="callout success" role="status">{message.success}</div></div> : null}
+      {error?.operation === 'member' ? <div className="card-body" style={{ paddingBottom: 0 }}><div className="error-callout" role="alert" style={{ marginBottom: 0 }}>{error.message}</div></div> : null}
       <PeopleTable rows={members.map(member => ({
         id: member.userId, name: member.displayName, email: member.email, isSelf: member.userId === currentUserId,
         access: member.inheritedFromOrganization ? 'Inherited · All projects' : 'This project',
@@ -80,8 +82,7 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
             <form className="form" onSubmit={(event) => void invite(event)}>
               <label>Email address<Input name="email" type="email" required placeholder="colleague@company.com" /></label>
               <label>Role<Select name="role" defaultValue="member" aria-label="Role" options={roles} /></label>
-              {message.error ? <p className="field-error" role="alert">{message.error}</p> : null}
-              {message.success ? <p className="action-result" role="status">{message.success}</p> : null}
+              {error?.operation === 'invite' ? <p className="field-error" role="alert">{error.message}</p> : null}
               <div><Button className="button" disabled={busy} pending={operation === 'invite'} pendingLabel="Inviting…">Invite</Button></div>
             </form>
           </DialogTrigger>

@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { DashboardLink as Link } from '@/components/dashboard-navigation';
 import { billingConfigured, billingPlanConfigured } from '@/lib/cloud/billing';
 import { billingStatus } from '@/lib/billing-status';
 import { BillingForm } from './billing-form';
@@ -90,8 +90,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
       {showPlans ? <Link className="button secondary" href="/dashboard/billing#usage">Back to usage</Link>
         : <Link className="button secondary" href={queryPath(interval) + '#plans'}>Compare plans</Link>}
     </>} />
-    {query.checkout === 'complete' ? <CheckoutStatus ready={subscriptionReady} planName={entitlement.plan.name} /> : null}
-    {query.checkout === 'canceled' ? <div className="callout plan-notice">Checkout was canceled. Your current plan is unchanged.</div> : null}
+    {query.checkout === 'complete' || query.checkout === 'canceled' ? <CheckoutStatus status={query.checkout === 'canceled' ? 'canceled' : subscriptionReady ? 'ready' : 'pending'} planName={entitlement.plan.name} /> : null}
     <section className="plan-summary"><div><span className="plan-kicker">{tenant.organizationGroupName}</span><div className="plan-current-line"><strong>{entitlement.plan.name}</strong><span className={`status ${lifecycle.tone}`}>{complimentary ? 'Complimentary' : lifecycle.label}</span></div>{lifecycle.message ? <p role="status">{lifecycle.message}</p> : hasSubscription && entitlement.currentPeriodEnd ? <p>{entitlement.status === 'trialing' ? 'Trial ends' : 'Current period ends'} {formatDate(entitlement.currentPeriodEnd)}.</p> : null}</div>{entitlement.providerCustomerId && canManage && configured ? <BillingForm action={openProjectBillingPortalForm.bind(null, tenant.organizationId)} label="Manage billing" pendingLabel="Opening billing…" className="button secondary" /> : null}</section>
     {details?.scheduled ? <p className="inline-note" role="status">{details.scheduled.name}{details.scheduled.interval ? `, billed ${details.scheduled.interval === 'annual' ? 'yearly' : 'monthly'},` : ''} starts {formatDate(details.scheduled.startsAt)}. Your {entitlement.plan.name} access stays active until then. You can review the scheduled change in Manage billing.</p> : null}
     {!canManage ? <p className="upgrade-owner-note">Only your organization owner can change plans. Share the plan details with them to request an upgrade.</p> : null}

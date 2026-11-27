@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Dialog } from './dialog';
 import { Select } from './select';
+import { useToast } from './toast';
 
 export const SUPPORT_OPEN_EVENT = 'adport:support-open';
 
@@ -16,7 +17,8 @@ export function SupportLauncher({ className }: { className: string }) {
 export function SupportWidget() {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ error?: string; success?: string }>({});
+  const [error, setError] = useState<string>();
+  const toast = useToast();
   const firstInput = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -33,7 +35,7 @@ export function SupportWidget() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
-    setMessage({});
+    setError(undefined);
     const form = event.currentTarget;
     const values = Object.fromEntries(new FormData(form).entries());
     const subject = String(values.message ?? '').trim().replace(/\s+/g, ' ').slice(0, 160);
@@ -44,13 +46,15 @@ export function SupportWidget() {
         body: JSON.stringify({ ...values, subject, pagePath: window.location.pathname }),
       });
       const result = await response.json().catch(() => ({})) as { error?: string; notificationDelayed?: boolean };
-      if (!response.ok) setMessage({ error: result.error ?? 'Your message could not be sent. Please try again.' });
+      if (!response.ok) setError(result.error ?? 'Your message could not be sent. Please try again.');
       else {
         form.reset();
-        setMessage({ success: result.notificationDelayed ? 'Your message is saved. Email notification is temporarily delayed.' : 'Thanks. Your message is in my inbox.' });
+        if (result.notificationDelayed) toast('Message saved. Email notification is delayed.', 'info');
+        else toast('Message sent to Yannick.');
+        setOpen(false);
       }
     } catch {
-      setMessage({ error: 'Your message could not be sent. Check your connection and try again.' });
+      setError('Your message could not be sent. Check your connection and try again.');
     } finally {
       setBusy(false);
     }
@@ -65,8 +69,7 @@ export function SupportWidget() {
               <Image src="/yannick-support.png" alt="" width={58} height={58} />
               <div><strong>Hey, I’m Yannick, the founder.</strong><p>Stuck on something? Send me a message. I read every one.</p></div>
             </div>
-            {message.error ? <div className="error-callout" role="alert">{message.error}</div> : null}
-            {message.success ? <div className="callout success" role="status">{message.success}</div> : null}
+            {error ? <div className="error-callout" role="alert">{error}</div> : null}
             <form className="form" onSubmit={(event) => void submit(event)}>
               <label className="field"><span>Message type</span><Select name="kind" defaultValue="support" aria-label="Message type" options={[{ value: 'support', label: 'Question' }, { value: 'feedback', label: 'Product feedback' }, { value: 'bug', label: 'Bug report' }]} /></label>
               <label className="field"><span>Your message</span><Textarea data-autofocus ref={firstInput} name="message" minLength={10} maxLength={5000} required placeholder="Hi Yannick, I could use a hand with…" /></label>

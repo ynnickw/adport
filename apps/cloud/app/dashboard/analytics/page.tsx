@@ -1,9 +1,10 @@
-import Link from 'next/link';
+import { DashboardLink as Link } from '@/components/dashboard-navigation';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { isSyntheticReviewer } from '@/lib/cloud/synthetic-reviewer';
 import { SyntheticReviewer } from '@/components/synthetic-reviewer';
 import { PageHeader } from '@/components/ui';
+import { SuccessToast } from '@/components/toast';
 import { ProviderConnections } from '@/app/dashboard/connections/provider-connections';
 import { AddProviderDialog } from '@/app/dashboard/connections/add-provider-dialog';
 import { connectionView, platformOptions } from '@/app/dashboard/connections/connection-view';
@@ -52,7 +53,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
     <PageHeader title="Analytics & tracking" action={accounts.length || pending.length ? addSource : undefined} />
     <div className="stack">
     {params.error ? <div className="error-callout" role="alert">{params.error}</div> : null}
-    {params.accounts_saved ? <div className="callout success" role="status">{params.access_enabled === '1' ? 'Sources enabled for assistants.' : 'Sources saved. New sources are off until enabled.'}</div> : null}
+    <SuccessToast message={params.accounts_saved ? params.access_enabled === '1' ? 'Sources enabled for assistants.' : 'Sources saved without enabling new sources.' : undefined} />
     {params.selection_id || params.selection_unavailable ? <div className="error-callout" role="alert">This selection is no longer available. {canManage ? 'Choose the platform again to restart.' : 'Ask an owner or admin to restart it.'}</div> : null}
     {providerFilter ? <div><Link className="button secondary small" href="/dashboard/analytics">View all sources</Link></div> : null}
     <PendingAccountSelections connections={pending} canManage={canManage} noun="sources" />

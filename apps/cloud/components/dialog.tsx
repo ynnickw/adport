@@ -3,11 +3,14 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from './controls';
+import { useToastHost } from './toast';
 
 const subscribe = () => () => {};
 
 export function Dialog({ title, children, onClose, className = '', portal = false, closeLabel = `Close ${title}` }: { title: string; children: React.ReactNode; onClose: () => void; className?: string; portal?: boolean; closeLabel?: string }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const toastHost = useRef<HTMLDivElement>(null);
+  const registerToastHost = useToastHost();
   const titleId = useId();
   const hydrated = useSyncExternalStore(subscribe, () => true, () => false);
   const ready = !portal || hydrated;
@@ -16,12 +19,13 @@ export function Dialog({ title, children, onClose, className = '', portal = fals
     const previous = document.activeElement as HTMLElement | null;
     const dialog = ref.current;
     dialog?.showModal();
+    const unregisterToastHost = toastHost.current ? registerToastHost(toastHost.current) : undefined;
     const target = dialog?.querySelector<HTMLElement>('[data-autofocus]');
     if (target && (target.dataset.autofocus !== 'fine-pointer' || !window.matchMedia?.('(pointer: coarse)').matches)) {
       target.focus();
     }
-    return () => { dialog?.close(); previous?.focus(); };
-  }, [ready]);
+    return () => { unregisterToastHost?.(); dialog?.close(); previous?.focus(); };
+  }, [ready, registerToastHost]);
   if (!ready) return null;
   const content = <dialog ref={ref} className={`app-dialog ${className}`} aria-labelledby={titleId}
     onCancel={event => { event.preventDefault(); onClose(); }}
@@ -32,6 +36,7 @@ export function Dialog({ title, children, onClose, className = '', portal = fals
     }}>
     <div className="dialog-heading"><h2 id={titleId}>{title}</h2><Button type="button" className="icon-button" aria-label={closeLabel} onClick={onClose}>×</Button></div>
     {children}
+    <div ref={toastHost} />
   </dialog>;
   return portal ? createPortal(content, document.body) : content;
 }

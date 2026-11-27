@@ -2,13 +2,13 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import type { Policy } from '@adport/core';
 import { Button, Checkbox, Disclosure, Input, Switch } from '@/components/controls';
 import { PlanLimitModal } from '@/components/plan-limit-modal';
 import { UpgradeButton } from '@/components/upgrade-button';
 import { Field, Provider } from '@/components/ui';
 import { InfoTooltip } from '@/components/info-tooltip';
+import { useToast } from '@/components/toast';
 import { planLimitFromResponse, type PlanLimitDetails } from '@/lib/cloud/plan-limit';
 import { createPolicySettingsDraft, policySettingsInput, type PolicySettingsDraft } from '@/lib/policy-settings';
 
@@ -34,7 +34,8 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
   const router = useRouter();
   const [draft, setDraft] = useState(() => createPolicySettingsDraft(policy, dataRetentionDays, accounts.map(account => account.accountId)));
   const [saved, setSaved] = useState(draft);
-  const [message, setMessage] = useState<{ error?: string; success?: string }>({});
+  const [message, setMessage] = useState<{ error?: string }>({});
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [planLimit, setPlanLimit] = useState<PlanLimitDetails>();
   const dirty = JSON.stringify(policySettingsInput(draft)) !== JSON.stringify(policySettingsInput(saved));
@@ -46,11 +47,6 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty]);
-  useEffect(() => {
-    if (!message.success) return;
-    const timer = window.setTimeout(() => setMessage({}), 4500);
-    return () => window.clearTimeout(timer);
-  }, [message.success]);
 
   function update<K extends keyof PolicySettingsDraft>(key: K, value: PolicySettingsDraft[K]) {
     setDraft(current => ({ ...current, [key]: value }));
@@ -71,7 +67,7 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
       const limit = planLimitFromResponse(result);
       if (limit) setPlanLimit(limit);
       else if (!response.ok) setMessage({ error: result.error ?? 'Unable to save settings.' });
-      else { setMessage({ success: 'Policy saved.' }); setSaved(draft); router.refresh(); }
+      else { toast('Policy saved.'); setSaved(draft); router.refresh(); }
     } catch {
       setMessage({ error: 'Could not save the policy. Check your connection and try again.' });
     } finally {
@@ -130,11 +126,11 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
           </div>
         </section>
       </fieldset>
-      {canAdminister ? <div className={dirty || busy ? 'form-actions save-bar' : 'policy-idle-feedback'}>
+      {canAdminister ? dirty || busy || message.error ? <div className="form-actions save-bar">
         <div className="save-feedback">
           {message.error ? <p className="save-state is-error" role="alert">{message.error}</p> : null}
-          <p className={`save-state${message.success ? ' is-saved' : dirty && !busy ? ' is-dirty' : ''}`} role="status">
-            {busy ? 'Saving policy…' : message.success ? 'Policy saved' : dirty && !message.error ? 'Unsaved changes' : null}
+          <p className={`save-state${dirty && !busy ? ' is-dirty' : ''}`} role="status">
+            {busy ? 'Saving policy…' : dirty && !message.error ? 'Unsaved changes' : null}
           </p>
           {dirty && !busy && !message.error ? <small>Pending changes will need a fresh preview.</small> : null}
         </div>
@@ -142,7 +138,7 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
           <Button type="button" className="button secondary" disabled={busy} onClick={() => { setDraft(saved); setMessage({}); }}>Discard</Button>
           <Button type="submit" className="button" pending={busy} pendingLabel="Saving…">Save policy</Button>
         </> : null}
-      </div> : <p className="inline-note">Owners and admins can change the policy.</p>}
+      </div> : null : <p className="inline-note">Owners and admins can change the policy.</p>}
     </form>
   );
 }
