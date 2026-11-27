@@ -16,9 +16,7 @@ Tests use synthetic responses shaped after the
 [Reporting API](https://developer.matomo.org/api-reference/reporting-api),
 [report metadata](https://developer.matomo.org/api-reference/reporting-api-metadata) and
 [segmentation](https://developer.matomo.org/api-reference/reporting-api-segmentation)
-references (checked 2026-11-27). Read calls (period keys, unformatted metric values,
-error messages) were checked against the public Matomo demo instance on 2026-11-27,
-but not against a private instance with a real token.
+references. On 2026-11-27 all eight tools ran through an authenticated Adport Cloud MCP connection against the public Matomo demo. The same campaign query returned identical rows over the Cloud REST API. In a disposable self-hosted Matomo 6.0.0 installation, the CLI and stdio MCP used a private view-only token. The selected site returned its test campaign, goal and segment, and Matomo denied access to the other site. Both installations exercised their own campaign report implementation.
 
 ## Create a token
 
