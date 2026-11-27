@@ -1,5 +1,5 @@
 import 'server-only';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { env } from '@/lib/env';
 import { createHostedMatomoProvider, hostedMatomoUrl, matomoFetch } from './matomo';
@@ -32,21 +32,26 @@ export async function matomoTokens(app: MatomoApplication, values: Record<string
   return tokens;
 }
 
+export function matomoRedirectUri(instance: string): string {
+  const url = new URL('/api/oauth/matomo/callback', env().ADPORT_CLOUD_BASE_URL);
+  url.searchParams.set('instance', createHash('sha256').update(hostedMatomoUrl(instance)).digest('base64url'));
+  return url.href;
+}
+
 export function matomoOAuth(app?: MatomoApplication): OAuthAdapter<'matomo'> {
-  const redirect = () => new URL('/api/oauth/matomo/callback', env().ADPORT_CLOUD_BASE_URL).href;
   return {
     provider: 'matomo', flowLabel: 'Matomo OAuth 2.0', pkce: true, codeParam: 'code', scopes: [scope],
     manualRevocationUrl: 'https://matomo.org/faq/how-to/set-up-oauth-2-0-authentication-for-the-matomo-api/', configured: () => true,
     authorizationUrl({ state, challenge }) {
       if (!app) throw new Error('Select the Matomo instance before connecting.');
       const url = endpoint(app, 'authorize');
-      for (const [key, value] of Object.entries({ client_id: app.clientId, redirect_uri: redirect(), response_type: 'code',
+      for (const [key, value] of Object.entries({ client_id: app.clientId, redirect_uri: matomoRedirectUri(app.url), response_type: 'code',
         scope, state, code_challenge: challenge, code_challenge_method: 'S256' })) url.searchParams.set(key, value);
       return url.href;
     },
     async exchange({ code, verifier }) {
       if (!app) throw new Error('The Matomo registration is missing.');
-      const tokens = await matomoTokens(app, { grant_type: 'authorization_code', code, code_verifier: verifier, redirect_uri: redirect() });
+      const tokens = await matomoTokens(app, { grant_type: 'authorization_code', code, code_verifier: verifier, redirect_uri: matomoRedirectUri(app.url) });
       // Some proxies strip the bearer header and Matomo can return an empty 200 response.
       const sites = await createHostedMatomoProvider({ url: app.url, accessToken: async () => tokens.accessToken }).listAccounts();
       if (!sites.length) throw new Error('Matomo did not return any visible sites. Check site access and bearer-header forwarding.');

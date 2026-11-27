@@ -1,4 +1,5 @@
 import 'server-only';
+import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { decryptSecret, encryptSecret } from '@/lib/crypto';
@@ -50,4 +51,25 @@ export function hostedAccessToken(organizationId: string, provider: CloudProvide
     });
     return tokens.accessToken;
   };
+}
+
+/** Lock the parent before the vault row, in the same order as reconnect. Revoke the latest rotated tokens. */
+export function disconnectHostedConnection(organizationId: string, provider: CloudProvider,
+  expected: StoredProviderCredential & { connectionId: string }, revoke?: (grant: StoredProviderCredential) => Promise<boolean>): Promise<boolean> {
+  const { connectionId, ...previous } = expected;
+  const changed = () => new Error('The connection changed while it was being disconnected. Please retry.');
+  return db().begin(async sql => {
+    const parent = await sql`select id from public.connections where id = ${connectionId}
+      and organization_id = ${organizationId} and provider = ${provider} for update`;
+    if (!parent.length) throw changed();
+    const [row] = await sql<Array<{ ciphertext: string }>>`select ciphertext from private.provider_credentials
+      where connection_id = ${connectionId} and organization_id = ${organizationId} and provider = ${provider} for update`;
+    if (!row) throw changed();
+    const current = decryptSecret<StoredProviderCredential>(row.ciphertext, 'connection:' + organizationId + ':' + provider);
+    const same = 'grantId' in previous ? 'grantId' in current && current.grantId === previous.grantId : isDeepStrictEqual(current, previous);
+    if (!same) throw changed();
+    const revoked = revoke ? await revoke(current) : false;
+    await sql`delete from public.connections where id = ${connectionId} and organization_id = ${organizationId} and provider = ${provider}`;
+    return revoked;
+  });
 }

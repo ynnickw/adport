@@ -5,6 +5,7 @@ import { GravityClient, GravityProvider } from '@adport/provider-gravity';
 import { matomoBaseUrl } from '@adport/provider-matomo';
 import { createHostedMatomoProvider } from '@/lib/cloud/matomo';
 import { providerLabel } from '@/lib/cloud/providers';
+import { disconnectHostedConnection } from '@/lib/cloud/hosted-grant';
 import { sessionPrincipal } from '@/lib/cloud/auth';
 import { oauthAdapter, revokeGrant } from '@/lib/cloud/provider-oauth';
 import {
@@ -90,16 +91,21 @@ export async function DELETE(request: Request, { params }: RouteContext<'/api/co
     if (!stored) return noStoreJson({ disconnected: false });
 
     let revokedAtProvider = false;
-    const oauth = isOAuthProvider(provider) && !(provider === 'matomo' && 'tokenAuth' in stored) && !(provider === 'gravity' && 'apiKey' in stored);
-    if (oauth && isOAuthProvider(provider)) {
-      const sharedGoogleGrant = provider === 'google' && (await Promise.all(['gtm', 'ga4', 'gsc'].map(id => loadProviderCredential(principal.organizationId, id as 'gtm' | 'ga4' | 'gsc')))).some(Boolean);
-      if (oauthAdapter(provider).configured() && !sharedGoogleGrant) {
-        // Throws on transient failure and keeps the encrypted credential for a retry.
-        revokedAtProvider = await revokeGrant(provider, stored);
+    const dualMethod = provider === 'matomo' || provider === 'gravity';
+    const oauth = isOAuthProvider(provider) && (!dualMethod || 'grantId' in stored);
+    if (dualMethod) {
+      revokedAtProvider = await disconnectHostedConnection(principal.organizationId, provider, stored, oauth ? grant => revokeGrant(provider, grant) : undefined);
+    } else {
+      if (oauth && isOAuthProvider(provider)) {
+        const sharedGoogleGrant = provider === 'google' && (await Promise.all(['gtm', 'ga4', 'gsc'].map(id => loadProviderCredential(principal.organizationId, id as 'gtm' | 'ga4' | 'gsc')))).some(Boolean);
+        if (oauthAdapter(provider).configured() && !sharedGoogleGrant) {
+          // Throws on transient failure and keeps the encrypted credential for a retry.
+          revokedAtProvider = await revokeGrant(provider, stored);
+        }
       }
+      const removed = await removeProviderConnection(principal.organizationId, provider, stored.connectionId);
+      if (!removed) throw new Error('The connection changed while it was being disconnected. Please retry.');
     }
-    const removed = await removeProviderConnection(principal.organizationId, provider, stored.connectionId);
-    if (!removed) throw new Error('The connection changed while it was being disconnected. Please retry.');
     await recordAudit(principal, {
       event: 'revoked', provider, tool: oauth ? 'oauth_disconnect' : 'credential_disconnect', accountId: '*',
       summary: revokedAtProvider

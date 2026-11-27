@@ -7,7 +7,8 @@ import { saveAccountSelection, stageAccountSelection } from '@/lib/cloud/account
 import { applyOrganizationPlanLimits } from '@/lib/cloud/billing';
 import { getOrganizationUsage } from '@/lib/cloud/usage';
 import { createProject, listOrganizationProjects, organizationActiveAccounts } from '@/lib/cloud/workspaces';
-import { setOrganizationAdAccountEnabled, syncDiscoveredAccounts, upsertProviderConnection } from '@/lib/cloud/repository';
+import { disconnectHostedConnection, hostedAccessToken } from '@/lib/cloud/hosted-grant';
+import { loadProviderCredential, setOrganizationAdAccountEnabled, syncDiscoveredAccounts, upsertProviderConnection } from '@/lib/cloud/repository';
 import type { TenantPrincipal } from '@/lib/cloud/types';
 
 const databaseUrl = process.env.ADPORT_SELECTION_TEST_DATABASE_URL;
@@ -98,5 +99,23 @@ suite('analytics accounts do not consume advertising capacity', () => {
     expect(await sites()).toHaveLength(1);
     await connect('https://another.example.test', 'other-instance');
     expect(await sites()).toHaveLength(0);
+  });
+
+  it('disconnects the rotated grant and preserves a replacement when an old disconnect arrives late', async () => {
+    const grant = { url: 'https://analytics.example.test', clientId: 'client', clientSecret: 'local-secret', grantId: randomUUID(), accessToken: 'old', refreshToken: 'old-refresh', expiresAt: 1 };
+    const connect = (credential: typeof grant) => upsertProviderConnection({ organizationId: sibling, userId, provider: 'matomo', credential });
+    const connectionId = await connect(grant);
+    const before = { ...grant, connectionId };
+    const token = hostedAccessToken(sibling, 'matomo', before, async () => ({ accessToken: 'new', refreshToken: 'new-refresh', expiresAt: Date.now() / 1000 + 3600 }));
+    expect(await token()).toBe('new');
+    await expect(disconnectHostedConnection(sibling, 'matomo', before, async current => {
+      expect(current).toMatchObject({ refreshToken: 'new-refresh' }); throw new Error('Provider unavailable');
+    })).rejects.toThrow(/Provider unavailable/);
+    const replacement = { ...grant, grantId: randomUUID() };
+    expect(await connect(replacement)).toBe(connectionId);
+    await expect(disconnectHostedConnection(sibling, 'matomo', before)).rejects.toThrow(/connection changed/);
+    expect(await loadProviderCredential(sibling, 'matomo')).toMatchObject({ grantId: replacement.grantId });
+    expect(await disconnectHostedConnection(sibling, 'matomo', { ...replacement, connectionId })).toBe(false);
+    expect(await loadProviderCredential(sibling, 'matomo')).toBeUndefined();
   });
 });
