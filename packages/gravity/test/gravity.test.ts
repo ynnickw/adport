@@ -366,3 +366,17 @@ describe('Gravity module wiring', () => {
     expect((await createGravityModule(store))?.provider.id).toBe('gravity');
   });
 });
+
+it('requires Gravity write permission to preview an edit and spend permission to increase a budget or activate', async () => {
+  const { provider, calls } = fixture([{ path: 'info', reply: info }, { path: 'campaigns/camp-456', reply: campaign }]);
+  const read = new GravityProvider(provider.api, ['read']);
+  const edit = new GravityProvider(provider.api, ['read', 'write']);
+  const status = { provider: 'gravity', accountId: 'abc-123', tool: 'gravity_set_campaign_status', kind: 'update' as const, payload: { campaign_id: 'camp-456', status: 'active' } };
+  await expect(read.previewWrite(status, guard)).rejects.toMatchObject({ code: 'POLICY_VIOLATION' });
+  expect(calls).toHaveLength(0);
+  await expect(edit.previewWrite(status, guard)).rejects.toMatchObject({ code: 'POLICY_VIOLATION' });
+  const budget = { ...status, tool: 'gravity_set_budget', payload: { campaign_id: 'camp-456', field: 'daily_budget', budget_micros: 200_000_000 } };
+  await expect(edit.applyWrite(budget, guard)).rejects.toMatchObject({ code: 'POLICY_VIOLATION' });
+  await expect(edit.previewWrite({ ...budget, payload: { ...budget.payload, budget_micros: 50_000_000 } }, guard)).resolves.toMatchObject({ serverValidated: false });
+  expect(calls.every(request => request.init.method === 'GET')).toBe(true);
+});

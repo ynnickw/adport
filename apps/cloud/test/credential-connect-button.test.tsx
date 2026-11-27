@@ -26,3 +26,15 @@ it.each(['matomo', 'openai', 'gravity'] as const)('connects %s from onboarding a
   expect(JSON.parse(request.mock.calls[0]?.[1].body)).toEqual({ organization_id: 'project', return_to: '/onboarding?resume=1',
     ...(provider === 'matomo' ? { url: 'https://analytics.example.test', token_auth: 'test-token' } : { api_key: 'test-token' }) });
 });
+
+it('carries the project, return path and explicitly selected Gravity permissions into hosted sign-in', async () => {
+  const ui = render(<ProviderConnections organizationId="project" projectName="Example" canManage connections={[]}
+    oauthProviders={[{ id: 'gravity', available: true }]} returnTo="/onboarding?resume=1" variant="onboarding" />);
+  fireEvent.click(ui.getByRole('button', { name: 'Connect Gravity' }));
+  const link = ui.getByRole('link', { name: 'Continue to Gravity' });
+  expect(new URL(link.getAttribute('href')!, 'https://app.test').searchParams.get('gravity_access')).toBe('read');
+  fireEvent.change(ui.getByLabelText('Gravity permissions'), { target: { value: 'spend' } });
+  expect(Object.fromEntries(new URL(link.getAttribute('href')!, 'https://app.test').searchParams)).toEqual({
+    organization_id: 'project', gravity_access: 'spend', return_to: '/onboarding?resume=1',
+  });
+});
