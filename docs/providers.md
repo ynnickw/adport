@@ -8,6 +8,8 @@ New in v0.6.0: [Snapchat](./providers/snapchat.md), [Spotify](./providers/spotif
 
 New: [OpenAI Ads](./providers/openai.md) (ads in ChatGPT), connected with an Advertiser API key.
 
+New: [Gravity](./providers/gravity.md) (ads in AI assistants), connected with an advertiser API key.
+
 For a source checkout, replace `adport` below with `node packages/cli/dist/index.js` after `pnpm build`.
 
 ## API versions and native coverage

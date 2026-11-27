@@ -324,7 +324,12 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
         await connectOpenAI({ io });
         return;
       }
-      io.err(`Provider "${provider}" is not supported. Available: ga4, gsc, gtm, google, meta, tiktok, apple, microsoft, reddit, snapchat, spotify, pinterest, linkedin, x, openai, mock.`);
+      if (provider === 'gravity') {
+        const { connectGravity } = await import('./connect/gravity.js');
+        await connectGravity({ io });
+        return;
+      }
+      io.err(`Provider "${provider}" is not supported. Available: ga4, gsc, gtm, google, meta, tiktok, apple, microsoft, reddit, snapchat, spotify, pinterest, linkedin, x, openai, gravity, mock.`);
       process.exitCode = 1;
     });
 
@@ -332,8 +337,8 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .command('disconnect <provider>')
     .description('Remove a provider connection from this machine')
     .action(async (provider: string) => {
-      if (!['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai'].includes(provider)) {
-        io.err(`Provider "${provider}" is not supported. Available: ga4, gsc, gtm, google, meta, tiktok, apple, microsoft, reddit, snapchat, spotify, pinterest, linkedin, x, openai.`);
+      if (!['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai', 'gravity'].includes(provider)) {
+        io.err(`Provider "${provider}" is not supported. Available: ga4, gsc, gtm, google, meta, tiktok, apple, microsoft, reddit, snapchat, spotify, pinterest, linkedin, x, openai, gravity.`);
         process.exitCode = 1;
         return;
       }
@@ -408,7 +413,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
       for (const record of records) {
         io.out(`${record.provider}: credentials stored (source: ${record.source}, updated ${record.updatedAt})`);
       }
-      for (const id of ['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai'] as const) {
+      for (const id of ['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai', 'gravity'] as const) {
         const provider = rt.ctx.providers.list().find((p) => p.id === id);
         if (!provider) {
           io.out(`${id}: not connected (run \`adport connect ${id}\`)`);

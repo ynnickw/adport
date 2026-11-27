@@ -28,6 +28,7 @@
     "@adport/provider-spotify": "workspace:*",
     "@adport/provider-pinterest": "workspace:*",
     "@adport/provider-linkedin": "workspace:*",
+    "@adport/provider-gravity": "workspace:*",
     "@adport/provider-openai": "workspace:*",
     "@adport/provider-x": "workspace:*",
     "@adport/provider-tiktok": "workspace:*",

@@ -115,7 +115,7 @@ ${RECORD_COLLECTION_UI}
       }).join('')+'</dl>':'')+'</article>';
     }
     function entityRecordTable(tool) {
-      return /^(?:google|meta|apple|microsoft|tiktok|linkedin|pinterest|reddit|snapchat|spotify|openai|x)_(?:list_)?(?:campaigns|campaign_groups|adgroups|ad_groups|ad_sets|adsets|line_items|adsquads)$/.test(tool||'');
+      return /^(?:google|meta|apple|microsoft|tiktok|linkedin|pinterest|reddit|snapchat|spotify|openai|gravity|x)_(?:list_)?(?:campaigns|campaign_groups|adgroups|ad_groups|ad_sets|adsets|line_items|adsquads)$/.test(tool||'');
     }
 
     function entityFields(row,meta) {
@@ -195,7 +195,7 @@ ${RECORD_COLLECTION_UI}
       if(meta.tool==='apple_report')return renderAppleReport(data,meta);
       if(nativeReportTools.has(meta.tool)&&(meta.tool!=='google_gaql'||arr(recordPayload(data)?.rows).some(row=>object(row?.metrics)&&Object.keys(row.metrics).length)))return renderNativeReport(data,meta);
       const payload=recordPayload(data),entries=recordEntries(payload),rows=entries ?? [payload];
-      const title=meta.tool==='google_gaql'?'Google Ads query results':human(String(meta.tool||'Results').replace(/^(?:google|meta|tiktok|apple|microsoft|reddit|snapchat|spotify|pinterest|linkedin|openai|x)_/,'').replace(/^(?:list|get)_/,'').replace(/_(?:list|get)$/,'').replaceAll('_',' '));
+      const title=meta.tool==='google_gaql'?'Google Ads query results':human(String(meta.tool||'Results').replace(/^(?:google|meta|tiktok|apple|microsoft|reddit|snapchat|spotify|pinterest|linkedin|openai|gravity|x)_/,'').replace(/^(?:list|get)_/,'').replace(/_(?:list|get)$/,'').replaceAll('_',' '));
       const parent=object(data.parent)?Object.entries(data.parent).filter(([key])=>/_id$/.test(key)).map(([key,value])=>human(key.replace(/_id$/,''))+' '+value).join(' · '):'';
       const scope=[parent,typeof data.parent_id==='string'&&!parent?data.parent_id:'',meta.accountId].filter(Boolean).join(' · ');
       const clean=object(data)?Object.fromEntries(Object.entries(data).filter(([key])=>key!=='_adport'&&!(key==='creatives'&&meta.view==='records'))):data;

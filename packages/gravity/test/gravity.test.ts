@@ -1,0 +1,239 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { CredentialStore } from '@adport/core';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { GravityClient } from '../src/client.js';
+import { GravityProvider } from '../src/provider.js';
+import { gravityTools, listConversions } from '../src/tools.js';
+import { createGravityModule } from '../src/index.js';
+
+// Synthetic fixtures shaped after the official Gravity advertiser Dashboard API
+// reference examples, reviewed 2026-11-27. See docs/providers/gravity.md.
+const info = { advertiser_id: 'abc-123', name: 'Acme Corp', email: 'ads@example.com' };
+const campaign = {
+  campaign_id: 'camp-456', name: 'Summer Sale', status: 'active', is_active: true, daily_budget: 100.0, budget_type: 'daily',
+  landing_page: 'https://example.com/summer', campaign_objective: 'conversions', billing_model: 'cpm', created_at: '2025-05-01T00:00:00',
+  start_time: '2025-05-01T00:00:00', end_time: null, delivery_status: 'eligible', delivery_issues: [],
+  impressions: 350000, clicks: 1800, spend: 875.5, conversions: 42, click_through_conversions: 40, view_through_conversions: 2, conversion_value: 4200.0,
+};
+const metrics = (spend: number, impressions: number, clicks: number, conversions: number, revenue: number | null) => ({
+  data: [], total_impressions: impressions, total_clicks: clicks, total_spend: spend, total_conversions: conversions, total_revenue: revenue,
+});
+
+type Route = { method?: string; path: string; reply: unknown | ((url: URL, init: RequestInit) => unknown); status?: number; headers?: Record<string, string> };
+function fixture(routes: Route[]) {
+  const calls: Array<{ url: URL; init: RequestInit }> = [];
+  const fetchImpl = vi.fn(async (input: string | URL | Request, init: RequestInit = {}) => {
+    const url = new URL(String(input));
+    calls.push({ url, init });
+    const route = routes.find(r => url.pathname === `/advertiser-dashboard/${r.path}` && (r.method ?? 'GET') === init.method);
+    if (!route) throw new Error(`Unexpected request ${init.method} ${url.pathname}`);
+    const reply = typeof route.reply === 'function' ? (route.reply as (u: URL, i: RequestInit) => unknown)(url, init) : route.reply;
+    return Response.json(reply, { status: route.status ?? 200, headers: route.headers });
+  }) as unknown as typeof fetch;
+  const provider = new GravityProvider(new GravityClient({ apiKey: 'grv-test-secret' }, fetchImpl));
+  return { provider, calls };
+}
+const infoRoute: Route = { path: 'info', reply: info };
+const guard = { forcePausedCreation: true };
+const body = (call: { init: RequestInit }) => JSON.parse(String(call.init.body));
+const dirs: string[] = [];
+afterEach(async () => { vi.unstubAllEnvs(); for (const dir of dirs.splice(0)) await rm(dir, { recursive: true }); });
+
+describe('Gravity transport and accounts', () => {
+  it('lists the key-bound advertiser with X-API-Key auth, no redirects and no email', async () => {
+    const { provider, calls } = fixture([infoRoute]);
+    const accounts = await provider.listAccounts();
+    expect(accounts).toEqual([{ provider: 'gravity', id: 'abc-123', name: 'Acme Corp', currency: 'USD', timezone: 'UTC' }]);
+    expect(JSON.stringify(accounts)).not.toContain('example.com');
+    expect(calls[0]!.url.href).toBe('https://platform.trygravity.com/advertiser-dashboard/info');
+    expect(calls[0]!.init.headers).toMatchObject({ 'x-api-key': 'grv-test-secret' });
+    expect(calls[0]!.init.headers).not.toHaveProperty('authorization');
+    expect(calls[0]!.init.redirect).toBe('error');
+  });
+  it('redacts the API key and surfaces detail messages and codes', async () => {
+    const { provider } = fixture([{ path: 'info', status: 401, reply: { detail: 'Invalid API key grv-test-secret' } }]);
+    const error = await provider.listAccounts().then(() => new Error('expected failure'), (e: Error) => e);
+    expect(error.message).toMatch(/gravity: HTTP 401/);
+    expect(error.message).toContain('Invalid API key');
+    expect(error.message).not.toContain('grv-test-secret');
+    const conflict = fixture([infoRoute, { path: 'campaigns/camp-456', reply: { ...campaign, status: 'paused' } },
+      { method: 'PATCH', path: 'campaigns/camp-456', status: 409, reply: { detail: { code: 'capi_event_not_received', event_type: 'purchase', message: 'No live CAPI event' } } }]);
+    const op = { provider: 'gravity', accountId: 'abc-123', tool: 'gravity_set_campaign_status', kind: 'update' as const, payload: { campaign_id: 'camp-456', status: 'active' } };
+    await expect(conflict.provider.applyWrite(op, guard)).rejects.toMatchObject({ message: expect.stringContaining('No live CAPI event'), details: { http_status: 409, provider_code: 'capi_event_not_received' } });
+  });
+  it('explains rate limits with Retry-After', async () => {
+    const { provider } = fixture([{ path: 'info', status: 429, reply: {}, headers: { 'retry-after': '3' } }]);
+    await expect(provider.listAccounts()).rejects.toThrow(/retry after 3 s/);
+  });
+  it('rejects another account id than the key advertiser', async () => {
+    const { provider } = fixture([infoRoute]);
+    await expect(provider.listCampaigns('other-advertiser')).rejects.toThrow(/does not match/);
+  });
+  it('rejects malformed responses rather than returning empty success', async () => {
+    const { provider } = fixture([infoRoute, { path: 'campaigns', reply: { campaigns: 'nope' } }]);
+    await expect(provider.listCampaigns('abc-123')).rejects.toThrow(/malformed/);
+  });
+  it('passes list filters as query parameters', async () => {
+    const { provider, calls } = fixture([infoRoute, { path: 'campaigns', reply: { campaigns: [campaign] } }, { path: 'ad-groups', reply: [] }]);
+    expect((await provider.listCampaigns('abc-123', 'paused')).items).toHaveLength(1);
+    await provider.listAdGroups('abc-123', 'camp-456', true);
+    expect(calls[1]!.url.searchParams.get('status')).toBe('paused');
+    expect(Object.fromEntries(calls[2]!.url.searchParams)).toEqual({ campaign_id: 'camp-456', include_archived: 'true' });
+  });
+});
+
+describe('Gravity reporting', () => {
+  const range = { start: '2026-11-01', end: '2026-11-07' };
+  it('reports account totals for an inclusive UTC date range', async () => {
+    const { provider, calls } = fixture([infoRoute, { path: 'metrics', reply: metrics(875.5, 350000, 1800, 42, 4200) }]);
+    const report = await provider.report({ level: 'account', metrics: ['spend', 'impressions', 'clicks', 'ctr', 'cpc', 'cpm', 'conversions', 'cpa', 'conversion_value', 'roas'], dateRange: range });
+    expect(Object.fromEntries(calls[1]!.url.searchParams)).toEqual({ start_date: '2026-11-01', end_date: '2026-11-07', tz: 'UTC' });
+    expect(report.rows).toHaveLength(1);
+    expect(report.rows[0]).toMatchObject({ provider: 'gravity', accountId: 'abc-123', currency: 'USD', entity: { level: 'account', id: 'abc-123', name: 'Acme Corp' } });
+    const m = report.rows[0]!.metrics;
+    expect(m).toMatchObject({ spend: 875.5, impressions: 350000, clicks: 1800, conversions: 42, conversion_value: 4200 });
+    expect(m.ctr).toBeCloseTo(1800 / 350000 * 100);
+    expect(m.cpm).toBeCloseTo(875.5 / 350);
+    expect(m.roas).toBeCloseTo(4200 / 875.5);
+  });
+  it('reads one metrics series per campaign and omits ratios with a zero denominator', async () => {
+    const other = { ...campaign, campaign_id: 'camp-789', name: 'Draft', status: 'draft' };
+    const { provider, calls } = fixture([infoRoute, { path: 'campaigns', reply: { campaigns: [campaign, other] } },
+      { path: 'metrics', reply: (url: URL) => url.searchParams.get('campaign_id') === 'camp-456' ? metrics(20, 1000, 40, 4, 80) : metrics(0, 0, 0, 0, null) }]);
+    const report = await provider.report({ level: 'campaign', metrics: ['spend', 'clicks', 'ctr', 'cpc', 'conversion_value', 'roas'], dateRange: range });
+    expect(calls.filter(c => c.url.pathname.endsWith('/metrics')).map(c => c.url.searchParams.get('campaign_id'))).toEqual(['camp-456', 'camp-789']);
+    expect(report.rows.map(r => r.entity)).toEqual([{ level: 'campaign', id: 'camp-456', name: 'Summer Sale', status: 'active' }, { level: 'campaign', id: 'camp-789', name: 'Draft', status: 'draft' }]);
+    expect(report.rows[0]!.metrics).toEqual({ spend: 20, clicks: 40, ctr: 4, cpc: 0.5, conversion_value: 80, roas: 4 });
+    expect(report.rows[1]!.metrics).toEqual({ spend: 0, clicks: 0 });
+    const limited = await provider.report({ level: 'campaign', metrics: ['spend'], dateRange: range, limit: 1 });
+    expect(limited).toMatchObject({ rows: [expect.anything()], truncated: true });
+  });
+  it('pages ad group metrics by offset while truncated', async () => {
+    const group = (id: string) => ({ ad_group_id: id, campaign_id: 'camp-456', name: id, status: 'active', group_type: 'generative', total_impressions: 10, total_clicks: 1, total_spend: 0.5, total_conversions: 0, total_revenue: null, data: [] });
+    const pages = [
+      { ad_groups: [group('adg-1'), group('adg-2')], total_ad_groups: 3, offset: 0, truncated: true },
+      { ad_groups: [group('adg-3')], total_ad_groups: 3, offset: 2, truncated: false },
+    ];
+    const { provider, calls } = fixture([infoRoute, { path: 'ad-group-metrics', reply: () => pages.shift() }]);
+    const report = await provider.report({ level: 'ad_group', metrics: ['spend', 'conversions', 'cpa'], dateRange: range });
+    expect(calls.filter(c => c.url.pathname.endsWith('/ad-group-metrics')).map(c => c.url.searchParams.get('offset'))).toEqual(['0', '2']);
+    expect(report.rows.map(r => r.entity.id)).toEqual(['adg-1', 'adg-2', 'adg-3']);
+    expect(report.rows[0]!.metrics).toEqual({ spend: 0.5, conversions: 0 });
+    const stuck = fixture([infoRoute, { path: 'ad-group-metrics', reply: { ad_groups: [], total_ad_groups: 3, truncated: true } }]);
+    await expect(stuck.provider.report({ level: 'ad_group', metrics: ['spend'], dateRange: range })).rejects.toThrow(/truncated but the page is empty/);
+  });
+  it('reports the ad level from ad unit metrics without conversions', async () => {
+    const { provider } = fixture([infoRoute, { path: 'ad-unit-metrics', reply: { ad_units: [{ ad_unit_id: 'ad-123', campaign_id: 'camp-456', name: 'Brand Voice', data_source: 'ad_unit_stats', total_impressions: 19784, total_clicks: 131, total_spend: 88.2, data: [] }] } }]);
+    const report = await provider.report({ level: 'ad', metrics: ['spend', 'clicks', 'conversions'], dateRange: range });
+    expect(report.rows).toEqual([expect.objectContaining({ entity: { level: 'ad', id: 'ad-123', name: 'Brand Voice' }, metrics: { spend: 88.2, clicks: 131 } })]);
+  });
+});
+
+describe('Gravity conversions and billing', () => {
+  it('follows next_cursor pages up to the requested limit and refuses a repeated cursor', async () => {
+    const conversion = (id: string) => ({ conversion_id: id, event_type: 'purchase', value_cents: 9999, currency: 'USD', conversion_timestamp: '2025-05-20T14:30:00', campaign_id: 'camp-456', source: 'capi', is_attributed: true, attribution_type: 'click_through' });
+    const pages = [
+      { conversions: [conversion('conv-2')], total_conversions: 2, has_more: true, next_cursor: 'conv-1' },
+      { conversions: [conversion('conv-1')], total_conversions: 2, has_more: false, next_cursor: null },
+    ];
+    const { provider, calls } = fixture([infoRoute, { path: 'conversions', reply: () => pages.shift() }]);
+    const result = await listConversions(provider, { account_id: 'abc-123', event_type: 'purchase', limit: 100 });
+    expect(result.items.map(c => c.conversion_id)).toEqual(['conv-2', 'conv-1']);
+    expect(result.total_conversions).toBe(2);
+    const second = calls.filter(c => c.url.pathname.endsWith('/conversions'))[1]!.url.searchParams;
+    expect(Object.fromEntries(second)).toEqual({ limit: '99', cursor: 'conv-1', event_type: 'purchase' });
+    const loop = fixture([infoRoute, { path: 'conversions', reply: { conversions: [conversion('conv-2')], has_more: true, next_cursor: 'conv-1' } }]);
+    await expect(listConversions(loop.provider, { account_id: 'abc-123', limit: 500 })).rejects.toThrow(/pagination/);
+  });
+  it('reads the billing summary for the key advertiser only', async () => {
+    const { provider } = fixture([infoRoute, { path: 'billing', reply: { total_spend_dollars: 875.5, total_billed_dollars: 800, unbilled_dollars: 75.5, credits_dollars: 0, billing_enabled: true } }]);
+    const billing = gravityTools(provider).find(tool => tool.name === 'gravity_billing')!;
+    await expect(billing.handler({ account_id: 'abc-123' } as never, {} as never)).resolves.toMatchObject({ unbilled_dollars: 75.5 });
+    await expect(billing.handler({ account_id: 'nope' } as never, {} as never)).rejects.toThrow(/does not match/);
+  });
+});
+
+describe('Gravity guarded writes', () => {
+  const createInput = { name: 'Launch', landing_page: 'https://example.com/launch', status: 'active', campaign_objective: 'clicks', daily_budget_micros: 50_000_000, context: 'Email signature software for teams', brand_name: 'Acme', allowed_countries: ['US', 'FR'] };
+  it('creates a campaign with one generative ad group, coerces active to paused and converts micros to dollars', async () => {
+    const { provider, calls } = fixture([infoRoute, { method: 'POST', path: 'campaigns', status: 201, reply: (_url: URL, init: RequestInit) => {
+      const sent = JSON.parse(String(init.body));
+      return { ...campaign, campaign_id: 'camp-new', name: sent.name, status: sent.status, campaign_objective: sent.campaign_objective, daily_budget: sent.daily_budget, ad_groups: [{ id: 'adg-new', campaign_id: 'camp-new', name: sent.ad_groups[0].name, group_type: 'generative', status: 'active', ads: [], ads_total: 0 }] };
+    } }]);
+    const op = { provider: 'gravity', accountId: 'abc-123', tool: 'gravity_create_campaign', kind: 'create' as const, payload: createInput };
+    const preview = await provider.previewWrite(op, guard);
+    expect(preview).toMatchObject({ serverValidated: false, coercions: ['status coerced to paused by policy (paused_creation)'], budgetDeltas: [{ target: 'new campaign daily_budget', toMicros: 50_000_000 }] });
+    expect(calls.filter(c => c.init.method === 'POST')).toHaveLength(0);
+    expect(await provider.applyWrite(op, guard)).toEqual({ applied: true, resourceIds: ['camp-new', 'adg-new'] });
+    expect(body(calls.find(c => c.init.method === 'POST')!)).toEqual({
+      name: 'Launch', landing_page: 'https://example.com/launch', status: 'paused', campaign_objective: 'clicks', budget_type: 'daily', daily_budget: 50,
+      allowed_countries: ['US', 'FR'], ad_groups: [{ name: 'Launch (Generative)', group_type: 'generative', context: 'Email signature software for teams', brand_name: 'Acme' }],
+    });
+  });
+  it('keeps drafts as drafts and rejects receipt mismatches with the new id', async () => {
+    const { provider, calls } = fixture([infoRoute, { method: 'POST', path: 'campaigns', reply: { ...campaign, campaign_id: 'camp-new', name: 'Launch', status: 'active', campaign_objective: 'clicks', daily_budget: 50, ad_groups: [] } }]);
+    const op = { provider: 'gravity', accountId: 'abc-123', tool: 'gravity_create_campaign', kind: 'create' as const, payload: { ...createInput, status: 'draft' } };
+    expect((await provider.previewWrite(op, guard)).coercions).toEqual([]);
+    await expect(provider.applyWrite(op, guard)).rejects.toMatchObject({ message: expect.stringMatching(/receipt mismatch/), details: { resource_ids: ['camp-new'] } });
+    expect(body(calls.find(c => c.init.method === 'POST')!).status).toBe('draft');
+  });
+  it('validates budgets, schedules and conversion settings locally', async () => {
+    const { provider } = fixture([infoRoute]);
+    const op = (payload: Record<string, unknown>) => ({ provider: 'gravity', accountId: 'abc-123', tool: 'gravity_create_campaign', kind: 'create' as const, payload: { ...createInput, ...payload } });
+    await expect(provider.previewWrite(op({ daily_budget_micros: 1_234_567 }), guard)).rejects.toThrow(/whole cents/);
+    await expect(provider.previewWrite(op({ total_budget_micros: 100_000_000 }), guard)).rejects.toThrow(/exactly one/);
+    await expect(provider.previewWrite(op({ daily_budget_micros: undefined, total_budget_micros: 100_000_000 }), guard)).rejects.toThrow(/end_time/);
+    await expect(provider.previewWrite(op({ campaign_objective: 'conversions' }), guard)).rejects.toThrow(/conversion_type/);
+    await expect(provider.previewWrite(op({ keywords: ['x'] }), guard)).rejects.toThrow();
+  });
+  it('changes the existing budget type with a before/after delta and refuses a type change', async () => {
+    const { provider, calls } = fixture([infoRoute, { path: 'campaigns/camp-456', reply: campaign },
+      { method: 'PATCH', path: 'campaigns/camp-456', reply: { ...campaign, daily_budget: 150.25 } }]);
+    const op = { provider: 'gravity', accountId: 'abc-123', tool: 'gravity_set_budget', kind: 'update' as const, payload: { campaign_id: 'camp-456', budget_micros: 150_250_000 } };
+    const preview = await provider.previewWrite(op, guard);
+    expect(preview.budgetDeltas).toEqual([{ target: 'campaign camp-456 daily_budget', fromMicros: 100_000_000, toMicros: 150_250_000 }]);
+    expect(preview.fieldChanges).toEqual([{ field: 'daily_budget', before: '100000000', after: '150250000' }]);
+    expect(await provider.applyWrite(op, guard)).toEqual({ applied: true, resourceIds: ['camp-456'] });
+    expect(body(calls.find(c => c.init.method === 'PATCH')!)).toEqual({ daily_budget: 150.25 });
+    await expect(provider.previewWrite({ ...op, payload: { ...op.payload, field: 'total_budget' } }, guard)).rejects.toThrow(/uses a daily budget/);
+  });
+  it('pauses campaigns and ad groups with a status receipt check', async () => {
+    const group = { id: 'adg-789', campaign_id: 'camp-456', name: 'Summer (Generative)', group_type: 'generative', status: 'active', ads: [], ads_total: 0 };
+    const { provider, calls } = fixture([infoRoute, { path: 'ad-groups/adg-789', reply: group },
+      { method: 'PATCH', path: 'ad-groups/adg-789', reply: (_url: URL, init: RequestInit) => ({ ...group, status: JSON.parse(String(init.body)).status }) },
+      { path: 'campaigns/camp-456', reply: campaign }, { method: 'PATCH', path: 'campaigns/camp-456', reply: campaign }]);
+    const groupOp = { provider: 'gravity', accountId: 'abc-123', tool: 'gravity_set_ad_group_status', kind: 'update' as const, payload: { ad_group_id: 'adg-789', status: 'paused' } };
+    expect((await provider.previewWrite(groupOp, guard)).fieldChanges).toEqual([{ field: 'status', before: 'active', after: 'paused' }]);
+    expect(await provider.applyWrite(groupOp, guard)).toEqual({ applied: true, resourceIds: ['adg-789'] });
+    expect(body(calls.find(c => c.init.method === 'PATCH')!)).toEqual({ status: 'paused' });
+    const campaignOp = { provider: 'gravity', accountId: 'abc-123', tool: 'gravity_set_campaign_status', kind: 'update' as const, payload: { campaign_id: 'camp-456', status: 'paused' } };
+    await expect(provider.applyWrite(campaignOp, guard)).rejects.toMatchObject({ details: { resource_ids: ['camp-456'] } });
+  });
+  it('refuses to change generated ads', async () => {
+    const ad = { id: 'ad-901', ad_group_id: 'adg-789', campaign_id: 'camp-456', headline: 'Hi', status: 'active', source: 'generated', review_status: 'approved' };
+    const { provider } = fixture([infoRoute, { path: 'ads/ad-901', reply: ad }]);
+    const op = { provider: 'gravity', accountId: 'abc-123', tool: 'gravity_set_ad_status', kind: 'update' as const, payload: { ad_id: 'ad-901', status: 'paused' } };
+    await expect(provider.previewWrite(op, guard)).rejects.toThrow(/only manual ads/);
+  });
+});
+
+describe('Gravity module wiring', () => {
+  it('loads from stored credentials or GRAVITY_API_KEY and registers the tools once', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'adport-gravity-')); dirs.push(dir);
+    const store = new CredentialStore(dir);
+    vi.stubEnv('GRAVITY_API_KEY', '');
+    expect(await createGravityModule(store)).toBeUndefined();
+    vi.stubEnv('GRAVITY_API_KEY', 'grv-env');
+    const module = await createGravityModule(store);
+    expect(module?.provider.id).toBe('gravity');
+    const names = module!.tools.map(tool => tool.name);
+    expect(names).toEqual(['gravity_list_campaigns', 'gravity_ad_groups', 'gravity_conversions', 'gravity_billing', 'gravity_create_campaign', 'gravity_set_campaign_status', 'gravity_set_ad_group_status', 'gravity_set_ad_status', 'gravity_set_budget']);
+    expect(module!.tools.filter(tool => tool.annotations?.readOnly).map(tool => tool.name)).toEqual(names.slice(0, 4));
+    for (const tool of module!.tools.filter(t => !t.annotations?.readOnly)) expect(tool.input.shape.pending_operation_id).toBeDefined();
+    vi.stubEnv('GRAVITY_API_KEY', '');
+    await store.set({ provider: 'gravity', source: 'byo', data: { api_key: 'grv-stored' } });
+    expect((await createGravityModule(store))?.provider.id).toBe('gravity');
+  });
+});

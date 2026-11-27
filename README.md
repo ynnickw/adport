@@ -90,7 +90,7 @@ Local state lives under `${ADPORT_HOME:-~/.config/adport}`. Credentials are stor
 
 ## Providers
 
-All 12 advertising providers have local connection commands, normalized reports, and guarded write tools. Coverage varies by provider; implementation and contract tests do not establish approval or successful live execution for every operation.
+All 13 advertising providers have local connection commands, normalized reports, and guarded write tools. Coverage varies by provider; implementation and contract tests do not establish approval or successful live execution for every operation.
 
 | Provider | Connection ID | Capabilities and setup |
 | --- | --- | --- |
@@ -106,6 +106,7 @@ All 12 advertising providers have local connection commands, normalized reports,
 | LinkedIn Ads | `linkedin` | [Campaigns/groups, targeting, bids, text creatives and image library](docs/providers/linkedin.md) |
 | X Ads | `x` | [Campaigns, line items, targeting, draft creatives, cards/media and analytics](docs/providers/x.md) |
 | OpenAI Ads | `openai` | [Ads in ChatGPT: reports, campaigns, ad groups, ads, status, spend limits](docs/providers/openai.md) |
+| Gravity | `gravity` | [Ads in AI assistants: reports, campaigns, ad groups, conversions, billing, status, budgets](docs/providers/gravity.md) |
 
 Provider application approval, account access, and available metrics depend on the platform. The [connection guides](docs/providers.md) record prerequisites and testing limits. Reports preserve currency and attribution differences; see [reporting semantics](docs/reporting-semantics.md) before comparing providers.
 
