@@ -7,6 +7,7 @@ export const sources = {
   metaInsights: { title: 'Meta Ads Insights API', url: 'https://developers.facebook.com/docs/marketing-api/insights/' },
   metaBreakdowns: { title: 'Meta Ads Insights breakdowns', url: 'https://developers.facebook.com/docs/marketing-api/insights/breakdowns/' },
   tiktok: { title: 'TikTok API for Business', url: 'https://business-api.tiktok.com/portal/docs' },
+  reddit: { title: 'Reddit Ads API v3 reference', url: 'https://ads-api.reddit.com/docs/v3/' },
   snapchat: { title: 'Snap Marketing API', url: 'https://developers.snap.com/marketing-api/Ads-API/introduction' },
   linkedin: { title: 'LinkedIn Marketing API program', url: 'https://learn.microsoft.com/en-us/linkedin/marketing/' },
   microsoft: { title: 'Microsoft Advertising API: getting started', url: 'https://learn.microsoft.com/en-us/advertising/guides/get-started' },
