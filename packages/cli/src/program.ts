@@ -435,8 +435,6 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .action(async () => {
       const { runStdioServer } = await import('@adport/mcp');
       await runStdioServer(await commandRuntime(), undefined, program.opts<{ rawApiTools?: boolean }>().rawApiTools === true);
-      // Keep the process alive for the stdio transport.
-      await new Promise(() => {});
     });
 
   return program;
