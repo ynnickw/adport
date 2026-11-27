@@ -5,10 +5,12 @@ import { parseCampaignRange } from '@/app/dashboard/reports/range';
 import { FindingsTable } from '@/app/dashboard/findings/findings-table';
 import { AccountAccessManager } from '@/app/dashboard/accounts/account-access-manager';
 import { ApprovalQueue } from '@/app/dashboard/approvals/approval-queue';
+import { ToastProvider } from '@/components/toast';
+import { PendingAccountSelections } from '@/components/pending-account-selections';
 import type { PendingOperationRow } from '@/lib/cloud/repository';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 it('uses a stable report default and carries supported Overview ranges through', () => {
   expect(parseCampaignRange({})).toEqual({ range: 'last_30_days' });
@@ -27,12 +29,35 @@ it('separates unusable grants from working access and does not expose role-gated
     { ...account, accountId: 'a', name: 'Ready', connectionStatus: 'connected' },
     { ...account, accountId: 'b', name: 'Expired', connectionStatus: 'revoked' },
   ]} canManage={false} maxActiveAccounts={15} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Unavailable 1' }));
-  expect(screen.queryByText('Ready')).toBeNull();
+  expect(screen.getByText('Ready')).toBeTruthy();
+  expect(screen.queryByRole('combobox', { name: /Access status/ })).toBeNull();
   expect(screen.getByText('Expired')).toBeTruthy();
   expect(screen.getByText('Connection needs attention')).toBeTruthy();
   expect(screen.queryByRole('link', { name: /Reconnect/ })).toBeNull();
   expect(screen.queryByRole('switch')).toBeNull();
+});
+
+it('announces successful access changes without inserting a row or hiding a save error', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(Response.json({}))
+    .mockResolvedValueOnce(Response.json({ error: 'Retry this change' }, { status: 500 })));
+  render(<ToastProvider><AccountAccessManager organizationId="project" canManage maxActiveAccounts={15}
+    accounts={[{ provider: 'gsc', accountId: 'domain', name: 'Example', currency: null, status: 'siteOwner', enabled: false }]} category="analytics" /></ToastProvider>);
+  const toggle = screen.getByRole('switch', { name: 'Adport access for Example' });
+  fireEvent.click(toggle);
+  expect(await within(screen.getByRole('status', { name: 'Notifications' })).findByText('Adport access enabled for Example.')).toBeTruthy();
+  expect(within(screen.getByRole('region', { name: 'Analytics account access' })).queryByText(/Adport access enabled/)).toBeNull();
+  expect(toggle.getAttribute('aria-checked')).toBe('true');
+  fireEvent.click(within(screen.getByRole('status', { name: 'Notifications' })).getByRole('button', { name: 'Dismiss notification' }));
+  expect(screen.queryByText('Adport access enabled for Example.')).toBeNull();
+  fireEvent.click(toggle);
+  expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Retry this change');
+  expect(toggle.getAttribute('aria-checked')).toBe('true');
+});
+
+it('opens a pending Search Console site selection directly on Analytics', () => {
+  render(<PendingAccountSelections canManage connections={[{ provider: 'gsc', status: 'connected', accountSelectionId: 'fixture-selection' }]} />);
+  expect(screen.getByRole('heading', { name: 'Finish adding sources' })).toBeTruthy();
+  expect(screen.getByRole('link', { name: 'Choose sites' }).getAttribute('href')).toBe('/dashboard/analytics?selection_id=fixture-selection');
 });
 
 it('shows open findings by severity and distinguishes a cleared queue from an empty audit history', () => {

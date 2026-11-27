@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/controls';
 
-import Link from 'next/link';
+import { DashboardLink, useDashboardPath } from '@/components/dashboard-navigation';
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 
@@ -46,14 +46,14 @@ const UTILITY_ITEMS: NavItem[] = [
 const isActive = (item: NavItem, pathname: string) => item.exact ? pathname === item.href : (item.paths ?? [item.href]).some(path => pathname === path || pathname.startsWith(`${path}/`));
 
 function NavLinks({ items }: { items: NavItem[] }) {
-  const pathname = usePathname();
+  const pathname = useDashboardPath(usePathname());
   return items.map((item) => {
     const active = isActive(item, pathname);
     return (
-      <Link key={item.href} href={item.href} prefetch={false} aria-current={active ? 'page' : undefined}>
+      <DashboardLink key={item.href} href={item.href} aria-current={active ? 'page' : undefined}>
         {item.icon}{item.label}
         {item.badge ? <span className="nav-badge"><span aria-hidden="true">{item.badge}</span><span className="sr-only">, {item.badge} waiting</span></span> : null}
-      </Link>
+      </DashboardLink>
     );
   });
 }
@@ -72,7 +72,7 @@ export function UtilityNav() {
 }
 
 export function ContextNav({ canManage = false }: { canManage?: boolean }) {
-  const pathname = usePathname();
+  const pathname = useDashboardPath(usePathname());
   const navigation = useRef<HTMLElement>(null);
   useEffect(() => {
     const nav = navigation.current;
@@ -98,14 +98,14 @@ export function ContextNav({ canManage = false }: { canManage?: boolean }) {
           ? [{ label: 'Overview', href: '/dashboard' }, { label: 'Campaign report', href: '/dashboard/reports' }, { label: 'Findings', href: '/dashboard/findings' }] : [];
   if (!tabs.length) return null;
   return <header className="workspace-bar">
-    <nav ref={navigation} className="section-tabs" aria-label="Section navigation">{tabs.map(item => <Link href={item.href} key={item.href} prefetch={false} aria-current={pathname === item.href ? 'page' : undefined}>{item.label}</Link>)}</nav>
+    <nav ref={navigation} className="section-tabs" aria-label="Section navigation">{tabs.map(item => <DashboardLink href={item.href} key={item.href} aria-current={pathname === item.href ? 'page' : undefined}>{item.label}</DashboardLink>)}</nav>
   </header>;
 }
 
 // On narrow screens the navigation collapses behind a menu button so each page starts with its content.
 export function SidebarFrame({ brand, workspace, children }: { brand: React.ReactNode; workspace: React.ReactNode; children: React.ReactNode }) {
   const sidebar = useRef<HTMLElement>(null);
-  const pathname = usePathname();
+  const pathname = useDashboardPath(usePathname());
   const [open, setOpen] = useState(false);
   const current = [...PRIMARY_ITEMS, ...SETTINGS_ITEMS].find((item) => isActive(item, pathname))?.label ?? 'Menu';
 

@@ -1,10 +1,11 @@
-import Link from 'next/link';
+import { DashboardLink as Link } from '@/components/dashboard-navigation';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { getAccountSelection } from '@/lib/cloud/account-selection';
 import { ProviderAccountPicker } from '@/app/account-selection/provider-account-picker';
 import { getOrganizationUsage } from '@/lib/cloud/usage';
 import { PageHeader } from '@/components/ui';
+import { SuccessToast } from '@/components/toast';
 import { Disclosure } from '@/components/controls';
 import { PendingAccountSelections } from '@/components/pending-account-selections';
 import { SupportLauncher } from '@/components/support-widget';
@@ -57,9 +58,9 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
     <main className="page">
       <PageHeader title={providerFilter ? `${providerLabel(providerFilter)} accounts` : 'Ad accounts'} action={hasAccounts || pendingConnections.length ? addAccounts : undefined} />
       {providerFilter ? <Link className="button secondary small" href="/dashboard/accounts" style={{ marginBottom: '1rem' }}>View all providers’ accounts</Link> : null}
-      {params.connected ? <div className="callout success" role="status" style={{ marginBottom: '1rem' }}>{providerLabel(params.connected)} is connected. Select the specific accounts agents may access below.</div> : null}
+      <SuccessToast message={params.connected ? `${providerLabel(params.connected)} connected.` : undefined} />
       {params.selection_id || params.selection_unavailable ? <div className="error-callout" role="alert">This account selection is no longer available. It may have expired, been saved, or belong to another admin. {canManage ? <Link href="/dashboard/connections">Reconnect the platform to choose accounts again.</Link> : 'Ask a project owner or admin to restart the connection.'}</div> : null}
-      {params.accounts_saved ? <div className="callout success" role="status" style={{ marginBottom: '1rem' }}>{params.access_enabled === '1' ? 'Accounts enabled for assistants.' : 'Selection saved. New accounts, if any, are not enabled.'}</div> : null}
+      <SuccessToast message={params.accounts_saved ? params.access_enabled === '1' ? 'Accounts enabled for assistants.' : 'Selection saved without enabling new accounts.' : undefined} />
       {params.error ? <div className="error-callout" role="alert">{params.error}</div> : null}
       <PendingAccountSelections connections={pendingConnections} canManage={['owner', 'admin'].includes(tenant.role)} />
       {!hasAccounts && pendingConnections.length ? null : !hasAccounts ? <section className="card">

@@ -5,6 +5,7 @@ import type { MediaAsset } from '@adport/core';
 import { ActionPopover } from '@/components/action-popover';
 import { Button, Input } from '@/components/controls';
 import { ProviderLogo, providerLabel } from '@/components/logos';
+import { useToast } from '@/components/toast';
 import { applyLibraryChange, mediaAction, type MediaPlatform } from './media-client';
 import styles from './assets.module.css';
 
@@ -12,6 +13,7 @@ export function AssetMenu({ asset, projectId, connectedPlatforms, onUpdate, onRe
   const [tags, setTags] = useState(''), [busy, setBusy] = useState(false), [attempted, setAttempted] = useState(false), [error, setError] = useState('');
   const [platforms, setPlatforms] = useState<MediaPlatform[]>([]);
   const lock = useRef(false), id = useId();
+  const toast = useToast();
   async function save(close: () => void) {
     if (lock.current || attempted) return;
     const values = [...new Set(tags.split(',').map(value => value.trim().toLowerCase()).filter(Boolean))];
@@ -22,7 +24,7 @@ export function AssetMenu({ asset, projectId, connectedPlatforms, onUpdate, onRe
       const result = await applyLibraryChange(projectId, 'media_update_metadata', { media_id: asset.id, expected_sha256: asset.sha256, expected_version: asset.metadata_version ?? 1, tags: values, ...(platformsChanged ? { platforms } : {}) });
       const next = result.result?.details?.asset;
       if (result.status !== 'applied' || next?.id !== asset.id || next.sha256 !== asset.sha256 || next.status !== 'READY') throw new Error('The tag change was not confirmed.');
-      onUpdate(next); setAttempted(false); close();
+      onUpdate(next); setAttempted(false); close(); toast('Creative details saved.');
     } catch { setAttempted(true); setError('Tags were not confirmed. Reload this file before saving again.'); }
     finally { lock.current = false; setBusy(false); }
   }

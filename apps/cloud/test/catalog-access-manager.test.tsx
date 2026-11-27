@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor, cleanup } from '@testing-library/react';
+import { fireEvent, render as renderComponent, screen, waitFor, cleanup, within } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CatalogAccessManager } from '@/app/dashboard/accounts/catalog-access-manager';
+import { ToastProvider } from '@/components/toast';
+
+const render = (ui: ReactElement) => renderComponent(ui, { wrapper: ToastProvider });
 
 const project = 'b310e750-d001-4427-8184-09bd05920e01', account = { accountId: '123', name: 'QA TikTok', ready: true }, fetchMock = vi.fn();
 const grants = Array.from({ length: 14 }, (_, index) => ({ scope: { accountId: '123', businessId: '456', resourceId: String(700 + index), kind: 'catalog' }, mode: 'read', hash: 'a'.repeat(64) }));
@@ -42,7 +46,7 @@ describe('compact owner catalog access UI', () => {
     render(<CatalogAccessManager organizationId={project} projectName="Adport" accounts={[account]} />);await open();const dialog = screen.getByRole('dialog');
     fireEvent.change(screen.getByLabelText('Business Center ID'), { target: { value: '456' } });fireEvent.change(screen.getByLabelText('Catalog ID'), { target: { value: '789' } });choose('Project access', 'Read and write');fireEvent.click(screen.getByText('Review access'));
     await screen.findByText('QA <catalog>');expect(dialog.querySelector('catalog')).toBeNull();expect(fetchMock.mock.calls.filter(call => call[1]?.method === 'POST')).toHaveLength(1);expect(JSON.parse(fetchMock.mock.calls.find(call => call[1]?.method === 'POST')![1].body)).not.toHaveProperty('pending_operation_id');
-    fireEvent.click(screen.getByText('Confirm access'));await screen.findByText('Catalog access updated.');expect(screen.getByRole('dialog')).toBe(dialog);const writes = fetchMock.mock.calls.filter(call => call[1]?.method === 'POST');expect(writes).toHaveLength(2);expect(JSON.parse(writes[1]![1].body)).toEqual({ organizationId: project, account_id: '123', bc_id: '456', catalog_id: '789', mode: 'write', expected_access_hash: 'b'.repeat(64), pending_operation_id: 'pending-one' });
+    fireEvent.click(screen.getByText('Confirm access'));await within(within(dialog).getByRole('status', { name: 'Notifications' })).findByText('Catalog access updated.');expect(screen.getByRole('dialog')).toBe(dialog);const writes = fetchMock.mock.calls.filter(call => call[1]?.method === 'POST');expect(writes).toHaveLength(2);expect(JSON.parse(writes[1]![1].body)).toEqual({ organizationId: project, account_id: '123', bc_id: '456', catalog_id: '789', mode: 'write', expected_access_hash: 'b'.repeat(64), pending_operation_id: 'pending-one' });
   });
   it('reviews and applies new-catalog delegation without a catalog ID and resets approval on resource changes', async () => {
     render(<CatalogAccessManager organizationId={project} projectName="Adport" accounts={[account]} />);await open();fireEvent.change(screen.getByLabelText('Business Center ID'), { target: { value: '456' } });choose('Resource', 'New catalogs');expect(screen.queryByLabelText('Catalog ID')).toBeNull();expect(screen.getByRole('combobox', { name: 'Project access: Create and manage new catalogs' })).toBeTruthy();expect(screen.getByText(/Existing catalogs are excluded/)).toBeDefined();fireEvent.click(screen.getByText('Review access'));await screen.findByText('Confirm access');

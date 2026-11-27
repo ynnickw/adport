@@ -1,5 +1,7 @@
 'use client';
 
+import { SuccessToast } from '@/components/toast';
+
 import { Button, Input } from '@/components/controls';
 
 import { useRouter } from 'next/navigation';
@@ -35,7 +37,7 @@ export function OrganizationName({ organizationId, name, canManage }: {
       <div className="card-head"><h2>Project</h2></div>
       <div className="card-body stack" style={{ gap: '0.8rem' }}>
         {message.error ? <div className="error-callout" role="alert" style={{ marginBottom: 0 }}>{message.error}</div> : null}
-        {message.success ? <div className="callout success" role="status">{message.success}</div> : null}
+        <SuccessToast message={message.success} />
         <form className="form-row" onSubmit={(event) => void save(event)}>
           <Input
             name="name"

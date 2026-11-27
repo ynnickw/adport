@@ -1,4 +1,10 @@
 import { safeDashboardReturnPath, safeReturnPath } from './return-path';
+import { usesAdAccountSlot } from './cloud/providers';
+
+export function pendingSelectionPath(selectionId: string, provider: string, setupReturnTo?: string): string {
+  if (setupReturnTo) return accountSelectionPath(selectionId, '/onboarding?' + new URLSearchParams({ return_to: setupReturnTo }));
+  return (usesAdAccountSlot(provider) ? '/dashboard/accounts?' : '/dashboard/analytics?') + new URLSearchParams({ selection_id: selectionId });
+}
 
 /** Keep the one-time picker in the flow that initiated authorization. */
 export function accountSelectionPath(selectionId: string, returnPath: string, needsOnboarding = false): string {

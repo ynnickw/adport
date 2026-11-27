@@ -1,5 +1,7 @@
 'use client';
 
+import { SuccessToast } from '@/components/toast';
+
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Button, Input } from '@/components/controls';
@@ -38,7 +40,7 @@ export function ResetPasswordForm({ returnTo, invalidLink }: { returnTo: string;
     } catch { setError('Your password could not be saved. Check your connection and try again.'); }
     finally { setBusy(false); }
   }
-  if (complete) return <><p className="callout success" role="status">Your password has been updated.</p><Link className="button full" href={returnTo}>Continue to Adport</Link></>;
+  if (complete) return <><SuccessToast message="Your password has been updated." /><Link className="button full" href={returnTo}>Continue to Adport</Link></>;
   return <>
     {!ready && !error ? <p role="status">Verifying your reset link…</p> : null}
     {error ? <p className="error-callout" role="alert">{error}</p> : null}

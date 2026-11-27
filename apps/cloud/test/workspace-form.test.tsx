@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { WorkspaceForm } from '@/components/workspace-form';
+import { ToastProvider } from '@/components/toast';
 import type { WorkspaceActionState } from '@/app/dashboard/projects/actions';
 
 afterEach(cleanup);
@@ -30,7 +31,7 @@ it('preserves the draft on a failed save and exposes a single busy action', asyn
 it('clears an invite field only after a confirmed success', async () => {
   let respond!: (result: WorkspaceActionState) => void;
   const action = vi.fn(() => new Promise<WorkspaceActionState>(resolve => { respond = resolve; }));
-  render(<WorkspaceForm action={action} label="Invite" resetOnSuccess><label>Email<input name="email" /></label></WorkspaceForm>);
+  render(<ToastProvider><WorkspaceForm action={action} label="Invite" resetOnSuccess><label>Email<input name="email" /></label></WorkspaceForm></ToastProvider>);
   const email = screen.getByRole('textbox', { name: 'Email' });
   fireEvent.change(email, { target: { value: 'test@example.invalid' } });
   fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
