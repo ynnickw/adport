@@ -1,5 +1,5 @@
 import { policySchema } from '@adport/core';
-import Link from 'next/link';
+import { DashboardLink as Link } from '@/components/dashboard-navigation';
 import { PageHeader } from '@/components/ui';
 import { InfoTooltip } from '@/components/info-tooltip';
 import { canAdminister, requireDashboardTenant } from '@/lib/cloud/dashboard';
@@ -28,7 +28,7 @@ export default async function PoliciesPage({ searchParams }: { searchParams: Pro
     <main className="page policy-page">
       <p className="workspace-context-label">{tenant.organizationName} · Cloud assistants</p>
       <PageHeader title="Policies"
-        action={<Link className="button secondary" href={params.setup === '1' ? setupHref : '/dashboard/accounts'} prefetch={false}>{params.setup === '1' ? 'Back to setup' : 'Manage accounts'}</Link>} />
+        action={<Link className="button secondary" href={params.setup === '1' ? setupHref : '/dashboard/accounts'}>{params.setup === '1' ? 'Back to setup' : 'Manage accounts'}</Link>} />
       <section className="policy-overview" aria-label="Policy coverage">
         <div><span>Ad changes</span><strong><i className="policy-dot" />{entitlement.plan.writeAccess ? 'Preview required' : 'Read-only plan'}</strong></div>
         <div><span>New campaigns</span><strong>{policy.paused_creation ? 'Start paused' : 'Use requested status'}</strong></div>

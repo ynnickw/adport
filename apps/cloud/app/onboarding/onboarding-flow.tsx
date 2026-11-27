@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/controls';
 import { Notice } from '@/components/feedback';
+import { SuccessToast } from '@/components/toast';
 import { ListToolbar, SearchField } from '@/components/list-controls';
 import { Empty } from '@/components/ui';
 import { BrandLockup } from '@/components/logos';
@@ -106,12 +107,13 @@ export function OnboardingFlow({ organizationId, projectName, setupKind, project
     ? `Choose your ${providerLabel(pendingSelection.provider)} ${providerResourceName(pendingSelection.provider)}.` : 'Enable account access'
     : setupReady ? 'Your assistant is ready' : 'Connect your assistant';
   return <>
+    <SuccessToast message={accountsSaved ? accountsEnabled ? 'Accounts enabled for assistants.' : 'Selection saved without enabling new accounts.' : undefined} />
     <header className="onboarding-head">
       <Link href={returnTo} aria-label="Adport dashboard" onClick={event => { event.preventDefault(); skip(); }}><BrandLockup /></Link>
       <div className="onboarding-project">{projectSwitcher ?? <><span className="setup-project-label">Project</span><span>{projectName}</span></>}</div>
       <div className="onboarding-head-actions"><SupportLauncher className="support-inline" /><Button type="button" className="button secondary small" disabled={busy} pending={action === 'exit'} pendingLabel="Leaving…" onClick={skip}>Set up later</Button></div>
     </header>
-    <div className="onboarding-shell setup-layout">
+    <div className="setup-scroll"><div className="onboarding-shell setup-layout">
       <div className="setup-rail">
         <p className="setup-rail-label" aria-hidden="true">Project setup</p>
         <SetupProgress step={step} completed={{ connect: connected, accounts: hasEnabledAccounts, agent: setupReady }} />
@@ -133,13 +135,12 @@ export function OnboardingFlow({ organizationId, projectName, setupKind, project
               <ProviderConnections variant="onboarding" organizationId={organizationId} projectName={projectName} canManage={canManage} connections={connections} oauthProviders={matchingProviders} returnTo={onboardingPath} />}
           </> : null}
           {step === 'accounts' ? pendingSelection ? <ProviderAccountPicker organizationId={organizationId} selectionId={pendingSelection.id} provider={pendingSelection.provider} accounts={pendingSelection.accounts} pages={pendingSelection.pages} initialSelectedIds={accounts.filter(account => account.provider === pendingSelection.provider).map(account => account.accountId)} initialEnabledIds={accounts.filter(account => account.provider === pendingSelection.provider && account.enabled).map(account => account.accountId)} maxActiveAccounts={maxActiveAccounts} organizationActiveCount={organizationActiveCount} backHref={onboardingPath + '&step=connect'} nextPath={onboardingPath} showProgress={false} /> : <>
-            {accountsSaved ? <Notice tone="success">{accountsEnabled ? 'Accounts enabled for assistants.' : 'Selection saved. New accounts are off until enabled.'}</Notice> : null}
             <PendingAccountSelections connections={connections} canManage={canManage} setupReturnTo={returnTo} setupResume={resuming} />
             {providerFilter ? <Button type="button" className="link-button" onClick={() => setProviderFilter(undefined)}>View all platforms’ accounts</Button> : null}
-            {accounts.length || providerFilter ? <AccountAccessManager key={organizationId} organizationId={organizationId} accounts={accountRows} canManage={canManage} maxActiveAccounts={maxActiveAccounts} providerFilter={providerFilter} organizationActiveCount={organizationActiveCount} /> : !hasPendingSelection ? <div className="card"><Empty title="No accounts added yet" copy="Go back to connect a platform, or connect your assistant now and add data later." /></div> : null}
+            {accounts.length || providerFilter ? <AccountAccessManager key={organizationId} organizationId={organizationId} accounts={accountRows} canManage={canManage} maxActiveAccounts={maxActiveAccounts} providerFilter={providerFilter} organizationActiveCount={organizationActiveCount} setupReturnTo={returnTo} /> : !hasPendingSelection ? <div className="card"><Empty title="No accounts added yet" copy="Go back to connect a platform, or connect your assistant now and add data later." /></div> : null}
           </> : null}
           {step === 'agent' ? <>
-            <AssistantConnect baseUrl={baseUrl} projectName={projectName} initialAgent={agent} listings={listings} onSelectionChange={setAgent} onStatusChange={setAssistantStatus} compact
+            <AssistantConnect baseUrl={baseUrl} projectName={projectName} initialAgent={agent} listings={listings} onSelectionChange={setAgent} onStatusChange={setAssistantStatus} canManageAccounts={canManage}
               accountAction={<Button type="button" className="link-button" disabled={busy} onClick={() => void advance(accountStepAvailable ? 'accounts' : 'connect', {}, 'back')}>Enable an account</Button>} />
           </> : null}
           </div>
@@ -150,6 +151,6 @@ export function OnboardingFlow({ organizationId, projectName, setupKind, project
                 onClick={() => void advance(step === 'connect' ? 'accounts' : 'agent')}>{step === 'connect' ? 'Continue to accounts' : hasEnabledAccounts ? 'Continue to assistant' : 'Continue without enabling'}</Button>}
           </div> : null}
       </div>
-    </div>
+    </div></div>
   </>;
 }

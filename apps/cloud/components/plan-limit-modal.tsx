@@ -11,6 +11,7 @@ import { useUpgradeContext } from './upgrade-context';
 import { BillingForm } from '@/app/dashboard/billing/billing-form';
 import { startProjectSubscriptionForm, changeProjectSubscriptionForm } from '@/app/dashboard/billing/actions';
 import { planChangeLabel } from '@/lib/plan-change';
+import { useToast } from './toast';
 
 export function PlanLimitModal({ limit, onClose }: { limit?: PlanLimitDetails; onClose: () => void }) {
   return limit ? <UpgradePaywall key={`${limit.kind}:${limit.recommendedPlan}:${limit.message}`} limit={limit} onClose={onClose} /> : null;
@@ -20,7 +21,8 @@ function UpgradePaywall({ limit, onClose }: { limit: PlanLimitDetails; onClose: 
   const context = useUpgradeContext();
   const id = useId();
   const [interval, setInterval] = useState<'monthly' | 'annual'>('monthly');
-  const [copyStatus, setCopyStatus] = useState<{ plan?: PaidPlanId; status: 'idle' | 'copied' | 'failed' }>({ status: 'idle' });
+  const [copyFailedFor, setCopyFailedFor] = useState<PaidPlanId>();
+  const toast = useToast();
   const canManage = context.canManageBilling;
   const path = (plan = limit.recommendedPlan) => billingUpgradePath({ ...limit, recommendedPlan: plan, projectId: context.projectId ?? limit.projectId }) + '&billing=' + interval;
   useEffect(() => {
@@ -29,8 +31,8 @@ function UpgradePaywall({ limit, onClose }: { limit: PlanLimitDetails; onClose: 
     return () => { document.body.style.overflow = previous; };
   }, []);
   async function copy(plan: PaidPlanId) {
-    try { await navigator.clipboard.writeText(new URL(path(plan), window.location.origin).href); setCopyStatus({ plan, status: 'copied' }); }
-    catch { setCopyStatus({ plan, status: 'failed' }); }
+    try { await navigator.clipboard.writeText(new URL(path(plan), window.location.origin).href); setCopyFailedFor(undefined); toast('Plan link copied.'); }
+    catch { setCopyFailedFor(plan); }
   }
   const actions: Partial<Record<PaidPlanId, React.ReactNode>> = {};
   const notes: Partial<Record<PaidPlanId, React.ReactNode>> = {};
@@ -41,7 +43,7 @@ function UpgradePaywall({ limit, onClose }: { limit: PlanLimitDetails; onClose: 
     const coversRequest = PAID_PLAN_IDS.indexOf(plan) >= minimum;
     if (context.planId === plan) actions[plan] = <span className="pricing-action pricing-action-current">Current plan</span>;
     else if (!coversRequest) actions[plan] = <span className="pricing-action pricing-action-current">Doesn’t cover this request</span>;
-    else if (!canManage) actions[plan] = <Button className={className} type="button" onClick={() => void copy(plan)}>{copyStatus.plan === plan && copyStatus.status === 'copied' ? 'Link copied ✓' : `Copy ${catalog[plan].name} plan link`}</Button>;
+    else if (!canManage) actions[plan] = <Button className={className} type="button" onClick={() => void copy(plan)}>Copy {catalog[plan].name} plan link</Button>;
     else if (billing?.hasSubscription) actions[plan] = billing.portalAvailable && billing.available[plan][interval] ? <BillingForm key={interval} action={changeProjectSubscriptionForm.bind(null, context.projectId ?? limit.projectId, plan, interval)} label={planChangeLabel(context.planId, plan, interval)} pendingLabel="Opening plan change…" className={className} /> : <span className="pricing-action pricing-action-current">Billing unavailable</span>;
     else if (billing?.available[plan][interval]) actions[plan] = <BillingForm key={interval} action={startProjectSubscriptionForm.bind(null, context.projectId ?? limit.projectId, plan, interval)} label={context.planId !== 'reader' ? planChangeLabel(context.planId, plan, interval) : billing.trialEligible ? 'Start 7-day free trial' : `Subscribe to ${catalog[plan].name}`} pendingLabel="Opening checkout…" className={className} />;
     else actions[plan] = <span className="pricing-action pricing-action-current">Checkout unavailable</span>;
@@ -52,11 +54,10 @@ function UpgradePaywall({ limit, onClose }: { limit: PlanLimitDetails; onClose: 
   return <Dialog title={PLAN_LIMIT_TITLES[limit.kind]} onClose={onClose} className="pricing-paywall pricing-surface" portal>
     <div className="paywall-scroll">
       <PricingComparison variant="paywall" showHeading={false} currentPlanId={context.planId} requestedPlan={limit.recommendedPlan} interval={interval}
-        onIntervalChange={value => { setInterval(value); setCopyStatus({ status: 'idle' }); }} actions={actions} notes={notes} canManageBilling={canManage} idPrefix={`paywall-${id}`}
+        onIntervalChange={value => { setInterval(value); setCopyFailedFor(undefined); }} actions={actions} notes={notes} canManageBilling={canManage} idPrefix={`paywall-${id}`}
         context={<div className="paywall-context"><p>{limit.message}</p><p className="paywall-plan-context">
           Current plan: <strong>{catalog[context.planId].name}</strong> <span aria-hidden="true">·</span> {canManage ? 'Billed per organization' : 'Only your organization owner can change plans. Share a plan link with them.'}</p>
-          {copyStatus.status === 'copied' ? <span className="sr-only" role="status">Plan link copied. Share it with your organization owner.</span> : null}
-          {copyStatus.status === 'failed' ? <p className="field-error" role="alert">Copying is unavailable. <Link href={path(copyStatus.plan)}>Open plan details and share that page’s address.</Link></p> : null}
+          {copyFailedFor ? <p className="field-error" role="alert">Copying is unavailable. <Link href={path(copyFailedFor)}>Open plan details and share that page’s address.</Link></p> : null}
         </div>} />
     </div>
     <footer className="paywall-footer"><span>Nothing changes until you confirm in billing.</span>

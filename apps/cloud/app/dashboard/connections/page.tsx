@@ -1,4 +1,5 @@
 import { PageHeader } from '@/components/ui';
+import { SuccessToast } from '@/components/toast';
 import { canAdminister, requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { providerLabel, usesAdAccountSlot } from '@/lib/cloud/providers';
 import { listConnections } from '@/lib/cloud/repository';
@@ -20,7 +21,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
         description="Connect your advertising platforms, then manage ad-account access."
       />
       <div className="stack" style={{ marginBottom: '0.9rem' }}>
-        {params.connected ? <div className="callout success" role="status">{providerLabel(params.connected)} is connected and its accessible ad accounts were verified.</div> : null}
+        <SuccessToast message={params.connected ? `${providerLabel(params.connected)} connected.` : undefined} />
         {params.error ? <div className="error-callout" role="alert" style={{ marginBottom: 0 }}>{params.error}</div> : null}
       </div>
       <ProviderConnections

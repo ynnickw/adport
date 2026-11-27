@@ -1,5 +1,7 @@
 'use client';
 
+import { SuccessToast } from './toast';
+
 import { useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LOGO_ACCEPT, MAX_LOGO_BYTES, type WorkspaceLogoKind } from '@/lib/workspace-logos';
@@ -61,6 +63,6 @@ export function WorkspaceLogoEditor({ kind, id, name, logoUrl }: {
       </div>
     </div>
     {message.error ? <p className="field-error" role="alert">{message.error}</p> : null}
-    {message.success ? <p className="inline-note" role="status">{message.success}</p> : null}
+    <SuccessToast message={message.success} />
   </div>;
 }

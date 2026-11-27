@@ -15,7 +15,12 @@ export function InfoTooltip({ children, label = 'More information' }: { children
       const rect = trigger.current?.getBoundingClientRect();
       if (rect) setPosition({ left: Math.max(12, Math.min(rect.left, window.innerWidth - 332)), top: rect.bottom + 8 });
     };
-    const dismiss = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false); };
+    const dismiss = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      // Keep the containing native dialog open when dismissing its tooltip.
+      if (trigger.current?.closest('dialog[open]')) event.preventDefault();
+      setOpen(false);
+    };
     const outside = (event: PointerEvent) => { if (!trigger.current?.contains(event.target as Node)) setOpen(false); };
     place();
     window.addEventListener('resize', place);
@@ -31,7 +36,8 @@ export function InfoTooltip({ children, label = 'More information' }: { children
   }, [open]);
   return <>
     <Button ref={trigger} type="button" className="info-trigger" aria-label={label} aria-describedby={open ? id : undefined}
-      onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}
+      onPointerEnter={event => { if (event.pointerType === 'mouse') setOpen(true); }}
+      onPointerLeave={event => { if (event.pointerType === 'mouse') setOpen(false); }}
       onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onClick={() => setOpen(true)}>
       <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" /><path d="M10 9v5M10 6v.1" /></svg>
     </Button>

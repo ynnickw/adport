@@ -2,10 +2,11 @@
 
 import { Button } from '@/components/controls';
 import { ActionPopover } from '@/components/action-popover';
-import { FilterButtons } from '@/components/list-controls';
 import { Notice } from '@/components/feedback';
+import { useToast } from '@/components/toast';
 
-import Link from 'next/link';
+import { DashboardLink as Link } from '@/components/dashboard-navigation';
+import { accountSelectionPath, pendingSelectionPath } from '@/lib/account-selection-path';
 import { useRouter } from 'next/navigation';
 import { Fragment, useState } from 'react';
 import { Provider, formatDate } from '@/components/ui';
@@ -49,43 +50,36 @@ export function ProviderConnections({ organizationId, projectName, canManage, co
   const router = useRouter();
   const [confirm, confirmationDialog] = useConfirm();
   const [busy, setBusy] = useState<string>();
-  const [notice, setNotice] = useState<Partial<Record<string, { error?: string; success?: string }>>>({});
-  const [filter, setFilter] = useState<'all' | 'attention' | 'connected' | 'available'>('all');
+  const [notice, setNotice] = useState<{ message: string; error?: boolean }>();
+  const toast = useToast();
   const settings = variant === 'settings';
   const chooser = variant === 'chooser';
-  const roster = oauthProviders.filter(provider => provider.available || find(provider.id));
+  const byProvider = new Map(connections.map(connection => [connection.provider, connection]));
   const needsAttention = (connection?: ConnectionView) => Boolean(connection && (connection.status !== 'connected' || connection.accountSelectionId));
-  const attention = roster.filter(provider => needsAttention(find(provider.id))).length;
-  const connected = roster.filter(provider => find(provider.id) && !needsAttention(find(provider.id))).length;
-  const visibleProviders = roster.filter(provider => {
-    if (!settings || filter === 'all') return true;
-    const connection = find(provider.id);
-    return filter === 'attention' ? needsAttention(connection) : filter === 'connected' ? connection && !needsAttention(connection) : !connection;
-  }).sort((a, b) => Number(!usesAdAccountSlot(a.id)) - Number(!usesAdAccountSlot(b.id)) || Number(!needsAttention(find(a.id))) - Number(!needsAttention(find(b.id))) || Number(!find(a.id)) - Number(!find(b.id)));
+  const visibleProviders = oauthProviders.filter(provider => provider.available || find(provider.id))
+    .sort((a, b) => Number(!usesAdAccountSlot(a.id)) - Number(!usesAdAccountSlot(b.id)) || Number(!needsAttention(find(a.id))) - Number(!needsAttention(find(b.id))) || Number(!find(a.id)) - Number(!find(b.id)));
 
   function find(provider: string): ConnectionView | undefined {
-    return connections.find((connection) => connection.provider === provider);
+    return byProvider.get(provider);
   }
 
   async function disconnect(provider: string, label: string) {
     const prompt = `Remove ${label} and its accounts from this project? Adport and connected assistants will lose access. ${usesAdAccountSlot(provider) ? 'Your campaigns keep running. ' : ''}You can reconnect later.`;
     if (!await confirm({ title: `Disconnect ${label}?`, description: prompt, confirmLabel: 'Disconnect' })) return;
     setBusy(provider);
-    setNotice((current) => ({ ...current, [provider]: {} }));
+    setNotice(undefined);
     try {
       const response = await fetch(`/api/connections/${provider}?organization_id=${organizationId}`, { method: 'DELETE' });
       const result = await response.json().catch(() => ({})) as { error?: string; providerRevocationRequired?: boolean };
       if (!response.ok) {
-        setNotice((current) => ({ ...current, [provider]: { error: result.error ?? `Unable to disconnect ${label}. Please retry.` } }));
+        setNotice({ message: result.error ?? `Unable to disconnect ${label}. Please retry.`, error: true });
       } else {
-        setNotice((current) => ({
-          ...current,
-          [provider]: { success: result.providerRevocationRequired ? `${label} removed. Revoke Adport's access in your ${label} account settings as well.` : `${label} disconnected and its grant revoked.` },
-        }));
+        if (result.providerRevocationRequired) setNotice({ message: `${label} removed. Revoke Adport's access in your ${label} account settings as well.` });
+        else toast(`${label} disconnected.`);
         router.refresh();
       }
     } catch {
-      setNotice(current => ({ ...current, [provider]: { error: 'Could not disconnect. Check your connection and try again.' } }));
+      setNotice({ message: 'Could not disconnect. Check your connection and try again.', error: true });
     } finally {
       setBusy(undefined);
     }
@@ -95,14 +89,9 @@ export function ProviderConnections({ organizationId, projectName, canManage, co
     <section aria-label="Provider connections" className={variant === 'onboarding' ? 'onboarding-platforms' : chooser ? 'provider-chooser' : 'provider-settings'}>
       {confirmationDialog}
       {!canManage ? <p className="inline-note">Owners and admins manage connections.</p> : null}
-      {Object.entries(notice).map(([id, message]) => message?.error ? <Notice key={id} tone="error">{message.error}</Notice>
-        : message?.success ? <Notice key={id} tone="success">{message.success}</Notice> : null)}
-      {!roster.length ? <div className="card"><div className="empty"><h2>Platform connections are temporarily unavailable</h2><p>{canManage ? 'You can finish setup now and connect your accounts later. Contact support if this continues.' : 'Ask your organization owner or an admin to connect an ad platform.'}</p></div></div> : <>
+      {notice ? <Notice tone={notice.error ? 'error' : 'info'}>{notice.message}</Notice> : null}
+      {!visibleProviders.length ? <div className="card"><div className="empty"><h2>Platform connections are temporarily unavailable</h2><p>{canManage ? 'You can finish setup now and connect your accounts later. Contact support if this continues.' : 'Ask your organization owner or an admin to connect an ad platform.'}</p></div></div> : <>
       <div className="connection-list">
-      {settings ? <FilterButtons className="connection-filters" label="Filter platforms" value={filter} onChange={setFilter}
-        options={([['all', 'All', roster.length], ['attention', 'Needs attention', attention], ['connected', 'Connected', connected], ['available', 'Not connected', roster.length - attention - connected]] as const)
-          .map(([value, label, count]) => ({ value, label, count }))} /> : null}
-      {!visibleProviders.length ? <div className="empty compact-empty"><h3>No matching platforms</h3><Button type="button" className="button secondary small" onClick={() => setFilter('all')}>Show all platforms</Button></div> : null}
       {visibleProviders.length ? <div className="connection-list-heading" aria-hidden="true"><span>Platform</span><span>Status</span><span>{oauthProviders.every(provider => !usesAdAccountSlot(provider.id)) ? 'Sources' : 'Accounts'}</span><span>Actions</span></div> : null}
       <ul className="connection-rows" role="list">
       {visibleProviders.map((provider, index) => {
@@ -110,14 +99,16 @@ export function ProviderConnections({ organizationId, projectName, canManage, co
         const platform = providerLabel(provider.id);
         const resources = providerResourceName(provider.id);
         const healthy = Boolean(connection && !needsAttention(connection));
-        const resumeHref = connection?.status === 'connected' && connection.accountSelectionId && !connection.accountSelectionUnavailable ? '/account-selection?selection_id=' + connection.accountSelectionId : undefined;
+        const resumeHref = connection?.status === 'connected' && connection.accountSelectionId && !connection.accountSelectionUnavailable
+          ? returnTo?.split('?')[0] === '/onboarding' ? accountSelectionPath(connection.accountSelectionId, returnTo)
+            : pendingSelectionPath(connection.accountSelectionId, provider.id) : undefined;
         const startHref = `/api/oauth/${provider.id}/start?organization_id=${organizationId}${returnTo ? `&return_to=${encodeURIComponent(returnTo)}` : ''}${provider.id === 'google' && connection?.dataManagerEnabled ? '&data_manager=1' : ''}${provider.id === 'reddit' && connection?.redditConversionsEnabled ? '&conversions=1' : ''}${provider.id === 'pinterest' ? `${connection?.secretPinsEnabled ? '&secret_pins=1' : connection?.pinManagementEnabled ? '&pin_management=1' : ''}${connection?.catalogManagementEnabled ? '&catalog_management=1' : ''}` : ''}`;
         const connectLabel = !connection ? 'Connect' : connection.status === 'connected' && connection.accountSelectionUnavailable ? 'Restart selection' : healthy ? `Find ${resources}` : 'Reconnect';
         const connect = canManage && provider.available ? provider.id === 'openai'
           ? <OpenAIConnectButton organizationId={organizationId} connected={Boolean(connection)} />
           : <OAuthPopupLink platform={platform} resourceProvider={provider.id} projectName={projectName} className="button secondary" label={`${connectLabel} ${healthy || connectLabel === 'Restart selection' ? 'for ' : ''}${platform}`} href={startHref}>{connectLabel}</OAuthPopupLink> : null;
         const mainAction = !canManage ? null : resumeHref
-          ? <Link className="button" prefetch={false} href={resumeHref}>Choose {resources}</Link>
+          ? <Link className="button" href={resumeHref}>Choose {resources}</Link>
           : healthy && settings ? <Link className="button secondary" href={providerAccountsPath(provider.id)}>View {resources}</Link> : connect;
         return (
           <Fragment key={provider.id}>

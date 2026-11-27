@@ -1,5 +1,7 @@
 'use client';
 
+import { useToast } from '@/components/toast';
+
 import { Button, Disclosure } from '@/components/controls';
 import { useState } from 'react';
 import { SiClaude, SiCursor, SiModelcontextprotocol } from 'react-icons/si';
@@ -36,12 +38,13 @@ export function AgentIdentityLogo({ name, clientUri }: { name: string; clientUri
 }
 
 export function CopyButton({ value, label, className = '', onCopyFailure }: { value: string; label: string; className?: string; onCopyFailure?: () => void }) {
-  const [status, setStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [failed, setFailed] = useState(false);
+  const toast = useToast();
   async function copy() {
-    try { await navigator.clipboard.writeText(value); setStatus('copied'); }
-    catch { setStatus('failed'); onCopyFailure?.(); }
+    try { await navigator.clipboard.writeText(value); setFailed(false); toast('Copied to clipboard.'); }
+    catch { setFailed(true); onCopyFailure?.(); }
   }
-  return <Button className={'button secondary small ' + className} type="button" onClick={() => void copy()} aria-label={label}><span aria-live="polite">{status === 'failed' ? 'Select text to copy' : status === 'copied' ? 'Copied ✓' : label}</span></Button>;
+  return <Button className={'button secondary small ' + className} type="button" onClick={() => void copy()} aria-label={label}><span aria-live="polite">{failed ? 'Select text to copy' : label}</span></Button>;
 }
 
 export function AgentSetupGuide({ baseUrl, projectName, initialSelectedId, onSelectionChange, canCheckConnection = false, hasConnections = false, variant = 'default' }: { baseUrl: string; projectName?: string; initialSelectedId?: string; onSelectionChange?: (id: string) => void; canCheckConnection?: boolean; hasConnections?: boolean; variant?: 'default' | 'onboarding' }) {
