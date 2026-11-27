@@ -11,7 +11,7 @@ import { LinkedInAdsClient, LinkedInAdsProvider, linkedinTools } from '@adport/p
 import { XAdsClient, XAdsProvider, xTools } from '@adport/provider-x';
 import { OpenAIAdsClient, OpenAIAdsProvider, openaiTools } from '@adport/provider-openai';
 import { GravityClient, GravityProvider, gravityTools } from '@adport/provider-gravity';
-import { MatomoClient, MatomoProvider, matomoTools } from '@adport/provider-matomo';
+import { MatomoClient, MatomoProvider } from '@adport/provider-matomo';
 
 export function providerModules() {
   const google = new GoogleAdsProvider(new GoogleAdsRestClient({
@@ -51,6 +51,6 @@ export function providerModules() {
       { provider: x, tools: xTools(x) },
       { provider: openai, tools: openaiTools(openai) },
       { provider: gravity, tools: gravityTools(gravity) },
-      { provider: matomo, tools: matomoTools(matomo) },
+      { provider: matomo, tools: [] },
   ];
 }

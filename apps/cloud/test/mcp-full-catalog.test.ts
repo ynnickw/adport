@@ -82,7 +82,7 @@ it('keeps the full hosted tools/list response within its wire budget on both tra
       const names = result.tools.map(tool => tool.name);
       for (const tool of result.tools) expect(tool.annotations?.title).toEqual(expect.any(String));
       expect(new Set(names).size).toBe(names.length);
-      for (const [prefix, count] of [['ga4', 4], ['gsc', 4], ['gtm', 24], ['matomo', 8], ['gravity', 15]] as const) {
+      for (const [prefix, count] of [['analytics', 2], ['ga4', 0], ['gsc', 4], ['gtm', 24], ['matomo', 0], ['gravity', 15]] as const) {
         expect(names.filter(name => name.startsWith(prefix + '_'))).toHaveLength(count);
       }
       expect(names).toContain('projects_list');
@@ -134,11 +134,12 @@ it('keeps the expanded publisher catalog below the metadata limit with GTM and S
     const { tools, resourcesByUri } = await listCatalog({ profile: 'full', providers: null }, true, true);
     const names = tools.map(tool => tool.name);
     const toolsByName = new Map(tools.map(tool => [tool.name, tool]));
-    expect(new Set(names).size).toBeGreaterThanOrEqual(867);
+    expect(new Set(names).size).toBeGreaterThanOrEqual(861);
     expect(names.filter(name => name.startsWith('gtm_'))).toHaveLength(24);
     expect(names.filter(name => name.startsWith('gsc_'))).toHaveLength(4);
     expect(names.some(name => name.startsWith('ga4_'))).toBe(false);
-    expect(names.filter(name => name.startsWith('matomo_'))).toHaveLength(8);
+    expect(names.filter(name => name.startsWith('matomo_'))).toHaveLength(0);
+    expect(names.filter(name => name.startsWith('analytics_')).sort()).toEqual(['analytics_acquisition_report', 'analytics_goals']);
     expect(names.filter(name => name.startsWith('gravity_'))).toHaveLength(15);
     for (const name of ['spotify_update_pixel', 'spotify_update_capi_integration', 'spotify_update_dataset', 'spotify_update_mobile_app']) {
       expect(toolsByName.get(name)?.annotations, name).toMatchObject({ readOnlyHint: false, destructiveHint: true });

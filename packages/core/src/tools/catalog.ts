@@ -1,8 +1,13 @@
 import type { AnyToolDefinition } from './registry.js';
 
-export const TOOL_PROVIDERS = ['ga4', 'gsc', 'matomo', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai', 'gravity'] as const;
-export function isAnalyticsProvider(provider: string): boolean {
-  return ['ga4', 'gsc', 'gtm', 'matomo'].includes(provider);
+export const ANALYTICS_PROVIDERS = ['ga4', 'matomo'] as const;
+export const TOOL_PROVIDERS = [...ANALYTICS_PROVIDERS, 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai', 'gravity'] as const;
+export function isAnalyticsProvider(id: string): id is typeof ANALYTICS_PROVIDERS[number] {
+  return ANALYTICS_PROVIDERS.some(provider => provider === id);
+}
+/** Website analytics, organic search and tag management share project resource settings. */
+export function isTrackingSource(id: string): boolean {
+  return isAnalyticsProvider(id) || id === 'gsc' || id === 'gtm';
 }
 export type ToolProvider = (typeof TOOL_PROVIDERS)[number];
 export type ToolProfile = 'standard' | 'reporting' | 'full';
@@ -56,8 +61,8 @@ const COMMON_OPERATIONS = /^(?:list_campaigns|get_campaign|campaigns|report|insi
 export function classifyTool(name: string, namespace: string): ToolCatalogMetadata {
   if (/_api_(read|create|update|delete|remove)$/.test(name)) return { category: 'administration', exposure: 'raw' };
   const operation = name.startsWith(`${namespace}_`) ? name.slice(namespace.length + 1) : name;
-  const standard = isAnalyticsProvider(namespace) || STANDARD_TOOLS.has(name) || (TOOL_PROVIDERS.includes(namespace as ToolProvider) && COMMON_OPERATIONS.test(operation));
-  const category: ToolCatalogMetadata['category'] = ['ga4', 'gsc', 'matomo'].includes(namespace) ? 'reporting' : namespace === 'gtm' ? 'measurement' : /experiment|lift_test/.test(operation) ? 'experiments'
+  const standard = namespace === 'analytics' || isTrackingSource(namespace) || STANDARD_TOOLS.has(name) || (TOOL_PROVIDERS.includes(namespace as ToolProvider) && COMMON_OPERATIONS.test(operation));
+  const category: ToolCatalogMetadata['category'] = ['analytics', 'gsc'].includes(namespace) ? 'reporting' : namespace === 'gtm' ? 'measurement' : /experiment|lift_test/.test(operation) ? 'experiments'
     : /conversion|pixel|insight_tag|event_source|offline_event|measurement|web_event_tag|app_event_tag|tracking_tag/.test(operation) ? 'measurement'
     : /audience|targeting|demographic/.test(operation) ? 'audiences'
     : /report|insight|forecast|estimate|keyword_ideas|historical_metrics/.test(operation) ? 'reporting'
@@ -70,6 +75,7 @@ export function classifyTool(name: string, namespace: string): ToolCatalogMetada
 export function toolInSelection(tool: AnyToolDefinition, selection: ToolSelection, includeRawTools = false): boolean {
   const catalog = tool.catalog ?? classifyTool(tool.name, tool.namespace);
   if (catalog.exposure === 'raw' && !includeRawTools) return false;
+  if (tool.sourceProviders && selection.providers !== null && !selection.providers.some(id => tool.sourceProviders!.includes(id))) return false;
   if (TOOL_PROVIDERS.includes(tool.namespace as ToolProvider) && selection.providers !== null
     && !selection.providers.includes(tool.namespace as ToolProvider)) return false;
   if (selection.profile === 'reporting') return tool.annotations.readOnly === true;

@@ -1,3 +1,6 @@
+import { z } from 'zod';
+import { AdportError } from './errors.js';
+import { analyticsTools } from './tools/acquisition.js';
 import { auditTools } from './audit/tools.js';
 import { CredentialStore } from './credentials/store.js';
 import { PolicyEngine } from './policy/engine.js';
@@ -9,7 +12,7 @@ import { MockProvider, mockTools } from './testing/mock-provider.js';
 import type { FindingsRepository } from './audit/store.js';
 import { mediaTools } from './tools/media.js';
 import type { MediaLibrary } from './media.js';
-import { toolInSelection, type ToolProvider, type ToolSelection } from './tools/catalog.js';
+import { ANALYTICS_PROVIDERS, toolInSelection, type ToolProvider, type ToolSelection } from './tools/catalog.js';
 import { capabilityTools } from './tools/capabilities.js';
 import type { ToolCatalogContext } from './tools/registry.js';
 
@@ -24,6 +27,8 @@ export interface CreateContextOptions {
   providerModules?: ProviderModule[];
   /** Platforms this host can connect, including those with no credentials yet. */
   capabilityProviders?: readonly ToolProvider[];
+  /** A hosted multi-project catalog may describe available website platforms before connection. */
+  analyticsProviders?: readonly typeof ANALYTICS_PROVIDERS[number][];
   /**
    * Include the credential-free mock provider. Disabled by default so a
    * misconfigured live runtime cannot silently substitute synthetic accounts.
@@ -46,14 +51,23 @@ export interface AdportRuntime {
   policySource: string;
 }
 
+function toolForSelection(tool: AnyToolDefinition, selection: ToolSelection): AnyToolDefinition {
+  if (!tool.sourceProviders || !selection.providers) return tool;
+  const sources = tool.sourceProviders.filter(id => selection.providers!.includes(id));
+  return { ...tool, sourceProviders: sources, input: tool.input.safeExtend({ provider: z.enum(sources) }) };
+}
+
 /** Filter execution as well as discovery; shared reads also see only selected providers. */
 export function selectRuntimeCatalog(runtime: AdportRuntime, selection: ToolSelection, includeRawTools = false,
   discovery: Pick<ToolCatalogContext, 'canWrite' | 'manageAccessUrl' | 'excludedTools'> = {}): AdportRuntime {
   const registry = new ToolRegistry();
-  registry.register(runtime.registry.list().filter(tool => toolInSelection(tool, selection, includeRawTools)));
+  registry.register(runtime.registry.list().filter(tool => toolInSelection(tool, selection, includeRawTools)).map(tool => toolForSelection(tool, selection)));
   // Keep transport instrumentation and the owning registry's validation path.
   registry.call = async (name, input, ctx) => {
-    registry.get(name);
+    const tool = registry.get(name);
+    if (tool.sourceProviders && input && typeof input === 'object' && 'provider' in input && !tool.sourceProviders.some(id => id === input.provider)) {
+      throw new AdportError('NOT_CONNECTED', 'This analytics platform is unavailable in the selected connection.');
+    }
     return runtime.registry.call(name, input, ctx);
   };
   const providers = new ProviderRegistry();
@@ -88,6 +102,8 @@ export async function createContext(options: CreateContextOptions = {}): Promise
     providers.register(module.provider);
     registry.register(module.tools);
   }
+  const sources = options.analyticsProviders ?? ANALYTICS_PROVIDERS.filter(id => modules.some(m => m.provider.id === id && m.provider.acquisitionAnalytics));
+  registry.register(analyticsTools(sources));
   if (includeMock) {
     providers.register(new MockProvider());
     registry.register(mockTools());

@@ -1,7 +1,7 @@
 import { GAQL_REPORT_UI } from './gaql-report-ui.js';
 
 export const NATIVE_REPORT_TOOLS = [
-  'ga4_report', 'ga4_realtime_report', 'gsc_search_analytics', 'matomo_report', 'matomo_campaign_performance', 'matomo_realtime_report',
+  'gsc_search_analytics',
   'google_gaql', 'gravity_conversion_stats',
   'linkedin_demographic_report',
   'meta_insights', 'tiktok_report', 'reddit_report', 'spotify_insight_report',
@@ -10,13 +10,16 @@ export const NATIVE_REPORT_TOOLS = [
   'apple_impression_share', 'apple_search_term_popularity',
 ] as const;
 
+// Already-open cards can still display results from earlier releases.
+export const HISTORICAL_REPORT_TOOLS = ['ga4_report', 'ga4_realtime_report', 'matomo_report', 'matomo_campaign_performance', 'matomo_realtime_report'] as const;
+
 export const NATIVE_REPORT_UI_STYLES = String.raw`
     .native-report-metrics { grid-template-columns:repeat(auto-fit,minmax(min(110px,100%),1fr)) }
 `;
 
 /** Each native read retains its own metrics, attribution and units. */
 export const NATIVE_REPORT_UI_SCRIPT = String.raw`
-    const nativeReportTools=new Set(${JSON.stringify(NATIVE_REPORT_TOOLS)});
+    const nativeReportTools=new Set(${JSON.stringify([...NATIVE_REPORT_TOOLS, ...HISTORICAL_REPORT_TOOLS])});
     ${GAQL_REPORT_UI}
     function nativeReportDecimal(value,scale=0) {
       const text=typeof value==='number'&&Number.isFinite(value)?String(value):typeof value==='string'?value:'';

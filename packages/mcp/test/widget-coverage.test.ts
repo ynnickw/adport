@@ -38,7 +38,9 @@ it('maps every registered tool to a branded view and supplies a structured revie
       const view = source.presentation ?? viewForTool(source.name, source.annotations.readOnly ?? false);
       if (source.name === 'projects_list') expect(view).toBe('data');
       if (!source.presentation && source.annotations.readOnly && !/^(accounts_list|report|audit_|recommendations_)/.test(source.name)) expect(['data','receipt']).toContain(view);
-      if (source.namespace !== 'core' && source.namespace !== 'audit' && source.namespace !== 'mock') expect(PROVIDER_LOGOS[source.namespace], source.name).toContain('<svg');
+      if (source.sourceProviders) {
+        for (const platform of source.sourceProviders) expect(PROVIDER_LOGOS[platform], source.name).toContain('<svg');
+      } else if (source.namespace !== 'core' && source.namespace !== 'audit' && source.namespace !== 'mock') expect(PROVIDER_LOGOS[source.namespace], source.name).toContain('<svg');
     }
     // Exercise each actual guarded handler without making network requests or
     // duplicating the tool definitions. Input validation is covered by providers.

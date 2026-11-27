@@ -2,6 +2,7 @@ import 'server-only';
 import {
   AdportError,
   additionalAccountIds,
+  type AcquisitionAnalytics,
   type AdProvider,
   type Account,
   type AnyToolDefinition,
@@ -47,23 +48,30 @@ export function createAccountScopeAuthorizer(accountIds: Partial<Record<CloudPro
       }
       return;
     }
-    const allowed = accountIds[tool.namespace as CloudProvider] ?? new Set<string>();
+    const platform = tool.namespace === 'analytics' && typeof input.provider === 'string' ? input.provider : tool.namespace;
+    const allowed = accountIds[platform as CloudProvider] ?? new Set<string>();
     const explicit = typeof input.account_id === 'string'
       ? input.account_id
       : typeof input.customer_id === 'string'
         ? input.customer_id
         : undefined;
-    if (explicit) assertAllowed(tool.namespace, allowed, explicit);
-    for (const id of additionalAccountIds(tool, input)) assertAllowed(tool.namespace, allowed, id);
+    if (explicit) assertAllowed(platform, allowed, explicit);
+    for (const id of additionalAccountIds(tool, input)) assertAllowed(platform, allowed, id);
   };
 }
 
 /** Restricts a real provider to the tenant's persisted active-account set. */
 export class AccountScopedProvider implements AdProvider {
   readonly id: string;
+  readonly acquisitionAnalytics?: AcquisitionAnalytics;
 
   constructor(private readonly provider: AdProvider, private readonly allowed: ReadonlySet<string>, private readonly accounts: readonly Account[] = []) {
     this.id = provider.id;
+    const analytics = provider.acquisitionAnalytics;
+    if (analytics) this.acquisitionAnalytics = {
+      listGoals: accountId => { assertAllowed(this.id, this.allowed, accountId); return analytics.listGoals(accountId); },
+      acquisitionReport: query => { assertAllowed(this.id, this.allowed, query.account_id); return analytics.acquisitionReport(query); },
+    };
   }
 
   capabilities() { return this.provider.capabilities(); }

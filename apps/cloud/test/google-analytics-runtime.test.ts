@@ -24,12 +24,12 @@ describe('selected analytics properties', () => {
     expect(await runtime.ctx.providers.get('ga4').listAccounts()).toMatchObject([{ id: '123', name: 'Selected website' }]);
     expect(await runtime.ctx.providers.get('gsc').listAccounts()).toMatchObject([{ id: 'sc-domain:example.com' }]);
     for (const provider of ['ga4', 'gsc']) {
-      const tools = runtime.registry.list().filter(tool => tool.namespace === provider);
-      expect(tools).toHaveLength(4); expect(tools.every(tool => tool.annotations.readOnly)).toBe(true);
+      const tools = runtime.registry.list().filter(tool => tool.namespace === (provider === 'ga4' ? 'analytics' : provider));
+      expect(tools).toHaveLength(provider === 'ga4' ? 2 : 4); expect(tools.every(tool => tool.annotations.readOnly)).toBe(true);
       expect(runtime.ctx.providers.get(provider).capabilities().reporting).toBe(false);
-      for (const tool of tools) expect(() => runtime.ctx.authorizeToolCall!(tool, { account_id: '999' })).toThrow(/not active/);
+      for (const tool of tools) expect(() => runtime.ctx.authorizeToolCall!(tool, { provider: 'ga4', account_id: '999' })).toThrow(/not active/);
     }
-    await expect(runtime.registry.call('ga4_get_property', { account_id: '999' }, runtime.ctx)).rejects.toMatchObject({ code: 'POLICY_VIOLATION' });
+    await expect(runtime.registry.call('analytics_goals', { provider: 'ga4', account_id: '999' }, runtime.ctx)).rejects.toMatchObject({ code: 'POLICY_VIOLATION' });
     await expect(runtime.registry.call('gsc_get_site', { account_id: 'sc-domain:other.test' }, runtime.ctx)).rejects.toMatchObject({ code: 'POLICY_VIOLATION' });
     expect(fetch).not.toHaveBeenCalled();
   });

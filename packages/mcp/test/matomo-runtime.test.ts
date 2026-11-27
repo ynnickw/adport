@@ -19,7 +19,7 @@ describe('runtime assembly with unusable Matomo credentials', () => {
     const runtime = await assembleRuntime();
     const providers = runtime.ctx.providers.list().map(p => p.id), names = runtime.registry.list().map(t => t.name);
     expect(providers).toContain('meta'); expect(providers).not.toContain('matomo');
-    expect(names).toContain('meta_insights'); expect(names.some(name => name.startsWith('matomo_'))).toBe(false);
+    expect(names).toContain('meta_insights'); expect(names.some(name => name.startsWith('analytics_') || name.startsWith('matomo_'))).toBe(false);
   });
 
   it('skips an unusable stored Matomo record the same way', async () => {

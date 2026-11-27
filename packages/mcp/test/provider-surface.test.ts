@@ -12,7 +12,7 @@ import { LinkedInAdsClient, LinkedInAdsProvider, linkedinTools } from '@adport/p
 import { XAdsClient, XAdsProvider, xTools } from '@adport/provider-x';
 import { OpenAIAdsClient, OpenAIAdsProvider, openaiTools } from '@adport/provider-openai';
 import { GravityClient, GravityProvider, gravityTools } from '@adport/provider-gravity';
-import { MatomoClient, MatomoProvider, matomoTools } from '@adport/provider-matomo';
+import { MatomoClient, MatomoProvider } from '@adport/provider-matomo';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { Client, InMemoryTransport, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { createMcpHandler } from '@modelcontextprotocol/server';
@@ -61,7 +61,7 @@ describe('all-provider shared tool surface', () => {
         { provider: x, tools: xTools(x) },
         { provider: openai, tools: openaiTools(openai) },
         { provider: gravity, tools: gravityTools(gravity) },
-        { provider: matomo, tools: matomoTools(matomo) },
+        { provider: matomo, tools: [] },
       ],
     });
     names = runtime.registry.list().map((tool) => tool.name);
@@ -113,7 +113,7 @@ describe('all-provider shared tool surface', () => {
       'linkedin_list_campaigns', 'linkedin_list_campaign_groups', 'linkedin_create_campaign', 'linkedin_set_campaign_status', 'linkedin_set_budget',
       'linkedin_budget_pricing', 'linkedin_supply_forecast',
       'linkedin_saved_audiences', 'linkedin_get_saved_audience', 'linkedin_create_saved_audience', 'linkedin_update_saved_audience', 'linkedin_delete_saved_audience',
-      'matomo_site', 'matomo_report_metadata', 'matomo_report', 'matomo_campaign_performance', 'matomo_realtime_report', 'matomo_segment_metadata', 'matomo_goals', 'matomo_segments',
+      'analytics_acquisition_report', 'analytics_goals',
       'x_list_campaigns', 'x_list_funding_instruments', 'x_list_line_items', 'x_create_campaign', 'x_set_campaign_status', 'x_set_budget',
     ]));
     expect(new Set(names).size).toBe(names.length);
@@ -286,7 +286,7 @@ describe('all-provider shared tool surface', () => {
         catalogs[label] = tools.length;
         expect(listed.some(name => /_api_/.test(name))).toBe(false);
         if (label !== 'full') {
-          expect(listed.some(name => /^(apple|tiktok|microsoft|reddit|snapchat|spotify|pinterest|linkedin|x|openai|matomo|gravity)_/.test(name))).toBe(false);
+          expect(listed.some(name => /^(apple|tiktok|microsoft|reddit|snapchat|spotify|pinterest|linkedin|x|openai|analytics|matomo|gravity)_/.test(name))).toBe(false);
           await unavailable(client, 'apple_create_campaign');
         }
         if (label === 'standard') {

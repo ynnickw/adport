@@ -2,11 +2,11 @@
 
 Both connections live under **Analytics & tracking** and are excluded from connected ad-account limits. Each project selects the properties its users and agents may read. Credentials remain encrypted in the existing tenant-isolated cloud vault.
 
-GA4 answers acquisition, landing-page, event, key-event and revenue questions, using the property's reporting time zone. Use `ga4_metadata` to discover valid standard and registered custom fields, `ga4_report` for a date range and `ga4_realtime_report` for current activity. Monetary metrics retain the property's currency and exact decimal strings.
+Use `analytics_goals` to list GA4 key events and `analytics_acquisition_report` to read sessions, conversions and purchase revenue by session source, medium and campaign. Both use the selected property. Dates use its reporting timezone. [Examples and migration from the earlier GA4 tools](website-analytics.md)
 
 Search Console answers organic Google Search questions by date, query, page, country, device or search appearance. `gsc_search_analytics` returns clicks, impressions, CTR and average position, with Pacific Time dates. It returns top rows rather than an exhaustive query export. `gsc_sitemaps` reads submitted sitemap status; `gsc_inspect_url` reads index status for a URL inside a selected property.
 
-All eight tools are read-only. There are no GA4 configuration changes, sitemap submissions or indexing requests. GA4 and Search Console do not replace Google Tag Manager's tracking configuration tools.
+Website analytics and Search Console reads request read-only Google scopes. There are no GA4 configuration changes, sitemap submissions or indexing requests. GA4 and Search Console do not replace Google Tag Manager's tracking configuration tools.
 
 ## Hosted OAuth setup
 

@@ -1,3 +1,4 @@
+import { ACQUISITION_UI } from './acquisition-ui.js';
 import { MEDIA_LIBRARY_UI, MEDIA_LIBRARY_STYLES } from './media-library-ui.js';
 import { MEDIA_UPLOAD_UI } from './media-upload-ui.js';
 import { TREND_UI_SCRIPT, TREND_UI_STYLES } from './trend-ui.js';
@@ -15,8 +16,9 @@ import { PLANNING_UI } from './planning-ui.js';
 import { READ_PAGE_UI } from './read-page-ui.js';
 import { REPORT_CHART_SCRIPT, REPORT_CHART_STYLES } from './report-chart-ui.js';
 
-export const ADPORT_UI_URI = 'ui://adport/insight-card-v39.html';
-export const ADPORT_SUMMARY_UI_URI = 'ui://adport/summary-card-v39.html';
+export const ADPORT_UI_VERSION = 41;
+export const ADPORT_UI_URI = `ui://adport/insight-card-v${ADPORT_UI_VERSION}.html`;
+export const ADPORT_SUMMARY_UI_URI = `ui://adport/summary-card-v${ADPORT_UI_VERSION}.html`;
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
 export const ADPORT_UI_RESOURCE_DOMAINS = [
   ADPORT_UI_DOMAIN,
@@ -360,6 +362,7 @@ ${RECORD_UI_SCRIPT}
 ${READ_PAGE_UI}
 ${APPLE_REPORT_UI_SCRIPT}
 ${NATIVE_REPORT_UI_SCRIPT}
+    ${ACQUISITION_UI}
 ${REPORT_CHART_SCRIPT}
 ${INSIGHT_UI_SCRIPT}
 ${TREND_UI_SCRIPT}
@@ -400,6 +403,7 @@ ${PLANNING_UI}
       if (meta.view === 'accounts') return renderAccounts(data,meta);
       if (meta.view === 'report') return renderReport(data,meta);
       if (meta.view === 'operation') {renderOperation(data,meta);providerGalleryReviewControls(data,meta);return;}
+      if (meta.tool === 'analytics_goals' || meta.tool === 'analytics_acquisition_report') return renderAcquisition(data,meta);
       if (meta.tool === 'capabilities_list') return renderAvailability(data,meta);
       if (meta.tool === 'apple_change_history') return renderHistory(data,meta);
       if (meta.tool === 'apple_recommendations') return renderAppleRecommendations(data,meta);

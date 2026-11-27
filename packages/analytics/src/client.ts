@@ -3,8 +3,8 @@ import { AdportError } from '@adport/core';
 export interface AnalyticsCredentials { clientId: string; clientSecret: string; refreshToken: string }
 export type Resource = Record<string, unknown>;
 const services = {
-  admin: { origin: 'https://analyticsadmin.googleapis.com/v1beta/', get: /^(?:accountSummaries|properties\/\d+)$/, post: /^$/ },
-  data: { origin: 'https://analyticsdata.googleapis.com/v1beta/', get: /^properties\/\d+\/metadata$/, post: /^properties\/\d+:(?:runReport|runRealtimeReport)$/ },
+  admin: { origin: 'https://analyticsadmin.googleapis.com/v1beta/', get: /^(?:accountSummaries|properties\/\d+\/keyEvents)$/, post: /^$/ },
+  data: { origin: 'https://analyticsdata.googleapis.com/v1beta/', get: /^$/, post: /^properties\/\d+:runReport$/ },
   search: { origin: 'https://www.googleapis.com/webmasters/v3/', get: /^sites(?:\/[^/]+(?:\/sitemaps)?)?$/, post: /^sites\/[^/]+\/searchAnalytics\/query$/ },
   inspection: { origin: 'https://searchconsole.googleapis.com/v1/', get: /^$/, post: /^urlInspection\/index:inspect$/ },
 } as const;

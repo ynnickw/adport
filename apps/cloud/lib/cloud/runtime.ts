@@ -1,8 +1,8 @@
 import 'server-only';
-import { AdportError, createContext, selectRuntimeCatalog, PolicyEngine, type ToolSelection, type AdportRuntime, type AnyToolDefinition, type ProviderModule } from '@adport/core';
+import { ANALYTICS_PROVIDERS, AdportError, createContext, selectRuntimeCatalog, PolicyEngine, type ToolSelection, type AdportRuntime, type AnyToolDefinition, type ProviderModule } from '@adport/core';
 import { toolAccessPath } from '@/lib/tool-access-link';
 import { AppleAdsClient, AppleAdsProvider, appleTools } from '@adport/provider-apple';
-import { AnalyticsClient, Ga4Provider, SearchConsoleProvider, ga4Tools, gscTools } from '@adport/provider-analytics';
+import { AnalyticsClient, Ga4Provider, SearchConsoleProvider, gscTools } from '@adport/provider-analytics';
 import { googleOAuthClient } from './google-oauth';
 import { GtmClient, GtmProvider, gtmTools } from '@adport/provider-gtm';
 import { GoogleAdsProvider, GoogleAdsRestClient, googleTools } from '@adport/provider-google';
@@ -10,7 +10,6 @@ import { MetaAdsProvider, MetaGraphClient, metaTools } from '@adport/provider-me
 import { MicrosoftAdsClient, MicrosoftAdsProvider, microsoftTools } from '@adport/provider-microsoft';
 import { GravityClient, GravityProvider, gravityTools } from '@adport/provider-gravity';
 import { createHostedMatomoProvider } from './matomo';
-import { matomoTools } from '@adport/provider-matomo';
 import { OpenAIAdsClient, OpenAIAdsProvider, openaiTools } from '@adport/provider-openai';
 import { RedditAdsClient, RedditAdsProvider, redditTools } from '@adport/provider-reddit';
 import { TikTokAdsProvider, TikTokClient, tiktokTools } from '@adport/provider-tiktok';
@@ -112,7 +111,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
   for (const id of ['ga4', 'gsc'] as const) {
     if (!credentials[id] || !providerAllowedForOrganization(id, principal.organizationId)) continue;
     const client = new AnalyticsClient({ ...googleOAuthClient(id), refreshToken: credentials[id]!.refreshToken });
-    if (id === 'ga4') { const provider = new Ga4Provider(client); modules.push({ provider: scopeProvider(provider), tools: ga4Tools(provider) }); }
+    if (id === 'ga4') { const provider = new Ga4Provider(client); modules.push({ provider: scopeProvider(provider), tools: [] }); }
     else { const provider = new SearchConsoleProvider(client); modules.push({ provider: scopeProvider(provider), tools: gscTools(provider) }); }
   }
   if (credentials.gtm && providerAllowedForOrganization('gtm', principal.organizationId)) {
@@ -151,7 +150,7 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
   }
   if (credentials.matomo) {
     const provider = createHostedMatomoProvider(credentials.matomo);
-    modules.push({ provider: scopeProvider(provider), tools: matomoTools(provider) });
+    modules.push({ provider: scopeProvider(provider), tools: [] });
   }
   if (credentials.gravity) {
     const provider = new GravityProvider(new GravityClient(credentials.gravity));
@@ -188,9 +187,11 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
   const runtime = await createContext({
     providerModules: modules,
     capabilityProviders: CLOUD_PROVIDERS,
+    analyticsProviders: options.surface === 'mcp' ? ANALYTICS_PROVIDERS.filter(id => providerAllowedForOrganization(id, principal.organizationId)) : undefined,
     engine,
     authorizeToolCall: enforceAccountScope ? (tool, input) => {
-      if (tool.namespace !== 'core' && tool.namespace !== 'audit' && !connected.has(tool.namespace)) {
+      const platform = tool.namespace === 'analytics' ? String(input.provider) : tool.namespace;
+      if (platform !== 'core' && platform !== 'audit' && !connected.has(platform)) {
         if (tool.namespace === 'gtm') return rejectUnavailableGtm(principal, !tool.annotations.readOnly);
         throw new AdportError('NOT_CONNECTED', 'This platform is not connected in the selected project.');
       }
@@ -221,13 +222,11 @@ function completeMcpCatalog(runtime: AdportRuntime, organizationId: string): voi
   const registered = new Set(runtime.registry.list().map(tool => tool.name));
   const catalog = [
     ...(providerAllowedForOrganization('gtm', organizationId) ? unavailableTools('gtm', gtmTools) : []),
-    ...(providerAllowedForOrganization('ga4', organizationId) ? unavailableTools('ga4', ga4Tools) : []),
     ...(providerAllowedForOrganization('gsc', organizationId) ? unavailableTools('gsc', gscTools) : []),
     ...unavailableTools('google', googleTools), ...unavailableTools('meta', metaTools),
     ...unavailableTools('tiktok', tiktokTools), ...unavailableTools('apple', appleTools),
     ...unavailableTools('microsoft', microsoftTools), ...unavailableTools('reddit', redditTools),
     ...unavailableTools('openai', openaiTools), ...unavailableTools('gravity', gravityTools),
-    ...unavailableTools('matomo', matomoTools),
     ...unavailableTools('snapchat', snapchatTools), ...unavailableTools('spotify', spotifyTools),
     ...unavailableTools('pinterest', pinterestTools), ...unavailableTools('linkedin', linkedinTools),
     ...unavailableTools('x', xTools),
