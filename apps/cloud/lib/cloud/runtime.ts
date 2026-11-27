@@ -8,6 +8,8 @@ import { GtmClient, GtmProvider, gtmTools } from '@adport/provider-gtm';
 import { GoogleAdsProvider, GoogleAdsRestClient, googleTools } from '@adport/provider-google';
 import { MetaAdsProvider, MetaGraphClient, metaTools } from '@adport/provider-meta';
 import { MicrosoftAdsClient, MicrosoftAdsProvider, microsoftTools } from '@adport/provider-microsoft';
+import { createHostedMatomoProvider } from './matomo';
+import { matomoTools } from '@adport/provider-matomo';
 import { OpenAIAdsClient, OpenAIAdsProvider, openaiTools } from '@adport/provider-openai';
 import { RedditAdsClient, RedditAdsProvider, redditTools } from '@adport/provider-reddit';
 import { TikTokAdsProvider, TikTokClient, tiktokTools } from '@adport/provider-tiktok';
@@ -146,6 +148,10 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     const provider = new AppleAdsProvider(new AppleAdsClient(hydrateApple(credentials.apple)), media);
     modules.push({ provider: scopeProvider(provider), tools: appleTools(provider) });
   }
+  if (credentials.matomo) {
+    const provider = createHostedMatomoProvider(credentials.matomo);
+    modules.push({ provider: scopeProvider(provider), tools: matomoTools(provider) });
+  }
   if (credentials.openai) {
     const provider = new OpenAIAdsProvider(new OpenAIAdsClient(credentials.openai));
     modules.push({ provider: scopeProvider(provider), tools: openaiTools(provider) });
@@ -216,6 +222,7 @@ function completeMcpCatalog(runtime: AdportRuntime, organizationId: string): voi
     ...unavailableTools('tiktok', tiktokTools), ...unavailableTools('apple', appleTools),
     ...unavailableTools('microsoft', microsoftTools), ...unavailableTools('reddit', redditTools),
     ...unavailableTools('openai', openaiTools),
+    ...unavailableTools('matomo', matomoTools),
     ...unavailableTools('snapchat', snapchatTools), ...unavailableTools('spotify', spotifyTools),
     ...unavailableTools('pinterest', pinterestTools), ...unavailableTools('linkedin', linkedinTools),
     ...unavailableTools('x', xTools),

@@ -33,7 +33,7 @@ Use `adport connect gtm` with your own Google Desktop OAuth client after enablin
 
 ## Analytics sources
 
-Google Analytics 4 and Search Console are covered in the [analytics guide](./providers/google-analytics.md). For Matomo, set `MATOMO_URL` and `MATOMO_TOKEN_AUTH`, then run `adport connect matomo`; see the [Matomo guide](./providers/matomo.md). Analytics sources are read-only.
+Google Analytics 4 and Search Console are covered in the [analytics guide](./providers/google-analytics.md). Connect Matomo under Analytics & tracking in Adport Cloud or run `adport connect matomo` locally. See the [Matomo guide](./providers/matomo.md). Analytics sources are read-only.
 
 ## Google Ads
 

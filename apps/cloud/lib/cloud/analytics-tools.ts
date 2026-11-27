@@ -1,4 +1,5 @@
 import 'server-only';
+import { providerCategory } from './providers';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { AdportRuntime } from '@adport/core';
 import { captureProductEvent } from './product-analytics';
@@ -13,7 +14,7 @@ export function instrumentCloudTools(runtime: AdportRuntime, principal: TenantPr
   runtime.registry.call = async (name, input, ctx) => {
     if (insideTool.getStore()) return call(name, input, ctx);
     const tool = runtime.registry.get(name);
-    if (['gtm', 'ga4', 'gsc'].includes(tool.namespace)) return call(name, input, ctx);
+    if (providerCategory(tool.namespace) === 'analytics') return call(name, input, ctx);
     const apply = input !== null && typeof input === 'object' && 'pending_operation_id' in input && Boolean(input.pending_operation_id);
     const category = !tool.annotations.readOnly ? (apply ? 'write_apply' : 'write_preview')
       : name === 'report' ? 'report' : tool.namespace === 'audit' ? 'audit' : 'read';

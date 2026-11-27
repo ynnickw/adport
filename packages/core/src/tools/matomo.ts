@@ -55,26 +55,35 @@ export function matomoSegmentNamesVisitor(segment: string): boolean {
 }
 const reportAction = z.string().regex(/^[a-z][A-Za-z0-9]{0,63}$/);
 const column = z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,63}$/);
-export const matomoReportSchema = z.object({
+const reportOptions = z.object({
   account_id: site,
-  module: reportModule.describe('Report module from matomo_report_metadata, e.g. VisitsSummary, Referrers, Goals, Actions.'),
-  action: reportAction.describe('Report action, e.g. get, getReferrerType, getCampaigns, getPageUrls.'),
   start_date: day, end_date: day,
   period: z.enum(['range', 'day', 'week', 'month', 'year']).default('range')
     .describe('range sums the dates; day/week/month/year returns rows per period.'),
   segment: z.string().min(1).max(2000).optional()
     .refine(value => value === undefined || !matomoSegmentNamesVisitor(value), 'Segments on visitor-identifying dimensions (userId, visitorId, visitId, visitIp, fingerprint) are not available.')
     .describe('Matomo segment definition, e.g. deviceType==smartphone;countryCode==fr.'),
-  id_goal: z.union([z.number().int().min(1).max(1_000_000), z.enum(['ecommerceOrder', 'ecommerceAbandonedCart'])]).optional()
-    .describe('Goal ID or ecommerceOrder/ecommerceAbandonedCart. Only valid with module Goals.'),
-  flat: z.boolean().optional().describe('Flatten hierarchical reports. Defaults to true for Actions reports.'),
   filter_sort_column: column.optional(),
   filter_sort_order: z.enum(['asc', 'desc']).optional(),
   limit: z.number().int().min(1).max(1000).default(100),
   offset: z.number().int().min(0).max(10_000_000).default(0),
-}).strict().refine(i => i.start_date <= i.end_date, 'start_date must not be after end_date.')
-  .refine(i => i.id_goal === undefined || i.module === 'Goals', { message: 'id_goal is only valid with module Goals.', path: ['id_goal'] })
-  .refine(i => i.period !== 'day' || (Date.parse(i.end_date) - Date.parse(i.start_date)) / 86_400_000 < 93, 'Daily rows are limited to 93 days; use week or month.');
+});
+type ReportRange = z.infer<typeof reportOptions>;
+const orderedDates = (i: ReportRange) => i.start_date <= i.end_date;
+const supportedDays = (i: ReportRange) => i.period !== 'day' || (Date.parse(i.end_date) - Date.parse(i.start_date)) / 86_400_000 < 93;
+const dateOrderMessage = 'start_date must not be after end_date.';
+const dailyLimitMessage = 'Daily rows are limited to 93 days; use week or month.';
+
+export const matomoCampaignReportSchema = reportOptions.strict().refine(orderedDates, dateOrderMessage).refine(supportedDays, dailyLimitMessage);
+export type MatomoCampaignReportInput = z.infer<typeof matomoCampaignReportSchema>;
+export const matomoReportSchema = reportOptions.extend({
+  module: reportModule.describe('Report module from matomo_report_metadata, e.g. VisitsSummary, Referrers, Goals, Actions.'),
+  action: reportAction.describe('Report action, e.g. get, getReferrerType, getCampaigns, getPageUrls.'),
+  id_goal: z.union([z.number().int().min(1).max(1_000_000), z.enum(['ecommerceOrder', 'ecommerceAbandonedCart'])]).optional()
+    .describe('Goal ID or ecommerceOrder/ecommerceAbandonedCart. Only valid with module Goals.'),
+  flat: z.boolean().optional().describe('Flatten hierarchical reports. Defaults to true for Actions reports.'),
+}).strict().refine(orderedDates, dateOrderMessage).refine(supportedDays, dailyLimitMessage)
+  .refine(i => i.id_goal === undefined || i.module === 'Goals', { message: 'id_goal is only valid with module Goals.', path: ['id_goal'] });
 export const matomoReportMetadataSchema = z.object({
   account_id: site,
   module: reportModule.optional().describe('Only list reports of this module.'),
@@ -85,6 +94,9 @@ export interface MatomoReader {
   site(accountId: string): Promise<unknown>;
   reportMetadata(input: MatomoReportMetadataInput): Promise<unknown>;
   processedReport(input: MatomoReportInput): Promise<unknown>;
+  campaignReport(input: MatomoCampaignReportInput): Promise<unknown>;
+  realtimeReport(accountId: string, minutes: number): Promise<unknown>;
+  segmentMetadata(accountId: string): Promise<unknown>;
   goals(accountId: string): Promise<unknown>;
   segments(accountId: string): Promise<unknown>;
 }
@@ -96,6 +108,13 @@ export function matomoTools(provider: MatomoReader) {
       input: matomoReportMetadataSchema, annotations: { readOnly: true }, handler: i => provider.reportMetadata(i) }),
     defineTool({ name: 'matomo_report', namespace: 'matomo', description: 'Read an aggregated Matomo report (visits, referrers, campaigns, goals, pages). Dates use the site time zone; revenue uses the site currency; paginate with offset.',
       input: matomoReportSchema, pagination: { cursorInput: 'offset', cursorOutput: 'next_offset' }, annotations: { readOnly: true }, handler: i => provider.processedReport(i) }),
+    defineTool({ name: 'matomo_campaign_performance', namespace: 'matomo', description: 'Compare visits and outcomes by tagged campaign. Automatically selects the campaign report installed on the Matomo site.',
+      input: matomoCampaignReportSchema, pagination: { cursorInput: 'offset', cursorOutput: 'next_offset' }, annotations: { readOnly: true }, handler: i => provider.campaignReport(i) }),
+    defineTool({ name: 'matomo_realtime_report', namespace: 'matomo', description: 'Read aggregate visits, visitors, actions and converted visits in the last 1 to 60 minutes for one Matomo site.',
+      input: z.object({ account_id: site, minutes: z.number().int().min(1).max(60).default(30) }).strict(), annotations: { readOnly: true },
+      handler: i => provider.realtimeReport(i.account_id, i.minutes) }),
+    defineTool({ name: 'matomo_segment_metadata', namespace: 'matomo', description: 'Discover available segment filters and accepted values for a Matomo site. Use a returned filter in matomo_report.',
+      input: z.object({ account_id: site }).strict(), annotations: { readOnly: true }, handler: i => provider.segmentMetadata(i.account_id) }),
     defineTool({ name: 'matomo_goals', namespace: 'matomo', description: 'Read Matomo goal definitions for a site. Use matomo_report with module Goals for conversions.',
       input: z.object({ account_id: site }), annotations: { readOnly: true }, handler: i => provider.goals(i.account_id) }),
     defineTool({ name: 'matomo_segments', namespace: 'matomo', description: 'Read stored Matomo segment definitions usable as the segment of matomo_report.',

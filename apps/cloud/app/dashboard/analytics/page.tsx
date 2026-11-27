@@ -15,7 +15,7 @@ import { getAccountSelection } from '@/lib/cloud/account-selection';
 import { canAdminister, requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { providerLabel, providerResourceName, usesAdAccountSlot } from '@/lib/cloud/providers';
 import { listConnections, listOrganizationAdAccounts } from '@/lib/cloud/repository';
-import { isOAuthProvider } from '@/lib/cloud/types';
+import { isCloudProvider } from '@/lib/cloud/types';
 
 export const metadata = { title: 'Analytics & tracking' };
 
@@ -48,7 +48,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
   const addSource = canManage ? <AddProviderDialog projectId={tenant.organizationId} projectName={tenant.organizationName}
     providers={providers} connections={views} category="analytics" /> : undefined;
   const requestedProvider = params.select_provider;
-  const providerFilter = requestedProvider && isOAuthProvider(requestedProvider) && !usesAdAccountSlot(requestedProvider) ? requestedProvider : undefined;
+  const providerFilter = requestedProvider && isCloudProvider(requestedProvider) && !usesAdAccountSlot(requestedProvider) ? requestedProvider : undefined;
   return <main className="page">
     <PageHeader title="Analytics & tracking" action={accounts.length || pending.length ? addSource : undefined} />
     <div className="stack">

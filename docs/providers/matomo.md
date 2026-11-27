@@ -2,9 +2,7 @@
 
 Read-only source for [Matomo](https://matomo.org/) web analytics, on Matomo Cloud
 (`https://<organization>.matomo.cloud`) or a self-hosted instance, including one
-served under a sub-path such as `https://analytics.example.com/matomo`. The local
-CLI and MCP server share the same provider and tools. Adport Cloud does not offer
-a Matomo connection yet.
+served under a sub-path such as `https://analytics.example.com/matomo`. The local CLI, local MCP server and Adport Cloud share the same eight analytics tools.
 
 Matomo answers acquisition, campaign, page, goal and ecommerce questions from its
 aggregated reports. There are no write tools: Adport never changes sites, goals,
@@ -29,6 +27,14 @@ token. A user with **view** access to the sites you want to report on is enough;
 we recommend a dedicated view-only user so the token cannot change anything even
 outside Adport. If Matomo offers it, restrict the token to POST requests: Adport
 always sends it in the POST body.
+
+## Connect in Adport Cloud
+
+In **Analytics & tracking**, choose **Add source → Matomo** and enter the instance URL and a token with view access. Adport verifies the token, stores it in the encrypted project vault and asks you to choose sites. Enable the selected sites for assistants. Analytics sites do not consume advertising account slots.
+
+Use a publicly reachable HTTPS domain for Matomo Cloud or a self-hosted installation. For a private-network installation, use the local CLI or stdio MCP on that network. Reconnecting to a different instance clears its predecessor’s site selections because each instance assigns its own site IDs. Disconnect removes the project’s credentials. Revoke the token in Matomo to invalidate it there.
+
+The Standard, Reporting and Full profiles include the eight read tools when Matomo is selected. Use `capabilities_list` with provider `matomo` to check access.
 
 ## Connect locally
 
@@ -61,10 +67,13 @@ refused and requests time out after 30 seconds.
 | `matomo_site` | `SitesManager.getSiteFromId` | URL, time zone, currency, ecommerce and site search flags |
 | `matomo_report_metadata` | `API.getReportMetadata` | Available reports: module, action, dimension, metrics, parameters |
 | `matomo_report` | `API.getProcessedReport` | Any aggregated report, normalized into rows, totals and metric labels |
+| `matomo_campaign_performance` | Report metadata and the installed campaign report | Visits and outcomes by tagged campaign, with the same dates, segments and pagination as `matomo_report` |
+| `matomo_realtime_report` | `Live.getCounters` | Aggregate visits, visitors, actions and converted visits for the last 1–60 minutes |
+| `matomo_segment_metadata` | `API.getSegmentsMetadata` | Available segment filter names, types and accepted values for the selected site |
 | `matomo_goals` | `Goals.getGoals` | Goal definitions |
 | `matomo_segments` | `SegmentEditor.getAll` | Stored aggregate segment definitions. Segments that identify a visitor and their names are omitted. |
 
-The generic `report` tool does not cover Matomo; use `matomo_report`. Examples of
+Use `matomo_report` for site analytics. For tagged campaigns, use `matomo_campaign_performance`. It selects `MarketingCampaignsReporting.getName` when installed or `Referrers.getCampaigns` when the site advertises it. Visits and attributed conversions are Matomo measurements. Read spend and clicks from the ad platform. Examples of
 `module`/`action` pairs: `VisitsSummary`/`get`, `Referrers`/`getReferrerType`,
 `Referrers`/`getCampaigns`, `Goals`/`get`, `Actions`/`getPageUrls`, and
 `MarketingCampaignsReporting`/`getName` when that plugin is installed.
@@ -99,7 +108,7 @@ are never paged.
 - Only aggregated reports are read. The `Live`, `UserId` and `MultiSites` modules
   (compared case-insensitively) and segments naming `userId`, `visitorId`, `visitId`,
   `visitIp` or `fingerprint` (case-insensitively, also once URL-decoded) are refused
-  before any request, and only the read methods listed above can be called.
+  before any report request. The realtime tool calls only `Live.getCounters` and returns aggregate counters.
 - Matomo error messages are classified (token rejected, access denied, segment,
   unknown report) but never echoed, and the token is never logged or returned.
 - A token tied to a user with broader rights still only reaches these read

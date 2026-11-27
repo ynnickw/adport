@@ -82,7 +82,7 @@ it('keeps the full hosted tools/list response within its wire budget on both tra
       const names = result.tools.map(tool => tool.name);
       for (const tool of result.tools) expect(tool.annotations?.title).toEqual(expect.any(String));
       expect(new Set(names).size).toBe(names.length);
-      for (const [prefix, count] of [['ga4', 4], ['gsc', 4], ['gtm', 24]] as const) {
+      for (const [prefix, count] of [['ga4', 4], ['gsc', 4], ['gtm', 24], ['matomo', 8]] as const) {
         expect(names.filter(name => name.startsWith(prefix + '_'))).toHaveLength(count);
       }
       expect(names).toContain('projects_list');
@@ -138,6 +138,7 @@ it('keeps the expanded publisher catalog below the metadata limit with GTM and S
     expect(names.filter(name => name.startsWith('gtm_'))).toHaveLength(24);
     expect(names.filter(name => name.startsWith('gsc_'))).toHaveLength(4);
     expect(names.some(name => name.startsWith('ga4_'))).toBe(false);
+    expect(names.filter(name => name.startsWith('matomo_'))).toHaveLength(8);
     for (const name of ['spotify_update_pixel', 'spotify_update_capi_integration', 'spotify_update_dataset', 'spotify_update_mobile_app']) {
       expect(toolsByName.get(name)?.annotations, name).toMatchObject({ readOnlyHint: false, destructiveHint: true });
     }

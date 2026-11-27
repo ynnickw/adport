@@ -1,7 +1,7 @@
 import { GAQL_REPORT_UI } from './gaql-report-ui.js';
 
 export const NATIVE_REPORT_TOOLS = [
-  'ga4_report', 'ga4_realtime_report', 'gsc_search_analytics', 'matomo_report',
+  'ga4_report', 'ga4_realtime_report', 'gsc_search_analytics', 'matomo_report', 'matomo_campaign_performance', 'matomo_realtime_report',
   'google_gaql',
   'linkedin_demographic_report',
   'meta_insights', 'tiktok_report', 'reddit_report', 'spotify_insight_report',
@@ -128,7 +128,7 @@ export const NATIVE_REPORT_UI_SCRIPT = String.raw`
       const missingGoals=arr(data.not_returned_goal_ids).filter(id=>!arr(data.errors).some(error=>error?.goal_id===id&&error?.error_code));
       const absent=missingGoals.length?'<p class="notice">No summary returned for goal'+(missingGoals.length===1?'':'s')+' '+missingGoals.map(esc).join(', ')+'.</p>':'';
       const records=entries.slice(0,1000).map((row,index)=>nativeReportRecord(row,index,meta,payload)),delay=provider==='google'&&entries.some(row=>row?.segments?.conversionLagBucket||row?.segments?.conversionOrAdjustmentLagBucket);
-      const pageArgs=['ga4_report','gsc_search_analytics','matomo_report'].includes(meta.tool)?readPageArgs(meta,'data-report-next'):null;
+      const pageArgs=['ga4_report','gsc_search_analytics','matomo_report','matomo_campaign_performance'].includes(meta.tool)?readPageArgs(meta,'data-report-next'):null;
       const points=records.map(nativeChartRecord);
       const table=provider==='google'&&!delay&&entries.length?gaqlReportTable(records,points):null;
       const entity=records[0]?.gaqlEntity;

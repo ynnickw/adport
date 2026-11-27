@@ -1,4 +1,4 @@
-import { AdportError, isMatomoBlockedModule, matomoSegmentNamesVisitor, matomoReportMetadataSchema, matomoReportSchema,
+import { AdportError, isMatomoBlockedModule, matomoSegmentNamesVisitor, matomoCampaignReportSchema, type MatomoCampaignReportInput, matomoReportMetadataSchema, matomoReportSchema,
   type AdProvider, type Account, type NormalizedQuery, type Report, type WriteOperation, type WritePreview, type WriteResult,
   type MatomoReportInput, type MatomoReportMetadataInput } from '@adport/core';
 import type { MatomoClient } from './client.js';
@@ -139,6 +139,48 @@ export class MatomoProvider implements AdProvider {
         ...(i.segment ? ['Segmented data may be archived on demand or unavailable when browser archiving of segments is disabled.'] : []),
       ],
     };
+  }
+
+  async campaignReport(input: MatomoCampaignReportInput) {
+    const query = matomoCampaignReportSchema.parse(input);
+    const { reports } = await this.reportMetadata({ account_id: query.account_id });
+    const candidates = [
+      { module: 'MarketingCampaignsReporting', action: 'getName' },
+      { module: 'Referrers', action: 'getCampaigns' },
+    ];
+    const selected = candidates.find(candidate => reports.some(report => report.module === candidate.module && report.action === candidate.action));
+    if (!selected) throw new AdportError('PROVIDER_ERROR', 'This site has no tagged campaign report. Use matomo_report_metadata to discover available reports.');
+    return this.processedReport({ ...query, ...selected });
+  }
+
+  async realtimeReport(accountId: string, minutes: number) {
+    const id = matomoSiteId(accountId);
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 60) throw new AdportError('INVALID_INPUT', 'Choose a realtime window between 1 and 60 minutes.');
+    const data = await this.client.call('Live.getCounters', { idSite: id, lastMinutes: String(minutes) });
+    const counters = Array.isArray(data) && data.length === 1 ? data[0] : undefined;
+    if (!object(counters)) throw new AdportError('PROVIDER_ERROR', 'Matomo returned an unexpected realtime response.');
+    const metrics: Record<string, number> = {};
+    for (const key of ['visits', 'visitors', 'actions', 'visitsConverted']) {
+      const value = counters[key];
+      if (typeof value === 'number' || typeof value === 'string' && /^\d+$/.test(value)) {
+        const count = Number(value);
+        if (Number.isSafeInteger(count) && count >= 0) metrics[key] = count;
+      }
+    }
+    if (metrics.visits === undefined) throw new AdportError('PROVIDER_ERROR', 'Matomo returned no realtime visit count.');
+    return { provider: this.id, account_id: id, minutes, report: { name: `Last ${minutes} minutes` },
+      rows: [{ dimensions: {}, metrics }], row_count: 1 };
+  }
+
+  async segmentMetadata(accountId: string) {
+    const id = matomoSiteId(accountId);
+    const raw = await this.client.call('API.getSegmentsMetadata', { idSites: id, hideImplementationData: '1' });
+    if (!Array.isArray(raw)) throw new AdportError('PROVIDER_ERROR', 'Matomo returned unexpected segment metadata.');
+    const segments = raw.filter(object)
+      .filter(item => typeof item.segment === 'string' && !matomoSegmentNamesVisitor(item.segment) && (item.permission === undefined || item.permission === true || item.permission === 1 || item.permission === '1'))
+      .map(item => ({ segment: text(item.segment), name: text(item.name), category: text(item.category), type: text(item.type),
+        ...(typeof item.acceptedValues === 'string' ? { accepted_values: item.acceptedValues } : {}) }));
+    return { provider: this.id, account_id: id, segments, count: segments.length };
   }
 
   async goals(accountId: string) {

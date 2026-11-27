@@ -1,5 +1,9 @@
 import { AdportError, normalizeMatomoUrl } from '@adport/core';
 
+type MatomoFetch = (url: string, init: {
+  method: 'POST'; redirect: 'error'; signal: AbortSignal; headers: Record<string, string>; body: URLSearchParams;
+}) => Promise<Pick<Response, 'ok' | 'status' | 'text'>>;
+
 export interface MatomoCredentials {
   /** Instance base URL, e.g. https://example.matomo.cloud or https://analytics.example.com/matomo. */
   url: string;
@@ -11,7 +15,7 @@ export interface MatomoCredentials {
 export const MATOMO_READ_METHODS = new Set([
   'API.getMatomoVersion', 'API.getReportMetadata', 'API.getProcessedReport',
   'SitesManager.getSitesWithAtLeastViewAccess', 'SitesManager.getSiteFromId',
-  'Goals.getGoals', 'SegmentEditor.getAll',
+  'Goals.getGoals', 'SegmentEditor.getAll', 'API.getSegmentsMetadata', 'Live.getCounters',
 ]);
 const RESERVED = new Set(['module', 'method', 'format', 'token_auth', 'force_api_session']);
 
@@ -22,7 +26,7 @@ const RESERVED = new Set(['module', 'method', 'format', 'token_auth', 'force_api
  */
 export class MatomoClient {
   readonly baseUrl: string;
-  constructor(private readonly credentials: MatomoCredentials, private readonly fetchImpl: typeof fetch = fetch) {
+  constructor(private readonly credentials: MatomoCredentials, private readonly fetchImpl: MatomoFetch = fetch) {
     this.baseUrl = normalizeMatomoUrl(credentials.url);
     if (!credentials.tokenAuth.trim()) throw new AdportError('INVALID_INPUT', 'matomo: token_auth is empty');
   }
@@ -31,7 +35,7 @@ export class MatomoClient {
     if (!MATOMO_READ_METHODS.has(method)) throw new AdportError('INVALID_INPUT', 'Unsupported Matomo read method.');
     if (Object.keys(params).some(key => RESERVED.has(key))) throw new AdportError('INVALID_INPUT', 'Reserved Matomo request parameter.');
     const body = new URLSearchParams({ ...params, module: 'API', method, format: 'JSON', token_auth: this.credentials.tokenAuth.trim() });
-    let response: Response;
+    let response: Awaited<ReturnType<MatomoFetch>>;
     try {
       response = await this.fetchImpl(`${this.baseUrl}/index.php`, {
         method: 'POST', redirect: 'error', signal: AbortSignal.timeout(30_000),

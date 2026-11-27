@@ -63,7 +63,7 @@ describe('Matomo provider', () => {
     expect(await resolveMatomoCredentials(stored)).toEqual({ url: base, tokenAuth: 'stored-token' });
     const module = await createMatomoModule(empty);
     expect(module?.provider.id).toBe('matomo');
-    expect(module?.tools.map(t => t.name)).toEqual(['matomo_site', 'matomo_report_metadata', 'matomo_report', 'matomo_goals', 'matomo_segments']);
+    expect(module?.tools.map(t => t.name)).toEqual(['matomo_site', 'matomo_report_metadata', 'matomo_report', 'matomo_campaign_performance', 'matomo_realtime_report', 'matomo_segment_metadata', 'matomo_goals', 'matomo_segments']);
     vi.stubEnv('MATOMO_TOKEN_AUTH', '');
     expect(await createMatomoModule(empty)).toBeUndefined();
   });
@@ -283,5 +283,31 @@ describe('Matomo provider', () => {
     await expect(provider.applyWrite(op)).rejects.toMatchObject({ code: 'POLICY_VIOLATION' });
     await expect(provider.report({} as never)).rejects.toMatchObject({ code: 'INVALID_INPUT', message: expect.stringContaining('matomo_report') });
     expect(() => new MatomoClient({ url: base, tokenAuth: ' ' })).toThrow(expect.objectContaining({ code: 'INVALID_INPUT' }));
+  });
+
+  it('reads site-scoped realtime counters and exposes only documented counts', async () => {
+    const { provider, fetchMock } = setup([{ visits: '3', visitors: 2, actions: 4, visitsConverted: 0, extra: 'ignored' }]);
+    const result = await provider.realtimeReport('1', 15);
+    expect(result.rows).toEqual([{ dimensions: {}, metrics: { visits: 3, visitors: 2, actions: 4, visitsConverted: 0 } }]);
+    const params = form(fetchMock, 0);
+    expect(Object.fromEntries(params)).toMatchObject({ method: 'Live.getCounters', lastMinutes: '15', idSite: '1' });
+    await expect(provider.realtimeReport('1', 61)).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('discovers usable segment filters without provider internals or restricted dimensions', async () => {
+    const { provider, fetchMock } = setup([{ segment: 'deviceType', name: 'Device type', acceptedValues: 'desktop, smartphone', suggestedValuesCallback: 'private' },
+      { segment: 'userId', name: 'Visitor identity' }, { segment: 'customRestricted', permission: false }]);
+    const result = await provider.segmentMetadata('7');
+    const params = form(fetchMock, 0);
+    expect(Object.fromEntries(params)).toMatchObject({ method: 'API.getSegmentsMetadata', idSites: '7', hideImplementationData: '1' });
+    expect(result.segments).toEqual([{ segment: 'deviceType', name: 'Device type', category: undefined, type: undefined, accepted_values: 'desktop, smartphone' }]);
+  });
+
+  it.each([['MarketingCampaignsReporting', 'getName'], ['Referrers', 'getCampaigns']])('uses the %s campaign report actually installed on the site', async (module, action) => {
+    const { provider, fetchMock } = setup([{ module, action }], { reportData: [{ label: 'Launch', nb_visits: 7 }], columns: {} }, site);
+    const result = await provider.campaignReport({ account_id: '1', start_date: '2026-11-01', end_date: '2026-11-02', period: 'range', limit: 10, offset: 0 });
+    expect(result.rows[0]).toEqual({ dimensions: { label: 'Launch' }, metrics: { nb_visits: 7 } });
+    expect(Object.fromEntries(form(fetchMock, 1))).toMatchObject({ apiModule: module, apiAction: action, idSite: '1' });
   });
 });
