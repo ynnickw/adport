@@ -17,6 +17,7 @@ it.each(['matomo', 'openai', 'gravity'] as const)('connects %s from onboarding a
   const ui = render(<ProviderConnections organizationId="project" projectName="Example" canManage connections={[]}
     oauthProviders={[{ id: provider, available: true }]} returnTo="/onboarding?resume=1" variant="onboarding" />);
   fireEvent.click(ui.getByRole('button', { name: provider === 'matomo' ? 'Connect Matomo' : provider === 'gravity' ? 'Connect Gravity' : 'Connect OpenAI Ads' }));
+  if (provider === 'matomo') fireEvent.change(await ui.findByLabelText('Connection method'), { target: { value: 'token' } });
   if (provider === 'matomo') fireEvent.change(await ui.findByLabelText('Matomo instance URL'), { target: { value: 'https://analytics.example.test' } });
   fireEvent.change(await ui.findByLabelText(provider === 'matomo' ? 'Auth token' : 'Advertiser API key'), { target: { value: 'test-token' } });
   fireEvent.click(ui.getByRole('button', { name: provider === 'matomo' ? 'Verify and choose sites' : 'Verify and choose account' }));
