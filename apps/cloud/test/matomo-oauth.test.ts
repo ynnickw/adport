@@ -38,7 +38,8 @@ it('uses the selected instance for code exchange, verifies actual bearer access,
   mocks.send.mockResolvedValueOnce(Response.json(response)).mockResolvedValueOnce(Response.json([{ idsite: 1, name: 'Shop' }]));
   const grant = await matomoOAuth(app).exchange({ code: 'code', state: 'state', verifier: 'verifier' });
   expect(grant).toMatchObject({ ...app, accessToken: 'initial-access', refreshToken: 'initial-refresh' });
-  const [[tokenUrl, exchange], [reportUrl, report]] = mocks.send.mock.calls;
+  const [tokenUrl, exchange] = mocks.send.mock.calls[0]!;
+  const [reportUrl, report] = mocks.send.mock.calls[1]!;
   expect(tokenUrl).toBe(url + '/index.php?module=OAuth2&action=token');
   expect(Object.fromEntries(exchange.body)).toMatchObject({ client_secret: app.clientSecret, code_verifier: 'verifier', grant_type: 'authorization_code' });
   expect(reportUrl).toBe(url + '/index.php');
