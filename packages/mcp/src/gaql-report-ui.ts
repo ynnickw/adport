@@ -23,23 +23,6 @@ export const GAQL_REPORT_UI = String.raw`
       return human(human(path.replace(/^segments\./, '')).toLowerCase()).replace(/\bid\b/i, 'ID');
     }
 
-    const gaqlMoneyFormats = new Map();
-    function gaqlAmount(amount, currency) {
-      const locale = state.host.locale || 'en', key = locale + '/' + (currency || '');
-      if (!gaqlMoneyFormats.has(key)) {
-        const digits = currency ? new Intl.NumberFormat(locale, {style:'currency', currency}).resolvedOptions().maximumFractionDigits : 2;
-        gaqlMoneyFormats.set(key, {
-          format: new Intl.NumberFormat(locale, {minimumFractionDigits:digits, maximumFractionDigits:digits}),
-          unit: 10 ** -digits
-        });
-      }
-      const {format, unit} = gaqlMoneyFormats.get(key);
-      if (Number(amount) !== 0 && Math.abs(Number(amount)) < unit) {
-        return Number(amount) < 0 ? '>' + format.format(-unit) : '<' + format.format(unit);
-      }
-      return format.format(amount);
-    }
-
     function gaqlHasTrend(points, dimensions, paths) {
       // A dated series must refer to the same returned entity and breakdown on every date.
       if (points.length > 366 || new Set(points.map(point => point.date)).size < 2) return false;

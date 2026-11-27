@@ -39,6 +39,23 @@ export const REPORT_CHART_SCRIPT = String.raw`
     function reportNumber(value) {
       const decimal=nativeReportDecimal(value);return decimal!==null&&Number.isFinite(Number(decimal))?Number(decimal):null;
     }
+    const reportMoneyFormats = new Map();
+    function reportAmount(amount, currency) {
+      const locale = state.host.locale || 'en', key = locale + '/' + (currency || '');
+      if (!reportMoneyFormats.has(key)) {
+        const digits = currency ? new Intl.NumberFormat(locale, {style:'currency', currency}).resolvedOptions().maximumFractionDigits : 2;
+        reportMoneyFormats.set(key, {
+          format: new Intl.NumberFormat(locale, {minimumFractionDigits:digits, maximumFractionDigits:digits}),
+          unit: 10 ** -digits
+        });
+      }
+      const {format, unit} = reportMoneyFormats.get(key);
+      if (Number(amount) !== 0 && Math.abs(Number(amount)) < unit) {
+        return Number(amount) < 0 ? '>' + format.format(-unit) : '<' + format.format(unit);
+      }
+      return format.format(amount);
+    }
+
     function reportMetricPriority(key) {
       const value=key.replaceAll('_','').toLowerCase();
       const order=['spend','costmicros','costinlocalcurrency','costinusd','conversions','conversion','totalinstalls','installs','purchases','clicks','taps','impressions','searchpopularity1to100','searchpopularityingenre','searchpopularity1to5','overallsuccesscount','successcount'];

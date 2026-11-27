@@ -126,7 +126,7 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
       input: z.object({
         account_id: z.string().describe('Numeric ad account id, act_ prefix optional'),
         level: z.enum(['account', 'campaign', 'adset', 'ad']).default('campaign'),
-        fields: z.array(z.string()).min(1).default(['campaign_id', 'campaign_name', 'spend', 'impressions', 'clicks']),
+        fields: z.array(z.string()).min(1).optional().describe('Defaults to entity IDs and names, account_currency, spend, impressions, and clicks. For custom reports, include a name or breakdown and account_currency for spend.'),
         date_preset: z.string().optional(),
         time_range: z.object({ since: z.string(), until: z.string() }).optional(),
         breakdowns: z.array(z.string()).optional(),
@@ -135,7 +135,7 @@ export function metaTools(provider: MetaAdsProvider): AnyToolDefinition[] {
       annotations: { readOnly: true, openWorld: false },
       async handler(input) {
         const rows = await provider.insights(input);
-        return { rows, row_count: rows.length };
+        return { rows, row_count: rows.length, ...(input.breakdowns?.length ? { breakdowns: input.breakdowns } : {}) };
       },
     }),
     guardedWriteTool({
