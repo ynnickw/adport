@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { DashboardLink as Link } from '@/components/dashboard-navigation';
 import type { Policy } from '@adport/core';
 import { InfoTooltip } from './info-tooltip';
 

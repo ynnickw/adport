@@ -36,10 +36,17 @@ describe('project assistant access', () => {
     expect(mocks.connected).not.toHaveBeenCalled();
     expect(html).toContain('This project');
     expect(html).toContain('Read only');
-    expect(html).toContain('Developer settings');
+    expect(html).not.toContain('Related settings');
+    expect(html).not.toContain('Developer settings');
+    expect(html).not.toContain('Safeguards');
+    expect(html).not.toContain('Add accounts');
+    expect(html).not.toContain('Refresh status');
     expect(html).not.toContain('<h2>AI assistant</h2>');
     expect(html).toContain('In use');
     expect(html).toContain('Last used');
+    expect(html).toContain('Manage access for Codex');
+    expect(html).not.toContain('<details');
+    expect(html).not.toContain('Tool profile');
   });
 
   it('does not describe an unused authorization as a working connection', async () => {
@@ -49,11 +56,28 @@ describe('project assistant access', () => {
     expect(html).not.toContain('In use');
   });
 
+  it('does not open a teammate’s access editor from a deep link', async () => {
+    mocks.grants.mockResolvedValue([{ ...grant, userId: 'teammate' }]);
+    const html = renderToStaticMarkup(await AgentsPage({ searchParams: Promise.resolve({ kind: 'oauth', connection: 'client', scope: 'project' }) }));
+    expect(html).toContain('Teammate’s connection');
+    expect(html).not.toContain('Manage access for Codex');
+    expect(html).not.toContain('Tool profile');
+  });
+
+  it('opens only the matching owned connection and project scope from a capability link', async () => {
+    mocks.grants.mockResolvedValue([grant, { ...grant, organizationGroupId: 'org', clientName: 'Codex (organization)' }]);
+    const html = renderToStaticMarkup(await AgentsPage({ searchParams: Promise.resolve({ kind: 'oauth', connection: 'client', scope: 'org' }) }));
+    expect(html).toContain('Codex (organization) access');
+    expect(html).not.toContain('>Codex access<');
+    expect(html).toContain('Applies to all projects on this connection.');
+  });
+
   it('offers one setup action when no assistant has been authorized', async () => {
     mocks.grants.mockResolvedValue([]);
     const html = renderToStaticMarkup(await AgentsPage());
     expect(html).toContain('>Connect assistant</button>');
     expect(html).toContain('No assistant connected yet');
+    expect(html).not.toContain('Add accounts');
   });
 
   it.each(['member', 'viewer'])('does not query or expose project credential metadata to a %s', async role => {

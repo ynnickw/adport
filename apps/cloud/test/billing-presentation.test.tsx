@@ -85,6 +85,6 @@ describe('dashboard pricing presentation', () => {
     const html = await render({ checkout: 'canceled' });
     expect(html).toContain('/onboarding?resume=1&amp;return_to=%2Fdashboard');
     expect(html).toContain('Continue setup');
-    expect(html).toContain('Your current plan is unchanged');
+    expect(html).not.toContain('Your current plan is unchanged');
   });
 });

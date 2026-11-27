@@ -44,7 +44,24 @@ describe('one-time account picker', () => {
     const html = renderToStaticMarkup(<ProviderAccountPicker organizationId={organizationId} selectionId={selectionId} provider={provider}
       accounts={[{ provider, id: 'a', name: 'Candidate account' }, { provider, id: 'b', name: 'Other account' }]} initialSelectedIds={[]} />);
     expect(html).toContain('Candidate account'); expect(html).toContain('0 of 2 selected');
-    expect(html).toContain('Select all'); expect(html).not.toContain('checked=""');
+    expect(html.match(/type="checkbox"/g)).toHaveLength(2);
+    expect(html).not.toContain('Select all'); expect(html).not.toContain('type="search"'); expect(html).not.toContain('checked=""');
+  });
+
+  it('offers search and bulk selection only when a long list benefits from them', () => {
+    const html = renderToStaticMarkup(<ProviderAccountPicker organizationId={organizationId} selectionId={selectionId} provider="gsc"
+      accounts={Array.from({ length: 8 }, (_, index) => ({ provider: 'gsc', id: 'site-' + index, name: 'site-' + index }))} initialSelectedIds={[]} />);
+    expect(html).toContain('aria-label="Search sites"');
+    expect(html).toContain('Select all');
+    expect(html.match(/>site-0</g)).toHaveLength(1);
+  });
+
+  it('labels a Search Console domain property without repeating its raw identifier', () => {
+    const html = renderToStaticMarkup(<ProviderAccountPicker organizationId={organizationId} selectionId={selectionId} provider="gsc"
+      accounts={[{ provider: 'gsc', id: 'sc-domain:example.com', name: 'sc-domain:example.com' }]} initialSelectedIds={[]} />);
+    expect(html).toContain('<strong>example.com</strong>');
+    expect(html).toContain('Domain property');
+    expect(html).not.toContain('>sc-domain:example.com<');
   });
 
   it('preselects only previously added accounts that are still available', () => {

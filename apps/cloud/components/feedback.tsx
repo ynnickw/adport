@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 import { Spinner } from './controls';
 
-export function Notice({ tone = 'info', children, className = '' }: { tone?: 'info' | 'success' | 'error'; children: ReactNode; className?: string }) {
-  return <div className={`${tone === 'error' ? 'error-callout' : tone === 'success' ? 'callout success' : 'callout'} ${className}`}
+export function Notice({ tone = 'info', children, className = '' }: { tone?: 'info' | 'error'; children: ReactNode; className?: string }) {
+  return <div className={`${tone === 'error' ? 'error-callout' : 'callout'} ${className}`}
     role={tone === 'error' ? 'alert' : 'status'}>{children}</div>;
 }
 

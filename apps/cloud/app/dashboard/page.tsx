@@ -1,5 +1,5 @@
 import { usesAdAccountSlot, providerConnectionsPath } from '@/lib/cloud/providers';
-import Link from 'next/link';
+import { DashboardLink as Link } from '@/components/dashboard-navigation';
 import { Empty, PageHeader, Provider, StatusPill } from '@/components/ui';
 import { providerLabel } from '@/components/logos';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
@@ -10,10 +10,7 @@ import { isSyntheticReviewer } from '@/lib/cloud/synthetic-reviewer';
 import { SyntheticReviewer } from '@/components/synthetic-reviewer';
 import { getOnboardingState } from '@/lib/cloud/onboarding';
 import { SetupChecklist } from '@/components/setup-checklist';
-import { ConnectAssistantButton } from '@/components/assistant-connect';
 import { getAssistantConnectionStatus } from '@/lib/cloud/assistant-connection';
-import { getAssistantListings } from '@/lib/cloud/assistant-listings';
-import { env } from '@/lib/env';
 import { overviewRangeFromParams, type OverviewRange } from '@/lib/overview-range';
 
 export const metadata = { title: 'Overview' };
@@ -42,7 +39,6 @@ export default async function OverviewPage({ searchParams }: { searchParams?: Pr
       <PageHeader
         title="Overview"
         description="Your ad accounts, campaign activity, and next steps."
-        action={<ConnectAssistantButton key={tenant.organizationId} baseUrl={env().ADPORT_CLOUD_BASE_URL.replace(/\/$/, '')} projectName={tenant.organizationName} initialAgent={onboarding.selectedAgent ?? undefined} listings={getAssistantListings()} canManage={canManage} />}
       />
       {assistantStatus ? <SetupChecklist key={`${tenant.userId}:${tenant.organizationId}`} userId={tenant.userId} projectId={tenant.organizationId} projectName={tenant.organizationName} connected={Boolean(connected.length)} accountsEnabled={Boolean(usableAccounts.length)} assistantVerified={assistantStatus.verified} /> : null}
       {connections.length === 0 ? (
@@ -62,14 +58,14 @@ export default async function OverviewPage({ searchParams }: { searchParams?: Pr
                 <div className="attention-item">
                   <span className="attention-dot" aria-hidden="true" />
                   <p><strong>{pending.length === 5 ? '5 or more changes' : `${pending.length} ${pending.length === 1 ? 'change' : 'changes'}`} waiting for approval.</strong></p>
-                  <Link className="button small" href="/dashboard/approvals" prefetch={false}>Review approvals</Link>
+                  <Link className="button small" href="/dashboard/approvals">Review approvals</Link>
                 </div>
               ) : null}
               {broken.map((connection) => (
                 <div className="attention-item critical" key={connection.provider}>
                   <span className="attention-dot" aria-hidden="true" />
                   <p><strong>{providerLabel(connection.provider)} needs reconnecting.</strong> {connection.lastError ?? 'Verification failed.'}</p>
-                  <Link className="button small secondary" href={providerConnectionsPath(connection.provider)} prefetch={false}>Open connections</Link>
+                  <Link className="button small secondary" href={providerConnectionsPath(connection.provider)}>Open connections</Link>
                 </div>
               ))}
             </section>
@@ -83,7 +79,7 @@ export default async function OverviewPage({ searchParams }: { searchParams?: Pr
           {(['advertising', 'analytics'] as const).map(category => {
             const categoryConnections = connections.filter(connection => usesAdAccountSlot(connection.provider) === (category === 'advertising'));
             return categoryConnections.length ? <section className="card" style={{ marginTop: '1rem' }} key={category}>
-              <div className="card-head"><h2>{category === 'advertising' ? 'Ad platforms' : 'Analytics & tracking'}</h2><Link className="card-note" href={category === 'advertising' ? '/dashboard/connections' : '/dashboard/analytics'} prefetch={false}>Manage</Link></div>
+              <div className="card-head"><h2>{category === 'advertising' ? 'Ad platforms' : 'Analytics & tracking'}</h2><Link className="card-note" href={category === 'advertising' ? '/dashboard/connections' : '/dashboard/analytics'}>Manage</Link></div>
               <div className="card-body stack">{categoryConnections.map(connection => <div key={connection.provider} className="connection-top"><Provider name={connection.provider} /><StatusPill status={connection.status} /></div>)}</div>
             </section> : null;
           })}
