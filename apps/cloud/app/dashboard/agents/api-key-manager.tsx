@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button, Checkbox, Disclosure, Input } from '@/components/controls';
 import { formatDate } from '@/components/ui';
 import { useConfirm } from '@/components/use-confirm';
+import { useToast } from '@/components/toast';
 import { CopyButton } from './agent-setup-guide';
 import { adportToolSearchConfig } from '@/lib/mcp-tool-search-config';
 import type { ToolProvider, ToolSelection } from '@adport/core/tool-catalog';
@@ -22,7 +23,7 @@ export function ApiKeyManager({ organizationId, suggestedProviders, baseUrl }: {
   const [loadError, setLoadError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [busyAction, setBusyAction] = useState<string>();
-  const [copied, setCopied] = useState(false);
+  const toast = useToast();
   const [revealed, setRevealed] = useState(false);
   const [confirm, confirmationDialog] = useConfirm();
 
@@ -46,7 +47,7 @@ export function ApiKeyManager({ organizationId, suggestedProviders, baseUrl }: {
 
   async function create(selection: ToolSelection) {
     setBusy(true);
-    setBusyAction('create'); setCopied(false); setRevealed(false);
+    setBusyAction('create'); setRevealed(false);
     setError(undefined);
     try {
       const response = await fetch('/api/api-keys', {
@@ -71,14 +72,15 @@ export function ApiKeyManager({ organizationId, suggestedProviders, baseUrl }: {
     try {
       const response = await fetch(`/api/api-keys/${id}?organization_id=${organizationId}`, { method: 'DELETE' });
       if (!response.ok) setError('Unable to revoke API key.');
-      else await load();
+      else { toast('API key revoked.'); await load(); }
     } catch { setError('Could not revoke the key. Check your connection and try again.'); }
     finally { setBusy(false); setBusyAction(undefined); }
   }
 
   async function copyKey() {
     if (!createdKey) return;
-    try { await navigator.clipboard.writeText(createdKey); setCopied(true); }
+    setError(undefined);
+    try { await navigator.clipboard.writeText(createdKey); toast('API key copied.'); }
     catch { setError('Could not copy the key. Use Show key to copy it manually.'); }
   }
 
@@ -89,9 +91,9 @@ export function ApiKeyManager({ organizationId, suggestedProviders, baseUrl }: {
       {loadError ? <div className="error-callout" role="alert">{loadError} <Button className="link-button" onClick={() => void load()}>Try again</Button></div> : !keys ? <p className="inline-note" role="status">Loading keys…</p> : null}
       {error ? <div className="error-callout" role="alert">{error}</div> : null}
       {createdKey ? <div className="stack">
-        <div className="callout success" role="status">Copy this key now. It is shown only once.</div>
+        <div className="callout" role="status">Copy this key now. It is shown only once.</div>
         <Input type={revealed ? 'text' : 'password'} value={createdKey} readOnly aria-label="New API key" autoComplete="off" />
-        <div className="row-actions secret-key-actions"><Button type="button" className="button secondary small" onClick={() => void copyKey()}>{copied ? 'Copied' : 'Copy key'}</Button><Button type="button" className="link-button" onClick={() => setRevealed(value => !value)}>{revealed ? 'Hide key' : 'Show key'}</Button><Button type="button" className="link-button" onClick={() => { setCreatedKey(undefined); setCopied(false); setRevealed(false); }}>Done</Button></div>
+        <div className="row-actions secret-key-actions"><Button type="button" className="button secondary small" onClick={() => void copyKey()}>Copy key</Button><Button type="button" className="link-button" onClick={() => setRevealed(value => !value)}>{revealed ? 'Hide key' : 'Show key'}</Button><Button type="button" className="link-button" onClick={() => { setCreatedKey(undefined); setRevealed(false); }}>Done</Button></div>
       </div> : null}
       {keys?.length === 0 ? <p className="inline-note">No API keys for this project.</p> : null}
       <div className="row-list">{keys?.map(key => <div className="row-item" key={key.id}><div className="assistant-connection-details"><strong>{key.name}</strong><div className="cell-sub">{key.keyPrefix}… · created {formatDate(key.createdAt)} · {key.lastUsedAt ? `last used ${formatDate(key.lastUsedAt)}` : 'never used'}</div><ToolCatalogEditor organizationId={organizationId} connection={{ type: 'key', id: key.id }} initialSelection={key.toolSelection ?? LEGACY_TOOL_SELECTION} onSaved={() => void load()} /></div><Button className="button danger small" disabled={busy} pending={busyAction === key.id} pendingLabel="Revoking…" onClick={() => void revoke(key.id)}>Revoke</Button></div>)}</div>

@@ -9,7 +9,7 @@ import { Button } from '@/components/controls';
 import { Select } from '@/components/select';
 import type { DashboardReportSummary } from '@/lib/report-summary';
 import { DateRangePicker } from '@/components/date-range-picker';
-import Link from 'next/link';
+import { DashboardLink as Link } from '@/components/dashboard-navigation';
 import { ReportCoverage } from '@/components/report-coverage';
 import { overviewRangeLabel, overviewRangeParams, type OverviewRange } from '@/lib/overview-range';
 
@@ -74,7 +74,7 @@ export function LiveData({ organizationId, connected, initialRange = 'last_7_day
       <Metric label="ROAS" value={totals?.roas == null ? loading ? '…' : '—' : `${formatNumber(totals.roas)}×`} foot="Conversion value divided by spend in this currency group. Uses spend-weighted reported ROAS when conversion value is unavailable. A dash means the ratio cannot be calculated." />
     </section>
     <section className="card">
-      <div className="card-head"><h2>Campaign activity</h2><div className="report-links"><Link prefetch={false} href={'/dashboard/reports?' + rangeQuery}>Campaign report</Link><Link href="/dashboard/findings">Findings</Link></div></div>
+      <div className="card-head"><h2>Campaign activity</h2><div className="report-links"><Link href={'/dashboard/reports?' + rangeQuery}>Campaign report</Link><Link href="/dashboard/findings">Findings</Link></div></div>
       {loading ? <div className="card-body"><LoadingStatus className="sr-only">Loading campaign activity…</LoadingStatus><SkeletonRows /></div>
         : error ? <div className="empty"><h3>Campaign activity unavailable</h3><Button type="button" className="button secondary small" onClick={() => { setFailure(undefined); setAttempt(current => current + 1); }}>Retry report</Button></div>
         : rows.length === 0 ? <Empty title={partial ? 'No rows from available sources' : 'No campaign activity in this range'} copy={partial ? 'Some data could not be read. Check your connections.' : 'Try a different date range or check that your ad accounts are enabled.'} />

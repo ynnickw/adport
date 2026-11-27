@@ -1,5 +1,5 @@
 import { Button } from '@/components/controls';
-import Link from 'next/link';
+import { DashboardContent, DashboardLink, DashboardNavigation } from '@/components/dashboard-navigation';
 import { signOut } from '@/app/dashboard/actions';
 import { BrandLockup } from '@/components/logos';
 import { ContextNav, Nav, SidebarFrame, UtilityNav } from '@/components/nav';
@@ -16,10 +16,10 @@ export interface ShellTenant {
 
 export function Shell({ tenant, pendingApprovals = 0, children }: { tenant: ShellTenant; pendingApprovals?: number; children: React.ReactNode }) {
   return (
-    <div className="app-shell">
+    <DashboardNavigation><div className="app-shell">
       <a className="skip-link" href="#content">Skip to content</a>
       <SidebarFrame
-        brand={<Link className="brand-lockup" href="/dashboard" prefetch={false} aria-label="Adport overview"><BrandLockup /></Link>}
+        brand={<DashboardLink className="brand-lockup" href="/dashboard" aria-label="Adport overview"><BrandLockup /></DashboardLink>}
         workspace={tenant.projectSwitcher ?? tenant.organizationName}
       >
         <Nav pendingApprovals={pendingApprovals} />
@@ -32,14 +32,14 @@ export function Shell({ tenant, pendingApprovals = 0, children }: { tenant: Shel
               <span className="user-sub">{tenant.email}</span>
             </span>
           </div>
-          <Link className="link-button sidebar-preferences" href="/dashboard/preferences" prefetch={false}>Preferences</Link>
+          <DashboardLink className="link-button sidebar-preferences" href="/dashboard/preferences">Preferences</DashboardLink>
           <form action={signOut}>
             <Button className="link-button" type="submit">Sign out</Button>
           </form>
         </div>
       </SidebarFrame>
-      <div className="main" id="content" tabIndex={-1}><ContextNav canManage={['owner', 'admin'].includes(tenant.role)} />{children}</div>
+      <div className="main"><ContextNav canManage={['owner', 'admin'].includes(tenant.role)} /><DashboardContent>{children}</DashboardContent></div>
       <SupportWidget />
-    </div>
+    </div></DashboardNavigation>
   );
 }

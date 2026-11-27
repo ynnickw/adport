@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { DashboardLink as Link } from '@/components/dashboard-navigation';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Account } from '@adport/core';
@@ -91,8 +91,8 @@ export function ProviderAccountPicker({ organizationId, selectionId, provider, a
     {confirmationDialog}
     <PlanLimitModal limit={planLimit} onClose={() => setPlanLimit(undefined)} />
     <div className="card-head"><h2 ref={heading} tabIndex={-1}><Provider name={provider} /></h2><span className="card-note" aria-live="polite">{singleAccount ? `1 ${singular} available` : `${selected.size} of ${accounts.length} selected`}</span></div>
-    {!singleAccount && accounts.length > 0 ? <div className="account-picker-toolbar">
-      <label className="account-picker-search">Search {resource}<SearchField value={query} disabled={pending} onChange={event => setQuery(event.target.value)} placeholder={`${header} name or ID`} /></label>
+    {accounts.length > 2 ? <div className="account-picker-toolbar">
+      {accounts.length > 6 ? <div className="account-picker-search"><SearchField aria-label={`Search ${resource}`} value={query} disabled={pending} onChange={event => setQuery(event.target.value)} placeholder={`Search ${resource} by name or ID`} /></div> : null}
       <Button type="button" className="button secondary small" disabled={pending || !visible.length} onClick={() => setSelected(current => new Set([...current, ...visible.map(account => account.id)]))}>{query.trim() ? 'Select matching' : 'Select all'}</Button>
       <Button type="button" className="button secondary small" disabled={pending || !selected.size} onClick={() => setSelected(new Set())}>Clear selection</Button>
     </div> : null}
@@ -103,7 +103,11 @@ export function ProviderAccountPicker({ organizationId, selectionId, provider, a
           const checked = event.target.checked;
           setSelected(current => { const next = new Set(current); if (checked) next.add(account.id); else next.delete(account.id); return next; });
         }} /></DataCell> : null}
-        <DataCell label={header}><strong>{account.name}</strong><div className="cell-sub">{account.id}</div></DataCell>
+        <DataCell label={header} className="account-picker-identity">
+          {provider === 'gsc' && account.id === account.name && account.id.startsWith('sc-domain:')
+            ? <><strong>{account.name.slice('sc-domain:'.length)}</strong><div className="cell-sub">Domain property</div></>
+            : <><strong>{account.name}</strong>{account.id !== account.name ? <div className="cell-sub">{account.id}</div> : null}</>}
+        </DataCell>
         {showCurrency ? <DataCell label="Currency">{account.currency ?? '—'}</DataCell> : null}<DataCell label="Platform status"><span className="status neutral">{account.status ?? 'available'}</span></DataCell>
       </tr>)}
     </DataTable> : <div className="empty"><h3>{accounts.length ? `No matching ${resource}` : `No ${resource} returned`}</h3><p>{accounts.length ? 'Try another name or ID.' : `This connection returned no ${resource}. Continue without adding any, or reconnect later.`}</p></div>}
@@ -124,10 +128,9 @@ export function ProviderAccountPicker({ organizationId, selectionId, provider, a
       {removedCount ? <p className="inline-note selection-removal-note">{removedCount} previously added {providerResourceName(provider, removedCount)} will be removed from this project.</p> : null}
       <div className="account-picker-actions"><Link className="button secondary" href={backHref} aria-disabled={pending} onClick={event => { if (pending) event.preventDefault(); }}>Back</Link><div className="account-picker-submit">
         {exceedsLimit ? <UpgradeButton kind="active_accounts" required={enabledElsewhere + chosenIds.length} message={limitMessage} label="Compare plans" className="button secondary" disabled={pending} /> : null}
-        {chosenIds.length ? <Button type="button" className={exceedsLimit ? 'button account-picker-save' : 'link-button'} disabled={pending} pending={pending && saveMode === 'import'} pendingLabel="Saving…" onClick={() => void save(false)}>{exceedsLimit ? 'Save without enabling' : 'Import without enabling'}</Button> : null}
+        {chosenIds.length ? <Button type="button" className={exceedsLimit ? 'button account-picker-save' : 'button secondary'} disabled={pending} pending={pending && saveMode === 'import'} pendingLabel="Saving…" onClick={() => void save(false)}>{exceedsLimit ? 'Save without enabling' : 'Import without enabling'}</Button> : null}
         {!exceedsLimit ? <Button type="button" className="button account-picker-save" disabled={pending} pending={pending && (saveMode === 'enable' || chosenIds.length === 0)} pendingLabel="Saving…" onClick={() => void save(chosenIds.length > 0)}>{chosenIds.length ? `Add and enable ${chosenIds.length} ${providerResourceName(provider, chosenIds.length)}` : removedCount ? 'Review removals' : selectedPages.size ? 'Save Pages and continue' : `Continue without ${resource}`}</Button> : null}
       </div></div>
-      <p className="selection-save-status" role="status">{pending ? 'Saving your selection…' : null}</p>
     </div>
   </section></div>;
 }

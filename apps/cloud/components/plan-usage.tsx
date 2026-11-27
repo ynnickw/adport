@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { DashboardLink as Link } from '@/components/dashboard-navigation';
 import { InfoTooltip } from './info-tooltip';
 import type { PlanDefinition } from '@/lib/cloud/plans';
 import type { OrganizationUsage } from '@/lib/cloud/usage';
@@ -15,7 +15,7 @@ function UsageBar({ used, limit }: { used: number; limit: number | null }) {
 }
 
 export function SidebarPlanUsage({ plan, usage }: { plan: PlanDefinition; usage: OrganizationUsage }) {
-  return <Link href="/dashboard/billing#usage" className="sidebar-plan" prefetch={false} aria-label={plan.name + ' plan and usage: ' + allowance(usage.enabledAccounts, plan.maxActiveAccounts) + ' enabled ad accounts, ' + allowance(usage.editingMembers, plan.maxMembers) + ' team seats'}>
+  return <Link href="/dashboard/billing#usage" className="sidebar-plan" aria-label={plan.name + ' plan and usage: ' + allowance(usage.enabledAccounts, plan.maxActiveAccounts) + ' enabled ad accounts, ' + allowance(usage.editingMembers, plan.maxMembers) + ' team seats'}>
     <span className="sidebar-plan-title"><strong>{plan.name} plan</strong><span>Usage ↗</span></span>
     <span className="sidebar-plan-count"><span>Enabled ad accounts</span><strong>{allowance(usage.enabledAccounts, plan.maxActiveAccounts)}</strong></span>
     <UsageBar used={usage.enabledAccounts} limit={plan.maxActiveAccounts} />

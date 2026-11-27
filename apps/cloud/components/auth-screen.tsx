@@ -19,7 +19,7 @@ export function AuthScreen({ mode, error, message, returnTo }: AuthScreenProps) 
       <BrandLockup size="large" />
       <h1>{signup ? 'Create your Adport account.' : 'Sign in to Adport.'}</h1>
       {error ? <div className="error-callout" role="alert">{error}</div> : null}
-      {message ? <div className="callout success" role="status">{message}</div> : null}
+      {message ? <div className="callout" role="status">{message}</div> : null}
       <div className="social-auth" aria-label="Social sign in">
         <form action={signInWithSocialProvider}>
           <input type="hidden" name="provider" value="google" />

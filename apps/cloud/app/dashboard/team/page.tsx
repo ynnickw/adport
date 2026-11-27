@@ -2,7 +2,7 @@ import { PageHeader } from '@/components/ui';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { listOrganizationMembers } from '@/lib/cloud/tenant-admin';
 import { TeamMembers } from './team-members';
-import Link from 'next/link';
+import { DashboardLink as Link } from '@/components/dashboard-navigation';
 
 export const metadata = { title: 'Team' };
 

@@ -5,12 +5,14 @@ import { Button } from '@/components/controls';
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { analyticsPage } from '@/lib/analytics-pages';
+import { useToast } from './toast';
 
 export const ANALYTICS_PREFERENCES_EVENT = 'adport:analytics-preferences';
 
 export function ProductAnalytics() {
   const pathname = usePathname();
   const router = useRouter();
+  const toast = useToast();
   const [preference, setPreference] = useState<boolean | null | undefined>();
   const [configured, setConfigured] = useState(false);
   const [open, setOpen] = useState(false);
@@ -44,7 +46,7 @@ export function ProductAnalytics() {
     try {
       const response = await fetch('/api/analytics', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'preference', enabled }) });
       if (!response.ok) throw new Error();
-      setPreference(enabled); setOpen(false); router.refresh();
+      setPreference(enabled); setOpen(false); toast('Analytics preference saved.'); router.refresh();
     } catch { setError('Your choice could not be saved. Please try again.'); }
     finally { setSaving(false); }
   }
