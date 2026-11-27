@@ -67,6 +67,21 @@
 .guide-prompt > div { display: flex; align-items: center; justify-content: space-between; gap: 1rem; color: var(--signal-ink); font-size: .7rem; font-weight: 650; }
 .guide-prompt .copy-chip { font-size: .75rem; }
 .guide-prompt blockquote { margin: .8rem 0 0; color: var(--ink); font-size: .9375rem; line-height: 1.8; }
+.guide-calculator { margin: 1.25rem 0; border: 1px solid var(--rule); border-radius: .6rem; background: var(--raised); }
+.guide-calculator fieldset { min-width: 0; margin: 0; padding: 1.25rem; border: 0; }
+.guide-calculator legend { float: left; width: 100%; margin-bottom: .9rem; padding: 0; font-weight: 650; }
+.calc-fields, .calc-readout dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem 1.2rem; clear: both; }
+.calc-fields label { display: grid; align-content: end; gap: .3rem; color: var(--ink-soft); font-size: .875rem; }
+.calc-fields input, .calc-fields select { box-sizing: border-box; width: 100%; min-height: 2.75rem; padding: .45rem .65rem; border: 1px solid var(--rule-strong); border-radius: .35rem; background: var(--paper); color: var(--ink); font: inherit; font-size: 1rem; }
+.calc-fields :is(input, select):focus-visible { outline: 2px solid var(--signal-ink); outline-offset: 2px; }
+.calc-fields select { appearance: none; padding-right: 2rem; background-image: linear-gradient(45deg, transparent 50%, var(--ink-soft) 50%), linear-gradient(135deg, var(--ink-soft) 50%, transparent 50%); background-size: 5px 5px; background-position: right 16px center, right 11px center; background-repeat: no-repeat; }
+.calc-readout { padding: 1.1rem 1.25rem; border-top: 1px solid var(--rule); background: var(--signal-wash); }
+.calc-readout dl, .calc-readout dd { margin: 0; }
+.calc-readout dt { color: var(--ink-soft); font-size: .8125rem; }
+.calc-readout dd { margin-top: .2rem; color: var(--ink); font-size: 1.25rem; font-weight: 650; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.calc-readout [data-status]:not(:empty) { margin: .85rem 0 0; font-size: .875rem; line-height: 1.45; }
+.calc-readout [data-status]:empty { display: none; }
+@media (max-width: 34rem) { .calc-fields { grid-template-columns: minmax(0, 1fr); } }
 .guide-sources { padding-top: 2rem; border-top: 1px solid var(--rule); }
 .guide-sources p, .guide-sources li { font-size: .875rem; }
 .guide-sources li > span { display: block; color: var(--muted); font-size: .75rem; }
