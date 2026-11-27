@@ -173,6 +173,18 @@ describe('Gravity conversions and billing', () => {
     await expect(billing.handler({ account_id: 'abc-123' } as never, {} as never)).resolves.toMatchObject({ unbilled_dollars: 75.5 });
     await expect(billing.handler({ account_id: 'nope' } as never, {} as never)).rejects.toThrow(/does not match/);
   });
+  it('reads only the selected group and reports the native ad count and truncation', async () => {
+    const ad = { id: 'ad-1', ad_group_id: 'group-1', status: 'paused', headline: 'Test' };
+    const group = { id: 'group-1', campaign_id: 'camp-456', name: 'Manual group', status: 'paused', ads: [ad], ads_total: 4 };
+    const { provider } = fixture([infoRoute, { path: 'ad-groups/group-1', reply: group }]);
+    const rt = await createContext({ providerModules: [{ provider, tools: gravityTools(provider) }] });
+    const args = { account_id: info.advertiser_id, ad_group_id: 'group-1' };
+    expect(await rt.registry.call('gravity_ads', args, rt.ctx)).toEqual({ items: [ad], total_count: 4, truncated: true });
+    await expect(rt.registry.call('gravity_ads', { ...args, account_id: 'foreign' }, rt.ctx)).rejects.toThrow(/does not match/);
+    const mismatch = fixture([infoRoute, { path: 'ad-groups/group-1', reply: { ...group, id: 'group-2' } }]);
+    const bad = await createContext({ providerModules: [{ provider: mismatch.provider, tools: gravityTools(mismatch.provider) }] });
+    await expect(bad.registry.call('gravity_ads', args, bad.ctx)).rejects.toMatchObject({ code: 'PROVIDER_ERROR' });
+  });
   it('reads a specific ad, pixel health and dated conversion totals using the advertiser API contracts', async () => {
     const ad = { id: 'ad-901', source: 'manual', status: 'paused', review_status: 'pending', headline: 'Trail shoes' };
     const pixel = { pixel_id: 'pix-123', name: 'Shop', url: 'https://example.org', is_active: true, is_functional: null };
@@ -345,9 +357,9 @@ describe('Gravity module wiring', () => {
     const module = await createGravityModule(store);
     expect(module?.provider.id).toBe('gravity');
     const names = module!.tools.map(tool => tool.name);
-    expect(names).toEqual(['gravity_list_campaigns', 'gravity_ad_groups', 'gravity_get_ad', 'gravity_pixels', 'gravity_conversion_stats', 'gravity_conversions', 'gravity_billing',
+    expect(names).toEqual(['gravity_list_campaigns', 'gravity_ad_groups', 'gravity_ads', 'gravity_get_ad', 'gravity_pixels', 'gravity_conversion_stats', 'gravity_conversions', 'gravity_billing',
       'gravity_create_campaign', 'gravity_set_campaign_status', 'gravity_set_ad_group_status', 'gravity_set_ad_status', 'gravity_set_budget', 'gravity_create_ad_group', 'gravity_create_ad', 'gravity_create_pixel']);
-    expect(module!.tools.filter(tool => tool.annotations.readOnly).map(tool => tool.name)).toEqual(names.slice(0, 7));
+    expect(module!.tools.filter(tool => tool.annotations.readOnly).map(tool => tool.name)).toEqual(names.slice(0, 8));
     for (const tool of module!.tools.filter(t => !t.annotations?.readOnly)) expect(tool.input.shape.pending_operation_id).toBeDefined();
     vi.stubEnv('GRAVITY_API_KEY', '');
     await store.set({ provider: 'gravity', source: 'byo', data: { api_key: 'grv-stored' } });

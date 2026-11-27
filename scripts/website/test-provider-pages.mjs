@@ -141,9 +141,9 @@ test('tabs switch by click and keyboard, wrap, and keep exactly one active panel
   key(2, 'Home', 0); key(0, 'End', 2);
 });
 
-test('covers all twelve advertising providers exactly once', () => {
-  assert.deepEqual(providers.map(p => p.id).sort(), ['apple', 'google', 'linkedin', 'meta', 'microsoft', 'openai', 'pinterest', 'reddit', 'snapchat', 'spotify', 'tiktok', 'x']);
-  assert.equal(new Set(providers.map(p => p.slug)).size, 12);
+test('covers all supported advertising providers exactly once', () => {
+  assert.deepEqual(providers.map(p => p.id).sort(), ['apple', 'google', 'gravity', 'linkedin', 'meta', 'microsoft', 'openai', 'pinterest', 'reddit', 'snapchat', 'spotify', 'tiktok', 'x']);
+  assert.equal(new Set(providers.map(p => p.slug)).size, providers.length);
 });
 
 test('titles, descriptions, editorial introductions, and workflow text are distinct', () => {

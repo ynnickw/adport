@@ -38,6 +38,7 @@ login email; Adport never surfaces it.
 | `gravity_list_campaigns` | read | Every campaign with status, delivery status, budgets in dollars and lifetime totals; optional `status` filter |
 | `gravity_ad_groups` | read | Generative or manual ad groups with up to 100 ads each; optional `campaign_id` filter and `include_archived` |
 | `gravity_conversions` | read | Recent conversions (event type, value in cents, source, click- or view-through), to check that pixel or server tracking arrives; follows the cursor up to `limit` (max 500) |
+| `gravity_ads` | read | Ads within one selected ad group, including the native total and whether the group response is truncated when Gravity supplies that total |
 | `gravity_get_ad` | read | Fetch one generated or manual ad, including creative content and review status |
 | `gravity_pixels` | read | Sites with registered pixels, activation and installation check status |
 | `gravity_conversion_stats` | read | Daily conversion counts and totals by event type over a date range or lookback |

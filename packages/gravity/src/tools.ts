@@ -2,7 +2,7 @@ import { AdportError, defineTool, guardedWriteTool, type AnyToolDefinition } fro
 import { z } from 'zod';
 import {
   billingInputSchema, billingSchema, conversionPageSchema, createCampaignSchema, listAdGroupsSchema, listCampaignsSchema, listConversionsSchema,
-  adSchema, conversionStatsInput, conversionStatsSchema, createAdGroupSchema, createAdSchema, createPixelSchema, getAdSchema, pixelSchema,
+  adGroupSchema, adSchema, gravityId, conversionStatsInput, conversionStatsSchema, createAdGroupSchema, createAdSchema, createPixelSchema, getAdSchema, pixelSchema,
   setAdGroupStatusSchema, setAdStatusSchema, setBudgetSchema, setCampaignStatusSchema,
 } from './schemas.js';
 import type { GravityProvider } from './provider.js';
@@ -42,6 +42,17 @@ export function gravityTools(provider: GravityProvider): AnyToolDefinition[] {
       input: listCampaignsSchema, annotations: { readOnly: true }, handler: input => provider.listCampaigns(input.account_id, input.status) }),
     defineTool({ name: 'gravity_ad_groups', namespace: 'gravity', description: 'List Gravity ad groups (generative or manual) with up to 100 ads each, optionally for one campaign.',
       input: listAdGroupsSchema, annotations: { readOnly: true }, handler: input => provider.listAdGroups(input.account_id, input.campaign_id, input.include_archived) }),
+    defineTool({ name: 'gravity_ads', namespace: 'gravity', description: 'List ads in one Gravity ad group with creative, status and the available count.',
+      input: z.object({ account_id: gravityId, ad_group_id: gravityId }).strict(), annotations: { readOnly: true },
+      handler: async ({ account_id, ad_group_id }) => {
+        await provider.assertAccount(account_id);
+        const group = await provider.api.get(`ad-groups/${ad_group_id}`, adGroupSchema);
+        if (group.id !== ad_group_id || !group.ads || group.ads.some(ad => ad.ad_group_id != null && ad.ad_group_id !== group.id)
+          || group.ads_total != null && group.ads_total < group.ads.length) {
+          throw new AdportError('PROVIDER_ERROR', 'Gravity returned incomplete or inconsistent ad-group data.');
+        }
+        return { items: group.ads, total_count: group.ads_total ?? null, truncated: group.ads_total == null ? null : group.ads_total > group.ads.length };
+      } }),
     defineTool({ name: 'gravity_get_ad', namespace: 'gravity', description: 'Read a Gravity ad by ID, including creative, source, status and review status.',
       input: getAdSchema, annotations: { readOnly: true }, handler: async input => {
         await provider.assertAccount(input.account_id);

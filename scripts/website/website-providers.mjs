@@ -235,4 +235,21 @@ export const providers = [
     guide: 'docs/providers/openai.md', reference: 'https://developers.openai.com/ads/api-overview',
     related: ['google', 'meta', 'reddit'],
   },
+  {
+    id: 'gravity', slug: 'gravity-ads', name: 'Gravity', label: 'Ads inside AI assistants and chat apps.',
+    description: 'Connect a Gravity advertiser to Adport. Report on campaigns, inspect ads and conversions, and preview budget or delivery changes from your AI assistant.',
+    intro: 'Use your Gravity advertiser account to compare campaign outcomes, review generated and manual ads, and prepare changes for approval.',
+    workflows: [
+      ['Compare campaigns', 'See spend, clicks and impressions across campaigns. Use campaign reporting to review attributed revenue and conversions.'],
+      ['Review ads and tracking', 'Inspect the ads in a selected group, read pixel installation status and check conversion counts for a date range.'],
+      ['Manage delivery', 'Create a paused campaign or ad group, draft an ad for a manual group, or preview a change to an existing campaign budget.'],
+    ],
+    prompts: ['Show Gravity campaign spend and conversions for the last seven complete days.', 'List the ads in this Gravity group and show their review status.', 'Preview pausing this Gravity campaign.'],
+    prerequisites: ['An approved Gravity advertiser account.', 'An advertiser API key from Settings → Organization in Gravity.', 'For Cloud, a project owner or admin who can enable the advertiser account.'],
+    connection: 'Enter the advertiser API key under Connections → Gravity in Adport Cloud and enable the returned account. For the CLI, set GRAVITY_API_KEY in your environment before connecting.',
+    nuance: 'Gravity validates changes when they are submitted. Adport previews them locally and requires approval before applying them. Campaign, ad-group and ad reports expose the metrics available at each level.',
+    faq: ['Which Gravity account does the key connect?', 'Gravity issues each key for one advertiser. Adport checks that advertiser when you connect and scopes subsequent operations to the selected account.'],
+    guide: 'docs/providers/gravity.md', reference: 'https://docs.trygravity.com/api-reference/advertiser/overview',
+    related: ['openai', 'google', 'meta'],
+  },
 ];
