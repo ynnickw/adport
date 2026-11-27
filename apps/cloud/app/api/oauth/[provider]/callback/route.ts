@@ -66,7 +66,8 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
     if (!providerAllowedForOrganization(provider, transaction.organizationId)) throw new Error('This provider is not enabled for this organization.');
 
     // The optional scope is bound to the consumed encrypted transaction, never callback parameters.
-    const exchangeAdapter = oauthAdapter(provider, { matomoApplication: transaction.matomoApplication, googleDataManager: transaction.googleDataManager === true, redditConversions: transaction.redditConversions === true, pinterestPinManagement: transaction.pinterestPinManagement === true, pinterestSecretPins: transaction.pinterestSecretPins === true, pinterestCatalogManagement: transaction.pinterestCatalogManagement === true });
+    if (provider === 'gravity' && url.searchParams.has('iss') && (url.searchParams.getAll('iss').length !== 1 || url.searchParams.get('iss') !== 'https://platform.trygravity.ai')) throw new Error('Unexpected Gravity authorization issuer.');
+    const exchangeAdapter = oauthAdapter(provider, { gravityAccess: transaction.gravityAccess, matomoApplication: transaction.matomoApplication, googleDataManager: transaction.googleDataManager === true, redditConversions: transaction.redditConversions === true, pinterestPinManagement: transaction.pinterestPinManagement === true, pinterestSecretPins: transaction.pinterestSecretPins === true, pinterestCatalogManagement: transaction.pinterestCatalogManagement === true });
     const credential = await exchangeAdapter.exchange({ code: code!, verifier: transaction.verifier, state });
     const selectionId = randomUUID();
     const connectionId = await upsertProviderConnection({
@@ -75,7 +76,7 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
       provider,
       credential,
       externalLabel: `${label} grant pending verification`,
-      scopes: exchangeAdapter.scopes,
+      scopes: provider === 'gravity' && 'scopes' in credential ? credential.scopes : exchangeAdapter.scopes,
       selectionId,
     });
 

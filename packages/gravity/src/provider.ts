@@ -28,9 +28,9 @@ type Named = { name?: string | null; status?: string | null; source?: string | n
 export class GravityProvider implements AdProvider {
   readonly id = 'gravity';
   private advertiser?: Promise<GravityAdvertiser>;
-  constructor(private readonly client: GravityClient) {}
+  constructor(private readonly client: Pick<GravityClient, 'get' | 'post' | 'patch'>, private readonly oauthScopes?: readonly string[]) {}
   /** API access for read tools; callers check the account first. */
-  get api(): GravityClient { return this.client; }
+  get api() { return this.client; }
 
   capabilities() { return { serverDryRun: false }; }
   standardActions(): StandardActions {
@@ -47,7 +47,7 @@ export class GravityProvider implements AdProvider {
 
   async assertAccount(accountId: string): Promise<GravityAdvertiser> {
     const advertiser = await this.keyAccount();
-    if (gravityId.parse(accountId) !== advertiser.advertiser_id) throw new AdportError('INVALID_INPUT', 'gravity: account_id does not match the advertiser of the connected API key');
+    if (gravityId.parse(accountId) !== advertiser.advertiser_id) throw new AdportError('INVALID_INPUT', 'gravity: account_id does not match the advertiser of the connected credential');
     return advertiser;
   }
 
@@ -140,6 +140,7 @@ export class GravityProvider implements AdProvider {
 
   private async plan(op: WriteOperation, guard: WriteGuard): Promise<Plan> {
     if (op.provider !== this.id) throw new AdportError('INVALID_INPUT', 'gravity: provider mismatch');
+    this.requireScope('write');
     await this.assertAccount(op.accountId);
     if (op.tool === 'gravity_create_campaign' && op.kind === 'create') return this.planCreate(op, guard);
     if (op.tool === 'gravity_create_ad_group' && op.kind === 'create') return this.planAdGroup(op, guard);
@@ -150,10 +151,15 @@ export class GravityProvider implements AdProvider {
     throw new AdportError('INVALID_INPUT', `gravity: unsupported write ${op.tool}`);
   }
 
+  private requireScope(scope: 'write' | 'spend') {
+    if (this.oauthScopes && !this.oauthScopes.includes(scope)) throw new AdportError('POLICY_VIOLATION', 'Reconnect Gravity with the ' + scope + ' permission for this change.');
+  }
+
   private planCreate(op: WriteOperation, guard: WriteGuard): Plan {
     const input = createCampaignSchema.parse(op.payload);
     // A draft never serves; only an active request is coerced.
     const status = guard.forcePausedCreation && input.status === 'active' ? 'paused' : input.status;
+    if (status === 'active') this.requireScope('spend');
     const budget = input.daily_budget_micros !== undefined
       ? { budget_type: 'daily', daily_budget: dollars(input.daily_budget_micros) }
       : { budget_type: 'total', total_budget: dollars(input.total_budget_micros!) };
@@ -194,6 +200,7 @@ export class GravityProvider implements AdProvider {
 
   private async planAdGroup(op: WriteOperation, guard: WriteGuard): Promise<Plan> {
     const input = createAdGroupSchema.parse(op.payload);
+    if (!guard.forcePausedCreation && input.status === 'active') this.requireScope('spend');
     const campaign = await this.client.get(`campaigns/${input.campaign_id}`, campaignSchema);
     if (campaign.campaign_id !== input.campaign_id) throw new AdportError('PROVIDER_ERROR', 'gravity: campaign response does not match the parent campaign');
     return creativePlan(`ad group "${input.name}" in "${campaign.name}"`, input, guard, async body => {
@@ -207,6 +214,7 @@ export class GravityProvider implements AdProvider {
 
   private async planAd(op: WriteOperation, guard: WriteGuard): Promise<Plan> {
     const { ad_group_id, ...input } = createAdSchema.parse(op.payload);
+    if (!guard.forcePausedCreation && input.status === 'active') this.requireScope('spend');
     const group = await this.client.get(`ad-groups/${ad_group_id}`, adGroupSchema);
     if (group.id !== ad_group_id) throw new AdportError('PROVIDER_ERROR', 'gravity: ad group response does not match the parent ad group');
     if (group.group_type !== 'manual') throw new AdportError('INVALID_INPUT', 'gravity: authored ads require a manual ad group');
@@ -248,6 +256,7 @@ export class GravityProvider implements AdProvider {
       throw new AdportError('PROVIDER_ERROR', 'gravity: could not establish the current campaign budget for policy checks');
     }
     const previous = typeof currentAmount === 'number' ? micros(currentAmount) : undefined;
+    if (previous === undefined || input.budget_micros > previous) this.requireScope('spend');
     const amount = dollars(input.budget_micros);
     return {
       summary: `Change Gravity campaign "${current.name}" ${input.field}`,
@@ -268,6 +277,7 @@ export class GravityProvider implements AdProvider {
     const spec = STATUS_TOOLS[op.tool as keyof typeof STATUS_TOOLS];
     const input = spec.schema.parse(op.payload) as Record<string, string>;
     const id = input[spec.key]!, status = input.status!;
+    if (status === 'active') this.requireScope('spend');
     const entity = spec.entity as z.ZodType<Named & Record<string, unknown>>;
     const readId = spec.id as (value: unknown) => string;
     const current = await this.client.get(`${spec.path}/${id}`, entity);

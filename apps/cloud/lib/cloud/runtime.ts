@@ -9,6 +9,8 @@ import { GoogleAdsProvider, GoogleAdsRestClient, googleTools } from '@adport/pro
 import { MetaAdsProvider, MetaGraphClient, metaTools } from '@adport/provider-meta';
 import { MicrosoftAdsClient, MicrosoftAdsProvider, microsoftTools } from '@adport/provider-microsoft';
 import { GravityClient, GravityProvider, gravityTools } from '@adport/provider-gravity';
+import { GravityMcpTransport } from './gravity-mcp';
+import { refreshGravity } from './gravity-oauth';
 import { hostedAccessToken } from './hosted-grant';
 import { matomoTokens } from './matomo-oauth';
 import { createHostedMatomoProvider } from './matomo';
@@ -159,8 +161,11 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     modules.push({ provider: scopeProvider(provider), tools: [] });
   }
   if (credentials.gravity) {
-    const provider = new GravityProvider(new GravityClient(credentials.gravity));
-    modules.push({ provider: scopeProvider(provider), tools: gravityTools(provider) });
+    const grant = credentials.gravity;
+    const provider = 'grantId' in grant ? new GravityProvider(new GravityMcpTransport(hostedAccessToken(principal.organizationId, 'gravity', grant,
+      refreshToken => refreshGravity(refreshToken, grant.scopes))), grant.scopes) : new GravityProvider(new GravityClient(grant));
+    const canEdit = !('grantId' in grant) || grant.scopes.includes('write');
+    modules.push({ provider: scopeProvider(provider), tools: gravityTools(provider).filter(tool => canEdit || tool.annotations.readOnly) });
   }
   if (credentials.openai) {
     const provider = new OpenAIAdsProvider(new OpenAIAdsClient(credentials.openai));
@@ -232,7 +237,7 @@ function completeMcpCatalog(runtime: AdportRuntime, organizationId: string): voi
     ...unavailableTools('google', googleTools), ...unavailableTools('meta', metaTools),
     ...unavailableTools('tiktok', tiktokTools), ...unavailableTools('apple', appleTools),
     ...unavailableTools('microsoft', microsoftTools), ...unavailableTools('reddit', redditTools),
-    ...unavailableTools('openai', openaiTools), ...unavailableTools('gravity', gravityTools),
+    ...unavailableTools('openai', openaiTools), ...(runtime.ctx.providers.list().some(provider => provider.id === 'gravity') ? [] : unavailableTools('gravity', gravityTools)),
     ...unavailableTools('snapchat', snapchatTools), ...unavailableTools('spotify', spotifyTools),
     ...unavailableTools('pinterest', pinterestTools), ...unavailableTools('linkedin', linkedinTools),
     ...unavailableTools('x', xTools),

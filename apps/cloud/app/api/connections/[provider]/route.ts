@@ -16,7 +16,7 @@ import {
 } from '@/lib/cloud/repository';
 import { stageAccountSelection } from '@/lib/cloud/account-selection';
 import { providerAllowedForOrganization } from '@/lib/cloud/provider-rollout';
-import { isCloudProvider, isOAuthProvider, type CredentialProvider } from '@/lib/cloud/types';
+import { acceptsProviderCredential, isCloudProvider, isOAuthProvider, type CredentialProvider } from '@/lib/cloud/types';
 import { env } from '@/lib/env';
 import { HttpError, apiError, noStoreJson } from '@/lib/http';
 
@@ -43,7 +43,7 @@ function parseConnection(provider: CredentialProvider, value: unknown) {
 /** Verify provider tokens before storing them, then use the shared project account selection. */
 export async function POST(request: Request, { params }: RouteContext<'/api/connections/[provider]'>) {
   const { provider } = await params;
-  if (!isCloudProvider(provider) || isOAuthProvider(provider)) return noStoreJson({ error: 'This platform connects through OAuth.' }, 405);
+  if (!acceptsProviderCredential(provider)) return noStoreJson({ error: 'This platform connects through OAuth.' }, 405);
   const origin = request.headers.get('origin');
   if (origin !== new URL(request.url).origin && origin !== new URL(env().ADPORT_CLOUD_BASE_URL).origin) {
     return noStoreJson({ error: 'Same-origin request required.' }, 403);
@@ -90,7 +90,7 @@ export async function DELETE(request: Request, { params }: RouteContext<'/api/co
     if (!stored) return noStoreJson({ disconnected: false });
 
     let revokedAtProvider = false;
-    const oauth = isOAuthProvider(provider) && !(provider === 'matomo' && 'tokenAuth' in stored);
+    const oauth = isOAuthProvider(provider) && !(provider === 'matomo' && 'tokenAuth' in stored) && !(provider === 'gravity' && 'apiKey' in stored);
     if (oauth && isOAuthProvider(provider)) {
       const sharedGoogleGrant = provider === 'google' && (await Promise.all(['gtm', 'ga4', 'gsc'].map(id => loadProviderCredential(principal.organizationId, id as 'gtm' | 'ga4' | 'gsc')))).some(Boolean);
       if (oauthAdapter(provider).configured() && !sharedGoogleGrant) {

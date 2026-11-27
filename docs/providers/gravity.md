@@ -6,15 +6,11 @@ share one set of provider tools.
 
 ## Connect in Adport Cloud
 
-1. An owner or admin opens **Connections → Gravity → Connect** in the project.
-2. Copy the advertiser API key from **Settings → Organization** in the Gravity dashboard and enter it in Adport.
-3. Choose the advertiser returned by Gravity and enable account access. The key
-   is encrypted for this project. An enabled Gravity account uses an advertising
-   account slot. Reporting access permits reads. Authorized writes use the
-   project's standard preview and approval flow.
+In **Connections → Gravity → Connect**, choose the permissions for the project. Read access is the default. Editing campaigns and changing spend require additional consent. Sign in as an advertiser owner or admin, choose the advertiser in Gravity, then confirm the account in Adport. Enabling it uses one advertising account slot.
 
-Disconnecting removes the encrypted key from the project. An advertiser admin can
-rotate the key in Gravity to invalidate it everywhere.
+Adport publishes its public OAuth client metadata at `/oauth/clients/gravity` on its HTTPS Cloud origin. Gravity supports public clients with PKCE. The exact callback is `/api/oauth/gravity/callback`. Adport stores and refreshes each project's grant in the encrypted vault and requests revocation on disconnect. A Cloud operator does not need a shared advertiser key or client secret. [Gravity sign-in and permission guide](https://docs.trygravity.com/advertisers/claude-chatgpt)
+
+OAuth uses Gravity's advertiser MCP resource. Adport discovers the compatible advertiser operations and validates their results. Changes still use the project's preview and approval flow. If Gravity returns a separate approval plan or has no compatible operation, Adport reports this to the caller. The **Use an advertiser API key** option connects through Gravity's dashboard REST API. An administrator can rotate a key in the Gravity dashboard to revoke it.
 
 ## Connect locally
 

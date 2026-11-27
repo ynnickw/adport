@@ -3,7 +3,7 @@ import { updateSession } from '@/lib/supabase/proxy';
 
 export async function proxy(request: NextRequest) {
   // These routes authorize requests independently of browser sessions.
-  if (request.nextUrl.pathname === '/api/public-support' || request.nextUrl.pathname === '/mcp') return NextResponse.next();
+  if (request.nextUrl.pathname === '/oauth/clients/gravity' || request.nextUrl.pathname === '/api/public-support' || request.nextUrl.pathname === '/mcp') return NextResponse.next();
   return updateSession(request);
 }
 

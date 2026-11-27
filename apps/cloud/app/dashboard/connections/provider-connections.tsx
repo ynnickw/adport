@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import { Fragment, useState } from 'react';
 import { Provider, formatDate } from '@/components/ui';
 import { providerLabel, providerAccountsPath, providerResourceName, usesAdAccountSlot } from '@/lib/cloud/providers';
-import { isOAuthProvider, type CloudProvider } from '@/lib/cloud/types';
+import { acceptsProviderCredential, type CloudProvider } from '@/lib/cloud/types';
 import { CredentialConnectButton } from './credential-connect-button';
 import { OAuthPopupLink } from '@/components/oauth-popup-link';
 import { useConfirm } from '@/components/use-confirm';
@@ -104,7 +104,7 @@ export function ProviderConnections({ organizationId, projectName, canManage, co
             : pendingSelectionPath(connection.accountSelectionId, provider.id) : undefined;
         const startHref = `/api/oauth/${provider.id}/start?organization_id=${organizationId}${returnTo ? `&return_to=${encodeURIComponent(returnTo)}` : ''}${provider.id === 'google' && connection?.dataManagerEnabled ? '&data_manager=1' : ''}${provider.id === 'reddit' && connection?.redditConversionsEnabled ? '&conversions=1' : ''}${provider.id === 'pinterest' ? `${connection?.secretPinsEnabled ? '&secret_pins=1' : connection?.pinManagementEnabled ? '&pin_management=1' : ''}${connection?.catalogManagementEnabled ? '&catalog_management=1' : ''}` : ''}`;
         const connectLabel = !connection ? 'Connect' : connection.status === 'connected' && connection.accountSelectionUnavailable ? 'Restart selection' : healthy ? `Find ${resources}` : 'Reconnect';
-        const connect = canManage && provider.available ? !isOAuthProvider(provider.id)
+        const connect = canManage && provider.available ? acceptsProviderCredential(provider.id)
           ? <CredentialConnectButton organizationId={organizationId} provider={provider.id} connected={Boolean(connection)} returnTo={returnTo} />
           : <OAuthPopupLink platform={platform} resourceProvider={provider.id} projectName={projectName} className="button secondary" label={`${connectLabel} ${healthy || connectLabel === 'Restart selection' ? 'for ' : ''}${platform}`} href={startHref}>{connectLabel}</OAuthPopupLink> : null;
         const mainAction = !canManage ? null : resumeHref
