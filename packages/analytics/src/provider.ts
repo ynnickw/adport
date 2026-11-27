@@ -1,12 +1,9 @@
-import { AdportError, ga4ReportSchema, ga4RealtimeSchema, gscReportSchema, searchConsoleSite,
+import { AdportError, gscReportSchema, searchConsoleSite,
   type AdProvider, type Account, type NormalizedQuery, type Report, type WriteOperation,
-  type WritePreview, type WriteResult, type Ga4ReportInput, type Ga4RealtimeInput, type GscReportInput } from '@adport/core';
-import { AnalyticsClient, type Resource } from './client.js';
+  type WritePreview, type WriteResult, type GscReportInput } from '@adport/core';
+import { Ga4Acquisition, propertyId } from './acquisition.js';
+import { AnalyticsClient } from './client.js';
 
-function propertyId(value: string): string {
-  if (!/^\d+$/.test(value)) throw new AdportError('INVALID_INPUT', 'GA4 property IDs must be numeric.');
-  return value;
-}
 abstract class ReadOnlyAnalytics implements AdProvider {
   abstract readonly id: string;
   abstract listAccounts(): Promise<Account[]>;
@@ -18,7 +15,8 @@ abstract class ReadOnlyAnalytics implements AdProvider {
 
 export class Ga4Provider extends ReadOnlyAnalytics {
   readonly id = 'ga4';
-  constructor(private readonly client: AnalyticsClient) { super(); }
+  readonly acquisitionAnalytics: Ga4Acquisition;
+  constructor(private readonly client: AnalyticsClient) { super(); this.acquisitionAnalytics = new Ga4Acquisition(client); }
   async listAccounts(): Promise<Account[]> {
     const accounts = new Map<string, Account>(), seen = new Set<string>();
     let pageToken: string | undefined;
@@ -35,35 +33,6 @@ export class Ga4Provider extends ReadOnlyAnalytics {
       if (pageToken) seen.add(pageToken);
     } while (pageToken);
     return [...accounts.values()];
-  }
-  property(accountId: string) { return this.client.request('admin', `properties/${propertyId(accountId)}`); }
-  metadata(accountId: string) { return this.client.request('data', `properties/${propertyId(accountId)}/metadata`); }
-  async analyticsReport(input: Ga4ReportInput | Ga4RealtimeInput, realtime = false) {
-    const i = realtime ? ga4RealtimeSchema.parse(input) : ga4ReportSchema.parse(input);
-    const offset = realtime ? 0 : (i as Ga4ReportInput).offset;
-    const filters = i.dimension_filters.map(filter => ({ filter: { fieldName: filter.field,
-      stringFilter: { matchType: filter.match, value: filter.value, caseSensitive: filter.case_sensitive } } }));
-    const body = {
-      dimensions: i.dimensions.map(name => ({ name })), metrics: i.metrics.map(name => ({ name })),
-      ...(!realtime ? { dateRanges: [{ startDate: (i as Ga4ReportInput).start_date, endDate: (i as Ga4ReportInput).end_date }] } : {}),
-      ...(filters.length ? { dimensionFilter: filters.length === 1 ? filters[0] : { [i.filter_mode === 'and' ? 'andGroup' : 'orGroup']: { expressions: filters } } } : {}),
-      limit: String(i.limit), ...(!realtime ? { offset: String(offset) } : {}), returnPropertyQuota: true,
-    };
-    const result = await this.client.request('data', `properties/${propertyId(i.account_id)}:${realtime ? 'runRealtimeReport' : 'runReport'}`, body);
-    const dimensions = (result.dimensionHeaders ?? []) as Array<{ name: string }>;
-    const metrics = (result.metricHeaders ?? []) as Array<{ name: string; type: string }>;
-    const rows = ((result.rows ?? []) as Array<{ dimensionValues?: Array<{ value: string }>; metricValues?: Array<{ value: string }> }>).map(row => ({
-      dimensions: Object.fromEntries(dimensions.map((d, index) => [d.name, row.dimensionValues?.[index]?.value ?? ''])),
-      metrics: Object.fromEntries(metrics.map((m, index) => [m.name, row.metricValues?.[index]?.value ?? ''])),
-    }));
-    const rowCount = Number(result.rowCount ?? rows.length), metadata = result.metadata as Resource | undefined;
-    return { provider: this.id, account_id: i.account_id, report_type: realtime ? 'realtime' : 'historical',
-      rows, metric_headers: metrics, metadata, row_count: rowCount, offset, limit: i.limit,
-      ...(!realtime && offset + rows.length < rowCount && rows.length ? { next_offset: offset + rows.length, truncated: true } : {}),
-      notes: [realtime ? 'Realtime dimensions and metrics differ from historical reporting.' : 'Dates use the GA4 property reporting time zone.',
-        ...(metadata?.subjectToThresholding ? ['Privacy thresholds may omit data.'] : []),
-        ...(Array.isArray(metadata?.samplingMetadatas) && metadata.samplingMetadatas.length ? ['This report contains sampled data.'] : [])],
-      property_quota: result.propertyQuota };
   }
 }
 

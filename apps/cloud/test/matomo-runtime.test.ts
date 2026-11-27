@@ -18,7 +18,7 @@ it('discovers unavailable Matomo reads and points owners to the analytics site p
   mocks.credentials.mockResolvedValue({});
   const runtime = await createTenantRuntime(principal, { surface: 'mcp', catalog: { profile: 'reporting', providers: ['matomo'] } });
   const result = await runtime.registry.call('capabilities_list', { provider: 'matomo' }, runtime.ctx);
-  expect(result).toMatchObject({ total_matches: 8, tools: expect.arrayContaining([expect.objectContaining({
+  expect(result).toMatchObject({ total_matches: 2, tools: expect.arrayContaining([expect.objectContaining({
     read_only: true, enabled: false, blockers: ['not_connected'], next_steps: [expect.stringContaining('Analytics & tracking')],
   })]) });
   expect(mocks.request).not.toHaveBeenCalled();
@@ -28,11 +28,14 @@ it('authorizes only enabled sites for every native tool and excludes other platf
   mocks.credentials.mockResolvedValue({ matomo: { url: 'https://example.matomo.cloud', tokenAuth: 'local-test' } });
   const runtime = await createTenantRuntime(principal, { surface: 'mcp', catalog: { profile: 'reporting', providers: ['matomo'] } });
   expect(await runtime.ctx.providers.get('matomo').listAccounts()).toMatchObject([{ id: '1' }]);
-  const tools = runtime.registry.list().filter(tool => tool.namespace === 'matomo');
-  expect(tools).toHaveLength(8);
-  for (const tool of tools) expect(() => runtime.ctx.authorizeToolCall!(tool, { account_id: '2' })).toThrow(/not active/);
+  const tools = runtime.registry.list().filter(tool => tool.namespace === 'analytics');
+  expect(tools).toHaveLength(2);
+  for (const tool of tools) expect(() => runtime.ctx.authorizeToolCall!(tool, { provider: 'matomo', account_id: '2' })).toThrow(/not active/);
   expect(runtime.registry.list().some(tool => tool.namespace === 'openai')).toBe(false);
   expect(mocks.request).not.toHaveBeenCalled();
-  mocks.request.mockResolvedValue(Response.json([{ visits: 4 }]));
-  await expect(runtime.registry.call('matomo_realtime_report', { account_id: '1' }, runtime.ctx)).resolves.toMatchObject({ rows: [{ metrics: { visits: 4 } }] });
+  await expect(runtime.registry.call('analytics_goals', { provider: 'ga4', account_id: '1' }, runtime.ctx)).rejects.toMatchObject({ code: 'NOT_CONNECTED' });
+  expect(mocks.request).not.toHaveBeenCalled();
+  mocks.request.mockResolvedValueOnce(Response.json({ idsite: 1, name: 'Selected site' }))
+    .mockResolvedValueOnce(Response.json([{ idsite: 1, idgoal: 4, name: 'Purchase' }]));
+  await expect(runtime.registry.call('analytics_goals', { provider: 'matomo', account_id: '1' }, runtime.ctx)).resolves.toMatchObject({ provider: 'matomo', goals: [{ id: '4', name: 'Purchase' }] });
 });

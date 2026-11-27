@@ -1,4 +1,4 @@
-import { createContext, defineTool, ga4Tools, gscTools, withProjectRouting } from '@adport/core';
+import { createContext, defineTool, MockProvider, type AdProvider, gscTools, withProjectRouting } from '@adport/core';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { JSDOM } from 'jsdom';
 import { describe, expect, it, vi } from 'vitest';
@@ -202,14 +202,16 @@ describe('media distribution handoff', () => {
 describe('hosted read paging from tool response to widget', () => {
   it('uses declared cursors for generic records and GA4 and Search Console reports', async () => {
     const projectId = 'b310e750-d001-4427-8184-09bd05920e01', range = { start_date: '2026-11-01', end_date: '2026-11-07' };
-    const runtime = await createContext();
-    runtime.registry.register(ga4Tools({
-      property: async () => null, metadata: async () => null,
-      analyticsReport: async input => {
-        const next = 'offset' in input && input.offset > 0;
-        return { rows: [{ dimensions: { date: next ? '20261102' : '20261101' }, metrics: { sessions: next ? '8' : '4' } }], ...(!next ? { next_offset: 1 } : {}) };
-      },
-    }));
+    const provider = Object.assign(new MockProvider() as AdProvider, { id: 'ga4', acquisitionAnalytics: {
+      listGoals: async () => [],
+      acquisitionReport: async (input: { cursor?: string }) => ({
+        rows: [{ dimensions: { source: input.cursor ? 'second source' : 'first source', medium: 'cpc', campaign: 'trial' },
+          metrics: { sessions: 4, conversions: 1, revenue: 10 } }],
+        date_range: { start: range.start_date, end: range.end_date, timezone: 'UTC' }, currency: 'EUR', attribution: 'Session', revenue_basis: 'Purchases',
+        notes: [], ...(!input.cursor ? { next_cursor: '1' } : {}),
+      }),
+    } });
+    const runtime = await createContext({ providerModules: [{ provider, tools: [] }] });
     runtime.registry.register(gscTools({
       site: async () => null, inspectUrl: async () => null, sitemaps: async () => null,
       searchAnalytics: async input => ({
@@ -236,7 +238,7 @@ describe('hosted read paging from tool response to widget', () => {
     const [ct, st] = InMemoryTransport.createLinkedPair();
     await server.connect(st); await client.connect(ct);
     const examples = [
-      { tool: 'ga4_report', args: { account_id: '123', metrics: ['sessions'], dimensions: ['date'], ...range }, selector: '[data-report-next]', rows: '.report-data', expected: '20261102', cursor: { offset: 1 } },
+      { tool: 'analytics_acquisition_report', args: { provider: 'ga4', account_id: '123', ...range }, selector: '[data-report-next]', rows: '.workflow-table', expected: 'second source', cursor: { cursor: '1' } },
       { tool: 'gsc_search_analytics', args: { account_id: 'sc-domain:example.org', dimensions: ['query'], ...range }, selector: '[data-report-next]', rows: '.report-data', expected: 'second', cursor: { start_row: 1 } },
       { tool: 'meta_list_campaigns', args: { account_id: 'act_1' }, selector: '[data-record-more]', rows: '.workflow-table', expected: 'Second campaign', cursor: { cursor: 'next' } },
     ];

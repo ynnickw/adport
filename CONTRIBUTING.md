@@ -19,7 +19,7 @@ No advertising credentials are needed. For safe CLI experiments, use synthetic d
 
 ## Make a focused change
 
-- **Keep one tool-definition layer.** Register typed tools once; CLI, MCP, and Cloud consume the shared registry.
+- **Keep one tool-definition layer.** Register typed tools once; CLI, MCP, and Cloud consume the shared registry. New website analytics providers implement the [shared two-tool adapter](docs/providers/website-analytics.md#implementing-an-adapter).
 - **Route every provider mutation through `guardedWriteTool` and the policy engine.** Preserve preview/apply binding, expiry, protected accounts, budget caps in micros, paused creation, reported coercions, and the audit trail.
 - **Test the wire contract.** Provider tests mock `fetch` and assert request methods, headers, bodies, pagination, update masks, currency conversions, and error envelopes against the official API documentation. Record the source and verification date when changing a contract.
 - **Distinguish fixtures from live evidence.** A mocked response does not prove provider approval or successful live execution. Default tests must not contact advertising APIs. Use explicit operator authorization for real-account writes.

@@ -13,9 +13,9 @@ export interface MatomoCredentials {
 
 /** Documented read methods only. Every other Matomo API method is refused before any request. */
 export const MATOMO_READ_METHODS = new Set([
-  'API.getMatomoVersion', 'API.getReportMetadata', 'API.getProcessedReport',
-  'SitesManager.getSitesWithAtLeastViewAccess', 'SitesManager.getSiteFromId',
-  'Goals.getGoals', 'SegmentEditor.getAll', 'API.getSegmentsMetadata', 'Live.getCounters',
+  'API.getReportMetadata', 'SitesManager.getSitesWithAtLeastViewAccess', 'SitesManager.getSiteFromId', 'Goals.getGoals',
+  'Referrers.getReferrerType', 'Referrers.getCampaigns', 'MarketingCampaignsReporting.getName',
+  'MarketingCampaignsReporting.getSource', 'MarketingCampaignsReporting.getMedium', 'MarketingCampaignsReporting.getSourceMedium', 'Actions.getEntryPageUrls',
 ]);
 const RESERVED = new Set(['module', 'method', 'format', 'token_auth', 'force_api_session']);
 
@@ -63,12 +63,9 @@ function classify(message: string, method: string): AdportError {
     return new AdportError('NOT_CONNECTED', 'Matomo rejected the auth token. Create a new token and reconnect Matomo.', { reason: 'auth' });
   }
   // Before access: "not enough permission to access the segment X" is a segment problem, not a bad token.
-  if (/segment/i.test(message)) return new AdportError('PROVIDER_ERROR', 'Matomo rejected the segment. Check its syntax, permissions or use matomo_segments.', { reason: 'segment' });
+  if (/segment/i.test(message)) return new AdportError('PROVIDER_ERROR', 'Matomo rejected the segment. This site must support aggregate entry-page segmentation to group by landing page.', { reason: 'segment' });
   if (/access|permission|not allowed/i.test(message)) {
     return new AdportError('PROVIDER_ERROR', 'Matomo denied access: the token is invalid or its user lacks view access to this site.', { reason: 'access_denied' });
-  }
-  if (/report|not found|does not exist|unknown/i.test(message) && method === 'API.getProcessedReport') {
-    return new AdportError('PROVIDER_ERROR', 'Matomo could not find this report. Use matomo_report_metadata to choose module and action.', { reason: 'report_not_found' });
   }
   if (/date|period/i.test(message)) return new AdportError('PROVIDER_ERROR', 'Matomo rejected the date or period.', { reason: 'date' });
   return new AdportError('PROVIDER_ERROR', `Matomo returned an error for ${method}. Check the site ID and parameters.`, { reason: 'provider' });

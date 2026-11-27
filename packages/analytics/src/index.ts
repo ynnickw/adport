@@ -1,9 +1,9 @@
-import { ga4Tools, gscTools, type CredentialStore, type ProviderModule } from '@adport/core';
+import { gscTools, type CredentialStore, type ProviderModule } from '@adport/core';
 import { AnalyticsClient, type AnalyticsCredentials } from './client.js';
 import { Ga4Provider, SearchConsoleProvider } from './provider.js';
 export { AnalyticsClient, type AnalyticsCredentials } from './client.js';
 export { Ga4Provider, SearchConsoleProvider } from './provider.js';
-export { ga4Tools, gscTools, GA4_SCOPES, GSC_SCOPES } from '@adport/core';
+export { gscTools, GA4_SCOPES, GSC_SCOPES } from '@adport/core';
 
 async function credentials(provider: 'ga4' | 'gsc', store: CredentialStore): Promise<AnalyticsCredentials | undefined> {
   const data = (await store.get(provider))?.data;
@@ -18,7 +18,7 @@ async function credentials(provider: 'ga4' | 'gsc', store: CredentialStore): Pro
 }
 export async function createGa4Module(store: CredentialStore): Promise<ProviderModule | undefined> {
   const value = await credentials('ga4', store); if (!value) return undefined;
-  const provider = new Ga4Provider(new AnalyticsClient(value)); return { provider, tools: ga4Tools(provider) };
+  const provider = new Ga4Provider(new AnalyticsClient(value)); return { provider, tools: [] };
 }
 export async function createGscModule(store: CredentialStore): Promise<ProviderModule | undefined> {
   const value = await credentials('gsc', store); if (!value) return undefined;

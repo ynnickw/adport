@@ -1,10 +1,10 @@
-import { isAnalyticsProvider } from '@adport/core/tool-catalog';
+import { isTrackingSource } from '@adport/core/tool-catalog';
 import type { CloudProvider } from './types';
 
 export type ProviderCategory = 'advertising' | 'analytics';
 
 export function providerCategory(provider: string): ProviderCategory {
-  return isAnalyticsProvider(provider) ? 'analytics' : 'advertising';
+  return isTrackingSource(provider) ? 'analytics' : 'advertising';
 }
 
 export function usesAdAccountSlot(provider: string): boolean {

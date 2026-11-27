@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod';
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
-import { AdportError, CredentialStore, createContext, selectRuntimeCatalog, nextPageArguments, writeOutput, type ToolSelection, type AdportRuntime, type ProviderModule } from '@adport/core';
+import { TOOL_PROVIDERS, AdportError, CredentialStore, createContext, selectRuntimeCatalog, nextPageArguments, writeOutput, type ToolSelection, type AdportRuntime, type ProviderModule } from '@adport/core';
 import { createGa4Module, createGscModule } from '@adport/provider-analytics';
 import { createGtmModule } from '@adport/provider-gtm';
 import { createGoogleModule } from '@adport/provider-google';
@@ -25,15 +25,21 @@ import {
   ADPORT_UI_DOMAIN,
   ADPORT_UI_RESOURCE_DOMAINS,
   ADPORT_UI_URI,
+  ADPORT_UI_VERSION,
   structuredResult,
   toolInvocationLabels,
   toolTitle,
   viewForTool,
 } from './ui.js';
 
-export const PROVIDER_IDS = ['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai', 'matomo'] as const;
+export const PROVIDER_IDS = TOOL_PROVIDERS;
 export { ADPORT_UI_RESOURCE_DOMAINS };
-export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [ADPORT_UI_URI, 'ui://adport/insight-card-v37.html', 'ui://adport/insight-card-v36.html', 'ui://adport/insight-card-v35.html', 'ui://adport/insight-card-v34.html', 'ui://adport/insight-card-v33.html', 'ui://adport/insight-card-v32.html', 'ui://adport/insight-card-v31.html', 'ui://adport/insight-card-v30.html', 'ui://adport/insight-card-v29.html', 'ui://adport/insight-card-v28.html', 'ui://adport/insight-card-v27.html', 'ui://adport/insight-card-v26.html', 'ui://adport/insight-card-v25.html', 'ui://adport/insight-card-v24.html', 'ui://adport/insight-card-v23.html', 'ui://adport/insight-card-v22.html', 'ui://adport/insight-card-v21.html', 'ui://adport/insight-card-v20.html', 'ui://adport/insight-card-v19.html', 'ui://adport/insight-card-v18.html', 'ui://adport/insight-card-v17.html', 'ui://adport/insight-card-v16.html', 'ui://adport/insight-card-v15.html', 'ui://adport/insight-card-v14.html', 'ui://adport/insight-card-v13.html', 'ui://adport/insight-card-v12.html', 'ui://adport/insight-card-v11.html', 'ui://adport/insight-card-v10.html', 'ui://adport/insight-card-v9.html', 'ui://adport/insight-card-v8.html', 'ui://adport/insight-card-v7.html', 'ui://adport/insight-card-v6.html', 'ui://adport/insight-card-v5.html', 'ui://adport/insight-card-v4.html', 'ui://adport/insight-card-v3.html', 'ui://adport/insight-card-v2.html', ADPORT_SUMMARY_UI_URI, 'ui://adport/summary-card-v37.html', 'ui://adport/summary-card-v36.html', 'ui://adport/summary-card-v35.html', 'ui://adport/summary-card-v34.html', 'ui://adport/summary-card-v33.html', 'ui://adport/summary-card-v32.html', 'ui://adport/summary-card-v30.html'];
+// Old cards reference their original URI. Summary cards first shipped at v30 and skipped v31.
+const uiVersions = Array.from({ length: ADPORT_UI_VERSION - 1 }, (_, i) => ADPORT_UI_VERSION - i);
+export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [
+  ...uiVersions.map(v => `ui://adport/insight-card-v${v}.html`),
+  ...uiVersions.filter(v => v === 30 || v >= 32).map(v => `ui://adport/summary-card-v${v}.html`),
+];
 
 const DEFAULT_MCP_ICONS = [{
   src: 'https://app.adport.dev/icon.svg?brand=orange-dot-v2',
@@ -221,8 +227,9 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
       },
     };
     const callback = async (args: Record<string, unknown>) => {
+      const platform = tool.namespace === 'analytics' ? args.provider : tool.namespace;
       const descriptor = {
-        ...(PROVIDER_IDS.includes(tool.namespace as typeof PROVIDER_IDS[number]) ? { provider: tool.namespace } : {}),
+        ...(typeof platform === 'string' && PROVIDER_IDS.includes(platform as typeof PROVIDER_IDS[number]) ? { provider: platform } : {}),
         ...(typeof args.account_id === 'string' ? { accountId: args.account_id } : {}),
         ...(tool.pagination ? { pagination: { cursorInput: tool.pagination.cursorInput } } : {}),
       };

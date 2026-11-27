@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createContext, matomoReportSchema, nextPageArguments, CredentialStore } from '@adport/core';
-import { MatomoClient, MatomoProvider, matomoTools, normalizeMatomoUrl, matomoCredentialsFromData, createMatomoModule, resolveMatomoCredentials, matomoPeriodStarts } from '../src/index.js';
+import { createContext, CredentialStore } from '@adport/core';
+import { MatomoClient, MatomoProvider, normalizeMatomoUrl, matomoCredentialsFromData, createMatomoModule, resolveMatomoCredentials } from '../src/index.js';
 
 // Wire shapes checked against the Matomo Reporting API docs, 2026-11-27:
 // developer.matomo.org/api-reference/reporting-api (POST token_auth, format=JSON, filter_limit/filter_offset, flat)
@@ -63,7 +63,8 @@ describe('Matomo provider', () => {
     expect(await resolveMatomoCredentials(stored)).toEqual({ url: base, tokenAuth: 'stored-token' });
     const module = await createMatomoModule(empty);
     expect(module?.provider.id).toBe('matomo');
-    expect(module?.tools.map(t => t.name)).toEqual(['matomo_site', 'matomo_report_metadata', 'matomo_report', 'matomo_campaign_performance', 'matomo_realtime_report', 'matomo_segment_metadata', 'matomo_goals', 'matomo_segments']);
+    const runtime = await createContext({ providerModules: [module!] });
+    expect(runtime.registry.list().filter(t => t.namespace === 'analytics').map(t => t.name).sort()).toEqual(['analytics_acquisition_report', 'analytics_goals']);
     vi.stubEnv('MATOMO_TOKEN_AUTH', '');
     expect(await createMatomoModule(empty)).toBeUndefined();
   });
@@ -83,165 +84,12 @@ describe('Matomo provider', () => {
 
   it('refuses methods outside the read allowlist and reserved parameters before any request', async () => {
     const { client, fetchMock } = setup();
-    for (const method of ['UsersManager.getUsers', 'Live.getLastVisitsDetails', 'SitesManager.addSite', 'API.getBulkRequest', 'Goals.addGoal']) {
+    for (const method of ['UsersManager.getUsers', 'Live.getLastVisitsDetails', 'SitesManager.addSite', 'API.getBulkRequest', 'Goals.addGoal', 'Live.getCounters', 'API.getProcessedReport', 'SegmentEditor.getAll']) {
       await expect(client.call(method)).rejects.toMatchObject({ code: 'INVALID_INPUT' });
     }
-    await expect(client.call('API.getMatomoVersion', { token_auth: 'other' })).rejects.toMatchObject({ code: 'INVALID_INPUT' });
-    await expect(client.call('API.getMatomoVersion', { method: 'UsersManager.deleteUser' })).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    await expect(client.call('Goals.getGoals', { token_auth: 'other' })).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    await expect(client.call('Goals.getGoals', { method: 'UsersManager.deleteUser' })).rejects.toMatchObject({ code: 'INVALID_INPUT' });
     expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it('refuses visitor-level modules and malformed report identifiers before any request', async () => {
-    const { provider, fetchMock } = setup();
-    const runtime = await createContext({ providerModules: [{ provider, tools: matomoTools(provider) }] });
-    const range = { account_id: '1', start_date: '2026-11-01', end_date: '2026-11-07' };
-    for (const args of [{ module: 'Live', action: 'getLastVisitsDetails' }, { module: 'UserId', action: 'getUsers' }, { module: 'Referrers', action: 'get&method=x' },
-      { module: 'referrers', action: 'get' }, { module: 'API', action: 'Get' }, { module: 'LIVE', action: 'getLastVisitsDetails' }, { module: 'USERID', action: 'getUsers' },
-      { module: 'HeatmapSessionRecording', action: 'get' }, { module: 'AbTesting', action: 'get' }, { module: 'MultiSites', action: 'getAll' }, { module: 'MULTISITES', action: 'getAll' }]) {
-      await expect(runtime.registry.call('matomo_report', { ...range, ...args }, runtime.ctx)).rejects.toMatchObject({ code: 'INVALID_INPUT' });
-    }
-    await expect(runtime.registry.call('matomo_report', { ...range, account_id: '0', module: 'VisitsSummary', action: 'get' }, runtime.ctx)).rejects.toMatchObject({ code: 'INVALID_INPUT' });
-    await expect(runtime.registry.call('matomo_site', { account_id: '1;2' }, runtime.ctx)).rejects.toMatchObject({ code: 'INVALID_INPUT' });
-    expect(matomoReportSchema.safeParse({ ...range, module: 'VisitsSummary', action: 'get', period: 'day', start_date: '2026-01-01', end_date: '2026-06-01' }).success).toBe(false);
-    for (const segment of ['userId==person', 'deviceType==smartphone;visitorId==0123456789abcdef', 'countryCode==fr,visitIp==192.0.2.1', 'USERID==x', ' fingerprint==abc',
-      'visitId==5', 'userId%3D%3Dperson', '%75serId==person', '%2575serId%253D%253Dx', 'deviceType==tablet;%76isitorId==abc%ZZ']) {
-      await expect(runtime.registry.call('matomo_report', { ...range, module: 'VisitsSummary', action: 'get', segment }, runtime.ctx), segment).rejects.toMatchObject({ code: 'INVALID_INPUT' });
-    }
-    expect(matomoReportSchema.safeParse({ ...range, module: 'VisitsSummary', action: 'get', segment: 'pageUrl=@userId;visitCount>=2' }).success).toBe(true);
-    expect(matomoReportSchema.safeParse({ ...range, module: 'Actions', action: 'getPageUrls', id_goal: 2 }).success).toBe(false);
-    expect(matomoReportSchema.safeParse({ ...range, module: 'Referrers', action: 'getReferrerType', id_goal: 'ecommerceOrder' }).success).toBe(false);
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(runtime.registry.list().filter(t => t.namespace === 'matomo').every(t => t.annotations.readOnly)).toBe(true);
-  });
-
-  it('sends a range report with segment, flat and pagination and normalizes rows', async () => {
-    const report = {
-      website: 'Example', prettyDate: 'Nov 1 – Nov 7, 2026',
-      metadata: { name: 'Page URLs', module: 'Actions', action: 'getPageUrls', dimension: 'Page URL', metricTypes: { nb_hits: 'number', revenue: 'money', bounce_rate: 'percent' } },
-      columns: { label: 'Page URL', nb_hits: 'Pageviews', bounce_rate: 'Bounce rate' },
-      reportData: [{ label: '/pricing', nb_hits: 12, bounce_rate: 0.45, idsubdatatable: 3, url: 'https://www.example.com/pricing', goals: { 'idgoal=1': {} } }, { label: '/blog', nb_hits: 3, bounce_rate: 0.1 }, { label: '/more', nb_hits: 1 }],
-      reportMetadata: [{}, {}], reportTotal: { nb_hits: 15 },
-    };
-    const { provider, fetchMock } = setup(report, site);
-    const input = matomoReportSchema.parse({ account_id: '1', module: 'Actions', action: 'getPageUrls', start_date: '2026-11-01', end_date: '2026-11-07',
-      segment: 'deviceType==smartphone;countryCode==fr', limit: 2, offset: 4, filter_sort_column: 'nb_hits', filter_sort_order: 'desc' });
-    const result = await provider.processedReport(input);
-    expect(Object.fromEntries(form(fetchMock, 0))).toEqual({ module: 'API', method: 'API.getProcessedReport', format: 'JSON', token_auth: 'test-token',
-      idSite: '1', apiModule: 'Actions', apiAction: 'getPageUrls', period: 'range', date: '2026-11-01,2026-11-07', filter_limit: '3', filter_offset: '4',
-      hideMetricsDoc: '1', showTimer: '0', format_metrics: '0', segment: 'deviceType==smartphone;countryCode==fr', flat: '1', filter_sort_column: 'nb_hits', filter_sort_order: 'desc' });
-    expect(Object.fromEntries(form(fetchMock, 1))).toMatchObject({ method: 'SitesManager.getSiteFromId', idSite: '1' });
-    expect(result.rows).toEqual([
-      { dimensions: { label: '/pricing' }, metrics: { nb_hits: 12, bounce_rate: 0.45 } },
-      { dimensions: { label: '/blog' }, metrics: { nb_hits: 3, bounce_rate: 0.1 } },
-    ]);
-    expect(result).toMatchObject({ provider: 'matomo', account_id: '1', report: { module: 'Actions', action: 'getPageUrls', name: 'Page URLs', dimension: 'Page URL' },
-      totals: { nb_hits: 15 }, metric_labels: { nb_hits: 'Pageviews', bounce_rate: 'Bounce rate' }, metric_types: { revenue: 'money' },
-      row_count: 2, offset: 4, limit: 2, next_offset: 6, truncated: true, date_range: { start: '2026-11-01', end: '2026-11-07', timezone: 'Europe/Paris' }, currency: 'EUR' });
-    expect(result.notes.join(' ')).toMatch(/time zone.*currency.*fractions.*seconds/);
-    const tool = matomoTools(provider).find(t => t.name === 'matomo_report')!;
-    expect(nextPageArguments(tool, input, result)).toMatchObject({ account_id: '1', module: 'Actions', offset: 6, segment: input.segment });
-  });
-
-  it('uses period=day for one date, omits flat outside Actions and reads a single-row report without a next page', async () => {
-    const { provider, fetchMock } = setup({ metadata: { name: 'Visits Summary' }, columns: { nb_visits: 'Visits' }, reportData: { nb_visits: 40, bounce_rate: 0.5, avg_time_on_site: 95 }, reportTotal: [] }, site);
-    const result = await provider.processedReport(matomoReportSchema.parse({ account_id: '1', module: 'VisitsSummary', action: 'get', start_date: '2026-11-05', end_date: '2026-11-05', limit: 1 }));
-    const body = form(fetchMock, 0);
-    expect(body.get('period')).toBe('day'); expect(body.get('date')).toBe('2026-11-05'); expect(body.has('flat')).toBe(false); expect(body.has('segment')).toBe(false);
-    expect(result.rows).toEqual([{ dimensions: {}, metrics: { nb_visits: 40, bounce_rate: 0.5, avg_time_on_site: 95 } }]);
-    expect(result).not.toHaveProperty('next_offset'); expect(result).not.toHaveProperty('truncated');
-  });
-
-  it('rejects settings for the wrong site and retries the read', async () => {
-    const { provider } = setup({ ...site, idsite: '2' }, site);
-    await expect(provider.site('1')).rejects.toThrow(/different site/);
-    await expect(provider.site('1')).resolves.toMatchObject({ id: '1' });
-  });
-
-  it('distinguishes an empty report from a missing report payload', async () => {
-    const { provider } = setup({ reportData: [] }, site, { metadata: {} }, site);
-    const input = matomoReportSchema.parse({ account_id: '1', module: 'VisitsSummary', action: 'get', start_date: '2026-11-01', end_date: '2026-11-01' });
-    await expect(provider.processedReport(input)).resolves.toMatchObject({ rows: [], row_count: 0 });
-    await expect(provider.processedReport(input)).rejects.toMatchObject({ code: 'PROVIDER_ERROR' });
-  });
-
-  it('sends id_goal only with Goals reports', async () => {
-    const { provider, fetchMock } = setup({ metadata: { name: 'Goal Signup' }, reportData: { nb_conversions: 7, revenue: 70.5, conversion_rate: 0.0125 } }, site);
-    const result = await provider.processedReport(matomoReportSchema.parse({ account_id: '1', module: 'Goals', action: 'get', start_date: '2026-11-01', end_date: '2026-11-07', id_goal: 2 }));
-    expect(form(fetchMock, 0).get('idGoal')).toBe('2'); expect(form(fetchMock, 0).get('apiModule')).toBe('Goals');
-    expect(result.rows).toEqual([{ dimensions: {}, metrics: { nb_conversions: 7, revenue: 70.5, conversion_rate: 0.0125 } }]);
-  });
-
-  it('derives ISO period start dates for localized per-period keys and reads the current site currency on each page', async () => {
-    // Matomo keys multi-period data by localized labels (thin spaces around the dash in week labels).
-    const week1 = 'week October 26\u2009–\u2009November 1, 2026', week2 = 'week November 2\u2009–\u20098, 2026';
-    const { provider, fetchMock } = setup(
-      { metadata: { name: 'Channel Type' }, columns: { label: 'Channel Type', nb_visits: 'Visits' }, reportData: { [week1]: [{ label: 'Search Engines', nb_visits: 5 }, { label: 'Websites', nb_visits: 1 }], [week2]: [] } },
-      site,
-      { metadata: { name: 'Channel Type' }, reportData: { [week1]: [{ label: 'Websites', nb_visits: 1 }], [week2]: [] } }, { ...site, currency: 'USD' },
-    );
-    const input = matomoReportSchema.parse({ account_id: '1', module: 'Referrers', action: 'getReferrerType', start_date: '2026-10-29', end_date: '2026-11-03', period: 'week', limit: 1 });
-    const result = await provider.processedReport(input);
-    expect(form(fetchMock, 0).get('period')).toBe('week'); expect(form(fetchMock, 0).get('date')).toBe('2026-10-29,2026-11-03');
-    expect(result.rows).toEqual([{ dimensions: { date: '2026-10-26', period_label: week1, label: 'Search Engines' }, metrics: { nb_visits: 5 } }]);
-    expect(result.next_offset).toBe(1); expect(result.notes.join(' ')).toContain('per week');
-    const last = await provider.processedReport({ ...input, offset: 1 });
-    expect(last.rows).toHaveLength(1);
-    expect(last.next_offset).toBeUndefined();
-    expect(last.currency).toBe('USD');
-    expect(fetchMock).toHaveBeenCalledTimes(4);
-  });
-
-  it('keeps single-row per-period reports unpaged and falls back to period_label on a period count mismatch', async () => {
-    const { provider } = setup(
-      { reportData: { 'Sunday, November 1, 2026': { nb_visits: 4 }, 'Monday, November 2, 2026': { nb_visits: 6 } } }, site,
-      { reportData: { 'November 2026': { nb_visits: 9 } } }, site,
-    );
-    const days = await provider.processedReport(matomoReportSchema.parse({ account_id: '1', module: 'VisitsSummary', action: 'get', start_date: '2026-11-01', end_date: '2026-11-02', period: 'day', limit: 1 }));
-    expect(days.rows).toEqual([
-      { dimensions: { date: '2026-11-01', period_label: 'Sunday, November 1, 2026' }, metrics: { nb_visits: 4 } },
-      { dimensions: { date: '2026-11-02', period_label: 'Monday, November 2, 2026' }, metrics: { nb_visits: 6 } },
-    ]);
-    expect(days).not.toHaveProperty('next_offset');
-    const months = await provider.processedReport(matomoReportSchema.parse({ account_id: '1', module: 'VisitsSummary', action: 'get', start_date: '2026-10-15', end_date: '2026-11-02', period: 'month' }));
-    expect(months.rows).toEqual([{ dimensions: { period_label: 'November 2026' }, metrics: { nb_visits: 9 } }]);
-    expect(months.notes.join(' ')).toContain('period_label only');
-  });
-
-  it.each([
-    ['day', '2026-12-30', '2027-01-02', ['2026-12-30', '2026-12-31', '2027-01-01', '2027-01-02']],
-    ['week', '2026-11-01', '2026-11-10', ['2026-10-26', '2026-11-02', '2026-11-09']],
-    ['week', '2026-11-02', '2026-11-02', ['2026-11-02']],
-    ['month', '2026-01-31', '2026-03-01', ['2026-01-01', '2026-02-01', '2026-03-01']],
-    ['year', '2025-06-15', '2026-02-01', ['2025-01-01', '2026-01-01']],
-  ] as const)('computes %s period starts for %s..%s', (period, start, end, expected) => {
-    expect(matomoPeriodStarts(period, start, end)).toEqual(expected);
-  });
-
-  it('trims report metadata, hides visitor-level reports and filters by module', async () => {
-    const { provider, fetchMock } = setup([
-      { category: 'Referrers', subcategory: 'Campaigns', name: 'Campaigns', module: 'Referrers', action: 'getCampaigns', dimension: 'Campaign', metrics: { nb_visits: 'Visits' }, processedMetrics: { bounce_rate: 'Bounce rate' }, metricsGoal: { nb_conversions: 'Conversions' }, metricsDocumentation: { nb_visits: 'long text' }, imageGraphUrl: 'index.php?x' },
-      { category: 'Visitors', name: 'Visits Log', module: 'Live', action: 'getLastVisitsDetails', metrics: {} },
-      { category: 'Referrers', name: 'All Websites', module: 'MultiSites', action: 'getAll', metrics: {} },
-      { category: 'Referrers', name: 'Odd case', module: 'LIVE', action: 'getLastVisitsDetails', metrics: {} },
-      { category: 'Goals', name: 'Goal A', module: 'Goals', action: 'get', metrics: {}, parameters: { idGoal: '1' } },
-    ]);
-    const result = await provider.reportMetadata({ account_id: '1', module: 'Referrers' });
-    expect(Object.fromEntries(form(fetchMock, 0))).toMatchObject({ method: 'API.getReportMetadata', idSites: '1', hideMetricsDoc: '1' });
-    expect(result.reports).toEqual([{ module: 'Referrers', action: 'getCampaigns', name: 'Campaigns', category: 'Referrers', subcategory: 'Campaigns', dimension: 'Campaign',
-      metrics: { nb_visits: 'Visits' }, processed_metrics: { bounce_rate: 'Bounce rate' }, has_goal_metrics: true }]);
-  });
-
-  it('reads site settings, goals and segments without creator logins', async () => {
-    const { provider, fetchMock } = setup(site,
-      { 1: { idsite: '1', idgoal: '1', name: 'Signup', description: '', match_attribute: 'url', pattern: '/thanks', pattern_type: 'contains', revenue: '10', allow_multiple: '0', case_sensitive: '0' } },
-      [{ idsegment: '4', name: 'Mobile', definition: 'deviceType==smartphone', login: 'person@example.com', enable_only_idsite: '0', auto_archive: '1' },
-       { idsegment: '5', name: 'Private visitor', definition: 'visitorId==fixture' }]);
-    expect(await provider.site('1')).toEqual({ id: '1', name: 'Example', main_url: 'https://www.example.com', timezone: 'Europe/Paris', currency: 'EUR', ecommerce: true, site_search: false, type: 'website', created: '2024-01-01 00:00:00' });
-    expect((await provider.goals('1')).goals).toEqual([{ id: '1', name: 'Signup', description: undefined, match_attribute: 'url', pattern: '/thanks', pattern_type: 'contains', revenue: '10', allow_multiple: false, case_sensitive: false }]);
-    const segments = await provider.segments('1');
-    expect(segments.segments).toEqual([{ id: '4', name: 'Mobile', definition: 'deviceType==smartphone', all_sites: true, auto_archive: true }]);
-    expect(JSON.stringify(segments)).not.toContain('person@example.com');
-    expect(form(fetchMock, 2).get('method')).toBe('SegmentEditor.getAll');
   });
 
   it.each([
@@ -250,12 +98,12 @@ describe('Matomo provider', () => {
     ['token_auth is not valid for user@example.com', 'NOT_CONNECTED', 'auth'],
     ['The segment condition foo==test-token is not valid.', 'PROVIDER_ERROR', 'segment'],
     ['API returned an error: You do not have enough permission to access the segment userId at Segment.php:250', 'PROVIDER_ERROR', 'segment'],
-    ['Requested report Login.getTrend for Website id=1 not found in the list of available reports.', 'PROVIDER_ERROR', 'report_not_found'],
+    ['Requested report Login.getTrend for Website id=1 not found in the list of available reports.', 'PROVIDER_ERROR', 'provider'],
     ['You do not have enough permission to access the segment Login sessions.', 'PROVIDER_ERROR', 'segment'],
-    ['Requested report Foo.bar for Website id=1 not found in the list of available reports.', 'PROVIDER_ERROR', 'report_not_found'],
+    ['Requested report Foo.bar for Website id=1 not found in the list of available reports.', 'PROVIDER_ERROR', 'provider'],
   ])('maps Matomo error envelopes without leaking the message or token (%s)', async (message, code, reason) => {
     const { client } = setup({ result: 'error', message });
-    try { await client.call('API.getProcessedReport', { idSite: '1' }); throw Error('Expected rejection'); }
+    try { await client.call('MarketingCampaignsReporting.getName', { idSite: '1' }); throw Error('Expected rejection'); }
     catch (error) {
       const serialized = JSON.stringify(error) + String(error);
       expect(serialized).not.toContain('user@example.com'); expect(serialized).not.toContain('test-token'); expect(serialized).not.toContain('Foo.bar');
@@ -270,7 +118,7 @@ describe('Matomo provider', () => {
     [new Response('bad gateway', { status: 502 }), 'PROVIDER_ERROR'],
   ])('maps non-JSON and HTTP failures without echoing the body (%#)', async (response, code) => {
     const { client } = setup(response);
-    const error = await client.call('API.getMatomoVersion').then(() => undefined, (e: unknown) => e as Error);
+    const error = await client.call('Goals.getGoals').then(() => undefined, (e: unknown) => e as Error);
     expect(error).toMatchObject({ code }); expect(String(error?.message)).not.toMatch(/test-token|Sign in|gateway/);
   });
 
@@ -281,33 +129,8 @@ describe('Matomo provider', () => {
     const op = { provider: 'matomo', accountId: '1', tool: 'made_up_write', kind: 'update' as const, payload: {} };
     await expect(provider.previewWrite(op)).rejects.toMatchObject({ code: 'POLICY_VIOLATION' });
     await expect(provider.applyWrite(op)).rejects.toMatchObject({ code: 'POLICY_VIOLATION' });
-    await expect(provider.report({} as never)).rejects.toMatchObject({ code: 'INVALID_INPUT', message: expect.stringContaining('matomo_report') });
+    await expect(provider.report({} as never)).rejects.toMatchObject({ code: 'INVALID_INPUT', message: expect.stringContaining('analytics_acquisition_report') });
     expect(() => new MatomoClient({ url: base, tokenAuth: ' ' })).toThrow(expect.objectContaining({ code: 'INVALID_INPUT' }));
   });
 
-  it('reads site-scoped realtime counters and exposes only documented counts', async () => {
-    const { provider, fetchMock } = setup([{ visits: '3', visitors: 2, actions: 4, visitsConverted: 0, extra: 'ignored' }]);
-    const result = await provider.realtimeReport('1', 15);
-    expect(result.rows).toEqual([{ dimensions: {}, metrics: { visits: 3, visitors: 2, actions: 4, visitsConverted: 0 } }]);
-    const params = form(fetchMock, 0);
-    expect(Object.fromEntries(params)).toMatchObject({ method: 'Live.getCounters', lastMinutes: '15', idSite: '1' });
-    await expect(provider.realtimeReport('1', 61)).rejects.toMatchObject({ code: 'INVALID_INPUT' });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('discovers usable segment filters without provider internals or restricted dimensions', async () => {
-    const { provider, fetchMock } = setup([{ segment: 'deviceType', name: 'Device type', acceptedValues: 'desktop, smartphone', suggestedValuesCallback: 'private' },
-      { segment: 'userId', name: 'Visitor identity' }, { segment: 'customRestricted', permission: false }]);
-    const result = await provider.segmentMetadata('7');
-    const params = form(fetchMock, 0);
-    expect(Object.fromEntries(params)).toMatchObject({ method: 'API.getSegmentsMetadata', idSites: '7', hideImplementationData: '1' });
-    expect(result.segments).toEqual([{ segment: 'deviceType', name: 'Device type', category: undefined, type: undefined, accepted_values: 'desktop, smartphone' }]);
-  });
-
-  it.each([['MarketingCampaignsReporting', 'getName'], ['Referrers', 'getCampaigns']])('uses the %s campaign report actually installed on the site', async (module, action) => {
-    const { provider, fetchMock } = setup([{ module, action }], { reportData: [{ label: 'Launch', nb_visits: 7 }], columns: {} }, site);
-    const result = await provider.campaignReport({ account_id: '1', start_date: '2026-11-01', end_date: '2026-11-02', period: 'range', limit: 10, offset: 0 });
-    expect(result.rows[0]).toEqual({ dimensions: { label: 'Launch' }, metrics: { nb_visits: 7 } });
-    expect(Object.fromEntries(form(fetchMock, 1))).toMatchObject({ apiModule: module, apiAction: action, idSite: '1' });
-  });
 });

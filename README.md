@@ -111,9 +111,9 @@ Read-only analytics sources:
 
 | Source | Connection ID | Capabilities and setup |
 | --- | --- | --- |
-| Google Analytics 4 | `ga4` | [Property settings, metadata, reports, realtime](docs/providers/google-analytics.md) |
+| Google Analytics 4 | `ga4` | [Acquisition outcomes and conversion goals](docs/providers/google-analytics.md) |
 | Google Search Console | `gsc` | [Search analytics, sitemaps, URL inspection](docs/providers/google-analytics.md) |
-| Matomo | `matomo` | [Sites, campaigns, goals, realtime activity and segment filters](docs/providers/matomo.md) |
+| Matomo | `matomo` | [Acquisition outcomes and conversion goals](docs/providers/matomo.md) |
 
 Provider application approval, account access, and available metrics depend on the platform. The [connection guides](docs/providers.md) record prerequisites and testing limits. Reports preserve currency and attribution differences; see [reporting semantics](docs/reporting-semantics.md) before comparing providers.
 

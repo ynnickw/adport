@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createContext, ga4ReportSchema, ga4RealtimeSchema, gscReportSchema, gscTools, nextPageArguments } from '@adport/core';
+import { createContext, gscReportSchema, gscTools, nextPageArguments } from '@adport/core';
 import { AnalyticsClient, Ga4Provider, SearchConsoleProvider } from '../src/index.js';
 
 // Wire shapes checked against official GA Data/Admin v1beta and Search Console v3 docs, 2026-11-06.
@@ -26,28 +26,6 @@ describe('read-only analytics providers', () => {
   it('rejects repeated GA4 account pagination tokens', async () => {
     const { client } = setup({ nextPageToken: 'same' }, { nextPageToken: 'same' });
     await expect(new Ga4Provider(client).listAccounts()).rejects.toThrow(/repeated/);
-  });
-  it('sends the GA4 report body with native filter groups, dates and string pagination', async () => {
-    const { client, fetchMock } = setup({ dimensionHeaders: [{ name: 'sessionSourceMedium' }], metricHeaders: [{ name: 'sessions', type: 'TYPE_INTEGER' }, { name: 'totalRevenue', type: 'TYPE_CURRENCY' }],
-      rows: [{ dimensionValues: [{ value: 'google / cpc' }], metricValues: [{ value: '9007199254740993' }, { value: '12.345' }] }], rowCount: 10,
-      metadata: { currencyCode: 'EUR', timeZone: 'Europe/Berlin', subjectToThresholding: true } });
-    const input = ga4ReportSchema.parse({ account_id: '123', start_date: '2026-11-01', end_date: '2026-11-05', dimensions: ['sessionSourceMedium'], metrics: ['sessions', 'totalRevenue'], offset: 2, limit: 1,
-      filter_mode: 'or', dimension_filters: [{ field: 'country', value: 'Germany' }, { field: 'country', value: 'France' }] });
-    const result = await new Ga4Provider(client).analyticsReport(input);
-    expect(fetchMock.mock.calls[1]![0]).toBe('https://analyticsdata.googleapis.com/v1beta/properties/123:runReport');
-    const body = JSON.parse(String(fetchMock.mock.calls[1]![1].body));
-    expect(body).toMatchObject({ dateRanges: [{ startDate: '2026-11-01', endDate: '2026-11-05' }], dimensions: [{ name: 'sessionSourceMedium' }], metrics: [{ name: 'sessions' }, { name: 'totalRevenue' }], offset: '2', limit: '1',
-      dimensionFilter: { orGroup: { expressions: [{ filter: { fieldName: 'country', stringFilter: { matchType: 'EXACT', value: 'Germany', caseSensitive: false } } }, { filter: { fieldName: 'country' } }] } } });
-    expect(result.rows[0]!.metrics).toEqual({ sessions: '9007199254740993', totalRevenue: '12.345' });
-    expect(result.next_offset).toBe(3); expect(result.notes.join(' ')).toContain('Privacy thresholds');
-  });
-  it('keeps realtime bodies free of unsupported historical dates and offsets', async () => {
-    const { client, fetchMock } = setup({ rows: [], rowCount: 0 });
-    await new Ga4Provider(client).analyticsReport(ga4RealtimeSchema.parse({ account_id: '123', metrics: ['activeUsers'] }), true);
-    expect(fetchMock.mock.calls[1]![0]).toMatch(/:runRealtimeReport$/);
-    const body = JSON.parse(String(fetchMock.mock.calls[1]![1].body));
-    expect(body).not.toHaveProperty('dateRanges'); expect(body).not.toHaveProperty('offset');
-    expect(ga4RealtimeSchema.safeParse({ account_id: '123', metrics: ['activeUsers'], offset: 1 }).success).toBe(false);
   });
   it('discovers verified Search Console domain and URL-prefix properties only', async () => {
     const { client } = setup({ siteEntry: [{ siteUrl: 'sc-domain:example.com', permissionLevel: 'siteOwner' }, { siteUrl: 'https://example.com/blog/', permissionLevel: 'siteRestrictedUser' }, { siteUrl: 'https://unverified.test/', permissionLevel: 'siteUnverifiedUser' }] });
@@ -76,7 +54,7 @@ describe('read-only analytics providers', () => {
   });
   it.each([401, 403, 429])('preserves upstream recovery status without leaking response data or retrying (%s)', async status => {
     const { client, fetchMock } = setup(Response.json({ error: { message: 'private property and user@example.com' } }, { status }));
-    try { await new Ga4Provider(client).metadata('123'); throw Error('Expected rejection'); }
+    try { await new Ga4Provider(client).acquisitionAnalytics.listGoals('123'); throw Error('Expected rejection'); }
     catch (error) { expect(String(error)).not.toContain('user@example.com'); expect((error as { code: string }).code).toBe(status === 401 ? 'NOT_CONNECTED' : 'PROVIDER_ERROR'); }
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });

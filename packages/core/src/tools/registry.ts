@@ -5,7 +5,7 @@ import { AdportError } from '../errors.js';
 import type { PolicyEngine } from '../policy/engine.js';
 import type { ProviderRegistry } from '../provider.js';
 import type { MediaLibrary } from '../media.js';
-import { classifyTool, type ToolCatalogMetadata, type ToolSelection } from './catalog.js';
+import { classifyTool, type ToolCatalogMetadata, type ToolProvider, type ToolSelection } from './catalog.js';
 
 export interface ToolCatalogContext {
   tools: readonly AnyToolDefinition[];
@@ -42,6 +42,8 @@ export interface AnyToolDefinition {
   name: string;
   /** Grouping key used for config-based enable/disable ("core", "mock", "google", ...). */
   namespace: string;
+  /** Platforms served by a single shared tool. */
+  sourceProviders?: readonly ToolProvider[];
   catalog?: ToolCatalogMetadata;
   description: string;
   input: z.ZodObject<z.ZodRawShape>;
@@ -66,6 +68,8 @@ export interface AnyToolDefinition {
 export function defineTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   name: string;
   namespace: string;
+  /** Platforms served by a single shared tool. */
+  sourceProviders?: readonly ToolProvider[];
   description: string;
   input: S;
   hosted?: AnyToolDefinition['hosted'];

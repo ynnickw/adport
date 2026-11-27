@@ -1,22 +1,6 @@
 # Matomo
 
-Read-only source for [Matomo](https://matomo.org/) web analytics, on Matomo Cloud
-(`https://<organization>.matomo.cloud`) or a self-hosted instance, including one
-served under a sub-path such as `https://analytics.example.com/matomo`. The local CLI, local MCP server and Adport Cloud share the same eight analytics tools.
-
-Matomo answers acquisition, campaign, page, goal and ecommerce questions from its
-aggregated reports. There are no write tools: Adport never changes sites, goals,
-segments, users or tracking settings. Visitor-level data is refused: the `Live`
-visitor log, `UserId` reports, and segments on `userId`, `visitorId`, `visitId`,
-`visitIp` or `fingerprint`. `MultiSites` is refused too, since it reads every site
-the token can view regardless of `account_id`. Discovery and reports also exclude
-heatmaps, session recordings and A/B tests.
-
-Tests use synthetic responses shaped after the
-[Reporting API](https://developer.matomo.org/api-reference/reporting-api),
-[report metadata](https://developer.matomo.org/api-reference/reporting-api-metadata) and
-[segmentation](https://developer.matomo.org/api-reference/reporting-api-segmentation)
-references. On 2026-11-27 all eight tools ran through an authenticated Adport Cloud MCP connection against the public Matomo demo. The same campaign query returned identical rows over the Cloud REST API. In a disposable self-hosted Matomo 6.0.0 installation, the CLI and stdio MCP used a private view-only token. The selected site returned its test campaign, goal and segment, and Matomo denied access to the other site. Both installations exercised their own campaign report implementation.
+Matomo Cloud and self-hosted sites use the same two website analytics tools as GA4. The adapter reads aggregate reports and goal definitions through a view token. [Website analytics contract and examples](website-analytics.md)
 
 ## Create a token
 
@@ -32,7 +16,7 @@ In **Analytics & tracking**, choose **Add source → Matomo** and enter the inst
 
 Use a publicly reachable HTTPS domain for Matomo Cloud or a self-hosted installation. For a private-network installation, use the local CLI or stdio MCP on that network. Reconnecting to a different instance clears its predecessor’s site selections because each instance assigns its own site IDs. Disconnect removes the project’s credentials. Revoke the token in Matomo to invalidate it there.
 
-The Standard, Reporting and Full profiles include the eight read tools when Matomo is selected. Use `capabilities_list` with provider `matomo` to check access.
+The Standard, Reporting and Full profiles include both shared read tools when Matomo is selected. Use `capabilities_list` with provider `matomo` to check access.
 
 ## Connect locally
 
@@ -57,59 +41,10 @@ Every request is `POST <base>/index.php` with `module=API`, `format=JSON` and
 `token_auth` in the form body. The token never appears in a URL. Redirects are
 refused and requests time out after 30 seconds.
 
-## Tools
+## Acquisition data
 
-| Tool | Matomo API | Purpose |
-| --- | --- | --- |
-| `accounts_list` (provider `matomo`) | `SitesManager.getSitesWithAtLeastViewAccess` | Sites as accounts, with currency and time zone |
-| `matomo_site` | `SitesManager.getSiteFromId` | URL, time zone, currency, ecommerce and site search flags |
-| `matomo_report_metadata` | `API.getReportMetadata` | Available reports: module, action, dimension, metrics, parameters |
-| `matomo_report` | `API.getProcessedReport` | Any aggregated report, normalized into rows, totals and metric labels |
-| `matomo_campaign_performance` | Report metadata and the installed campaign report | Visits and outcomes by tagged campaign, with the same dates, segments and pagination as `matomo_report` |
-| `matomo_realtime_report` | `Live.getCounters` | Aggregate visits, visitors, actions and converted visits for the last 1–60 minutes |
-| `matomo_segment_metadata` | `API.getSegmentsMetadata` | Available segment filter names, types and accepted values for the selected site |
-| `matomo_goals` | `Goals.getGoals` | Goal definitions |
-| `matomo_segments` | `SegmentEditor.getAll` | Stored aggregate segment definitions. Segments that identify a visitor and their names are omitted. |
+The free Marketing Campaigns Reporting plugin archives source and medium together, with campaign names in a subtable. Enable the plugin before collecting campaign traffic. A core-only installation can report campaign names and goals. For missing or ambiguous source and medium tags, Adport keeps the counts and returns unresolved dimensions. Adport never combines independent source and medium totals to invent campaign rows.
 
-Use `matomo_report` for site analytics. For tagged campaigns, use `matomo_campaign_performance`. It selects `MarketingCampaignsReporting.getName` when installed or `Referrers.getCampaigns` when the site advertises it. Visits and attributed conversions are Matomo measurements. Read spend and clicks from the ad platform. Examples of
-`module`/`action` pairs: `VisitsSummary`/`get`, `Referrers`/`getReferrerType`,
-`Referrers`/`getCampaigns`, `Goals`/`get`, `Actions`/`getPageUrls`, and
-`MarketingCampaignsReporting`/`getName` when that plugin is installed.
-`matomo_report_metadata` lists what the instance actually offers.
+Landing-page breakdowns use exact entry-URL segments and require Matomo to serve those segmented archives. Adport checks the segment against the recorded entry visits. An incomplete archive results in an actionable error. Landing URLs in the output omit query strings and fragments.
 
-`matomo_report` takes `start_date` and `end_date`. With the default `period: "range"`
-Matomo sums the dates (`period=range`, or `period=day` for a single date). With
-`day`, `week`, `month` or `year` it returns rows per period. Each row has a `date`
-dimension holding the ISO start date of its period (`YYYY-MM-DD`; weeks start on
-Monday, months and years on their first day) and a `period_label` dimension with
-Matomo's own label, which depends on the token user's language. Daily rows are
-limited to 93 days.
-Optional inputs: `segment`, `id_goal` (only with module `Goals`), `flat` (on by
-default for `Actions` reports), `filter_sort_column`/`filter_sort_order`, `limit`
-(1–1,000, default 100) and `offset`. The result includes `next_offset` and `truncated: true` only when
-Matomo returns another row in at least one requested period. Reports with a single row and no dimension (such as `VisitsSummary`/`get`)
-are never paged.
-
-## Units, time zone and currency
-
-- Dates use the site's time zone, returned in `date_range.timezone`.
-- Metrics are requested unformatted (`format_metrics=0`), so they are plain numbers.
-  `metric_types` marks money, percent and duration metrics when Matomo reports them.
-- Money metrics are in the site currency (`currency`), in major units (`12.5` is 12.50).
-- Percent metrics are fractions: `0.45` means 45%.
-- Duration metrics (`duration_s`, such as `avg_time_on_site`) are in seconds.
-- Custom ranges and segments may be archived on demand, which can be slow on large
-  sites or unavailable if the instance disables browser-triggered archiving.
-
-## Privacy and limits
-
-- Only aggregated reports are read. The `Live`, `UserId` and `MultiSites` modules
-  (compared case-insensitively) and segments naming `userId`, `visitorId`, `visitId`,
-  `visitIp` or `fingerprint` (case-insensitively, also once URL-decoded) are refused
-  before any report request. The realtime tool calls only `Live.getCounters` and returns aggregate counters.
-- Matomo error messages are classified (token rejected, access denied, segment,
-  unknown report) but never echoed, and the token is never logged or returned.
-- A token tied to a user with broader rights still only reaches these read
-  methods through Adport, but a view-only user remains the safer choice.
-- Goal-specific nested metrics in rows are not flattened; request a goal report
-  with `id_goal` instead.
+Use the site’s native MCP for arbitrary reports, visitor analysis, realtime monitoring or configuration. [Matomo campaign plugin](https://github.com/matomo-org/plugin-MarketingCampaignsReporting) · [Reporting API](https://developer.matomo.org/guides/reporting-api)

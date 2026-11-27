@@ -1,9 +1,9 @@
-import { matomoTools, normalizeMatomoUrl, type CredentialStore, type ProviderModule } from '@adport/core';
+import { normalizeMatomoUrl, type CredentialStore, type ProviderModule } from '@adport/core';
 import { MatomoClient, type MatomoCredentials } from './client.js';
 import { MatomoProvider } from './provider.js';
 export { MatomoClient, MATOMO_READ_METHODS, type MatomoCredentials } from './client.js';
-export { MatomoProvider, matomoSiteId, matomoPeriodStarts, type MatomoSite } from './provider.js';
-export { matomoTools, matomoReportSchema, matomoReportMetadataSchema, matomoBaseUrl, normalizeMatomoUrl } from '@adport/core';
+export { MatomoProvider, matomoSiteId, type MatomoSite } from './provider.js';
+export { matomoBaseUrl, normalizeMatomoUrl } from '@adport/core';
 
 /** Stored data uses { url, token_auth }; both values are required. */
 export function matomoCredentialsFromData(data: Record<string, string> | undefined): MatomoCredentials | undefined {
@@ -26,5 +26,5 @@ export async function createMatomoModule(store: CredentialStore): Promise<Provid
   let client: MatomoClient;
   try { client = new MatomoClient(credentials); } catch { return undefined; }
   const provider = new MatomoProvider(client);
-  return { provider, tools: matomoTools(provider) };
+  return { provider, tools: [] };
 }
