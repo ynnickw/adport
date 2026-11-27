@@ -1,5 +1,5 @@
 import { Empty, PageHeader, Provider, formatDate, formatMoney } from '@/components/ui';
-import Link from 'next/link';
+import { DashboardLink as Link } from '@/components/dashboard-navigation';
 import { providerLabel } from '@/components/logos';
 import type { PendingOperationRow } from '@/lib/cloud/repository';
 import { Disclosure } from '@/components/controls';

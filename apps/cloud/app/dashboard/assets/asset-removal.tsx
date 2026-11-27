@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import type { MediaAsset } from '@adport/core';
+import { useToast } from '@/components/toast';
 import { LibraryDialog } from './library-dialog';
 import { mediaAction, type Preview } from './media-client';
 import styles from './assets.module.css';
@@ -9,6 +10,7 @@ import styles from './assets.module.css';
 export function AssetRemoval({ projectId, assets, onRemoved, onClose }: { projectId: string; assets: MediaAsset[]; onRemoved(ids: string[]): void; onClose(): void }) {
   const [previews, setPreviews] = useState<Array<{ asset: MediaAsset; args: Record<string, unknown>; preview: Preview }>>([]), [busy, setBusy] = useState(false), [finished, setFinished] = useState(false), [error, setError] = useState('');
   const lock = useRef(false);
+  const toast = useToast();
   async function prepare() {
     if (lock.current) return; lock.current = true; setBusy(true); setError('');
     try {
@@ -23,7 +25,8 @@ export function AssetRemoval({ projectId, assets, onRemoved, onClose }: { projec
     const failures = [], removed = [];
     for (const item of approved) { try { const result = await mediaAction<Preview>(projectId, 'media_delete', { ...item.args, pending_operation_id: item.preview.pending_operation_id }); if (result.status !== 'applied') throw new Error('Unconfirmed removal'); removed.push(item.asset.id); } catch { failures.push(item.asset.name); } }
     setFinished(true); setBusy(false); lock.current = false; if (removed.length) onRemoved(removed);
-    if (failures.length) setError(`Check removal status for: ${failures.join(', ')}. Reload the library before another removal attempt.`); else onClose();
+    if (failures.length) setError(`Check removal status for: ${failures.join(', ')}. Reload the library before another removal attempt.`);
+    else { onClose(); toast(removed.length === 1 ? 'File removed.' : `${removed.length} files removed.`); }
   }
   return <LibraryDialog title={`Remove ${assets.length === 1 ? 'creative' : `${assets.length} creatives`}`} onClose={busy ? () => {} : onClose}>
     <div className={styles.dialogBody}><p>Permanently delete these source files from the Adport library. Copies already uploaded to channels and their ads remain available.</p><ul>{assets.map(asset => <li key={asset.id}>{asset.name}</li>)}</ul>{previews.length ? <p className={styles.error}>This removes the stored files and cannot be undone.</p> : null}{error ? <p className={styles.error} role="alert">{error}</p> : null}</div>

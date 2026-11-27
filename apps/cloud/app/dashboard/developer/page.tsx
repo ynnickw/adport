@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { DashboardLink as Link } from '@/components/dashboard-navigation';
 import { PageHeader } from '@/components/ui';
 import { canAdminister, requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { connectedCatalogProviders } from '@/lib/cloud/tool-catalog';

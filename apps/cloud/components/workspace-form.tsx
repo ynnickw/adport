@@ -3,6 +3,7 @@
 import { Button } from '@/components/controls';
 
 import { startTransition, useActionState, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useToast } from './toast';
 import type { WorkspaceActionState } from '@/app/dashboard/projects/actions';
 import { useConfirm } from './use-confirm';
 import { PlanLimitModal } from './plan-limit-modal';
@@ -20,8 +21,13 @@ export function WorkspaceForm({ action, children, label = 'Save changes', danger
   const [confirm, confirmationDialog] = useConfirm();
   const [dismissedLimit, setDismissedLimit] = useState<PlanLimitDetails>();
   const [state, formAction, pending] = useActionState(action, {});
+  const toast = useToast();
   const form = useRef<HTMLFormElement>(null);
-  useEffect(() => { if (state.success && resetOnSuccess) form.current?.reset(); }, [state, resetOnSuccess]);
+  useEffect(() => {
+    if (!state.success) return;
+    if (resetOnSuccess) form.current?.reset();
+    toast(successMessage ?? state.success);
+  }, [state, resetOnSuccess, successMessage, toast]);
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
@@ -38,7 +44,6 @@ export function WorkspaceForm({ action, children, label = 'Save changes', danger
       {children}
       {!pending && state.error ? <p className="field-error" role="alert">{state.error}</p> : null}
       <div className="workspace-form-actions"><Button type="submit" className={`button${danger ? ' danger' : ''}`} pending={pending} pendingLabel="Saving…">{label}</Button>
-        <span className="action-result" role="status">{pending ? <span className="sr-only">Saving changes</span> : state.success ? <><span aria-hidden="true">✓</span> {successMessage ?? state.success}</> : null}</span>
       </div>
     </form>
   );

@@ -2,10 +2,12 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { DashboardLink as Link } from '@/components/dashboard-navigation';
+import { pendingSelectionPath } from '@/lib/account-selection-path';
 import { Button, Switch } from '@/components/controls';
 import { Select } from '@/components/select';
-import { FilterButtons, ListToolbar, SearchField } from '@/components/list-controls';
+import { ListToolbar, SearchField } from '@/components/list-controls';
+import { useToast } from '@/components/toast';
 import { DataCell, DataTable } from '@/components/data-table';
 import { Notice } from '@/components/feedback';
 import { InfoTooltip } from '@/components/info-tooltip';
@@ -33,13 +35,14 @@ function accessState(account: AccountAccessItem): 'enabled' | 'disabled' | 'unav
   return account.accountSelectionId || (account.connectionStatus && account.connectionStatus !== 'connected') ? 'unavailable' : 'enabled';
 }
 
-export function AccountAccessManager({ organizationId, accounts, canManage, maxActiveAccounts, providerFilter, organizationActiveCount, category: categoryOverride }: {
+export function AccountAccessManager({ organizationId, accounts, canManage, maxActiveAccounts, providerFilter, organizationActiveCount, setupReturnTo, category: categoryOverride }: {
   organizationId: string;
   accounts: AccountAccessItem[];
   canManage: boolean;
   maxActiveAccounts: number | null;
   providerFilter?: CloudProvider;
   organizationActiveCount?: number;
+  setupReturnTo?: string;
   category?: ProviderCategory;
 }) {
   const category = categoryOverride ?? (providerFilter ? providerCategory(providerFilter) : 'advertising');
@@ -48,7 +51,7 @@ export function AccountAccessManager({ organizationId, accounts, canManage, maxA
   const [busy, setBusy] = useState<string>();
   const [refreshing, startRefresh] = useTransition();
   const [error, setError] = useState<string>();
-  const [notice, setNotice] = useState<string>();
+  const toast = useToast();
   const [planLimit, setPlanLimit] = useState<PlanLimitDetails>();
   const [query, setQuery] = useState('');
   const [platform, setPlatform] = useState('');
@@ -60,15 +63,19 @@ export function AccountAccessManager({ organizationId, accounts, canManage, maxA
   const noun = category === 'analytics' ? 'sources' : 'accounts';
   const counts = { all: providerAccounts.length, enabled: 0, disabled: 0, unavailable: 0 };
   for (const account of providerAccounts) counts[accessState(account)]++;
+  const showSearch = items.length > 6;
+  const showStatusFilter = providerAccounts.length > 6 && [counts.enabled, counts.disabled, counts.unavailable].filter(Boolean).length > 1;
+  const effectiveFilter = showStatusFilter ? filter : 'all';
+  const search = showSearch ? query.trim().toLowerCase() : '';
   const organizationCount = organizationActiveCount === undefined ? undefined
     : organizationActiveCount + items.filter(account => account.enabled && usesAdAccountSlot(account.provider)).length - accounts.filter(account => account.enabled && usesAdAccountSlot(account.provider)).length;
-  const visible = providerAccounts.filter(account => (filter === 'all' || accessState(account) === filter)
-    && (account.name + ' ' + account.accountId + ' ' + providerLabel(account.provider)).toLowerCase().includes(query.trim().toLowerCase()));
+  const visible = providerAccounts.filter(account => (effectiveFilter === 'all' || accessState(account) === effectiveFilter)
+    && (!search || (account.name + ' ' + account.accountId + ' ' + providerLabel(account.provider)).toLowerCase().includes(search)));
   const atLimit = category === 'advertising' && maxActiveAccounts !== null && organizationCount !== undefined && organizationCount >= maxActiveAccounts;
 
   async function setEnabled(account: AccountAccessItem, enabled: boolean) {
     const key = account.provider + ':' + account.accountId;
-    setBusy(key); setError(undefined); setNotice(undefined);
+    setBusy(key); setError(undefined);
     try {
       const response = await fetch('/api/account-access', {
         method: 'POST', headers: { 'content-type': 'application/json' },
@@ -80,7 +87,7 @@ export function AccountAccessManager({ organizationId, accounts, canManage, maxA
       else if (!response.ok) setError(body.error ?? 'Account access could not be updated. Please try again.');
       else {
         setItems(current => current.map(item => item.provider === account.provider && item.accountId === account.accountId ? { ...item, enabled } : item));
-        setNotice(account.name + ': Adport access ' + (enabled ? 'enabled.' : usesAdAccountSlot(account.provider) ? 'disabled. Campaigns keep running.' : 'disabled.'));
+        toast(enabled ? `Adport access enabled for ${account.name}.` : `Adport access disabled for ${account.name}.`);
         startRefresh(() => router.refresh());
       }
     } catch {
@@ -91,18 +98,18 @@ export function AccountAccessManager({ organizationId, accounts, canManage, maxA
   return <section className="card account-access-card" aria-label={category === 'analytics' ? 'Analytics account access' : 'Ad account access'}>
     <PlanLimitModal limit={planLimit} onClose={() => setPlanLimit(undefined)} />
     <div className="card-head"><div className="account-access-heading"><h2>{category === 'analytics' ? 'Source access' : 'Adport access'}</h2><InfoTooltip label="About account access">{category === 'analytics' ? 'Enable the analytics and tracking sources your assistants may access. Sources do not use ad-account slots.' : 'Enabled ad accounts are available to your AI assistants and use plan slots. Disabling access only removes the account from Adport; your campaigns keep running.'}</InfoTooltip></div><div className="account-access-counts">{category === 'analytics' ? null : <Link href="/dashboard/billing#usage">{organizationCount === undefined ? 'Organization allowance: ' + (maxActiveAccounts ?? 'unlimited') + ' accounts' : organizationCount + ' / ' + (maxActiveAccounts ?? 'unlimited') + ' organization slots'}</Link>}</div></div>
-    <ListToolbar divided filters={<FilterButtons label="Filter account access" value={filter} onChange={setFilter}
-      options={([['all', 'All'], ['enabled', 'Enabled'], ['disabled', 'Disabled'], ['unavailable', 'Unavailable']] as const)
-        .filter(([id]) => id !== 'unavailable' || counts.unavailable > 0 || filter === 'unavailable')
-        .map(([value, label]) => ({ value, label, count: counts[value] }))} />}>
-      <SearchField value={query} onChange={event => setQuery(event.target.value)} placeholder="Search name, ID, or platform" aria-label={category === 'analytics' ? 'Search analytics sources' : 'Search ad accounts'} />
-      {!providerFilter && platforms.length > 1 ? <Select aria-label="Platform" value={selectedPlatform} onValueChange={setPlatform}
+    {showSearch || (!providerFilter && platforms.length > 1) ? <ListToolbar divided>
+      {showSearch ? <SearchField value={query} onChange={event => setQuery(event.target.value)} placeholder="Search name, ID, or platform" aria-label={category === 'analytics' ? 'Search analytics sources' : 'Search ad accounts'} /> : null}
+      {!providerFilter && platforms.length > 1 ? <Select aria-label="Platform" value={selectedPlatform} onValueChange={value => { setPlatform(value); setFilter('all'); }}
         options={[{ value: '', label: 'All platforms' }, ...platforms.map(value => ({ value, label: providerLabel(value) }))]} /> : null}
-    </ListToolbar>
+      {showStatusFilter ? <Select aria-label="Access status" value={filter}
+        onValueChange={value => setFilter(value as typeof filter)}
+        options={([['all', 'Any access'], ['enabled', 'Enabled'], ['disabled', 'Disabled'], ['unavailable', 'Unavailable']] as const)
+          .filter(([id]) => counts[id] > 0 || filter === id).map(([value, label]) => ({ value, label }))} /> : null}
+    </ListToolbar> : null}
     {atLimit && canManage ? <div className="account-limit-note"><span>{organizationCount} of {maxActiveAccounts} account slots in use across this organization. Disable an account to free a slot.</span> <UpgradeButton kind="active_accounts" required={(organizationCount ?? 0) + 1} message={`Your organization uses ${organizationCount} account slots. Its plan includes ${maxActiveAccounts}.`} /></div> : null}
     {!canManage ? <p className="account-limit-note">An owner or admin can change account access.</p> : null}
     {error ? <Notice tone="error">{error}</Notice> : null}
-    {notice ? <p className="account-access-notice" role="status">{notice}</p> : null}
     {visible.length ? <DataTable responsive className="account-access-table" columns={[category === 'analytics' ? 'Source' : 'Account', 'Platform', 'Adport access']}>
       {visible.map(account => {
         const key = account.provider + ':' + account.accountId;
@@ -118,7 +125,7 @@ export function AccountAccessManager({ organizationId, accounts, canManage, maxA
             <span>{busy === key ? 'Updating…' : { enabled: 'Enabled', disabled: 'Disabled', unavailable: 'Unavailable' }[accessState(account)]}</span>
             <InfoTooltip label={'Platform status for ' + account.name}>{account.status ?? 'Available at the platform'}. Adport access is managed separately from the account's status at {providerLabel(account.provider)}.</InfoTooltip>
           </div>
-          {recovery ? canManage ? <Link className="account-access-fix" href={needsReconnect || needsRestart ? providerConnectionsPath(account.provider) : '/account-selection?selection_id=' + account.accountSelectionId}>{recovery} ↗</Link> : <span className="cell-sub">{needsReconnect ? 'Connection needs attention' : 'Selection incomplete'}</span> : null}</DataCell>
+          {recovery ? canManage ? <Link className="account-access-fix" href={needsReconnect || needsRestart ? providerConnectionsPath(account.provider) : pendingSelectionPath(account.accountSelectionId!, account.provider, setupReturnTo)}>{recovery} ↗</Link> : <span className="cell-sub">{needsReconnect ? 'Connection needs attention' : 'Selection incomplete'}</span> : null}</DataCell>
         </tr>;
       })}
     </DataTable> : <Empty heading="h3" title={providerAccounts.length ? `No matching ${noun}` : `No ${noun} added yet`}

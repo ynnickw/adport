@@ -1,5 +1,7 @@
 'use client';
 
+import { SuccessToast } from '@/components/toast';
+
 import { useEffect, useRef, useState } from 'react';
 import { Button, Disclosure, Input } from '@/components/controls';
 import { Dialog } from '@/components/dialog';
@@ -91,7 +93,7 @@ function CatalogAccessDialog({ organizationId, projectName, account, onClose, pr
       {kind === 'catalog_creation' ? <p className="inline-note">Allows creation in this Business and management of verified new catalog IDs. Existing catalogs are excluded. Revoking this delegation keeps independent catalog grants in place.</p> : null}
       {kind === 'catalog_migration' && mode !== 'none' ? <fieldset disabled={busy}><legend>Source ownership and transfer</legend><label><input type="checkbox" checked={ownership} onChange={event => { setOwnership(event.target.checked);change(); }} />I own catalog {catalog || '…'} under advertiser {account.accountId}. Adport cannot independently verify the source catalog; TikTok checks ownership on transfer.</label><label><input type="checkbox" checked={sharedEffects} onChange={event => { setSharedEffects(event.target.checked);change(); }} />I authorize transferring this entire catalog and its contents to Business Center {bc || '…'}, including effects on shared ads and users. This does not grant ongoing project read/write access.</label></fieldset> : null}
       {review ? <div className="catalog-access-review" aria-label="Access change preview"><strong>{review.result.preview.review.subject}</strong><dl>{review.result.preview.review.fields.map(field => <div key={field.label}><dt>{field.label}</dt><dd>{field.before !== undefined ? <><span>{String(field.before)}</span> → </> : null}<strong>{String(field.after)}</strong></dd></div>)}</dl><p className="inline-note">Catalog changes can affect other ads or accounts that reuse it. This grants Adport access; {platformName[provider]} permissions remain in place.</p></div> : null}
-      {error ? <Notice tone="error">{error}</Notice> : null}{notice ? <Notice tone="success">{notice}</Notice> : null}
+      {error ? <Notice tone="error">{error}</Notice> : null}<SuccessToast message={notice} />
       {!account.ready ? <p className="inline-note">Access can be revoked now. Enable the advertiser and reconnect the platform before granting access.</p> : null}
       <div className="dialog-actions"><Button type="button" className="button secondary" disabled={busy} onClick={onClose}>Close</Button>{review ? <Button type="button" className="button" pending={busy} pendingLabel="Applying…" disabled={!account.ready && review.arguments.mode !== 'none'} onClick={() => void submit(true)}>Confirm access</Button> : <Button type="submit" className="button" pending={busy} pendingLabel="Preparing…" disabled={!validBusiness(bc, provider) || kind !== 'catalog_creation' && !validCatalog(catalog, provider) || kind === 'catalog_migration' && mode !== 'none' && (!ownership || !sharedEffects) || !account.ready && mode !== 'none'}>Review access</Button>}</div>
     </form>
