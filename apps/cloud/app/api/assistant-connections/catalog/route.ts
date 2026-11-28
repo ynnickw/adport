@@ -9,7 +9,8 @@ import { db } from '@/lib/db';
 const inputSchema = z.object({
   organization_id: z.string().uuid(), selection: toolSelectionSchema,
   connection: z.discriminatedUnion('type', [
-    z.object({ type: z.literal('oauth'), client_id: z.string().min(1), user_id: z.string().uuid(), resource: z.string().url(), organization_group_id: z.string().uuid().nullable() }),
+    z.object({ type: z.literal('oauth'), client_id: z.string().min(1), user_id: z.string().uuid(), resource: z.string().url(),
+      organization_group_id: z.string().uuid().nullable(), organization_grant_id: z.string().uuid().nullable().optional() }),
     z.object({ type: z.literal('key'), id: z.string().uuid() }),
   ]),
 });
@@ -29,10 +30,11 @@ export async function PATCH(request: Request) {
       if (connection.user_id !== principal.userId) throw new HttpError('Only the person who authorized this assistant can change its tool access.', 403);
       const grant = (await listMcpOAuthGrants(principal.organizationId)).find(grant => grant.status === 'active'
         && grant.clientId === connection.client_id && grant.userId === connection.user_id && grant.resource === connection.resource
-        && (grant.organizationGroupId ?? null) === connection.organization_group_id);
+        && (grant.organizationGroupId ?? null) === connection.organization_group_id
+        && (grant.organizationGrantId ?? null) === (connection.organization_grant_id ?? null));
       if (!grant) throw new HttpError('This assistant connection is no longer active.', 404);
       await saveToolSelection({ ...principal, clientId: grant.clientId, resource: grant.resource,
-        oauthOrganizationGroupId: grant.organizationGroupId ?? undefined }, input.selection);
+        oauthOrganizationGroupId: grant.organizationGroupId ?? undefined, oauthOrganizationGrantId: grant.organizationGrantId ?? undefined }, input.selection);
     }
     return noStoreJson({ selection: input.selection });
   } catch (error) { return apiError(error, error instanceof z.ZodError ? 400 : undefined); }

@@ -26,7 +26,7 @@ import { WorkspaceNamesForm } from './workspace-names-form';
 type Step = 'welcome' | SetupStep | 'complete';
 type PersistedStep = Exclude<Step, 'workspace'>;
 
-export function OnboardingFlow({ organizationId, projectName, setupKind, projectSwitcher, resuming = false, canManage, initialStep, initialAgent, baseUrl, listings, connectedProvider, pendingSelection, accountsSaved = false, accountsEnabled = false, oauthError, providers, connections, accounts, maxActiveAccounts, organizationActiveCount, returnTo, workspace }: {
+export function OnboardingFlow({ organizationId, projectName, setupKind, projectSwitcher, resuming = false, canManage, initialStep, initialAgent, initialAssistantStatus, baseUrl, listings, connectedProvider, pendingSelection, accountsSaved = false, accountsEnabled = false, oauthError, providers, connections, accounts, maxActiveAccounts, organizationActiveCount, returnTo, workspace }: {
   organizationId: string;
   projectName: string;
   setupKind: 'first_project' | 'new_project';
@@ -35,6 +35,7 @@ export function OnboardingFlow({ organizationId, projectName, setupKind, project
   canManage: boolean;
   initialStep: Step;
   initialAgent: string | null;
+  initialAssistantStatus?: AssistantConnectionStatus;
   baseUrl: string;
   listings?: AssistantListings;
   connectedProvider?: string;
@@ -56,8 +57,9 @@ export function OnboardingFlow({ organizationId, projectName, setupKind, project
   const flight = useRef(false);
   const [step, setStep] = useState<SetupStep>(pendingSelection ? 'accounts' : accountsEnabled ? 'agent' : connectedProvider ? 'accounts' : initialStep === 'welcome' ? 'connect' : initialStep === 'complete' ? 'agent' : initialStep);
   const [agent, setAgent] = useState(initialAgent ?? 'chatgpt');
-  const [assistantStatus, setAssistantStatus] = useState<AssistantConnectionStatus>();
+  const [assistantStatus, setAssistantStatus] = useState(initialAssistantStatus);
   const setupReady = Boolean(assistantStatus?.verified && assistantStatus.hasAccounts);
+  const assistantConnected = Boolean(assistantStatus?.authorized || assistantStatus?.existingConnection?.coversProject);
   const [action, setAction] = useState<'next' | 'back' | 'exit'>();
   const busy = Boolean(action);
   const [error, setError] = useState<string>();
@@ -109,13 +111,13 @@ export function OnboardingFlow({ organizationId, projectName, setupKind, project
   const skip = () => void advance(step === 'workspace' ? 'welcome' : step, { skip: true }, 'exit');
   const title = step === 'workspace' ? 'Name your workspace' : step === 'connect' ? 'Connect a platform' : step === 'accounts' ? pendingSelection
     ? `Choose your ${providerLabel(pendingSelection.provider)} ${providerResourceName(pendingSelection.provider)}.` : 'Enable account access'
-    : setupReady ? 'Your assistant is ready' : 'Connect your assistant';
+    : setupReady ? 'Your assistant is ready' : assistantConnected ? 'Your assistant is connected' : 'Connect your assistant';
   return <>
     <SuccessToast message={accountsSaved ? accountsEnabled ? 'Accounts enabled for assistants.' : 'Selection saved without enabling new accounts.' : undefined} />
     <header className="onboarding-head">
       <Link href={returnTo} aria-label="Adport dashboard" onClick={event => { event.preventDefault(); skip(); }}><BrandLockup /></Link>
       <div className="onboarding-project">{projectSwitcher ?? <><span className="setup-project-label">Project</span><span>{projectName}</span></>}</div>
-      <div className="onboarding-head-actions"><SupportLauncher className="support-inline" /><Button type="button" className="button secondary small" disabled={busy} pending={action === 'exit'} pendingLabel="Leaving…" onClick={skip}>Set up later</Button></div>
+      <div className="onboarding-head-actions"><SupportLauncher className="support-inline" />{step !== 'agent' ? <Button type="button" className="button secondary small" disabled={busy} pending={action === 'exit'} pendingLabel="Leaving…" onClick={skip}>Set up later</Button> : null}</div>
     </header>
     <div className="setup-scroll"><div className="onboarding-shell setup-layout">
       <div className="setup-rail">
@@ -154,13 +156,14 @@ export function OnboardingFlow({ organizationId, projectName, setupKind, project
             {accounts.length || providerFilter ? <AccountAccessManager key={organizationId} organizationId={organizationId} accounts={accountRows} canManage={canManage} maxActiveAccounts={maxActiveAccounts} providerFilter={providerFilter} organizationActiveCount={organizationActiveCount} setupReturnTo={returnTo} /> : !hasPendingSelection ? <div className="card"><Empty title="No accounts added yet" copy="Go back to connect a platform, or connect your assistant now and add data later." /></div> : null}
           </> : null}
           {step === 'agent' ? <>
-            <AssistantConnect baseUrl={baseUrl} projectName={projectName} initialAgent={agent} listings={listings} onSelectionChange={setAgent} onStatusChange={setAssistantStatus} canManageAccounts={canManage}
+            <AssistantConnect baseUrl={baseUrl} projectName={projectName} initialAgent={agent} initialStatus={assistantStatus} listings={listings} onSelectionChange={setAgent} onStatusChange={setAssistantStatus} canManageAccounts={canManage}
               accountAction={<Button type="button" className="link-button" disabled={busy} onClick={() => void advance(accountStepAvailable ? 'accounts' : 'connect', {}, 'back')}>Enable an account</Button>} />
           </> : null}
           </div>
           {step !== 'workspace' && !selectingAccounts && (step !== 'connect' || accountStepAvailable) ? <div className="setup-flow-actions">
             {step !== 'connect' ? <Button type="button" className="button secondary" disabled={busy} pending={action === 'back'} pendingLabel="Loading…" onClick={() => void advance(step === 'accounts' ? 'connect' : accountStepAvailable ? 'accounts' : 'connect', {}, 'back')}>Back</Button> : null}
-            {step === 'agent' ? <><span className="setup-finish-hint">{!setupReady ? 'Finish after your assistant successfully reads an enabled account.' : null}</span><Button type="button" className="button" disabled={busy || !setupReady} pending={action === 'next'} pendingLabel="Finishing setup…" onClick={() => void advance('complete', { complete: true })}>Finish setup</Button></>
+            {step === 'agent' ? setupReady ? <Button type="button" className="button" disabled={busy} pending={action === 'next'} pendingLabel="Finishing setup…" onClick={() => void advance('complete', { complete: true })}>Finish setup</Button>
+              : <Button type="button" className={assistantConnected ? 'button' : 'button secondary'} disabled={busy} pending={action === 'exit'} pendingLabel="Opening dashboard…" onClick={skip}>{assistantConnected ? 'Continue to dashboard' : 'Skip assistant setup'}</Button>
               : <Button type="button" className="button" disabled={busy} pending={action === 'next'} pendingLabel="Continuing…"
                 onClick={() => void advance(step === 'connect' ? 'accounts' : 'agent')}>{step === 'connect' ? 'Continue to accounts' : hasEnabledAccounts ? 'Continue to assistant' : 'Continue without enabling'}</Button>}
           </div> : null}

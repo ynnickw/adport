@@ -5,6 +5,10 @@ export interface TenantPrincipal {
   oauthTokenId?: string;
   /** Explicit OAuth consent for accessible projects in this company. API keys stay project-bound. */
   oauthOrganizationGroupId?: string;
+  /** A multi-organization consent and its explicit organization scope. */
+  oauthOrganizationGrantId?: string;
+  oauthOrganizationGroupIds?: string[];
+  oauthProjectIds?: string[];
   clientId?: string;
   role?: 'owner' | 'admin' | 'member' | 'viewer';
   /** Scopes granted to the credential before dynamic plan and role checks. */

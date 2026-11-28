@@ -11,6 +11,7 @@ import { AgentIdentityLogo } from './agent-setup-guide';
 export interface OAuthGrantSummary {
   toolSelection?: ToolSelection;
   organizationGroupId?: string | null;
+  organizationGrantId?: string | null;
   clientId: string;
   userId: string;
   clientName: string;
@@ -79,19 +80,19 @@ export function AssistantConnections({ organizationId, currentUserId, initialGra
     Number(Boolean(b.lastUsedAt)) - Number(Boolean(a.lastUsedAt)) || Date.parse(b.lastUsedAt ?? b.createdAt) - Date.parse(a.lastUsedAt ?? a.createdAt));
   const previous = grants.filter(grant => grant.status !== 'active').sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   const requested = requestedConnection ? active.find(grant => grant.clientId === requestedConnection.clientId
-    && grant.userId === currentUserId && (grant.organizationGroupId ?? 'project') === (requestedConnection.scope ?? 'project')) : undefined;
+    && grant.userId === currentUserId && (grant.organizationGrantId ?? grant.organizationGroupId ?? 'project') === (requestedConnection.scope ?? 'project')) : undefined;
 
   function rows(items: OAuthGrantSummary[]) {
     return items.map(grant => {
       const selection = grant.toolSelection ?? LEGACY_TOOL_SELECTION;
       const own = grant.userId === currentUserId;
       const activeGrant = grant.status === 'active';
-      return <li className="assistant-list-row" key={`${grant.clientId}:${grant.userId}:${grant.resource}:${grant.organizationGroupId ?? 'project'}:${grant.createdAt}`}>
+      return <li className="assistant-list-row" key={`${grant.clientId}:${grant.userId}:${grant.resource}:${grant.organizationGrantId ?? grant.organizationGroupId ?? 'project'}:${grant.createdAt}`}>
         <div className="assistant-list-identity">
           <AgentIdentityLogo name={grant.clientName} clientUri={grant.clientUri} />
           <div>
             <strong>{grant.clientName}</strong>
-            <small>{grant.organizationGroupId ? 'All accessible projects' : 'This project'}{!own ? ' · Teammate’s connection' : ''}</small>
+            <small>{grant.organizationGrantId ? 'Multiple organizations' : grant.organizationGroupId ? 'All accessible projects' : 'This project'}{!own ? ' · Teammate’s connection' : ''}</small>
           </div>
         </div>
         <div className="assistant-list-status">
@@ -103,7 +104,8 @@ export function AssistantConnections({ organizationId, currentUserId, initialGra
           <small>{grant.scopes.includes('tools:write') && selection.profile !== 'reporting' && selection.providers?.length !== 0 ? 'Read and propose changes' : 'Read only'}</small>
         </div> : null}
         {activeGrant && own ? <div className="assistant-list-action"><ToolCatalogEditor organizationId={organizationId} name={grant.clientName} openOnLoad={grant === requested}
-          connection={{ type: 'oauth', client_id: grant.clientId, user_id: grant.userId, resource: grant.resource, organization_group_id: grant.organizationGroupId ?? null }}
+          connection={{ type: 'oauth', client_id: grant.clientId, user_id: grant.userId, resource: grant.resource,
+            organization_group_id: grant.organizationGroupId ?? null, organization_grant_id: grant.organizationGrantId ?? null }}
           initialSelection={selection} onSaved={() => void load(true)} /></div> : null}
       </li>;
     });

@@ -8,15 +8,10 @@ export const toolSelectionSchema = z.object({
 });
 export const LEGACY_TOOL_SELECTION: ToolSelection = { profile: 'full', providers: null };
 export const TOOL_PROFILE_OPTIONS = [
-  { value: 'standard', label: 'Standard' },
-  { value: 'reporting', label: 'Reporting' },
-  { value: 'full', label: 'Full' },
-];
-export const TOOL_PROFILE_DESCRIPTIONS = {
-  standard: 'Performance reports, campaigns, budgets, ads and creative uploads.',
-  reporting: 'Read-only access to performance, account inspection and available configuration.',
-  full: 'All supported tools for your selected platforms, including advanced workflows.',
-};
+  { value: 'reporting', label: 'Reporting', details: 'Read-only access to performance, accounts, campaigns, audiences, and conversion settings.' },
+  { value: 'standard', label: 'Standard', details: 'Includes Reporting plus everyday campaign tools. Propose changes to ads, budgets, keywords, or targeting where supported.' },
+  { value: 'full', label: 'Full', details: 'Includes Standard plus advanced tools where supported, such as Google Ads experiments, conversion imports, and Meta custom audiences. Existing permissions and approval rules still apply.' },
+] as const;
 
 export function toolSelectionFromForm(form: FormData): ToolSelection {
   return toolSelectionSchema.parse({

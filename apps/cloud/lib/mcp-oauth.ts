@@ -157,7 +157,8 @@ interface AccessTokenClaims {
   iat: number;
   jti: string;
   client_id: string;
-  organization_id: string;
+  organization_id: string | null;
+  organization_grant_id?: string;
   scope: string;
 }
 
@@ -197,9 +198,10 @@ export function verifyAccessTokenSignature(token: string): AccessTokenClaims {
     iat: z.number().int(),
     jti: z.string().uuid(),
     client_id: z.string().min(1),
-    organization_id: z.string().uuid(),
+    organization_id: z.string().uuid().nullable(),
+    organization_grant_id: z.string().uuid().optional(),
     scope: z.string(),
-  }).parse(payload);
+  }).refine(claims => Boolean(claims.organization_id) !== Boolean(claims.organization_grant_id), 'Invalid organization scope.').parse(payload);
   if (claims.exp <= Math.floor(Date.now() / 1000)) throw new Error('Access token expired.');
   parseScopes(claims.scope, []);
   return claims;

@@ -12,8 +12,8 @@ export function AssistantPrompt({ projectName, verified }: { projectName: string
     prompt: `Use Adport for the project ${project}. Review the last 7 days of performance across its enabled ad accounts. Show spend, conversions, and the biggest changes to investigate. Keep each currency separate and suggest what to review next. If this project is not available, ask me to reconnect to it. Do not make any ad changes.`,
     label: 'Copy starter prompt',
   } : {
-    title: 'Verify access',
-    description: 'Enable Adport in a chat, then paste this prompt.',
+    title: 'Try a test read',
+    description: 'This is optional. Paste this prompt in a chat to check access.',
     prompt: `Use Adport to list the enabled ad accounts available in the project ${project}. Confirm their names and ad platforms. If this project or its accounts are not available, tell me which connection or access step is needed. Do not make any ad changes.`,
     label: 'Copy verification prompt',
   };

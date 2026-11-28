@@ -13,15 +13,16 @@ import { AssistantPrompt } from './assistant-prompt';
 
 const EMPTY_STATUS: AssistantConnectionStatus = { authorized: false, verified: false, hasAccounts: false, clientName: null };
 
-export function AssistantConnect({ baseUrl, projectName, initialAgent = 'chatgpt', listings = {}, onSelectionChange, onStatusChange, accountAction, canManageAccounts = true }: {
+export function AssistantConnect({ baseUrl, projectName, initialAgent = 'chatgpt', initialStatus, listings = {}, onSelectionChange, onStatusChange, accountAction, canManageAccounts = true }: {
   baseUrl: string; projectName: string; initialAgent?: string; listings?: AssistantListings;
+  initialStatus?: AssistantConnectionStatus;
   onSelectionChange?: (id: string) => void; onStatusChange?: (status: AssistantConnectionStatus) => void;
   accountAction?: React.ReactNode; canManageAccounts?: boolean;
 }) {
   const id = useId();
   const [agent, setAgent] = useState(initialAgent);
-  const [status, setStatus] = useState(EMPTY_STATUS);
-  const [checked, setChecked] = useState(false);
+  const [status, setStatus] = useState(initialStatus ?? EMPTY_STATUS);
+  const [checked, setChecked] = useState(Boolean(initialStatus));
   const [error, setError] = useState<string>();
   const selected = AGENT_SETUPS.find(setup => setup.id === agent) ?? AGENT_SETUPS[0]!;
   const command = selected.command(baseUrl);
@@ -82,7 +83,8 @@ export function AssistantConnect({ baseUrl, projectName, initialAgent = 'chatgpt
     : selected.id === 'codex' ? 'Run the command and follow the browser sign-in.'
     : 'Open Cursor, confirm Add, then follow the browser sign-in.';
   const statusLabel = status.verified ? 'Read verified'
-    : status.authorized ? 'Waiting for first read' : error ? 'Status unavailable' : checked ? 'Waiting for sign-in' : 'Checking connection…';
+    : status.authorized || status.existingConnection?.coversProject ? 'Connected' : error ? 'Status unavailable'
+    : status.existingConnection ? 'Connected in another project' : checked ? 'Waiting for sign-in' : 'Checking connection…';
 
   return <section className="setup-connect" aria-label="Connect an AI assistant">
     <div className="setup-assistant-picker-block">
@@ -93,17 +95,19 @@ export function AssistantConnect({ baseUrl, projectName, initialAgent = 'chatgpt
     </div>
     <div className="setup-connect-body" id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-tab-${selected.id}`} tabIndex={0}>
       {!status.authorized ? <div className="setup-connect-instructions">
+        {status.existingConnection ? <p className="assistant-existing-connection"><strong>{status.existingConnection.clientName} is already connected</strong>
+          {status.existingConnection.coversProject ? ' for this project.' : ' in another project. Include this project when you authorize to use it here.'}</p> : null}
         <h3>Connect {label}</h3>
-        <p>{listing ? `Add Adport in ${selected.name}, then sign in and select ${projectName}.` : manualInstruction}</p>
+        <p>{listing ? `Add Adport in ${selected.name}, then sign in and choose which workspaces to share.` : manualInstruction}</p>
         {listing ? <a className="button" href={listing} target="_blank" rel="noreferrer" aria-label={`Add Adport from the official ${selected.name} connector`}>Add to {selected.name} ↗</a>
           : selected.id === 'cursor' ? <a className="button" href={cursorInstallUrl(baseUrl)}>Add to Cursor ↗</a>
           : <><div className="assistant-code"><span>{terminal ? 'Terminal' : 'Server URL'}</span><pre><code>{command}</code></pre><CopyButton key={selected.id} value={command} label={terminal ? 'Copy command' : 'Copy URL'} /></div>
             {selected.open ? <a className="button" href={selected.open.href} target="_blank" rel="noreferrer">{selected.open.label} ↗</a> : null}</>}
         {!listing && selected.id === 'codex' ? <div className="assistant-login-fallback"><p>Sign-in didn’t open? Run <code>codex mcp login adport</code>.</p><CopyButton value="codex mcp login adport" label="Copy sign-in command" /></div> : null}
-        {!listing ? <p className="inline-note">Choose <strong>{projectName}</strong> when Adport asks what to connect.{selected.id === 'mcp' ? <> No OAuth? Ask an admin for an API key.</> : null}</p> : null}
+        {!listing ? <p className="inline-note">Authorize <strong>{projectName}</strong> or its organization.{selected.id === 'mcp' ? <> Your admin can provide an API key for clients that require one.</> : null}</p> : null}
       </div> : status.hasAccounts ? <AssistantPrompt projectName={projectName} verified={status.verified} /> : <div className="setup-connect-instructions">
         <h3>Enable account access</h3>
-        <p>{canManageAccounts ? 'Add or enable an account in this project, then return to verify access.' : 'Ask a project owner or admin to enable an account for this project.'}</p>
+        <p>{canManageAccounts ? 'Enable an account whenever you’re ready to give your assistant data to work with.' : 'Ask a project owner or admin to enable an account for this project.'}</p>
         {canManageAccounts ? accountAction ?? <Link className="button secondary" href="/dashboard/accounts">Add accounts</Link> : null}
       </div>}
       {error ? <Notice tone="error">{error}</Notice> : null}

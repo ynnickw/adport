@@ -59,13 +59,13 @@ it('keeps the current step after a save error and resumes the assistant step on 
   const progress = screen.getByRole('list', { name: 'Project setup progress' });
   expect(progress.querySelector('[aria-current="step"]')?.textContent).toContain('Assistant');
   expect(window.location.pathname + window.location.search).toBe('/onboarding?return_to=%2Fdashboard%2Fagents&step=agent');
-  expect(screen.getByRole('button', { name: 'Finish setup' }).hasAttribute('disabled')).toBe(true);
+  expect(screen.getByRole('button', { name: 'Skip assistant setup' })).toHaveProperty('disabled', false);
   expect(router.replace).not.toHaveBeenCalled();
 });
 
 it('separates leaving setup from completing it after a verified read', async () => {
   const view = render(<OnboardingFlow {...props} initialStep="agent" />);
-  fireEvent.click(screen.getByRole('button', { name: 'Set up later' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Skip assistant setup' }));
   await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/dashboard/agents'));
   expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body))).toEqual({ currentStep: 'agent', selectedAgent: 'chatgpt', setupKind: 'first_project', skip: true });
   view.unmount();
@@ -74,4 +74,12 @@ it('separates leaving setup from completing it after a verified read', async () 
   fireEvent.click(screen.getByRole('button', { name: 'Finish setup' }));
   await waitFor(() => expect(router.replace).toHaveBeenCalledTimes(2));
   expect(JSON.parse(String(vi.mocked(fetch).mock.calls[1]?.[1]?.body))).toEqual({ currentStep: 'complete', selectedAgent: 'chatgpt', setupKind: 'first_project', complete: true });
+});
+
+it('can continue with an existing connection before a test read', async () => {
+  render(<OnboardingFlow {...props} initialStep="agent" initialAssistantStatus={{ authorized: true, verified: false, hasAccounts: true, clientName: 'Fixture' }} />);
+  expect(screen.getByRole('heading', { name: 'Your assistant is connected' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Continue to dashboard' }));
+  await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/dashboard/agents'));
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body))).toEqual({ currentStep: 'agent', selectedAgent: 'chatgpt', setupKind: 'first_project', skip: true });
 });

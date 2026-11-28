@@ -15,6 +15,8 @@ import {
 } from '@/lib/mcp-oauth';
 import type { TenantPrincipal } from './types';
 import type { ToolSelection } from '@adport/core';
+import { toolSelectionSchema } from '@/lib/mcp-tool-selection';
+import { HttpError } from '@/lib/http';
 import { loadToolSelection } from './tool-catalog';
 import { mcpProjectLogoUrls } from './mcp-project-logos';
 import { resolveMembership } from './repository';
@@ -26,8 +28,9 @@ const REFRESH_TOKEN_SECONDS = 30 * 24 * 60 * 60;
 // can complete, while retaining rotation and a bounded replay window.
 const REFRESH_TOKEN_REUSE_GRACE_SECONDS = 60;
 
-export async function listMcpProjects(principal: TenantPrincipal, includeLogos = false): Promise<AgentProject[]> {
+export async function listMcpProjects(principal: Partial<TenantPrincipal>, includeLogos = false): Promise<AgentProject[]> {
   if (!principal.userId) return [];
+  const organizationIds = principal.oauthOrganizationGroupIds ?? (principal.oauthOrganizationGroupId ? [principal.oauthOrganizationGroupId] : null);
   const rows = await db()<Array<{ id: string; name: string; organizationName: string; logoPath: string | null; role: string; providers: string[] }>>`
     select project.id, project.name, project.logo_path, company.name as organization_name, access.role,
       array(select connection.provider from public.connections connection
@@ -36,8 +39,8 @@ export async function listMcpProjects(principal: TenantPrincipal, includeLogos =
     join public.organizations project on project.id = access.organization_id
     join public.organization_groups company on company.id = project.organization_group_id
     where access.user_id = ${principal.userId}
-      and ((${principal.oauthOrganizationGroupId ?? null}::uuid is null and project.id = ${principal.organizationId})
-        or company.id = ${principal.oauthOrganizationGroupId ?? null})
+      and ((${organizationIds}::uuid[] is null and project.id = ${principal.organizationId ?? null})
+        or company.id = any(${organizationIds}::uuid[]))
     order by project.created_at, project.id
   `;
   const logos = includeLogos ? await mcpProjectLogoUrls(rows) : new Map<string, string>();
@@ -57,6 +60,7 @@ export interface McpOAuthTokenPair {
 export interface McpOAuthGrantSummary {
   toolSelection: ToolSelection;
   organizationGroupId?: string | null;
+  organizationGrantId?: string | null;
   clientId: string;
   userId: string;
   clientName: string;
@@ -79,9 +83,10 @@ export async function listMcpOAuthGrants(organizationId: string): Promise<McpOAu
     consumedAt: Date | null;
     revokedAt: Date | null;
   }>>`
-    select distinct on (refresh.client_id, refresh.user_id, refresh.resource, refresh.organization_group_id)
+    select distinct on (refresh.client_id, refresh.user_id, refresh.resource, refresh.organization_group_id, refresh.organization_grant_id)
       refresh.client_id,
       refresh.organization_group_id,
+      refresh.organization_grant_id,
       refresh.user_id,
       client.client_name,
       client.client_uri,
@@ -97,22 +102,28 @@ export async function listMcpOAuthGrants(organizationId: string): Promise<McpOAu
     left join lateral (
       select token.last_used_at
       from private.mcp_oauth_access_tokens token
-      where token.organization_id = refresh.organization_id
+      where token.organization_id is not distinct from refresh.organization_id
         and token.user_id = refresh.user_id
         and token.client_id = refresh.client_id
         and token.resource = refresh.resource
         and token.organization_group_id is not distinct from refresh.organization_group_id
+        and token.organization_grant_id is not distinct from refresh.organization_grant_id
         and token.revoked_at is null
       order by token.created_at desc
       limit 1
     ) access on true
     where refresh.organization_id = ${organizationId}
       or refresh.organization_group_id = (select organization_group_id from public.organizations where id = ${organizationId})
-    order by refresh.client_id, refresh.user_id, refresh.resource, refresh.organization_group_id, refresh.created_at desc
+      or refresh.organization_grant_id in (select grant_row.id from private.mcp_oauth_organization_grants grant_row
+        join public.organizations project on project.id = ${organizationId}
+        join private.project_memberships membership on membership.organization_id = project.id and membership.user_id = grant_row.user_id
+        where grant_row.organization_group_ids @> array[project.organization_group_id])
+    order by refresh.client_id, refresh.user_id, refresh.resource, refresh.organization_group_id, refresh.organization_grant_id, refresh.created_at desc
   `;
   return Promise.all(grants.map(async ({ consumedAt, revokedAt, ...grant }) => ({
     ...grant,
-    toolSelection: await loadToolSelection({ organizationId, userId: grant.userId, clientId: grant.clientId, resource: grant.resource, oauthOrganizationGroupId: grant.organizationGroupId ?? undefined }),
+    toolSelection: await loadToolSelection({ organizationId, userId: grant.userId, clientId: grant.clientId, resource: grant.resource,
+      oauthOrganizationGroupId: grant.organizationGroupId ?? undefined, oauthOrganizationGrantId: grant.organizationGrantId ?? undefined }),
     status: revokedAt ? 'revoked' : grant.expiresAt.getTime() <= Date.now() ? 'expired' : consumedAt ? 'rotated' : 'active',
   } as McpOAuthGrantSummary)));
 }
@@ -153,7 +164,7 @@ export async function getMcpOAuthClient(clientId: string): Promise<McpOAuthClien
 export async function createMcpAuthorizationCode(
   principal: TenantPrincipal,
   request: AuthorizationRequest,
-  organizationGroupId?: string,
+  target?: string | { organizationIds: readonly string[]; selection: ToolSelection },
 ): Promise<string> {
   const userId = principal.userId;
   if (!userId) throw new Error('A user session is required to authorize an MCP client.');
@@ -162,8 +173,25 @@ export async function createMcpAuthorizationCode(
   if (scopes.length === 0) throw new Error('This workspace does not grant any of the requested MCP scopes.');
   const code = `adp_code_${randomBytes(32).toString('base64url')}`;
   await db().begin(async sql => {
-    let organizationId = principal.organizationId;
-    if (organizationGroupId) {
+    let organizationId: string | null = principal.organizationId;
+    const organizationGroupId = typeof target === 'string' ? target : null;
+    let organizationGrantId: string | null = null;
+    if (target && typeof target !== 'string') {
+      const organizationIds = [...new Set(target.organizationIds)].sort();
+      if (organizationIds.length < 2) throw new Error('Select at least two organizations for this connection.');
+      const access = await sql`select distinct project.organization_group_id from private.project_memberships membership
+        join public.organizations project on project.id = membership.organization_id
+        where membership.user_id = ${userId} and project.organization_group_id = any(${organizationIds}::uuid[])`;
+      if (access.length !== organizationIds.length) throw new Error('You do not have access to every selected organization.');
+      const selection = toolSelectionSchema.parse(target.selection);
+      const scopeKey = digestState(JSON.stringify([userId, request.clientId, request.resource, organizationIds, [...scopes].sort()]));
+      const [grant] = await sql<Array<{ id: string }>>`insert into private.mcp_oauth_organization_grants
+          (scope_key, user_id, client_id, resource, organization_group_ids, profile, providers)
+        values (${scopeKey}, ${userId}, ${request.clientId}, ${request.resource}, ${organizationIds}, ${selection.profile}, ${selection.providers})
+        on conflict (scope_key) do update set profile = excluded.profile, providers = excluded.providers returning id`;
+      organizationGrantId = grant!.id;
+      organizationId = null;
+    } else if (organizationGroupId) {
       const [company] = await sql<Array<{ defaultProjectId: string }>>`
         select company.default_project_id from public.organization_groups company
         join public.organizations project on project.organization_group_id = company.id
@@ -177,9 +205,9 @@ export async function createMcpAuthorizationCode(
     }
     await sql`
       insert into private.mcp_oauth_authorization_codes
-        (code_hash, organization_id, organization_group_id, user_id, client_id, redirect_uri, scopes, code_challenge, resource, expires_at)
+        (code_hash, organization_id, organization_group_id, organization_grant_id, user_id, client_id, redirect_uri, scopes, code_challenge, resource, expires_at)
       values
-        (${digestState(code)}, ${organizationId}, ${organizationGroupId ?? null}, ${userId}, ${request.clientId},
+        (${digestState(code)}, ${organizationId}, ${organizationGroupId}, ${organizationGrantId}, ${userId}, ${request.clientId},
          ${request.redirectUri}, ${scopes}, ${request.codeChallenge}, ${request.resource}, now() + interval '10 minutes')`;
   });
   return code;
@@ -187,29 +215,34 @@ export async function createMcpAuthorizationCode(
 
 async function issueTokenPair(
   sql: postgres.TransactionSql,
-  input: { organizationId: string; organizationGroupId?: string | null; userId: string; clientId: string; scopes: McpOAuthScope[]; resource: string; verifiedAt?: Date | null },
+  input: { organizationId: string | null; organizationGroupId: string | null; organizationGrantId: string | null;
+    userId: string; clientId: string; scopes: McpOAuthScope[]; resource: string; verifiedAt?: Date | null },
 ): Promise<McpOAuthTokenPair> {
   const access = await sql`select access.role from private.project_memberships access
     join public.organizations project on project.id = access.organization_id
     where access.user_id = ${input.userId}
-      and ((${input.organizationGroupId ?? null}::uuid is null and project.id = ${input.organizationId})
-        or project.organization_group_id = ${input.organizationGroupId ?? null}) limit 1`;
+      and ((${input.organizationGroupId}::uuid is null and project.id = ${input.organizationId})
+        or project.organization_group_id = ${input.organizationGroupId}
+        or exists (select 1 from private.mcp_oauth_organization_grants grant_row
+          where grant_row.id = ${input.organizationGrantId} and grant_row.user_id = ${input.userId}
+            and grant_row.client_id = ${input.clientId} and grant_row.resource = ${input.resource}
+            and project.organization_group_id = any(grant_row.organization_group_ids))) limit 1`;
   if (!access.length) throw new Error('Project access has been revoked.');
   const now = Math.floor(Date.now() / 1000);
   const tokenId = randomUUID();
   const refreshToken = `adp_refresh_${randomBytes(40).toString('base64url')}`;
   await sql`
     insert into private.mcp_oauth_access_tokens
-      (token_id, organization_id, organization_group_id, user_id, client_id, scopes, resource, expires_at)
+      (token_id, organization_id, organization_group_id, organization_grant_id, user_id, client_id, scopes, resource, expires_at)
     values
-      (${tokenId}, ${input.organizationId}, ${input.organizationGroupId ?? null}, ${input.userId}, ${input.clientId}, ${input.scopes},
+      (${tokenId}, ${input.organizationId}, ${input.organizationGroupId}, ${input.organizationGrantId}, ${input.userId}, ${input.clientId}, ${input.scopes},
        ${input.resource}, to_timestamp(${now + ACCESS_TOKEN_SECONDS}))
   `;
   await sql`
     insert into private.mcp_oauth_refresh_tokens
-      (token_hash, organization_id, organization_group_id, user_id, client_id, scopes, resource, expires_at, verified_at)
+      (token_hash, organization_id, organization_group_id, organization_grant_id, user_id, client_id, scopes, resource, expires_at, verified_at)
     values
-      (${digestState(refreshToken)}, ${input.organizationId}, ${input.organizationGroupId ?? null}, ${input.userId}, ${input.clientId},
+      (${digestState(refreshToken)}, ${input.organizationId}, ${input.organizationGroupId}, ${input.organizationGrantId}, ${input.userId}, ${input.clientId},
        ${input.scopes}, ${input.resource}, to_timestamp(${now + REFRESH_TOKEN_SECONDS}), ${input.verifiedAt ?? null})
   `;
   const accessToken = signAccessToken({
@@ -220,6 +253,7 @@ async function issueTokenPair(
     jti: tokenId,
     client_id: input.clientId,
     organization_id: input.organizationId,
+    ...(input.organizationGrantId ? { organization_grant_id: input.organizationGrantId } : {}),
     scope: input.scopes.join(' '),
   });
   return { accessToken, refreshToken, expiresIn: ACCESS_TOKEN_SECONDS, scopes: input.scopes };
@@ -240,8 +274,9 @@ export async function exchangeMcpAuthorizationCode(input: {
       where code.code_hash = ${codeHash} and code.organization_group_id is null for share of project`;
     const rows = await sql<Array<{
       codeHash: string;
-      organizationId: string;
+      organizationId: string | null;
       organizationGroupId: string | null;
+      organizationGrantId: string | null;
       userId: string;
       clientId: string;
       redirectUri: string;
@@ -251,7 +286,7 @@ export async function exchangeMcpAuthorizationCode(input: {
       expiresAt: Date;
       consumedAt: Date | null;
     }>>`
-      select code_hash, organization_id, organization_group_id, user_id, client_id, redirect_uri, scopes,
+      select code_hash, organization_id, organization_group_id, organization_grant_id, user_id, client_id, redirect_uri, scopes,
         code_challenge, resource, expires_at, consumed_at
       from private.mcp_oauth_authorization_codes
       where code_hash = ${codeHash}
@@ -284,8 +319,9 @@ export async function exchangeMcpRefreshToken(input: {
       where refresh.token_hash = ${tokenHash} and refresh.organization_group_id is null for share of project`;
     const rows = await sql<Array<{
       tokenHash: string;
-      organizationId: string;
+      organizationId: string | null;
       organizationGroupId: string | null;
+      organizationGrantId: string | null;
       userId: string;
       clientId: string;
       scopes: McpOAuthScope[];
@@ -295,7 +331,7 @@ export async function exchangeMcpRefreshToken(input: {
       revokedAt: Date | null;
       verifiedAt: Date | null;
     }>>`
-      select token_hash, organization_id, organization_group_id, user_id, client_id, scopes, resource, expires_at, consumed_at, revoked_at, verified_at
+      select token_hash, organization_id, organization_group_id, organization_grant_id, user_id, client_id, scopes, resource, expires_at, consumed_at, revoked_at, verified_at
       from private.mcp_oauth_refresh_tokens
       where token_hash = ${tokenHash}
       for update
@@ -334,8 +370,10 @@ export async function authenticateMcpOAuthAccessToken(token: string): Promise<Te
   }
   const rows = await db()<Array<{
     tokenId: string;
-    organizationId: string;
+    organizationId: string | null;
     organizationGroupId: string | null;
+    organizationGrantId: string | null;
+    organizationGroupIds: string[] | null;
     userId: string;
     clientId: string;
     scopes: string[];
@@ -343,20 +381,35 @@ export async function authenticateMcpOAuthAccessToken(token: string): Promise<Te
     expiresAt: Date;
     revokedAt: Date | null;
   }>>`
-    select token_id, organization_id, organization_group_id, user_id, client_id, scopes, resource, expires_at, revoked_at
-    from private.mcp_oauth_access_tokens
-    where token_id = ${claims.jti}
+    select access.token_id, access.organization_id, access.organization_group_id, access.organization_grant_id,
+      grant_row.organization_group_ids, access.user_id, access.client_id, access.scopes, access.resource, access.expires_at, access.revoked_at
+    from private.mcp_oauth_access_tokens access
+    left join private.mcp_oauth_organization_grants grant_row on grant_row.id = access.organization_grant_id
+      and grant_row.user_id = access.user_id and grant_row.client_id = access.client_id and grant_row.resource = access.resource
+    where access.token_id = ${claims.jti}
     limit 1
   `;
   const found = rows[0];
   if (!found || found.revokedAt || found.expiresAt.getTime() <= Date.now()) return undefined;
-  if (found.organizationId !== claims.organization_id || found.userId !== claims.sub
+  if (found.organizationId !== claims.organization_id || (found.organizationGrantId ?? null) !== (claims.organization_grant_id ?? null) || found.userId !== claims.sub
     || found.clientId !== claims.client_id || found.resource !== claims.aud
     || found.scopes.join(' ') !== claims.scope) return undefined;
+  let organizationId = found.organizationId;
+  let oauthProjectIds: string[] | undefined;
+  if (found.organizationGrantId) {
+    if (!found.organizationGroupIds?.length) return undefined;
+    const projects = await listMcpProjects({ userId: found.userId, oauthOrganizationGroupIds: found.organizationGroupIds });
+    oauthProjectIds = projects.map(project => project.id);
+    organizationId = oauthProjectIds[0] ?? null;
+  }
+  if (!organizationId) throw new HttpError('Project access has been revoked.', 403);
   await db()`update private.mcp_oauth_access_tokens set last_used_at = now() where token_id = ${found.tokenId}`;
   return {
-    organizationId: found.organizationId,
+    organizationId,
     oauthOrganizationGroupId: found.organizationGroupId ?? undefined,
+    ...(found.organizationGrantId && found.organizationGroupIds ? {
+      oauthOrganizationGrantId: found.organizationGrantId, oauthOrganizationGroupIds: found.organizationGroupIds, oauthProjectIds,
+    } : {}),
     userId: found.userId,
     oauthTokenId: found.tokenId,
     clientId: found.clientId,

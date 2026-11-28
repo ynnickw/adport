@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getAccountSelection } from '@/lib/cloud/account-selection';
 import { canAdminister, requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { getOnboardingState } from '@/lib/cloud/onboarding';
+import { getAssistantConnectionStatus } from '@/lib/cloud/assistant-connection';
 import { getOrganizationEntitlement } from '@/lib/cloud/plans';
 import { oauthAvailability } from '@/lib/cloud/provider-oauth';
 import { listConnections, listOrganizationAdAccounts } from '@/lib/cloud/repository';
@@ -48,6 +49,10 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
     ? { organizationName: tenant.organizationGroupName, projectName: tenant.organizationName } : undefined;
   const startWithNames = workspace && tenant.organizationRole === 'owner' && state.currentStep === 'welcome' && !state.completedAt && !state.skippedAt
     && resumeStep === 'connect' && !requestedStep && !params.connected && !params.accounts_saved && !params.error && !selectionUnavailable;
+  const initialStep = selection ? 'accounts' : startWithNames ? 'workspace' : requestedStep ?? resumeStep;
+  const accountsEnabled = params.access_enabled === '1' && enabledAccounts.some(account => account.provider === params.accounts_saved);
+  const initialAssistantStatus = !selection && (accountsEnabled || (!params.accounts_saved && !params.connected && (initialStep === 'agent' || initialStep === 'complete')))
+    ? await getAssistantConnectionStatus({ ...tenant, scopes: [] }, state.selectedAgent ?? 'chatgpt').catch(() => undefined) : undefined;
   const availability = oauthAvailability(tenant.organizationId);
   const providers: OAuthProviderView[] = CLOUD_PROVIDERS.map(id => ({ id, available: isOAuthProvider(id) ? availability[id] : true }));
   return (
@@ -61,15 +66,16 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
         projectSwitcher={<ProjectSwitcher projects={tenant.projects} currentProjectId={tenant.organizationId} />}
         resuming={params.resume === '1'}
         canManage={canAdminister(tenant)}
-        initialStep={selection ? 'accounts' : startWithNames ? 'workspace' : requestedStep ?? resumeStep}
+        initialStep={initialStep}
         workspace={workspace}
         initialAgent={state.selectedAgent}
+        initialAssistantStatus={initialAssistantStatus}
         baseUrl={env().ADPORT_CLOUD_BASE_URL.replace(/\/$/, '')}
         listings={getAssistantListings()}
         connectedProvider={selection?.provider ?? params.accounts_saved ?? params.connected}
         pendingSelection={selection ? { id: selection.id, provider: selection.provider, accounts: selection.accounts, pages: selection.pages } : undefined}
         accountsSaved={Boolean(params.accounts_saved)}
-        accountsEnabled={params.access_enabled === '1' && enabledAccounts.some(account => account.provider === params.accounts_saved)}
+        accountsEnabled={accountsEnabled}
         oauthError={params.error ?? (selectionUnavailable ? 'This account selection is no longer available. Reconnect the platform to choose accounts again.' : undefined)}
         providers={providers}
         connections={connections.map(connectionView)}

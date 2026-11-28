@@ -115,7 +115,7 @@ it('explains each access tier without changing the current selection', () => {
     connection={{ type: 'key', id: 'fixture' }} initialSelection={{ profile: 'standard', providers: null }} onSaved={vi.fn()} />);
   fireEvent.click(screen.getByRole('button', { name: 'Manage access for Claude' }));
   const dialog = screen.getByRole('dialog', { name: 'Claude access' });
-  for (const [tier, details] of [['Reporting', 'cannot make changes'], ['Standard', 'everyday campaign tools'], ['Full', 'advanced tools where supported']]) {
+  for (const [tier, details] of [['Reporting', 'Read-only access'], ['Standard', 'everyday campaign tools'], ['Full', 'advanced tools where supported']]) {
     const icon = within(dialog).getByRole('button', { name: `About ${tier} access` });
     fireEvent.click(icon);
     expect(within(dialog).getByRole('tooltip').textContent).toContain(details);

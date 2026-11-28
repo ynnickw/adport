@@ -18,7 +18,8 @@ async function handle(request: Request): Promise<Response> {
   try {
     const principal = await apiPrincipal(request);
     if (request.method !== 'POST') return mcpPostOnlyResponse();
-    const toolScopes = principal.oauthOrganizationGroupId ? principal.grantedScopes ?? principal.scopes : principal.scopes;
+    const scopedToOrganizations = Boolean(principal.oauthOrganizationGroupId || principal.oauthOrganizationGrantId);
+    const toolScopes = scopedToOrganizations ? principal.grantedScopes ?? principal.scopes : principal.scopes;
     // Each HTTP request has a fresh server, so initialize/clientInfo cannot
     // identify the host on subsequent resources/read requests.
     const oauthClient = principal.oauthTokenId && principal.clientId
@@ -27,7 +28,7 @@ async function handle(request: Request): Promise<Response> {
     const requestShape = await inspectMcpRequest(request);
     const uiOnly = requestShape.uiOnly;
     discoveryMethod = requestShape.discoveryMethod;
-    const writeLimit = uiOnly || principal.oauthOrganizationGroupId ? undefined : await adWritePlanLimit(principal, env().ADPORT_CLOUD_BASE_URL);
+    const writeLimit = uiOnly || scopedToOrganizations ? undefined : await adWritePlanLimit(principal, env().ADPORT_CLOUD_BASE_URL);
     const writePlanDenial = writeLimit
       ? {
           code: 'PLAN_LIMIT',
@@ -50,7 +51,7 @@ async function handle(request: Request): Promise<Response> {
     if (uiOnly) server = createMcpUiServer(uiOptions);
     else {
       const catalog = await principalToolSelection(principal);
-      const tenantRuntime = await createTenantRuntime(principal, { surface: 'mcp', catalog });
+      const tenantRuntime = await createTenantRuntime(principal, { surface: 'mcp', catalog, discoveryProjectIds: principal.oauthProjectIds });
       const runtime = principal.oauthTokenId ? routeMcpProjects(tenantRuntime, principal, catalog) : tenantRuntime;
       server = createMcpServer({
         ...uiOptions,

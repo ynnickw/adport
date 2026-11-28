@@ -52,7 +52,7 @@ export default async function AuthorizePage({ searchParams }: {
         scopes={grantedScopes}
         projects={projects.map(project => ({ id: project.id, name: project.name, organizationId: project.organizationId, organizationName: project.organizationName, providers: providers[project.id] ?? [] }))}
         defaultProjectId={principal.organizationId}
-        hidden={Array.from(params.entries()).filter(([name]) => !['project_id', 'tool_profile', 'tool_platform_mode', 'tool_providers'].includes(name))}
+        hidden={Array.from(params.entries()).filter(([name]) => ['client_id', 'response_type', 'redirect_uri', 'scope', 'state', 'code_challenge', 'code_challenge_method', 'resource'].includes(name))}
       />
     </AuthFrame>
   );

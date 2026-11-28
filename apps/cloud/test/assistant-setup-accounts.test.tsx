@@ -10,7 +10,7 @@ it.each([
   { authorized: false, hasAccounts: false, canManage: true, heading: 'Connect ChatGPT', showAction: false },
   { authorized: true, hasAccounts: false, canManage: true, heading: 'Enable account access', showAction: true },
   { authorized: true, hasAccounts: false, canManage: false, heading: 'Enable account access', showAction: false },
-  { authorized: true, hasAccounts: true, canManage: true, heading: 'Verify access', showAction: false },
+  { authorized: true, hasAccounts: true, canManage: true, heading: 'Try a test read', showAction: false },
 ])('sets the account action only when setup needs it and the user can manage accounts ($authorized, $hasAccounts, $canManage)', async ({
   authorized, hasAccounts, canManage, heading, showAction,
 }) => {
