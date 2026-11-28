@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CopyButton } from '@/app/dashboard/agents/agent-setup-guide';
+import { CopyButton } from './copy-button';
 
 export function AssistantPrompt({ projectName, verified }: { projectName: string; verified: boolean }) {
   const [failedPrompt, setFailedPrompt] = useState<string>();

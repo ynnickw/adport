@@ -19,7 +19,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
     .map(project => [project.organizationId, { id: project.organizationId, name: project.organizationName }])).values()]
     .sort((left, right) => left.name.localeCompare(right.name)) : undefined;
   const transferred = projects.find(project => project.id === params.transferred);
-  return <main className="page">
+  return <main className="page settings-page">
     <SuccessToast message={transferred ? `${transferred.name} moved to ${tenant.organizationGroupName}.` : undefined} />
     <PageHeader title="Projects"
       action={canManage ? <NewProjectButton organizationId={tenant.organizationGroupId} organizationName={tenant.organizationGroupName} /> : undefined} />
