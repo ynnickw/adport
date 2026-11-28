@@ -87,6 +87,7 @@ for (const article of articles) {
 const featured = [
   ['google-ads-mcp-server', 'Google Ads MCP setup'],
   ['google-ads-audit-checklist', 'Google Ads audit checklist'],
+  ['advertise-on-duckduckgo', 'Advertising on DuckDuckGo'],
   ['agency-multi-client-ad-management', 'Multi-client ad management'],
   ['marketing-analytics', 'GA4 and Search Console'],
 ];
