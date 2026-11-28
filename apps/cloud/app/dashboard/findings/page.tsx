@@ -2,7 +2,7 @@ import { Empty, PageHeader, formatDate } from '@/components/ui';
 import { requireDashboardTenant } from '@/lib/cloud/dashboard';
 import { PostgresFindingsStore } from '@/lib/cloud/repository';
 import { getAssistantConnectionStatus } from '@/lib/cloud/assistant-connection';
-import { CopyButton } from '@/app/dashboard/agents/agent-setup-guide';
+import { CopyButton } from '@/components/copy-button';
 import { Disclosure } from '@/components/controls';
 import { FindingsTable } from './findings-table';
 

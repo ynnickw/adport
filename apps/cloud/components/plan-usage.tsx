@@ -24,15 +24,43 @@ export function SidebarPlanUsage({ plan, usage }: { plan: PlanDefinition; usage:
 }
 
 export function PlanUsage({ plan, usage, organizationName, canManage, projectUsage, currentProjectId }: { plan: PlanDefinition; usage: OrganizationUsage; organizationName: string; canManage: boolean; projectUsage?: Array<{ id: string; name: string; enabledAccounts: number }>; currentProjectId?: string }) {
-  return <section className="card plan-usage" id="usage" aria-label="Plan usage">
-    <div className="card-head"><h2>Usage</h2><InfoTooltip label="About organization usage">Allowances are shared across every project in {organizationName}. Each enabled ad account in a project uses one account slot. Analytics and tracking connections do not use ad-account slots. Owners, admins, and editing members use team seats. Read-only viewers are free.</InfoTooltip></div>
-    <div className="usage-grid">
-      <div className="usage-metric"><span>Enabled ad accounts</span><strong>{allowance(usage.enabledAccounts, plan.maxActiveAccounts)}</strong><UsageBar used={usage.enabledAccounts} limit={plan.maxActiveAccounts} /><Link href="/dashboard/accounts">Manage accounts ↗</Link></div>
-      <div className="usage-metric"><span>Team seats</span><strong>{allowance(usage.editingMembers, plan.maxMembers)}</strong><UsageBar used={usage.editingMembers} limit={plan.maxMembers} />{canManage ? <Link href="/dashboard/organization">Manage team ↗</Link> : <small>Owners, admins, and editors</small>}</div>
-      <div className="usage-metric"><span>Projects</span><strong>{usage.projects}</strong><small>Unlimited on every plan</small><Link href="/dashboard/projects">View projects ↗</Link></div>
-      <div className="usage-metric"><span>Read-only viewers</span><strong>{usage.viewers}</strong><small>Free, with read-only access</small></div>
-    </div>
-    <p className="usage-scope">Across all projects in {organizationName}</p>
-    {projectUsage && projectUsage.length > 1 ? <div className="project-usage-breakdown"><h3>Enabled ad accounts by project</h3><div className="row-list">{projectUsage.map(project => <div className="row-item" key={project.id}><div><strong>{project.name}</strong>{project.id === currentProjectId ? <span className="cell-sub">This project</span> : null}</div><div className="row-actions"><span className="usage-project-count">{project.enabledAccounts} enabled</span>{project.id === currentProjectId ? <Link href="/dashboard/accounts" className="link-button">Manage accounts ↗</Link> : <form action={selectProjectAction}><input type="hidden" name="projectId" value={project.id} /><input type="hidden" name="return_to" value="/dashboard/accounts" /><PendingButton className="link-button" pendingLabel="Opening…">Manage accounts ↗</PendingButton></form>}</div></div>)}</div></div> : null}
+  return <section className="settings-section plan-usage" id="usage" aria-labelledby="plan-usage-heading">
+    <div className="settings-section-head"><h2 id="plan-usage-heading">Usage <InfoTooltip label="About organization usage">Allowances are shared across every project in {organizationName}. Each enabled ad account in a project uses one account slot. Analytics and tracking connections do not use ad-account slots. Owners, admins, and editing members use team seats. Read-only viewers are free.</InfoTooltip></h2></div>
+    <ul className="settings-list">
+      <li className="settings-row usage-row">
+        <strong>Enabled ad accounts</strong>
+        <div className="usage-row-value"><span>{allowance(usage.enabledAccounts, plan.maxActiveAccounts)}</span>{plan.maxActiveAccounts !== null ? <UsageBar used={usage.enabledAccounts} limit={plan.maxActiveAccounts} /> : null}</div>
+        <Link className="link-button settings-link" href="/dashboard/accounts">Manage accounts</Link>
+      </li>
+      <li className="settings-row usage-row">
+        <strong>Team seats</strong>
+        <div className="usage-row-value"><span>{allowance(usage.editingMembers, plan.maxMembers)}</span>{plan.maxMembers !== null ? <UsageBar used={usage.editingMembers} limit={plan.maxMembers} /> : null}</div>
+        {canManage ? <Link className="link-button settings-link" href="/dashboard/organization">Manage team</Link> : null}
+      </li>
+      <li className="settings-row usage-row">
+        <strong>Projects</strong>
+        <div className="usage-row-value">{allowance(usage.projects, null)}</div>
+        <Link className="link-button settings-link" href="/dashboard/projects">View projects</Link>
+      </li>
+      <li className="settings-row usage-row">
+        <strong>Read-only viewers</strong>
+        <div className="usage-row-value">{usage.viewers}</div>
+      </li>
+    </ul>
+    {projectUsage && projectUsage.length > 1 ? <section className="project-usage-breakdown" aria-labelledby="project-usage-heading">
+      <h3 id="project-usage-heading">Enabled ad accounts by project</h3>
+      <ul className="settings-list">{projectUsage.map(project => <li className="settings-row" key={project.id}>
+        <div className="settings-row-copy"><strong>{project.name}</strong>{project.id === currentProjectId ? <p className="settings-note">This project</p> : null}</div>
+        <div className="settings-row-actions">
+          <span className="usage-project-count">{project.enabledAccounts} enabled</span>
+          {project.id === currentProjectId ? <Link href="/dashboard/accounts" className="link-button settings-link">Manage accounts</Link>
+            : <form action={selectProjectAction}>
+              <input type="hidden" name="projectId" value={project.id} />
+              <input type="hidden" name="return_to" value="/dashboard/accounts" />
+              <PendingButton className="link-button settings-link" pendingLabel="Opening…">Manage accounts</PendingButton>
+            </form>}
+        </div>
+      </li>)}</ul>
+    </section> : null}
   </section>;
 }

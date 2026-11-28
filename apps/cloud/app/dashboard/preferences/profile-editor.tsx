@@ -83,38 +83,37 @@ export function ProfileEditor({ profile }: { profile: Profile }) {
   }
 
   return <form className="account-profile-form" onSubmit={save} aria-label="Edit profile" aria-busy={saving}>
-    <div className="card-body account-profile-fields">
-      <div className="account-photo-field">
+    <div className="settings-row">
+      <div className="settings-row-copy">
+        <strong>Profile photo</strong>
+        <p id={photoHintId} className="settings-note">JPG, PNG, or WebP up to 4 MB.</p>
+        {photo.action === 'remove' ? <p className="settings-note" role="status">Your photo will be removed when you save.</p> : null}
+      </div>
+      <div className="account-photo-controls">
         <ProfileAvatar name={displayName || saved.displayName} avatarUrl={previewUrl} className="account-photo-preview" />
-        <div>
-          <div className="field-label">Profile photo</div>
-          <div className="row-actions">
-            <input ref={fileInput} className="sr-only" type="file" tabIndex={-1} accept={IMAGE_UPLOAD_ACCEPT}
-              aria-label="Choose a profile photo" disabled={saving} onChange={event => {
-                const selected = event.currentTarget.files?.[0];
-                event.currentTarget.value = '';
-                if (selected) choosePhoto(selected);
-              }} />
-            <Button type="button" className="button secondary small" disabled={saving} aria-describedby={photoHintId}
-              onClick={() => fileInput.current?.click()}>{previewUrl || file ? 'Change photo' : 'Upload photo'}</Button>
-            {previewUrl || file ? <Button type="button" className="link-button" disabled={saving} onClick={() => {
-              setError(undefined);
-              setPhoto({ action: saved.avatarUrl ? 'remove' : 'keep' });
-            }}>Remove photo</Button> : null}
-          </div>
-          <p id={photoHintId} className="field-hint">JPG, PNG, or WebP up to 4 MB.</p>
-          {photo.action === 'remove' ? <p className="field-hint" role="status">Your photo will be removed when you save.</p> : null}
+        <div className="settings-row-actions">
+          <input ref={fileInput} className="sr-only" type="file" tabIndex={-1} accept={IMAGE_UPLOAD_ACCEPT}
+            aria-label="Choose a profile photo" disabled={saving} onChange={event => {
+              const selected = event.currentTarget.files?.[0];
+              event.currentTarget.value = '';
+              if (selected) choosePhoto(selected);
+            }} />
+          <Button type="button" className="button secondary small" disabled={saving} aria-describedby={photoHintId}
+            onClick={() => fileInput.current?.click()}>{previewUrl || file ? 'Change photo' : 'Upload photo'}</Button>
+          {previewUrl || file ? <Button type="button" className="link-button" disabled={saving} onClick={() => {
+            setError(undefined);
+            setPhoto({ action: saved.avatarUrl ? 'remove' : 'keep' });
+          }}>Remove photo</Button> : null}
         </div>
       </div>
-      <div className="field">
-        <label className="field-label" htmlFor={nameId}>Display name</label>
-        <Input id={nameId} autoComplete="name" maxLength={120} required disabled={saving}
-          value={displayName} onChange={event => setDisplayName(event.target.value)} />
-        <p className="field-hint">Your name and photo appear in team lists and member search.</p>
-      </div>
-      {error ? <p className="field-error" role="alert">{error}</p> : null}
     </div>
-    <div className="account-profile-actions">
+    <div className="settings-row account-name-row">
+      <label className="field-label" htmlFor={nameId}>Display name</label>
+      <Input id={nameId} autoComplete="name" maxLength={120} required disabled={saving}
+        value={displayName} onChange={event => setDisplayName(event.target.value)} />
+    </div>
+    {error ? <p className="field-error" role="alert">{error}</p> : null}
+    <div className="settings-row-actions settings-dialog-actions account-profile-actions">
       {dirty ? <Button type="button" className="button secondary" disabled={saving} onClick={() => {
         setDisplayName(saved.displayName);
         setPhoto({ action: 'keep' });
