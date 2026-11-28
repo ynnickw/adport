@@ -6,7 +6,7 @@ share one set of provider tools.
 
 ## Connect in Adport Cloud
 
-In **Connections → Gravity → Connect**, choose the permissions for the project. Read access is the default. Editing campaigns and changing spend require additional consent. Sign in as an advertiser owner or admin, choose the advertiser in Gravity, then confirm the account in Adport. Enabling it uses one advertising account slot.
+In **Ad platforms → Gravity → Connect**, choose the permissions for the project. The dialog defaults to **Read, edit and change spend**. You can also choose **Read and edit campaigns** or **Read campaigns and reports**. Sign in as an advertiser owner or admin, approve the permissions in Gravity, then confirm the advertiser in Adport. Enabling it uses one advertising account slot.
 
 Adport publishes its public OAuth client metadata at `/oauth/clients/gravity` on its HTTPS Cloud origin. Gravity supports public clients with PKCE. The exact callback is `/api/oauth/gravity/callback`. Adport stores and refreshes each project's grant in the encrypted vault and requests revocation on disconnect. A Cloud operator does not need a shared advertiser key or client secret. [Gravity sign-in and permission guide](https://docs.trygravity.com/advertisers/claude-chatgpt)
 
