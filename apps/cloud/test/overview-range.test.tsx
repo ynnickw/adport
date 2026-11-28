@@ -5,6 +5,7 @@ import { LiveData } from '@/app/dashboard/live-data';
 import { ToolCatalogEditor } from '@/components/tool-catalog-editor';
 import { ToastProvider } from '@/components/toast';
 import { ApiKeyManager } from '@/app/dashboard/agents/api-key-manager';
+import { DeveloperReference } from '@/app/dashboard/developer/developer-reference';
 
 const requests: Array<{ url: string; init?: RequestInit; resolve: (value: Response) => void }> = [];
 beforeEach(() => {
@@ -80,7 +81,7 @@ it('opens the linked connection’s settings and saves only after an explicit us
 
 it('reveals API key settings in Developer settings when following a capability link', async () => {
   window.history.replaceState(null, '', '/dashboard/developer?connection=fixture&kind=key');
-  render(<ApiKeyManager organizationId="fixture-project" suggestedProviders={[]} baseUrl="https://app.adport.test" />);
+  render(<ApiKeyManager organizationId="fixture-project" suggestedProviders={[]} />);
   await waitFor(() => expect(requests).toHaveLength(1));
   await act(async () => requests[0]!.resolve(Response.json({ oauthGrants: [], keys: [{ id: 'fixture', name: 'Fixture key', keyPrefix: 'fixture', createdAt: new Date().toISOString(), lastUsedAt: null, toolSelection: { profile: 'standard', providers: ['meta'] } }] })));
   const dialog = await screen.findByRole('dialog', { name: 'API key tool access' });
@@ -99,7 +100,7 @@ it('previews a Standard migration and limits it to connected platforms when save
   fireEvent.click(screen.getByRole('button', { name: /^Tool access/ }));
   const dialog = within(screen.getByRole('dialog'));
   expect(dialog.getByRole('status', { name: 'Estimated tool count' }).textContent).toBe('53 → 10 tools with Standard');
-  expect(dialog.getByRole('link', { name: /on-demand tool loading/ }).getAttribute('href')).toBe('/dashboard/developer?toolSearch=1#tool-search');
+  expect(dialog.getByRole('link', { name: /on-demand tool loading/ }).getAttribute('href')).toBe('/dashboard/developer#tool-search');
   fireEvent.click(dialog.getByRole('button', { name: 'Use Standard' }));
   expect(dialog.getByRole('status', { name: 'Estimated tool count' }).textContent).toBe('53 → 10 tools after saving');
   expect(dialog.getByRole('checkbox', { name: 'Meta Ads' })).toHaveProperty('checked', true);
@@ -152,25 +153,46 @@ it('explains each access tier without changing the current selection', () => {
 });
 
 it.each([false, true])('creates a read-only key unless changes are explicitly selected (%s)', async write => {
-  render(<ApiKeyManager organizationId="fixture-project" suggestedProviders={['google']} baseUrl="https://app.adport.test" />);
+  render(<ApiKeyManager organizationId="fixture-project" suggestedProviders={['google']} />);
   await waitFor(() => expect(requests).toHaveLength(1));
-  await act(async () => requests[0]!.resolve(Response.json({ keys: [] })));
-  fireEvent.click(screen.getByText('Create API key', { exact: true }));
-  expect(screen.getByRole('checkbox', { name: 'Allow changes after approval' })).toHaveProperty('checked', false);
-  if (write) fireEvent.click(screen.getByRole('checkbox', { name: 'Allow changes after approval' }));
-  fireEvent.click(screen.getByRole('button', { name: /^Create key$/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create API key' }));
+  const form = within(screen.getByRole('dialog', { name: 'Create API key' }));
+  const allowChanges = form.getByRole('checkbox', { name: 'Allow ad changes' });
+  expect(allowChanges).toHaveProperty('checked', false);
+  if (write) fireEvent.click(allowChanges);
+  fireEvent.click(form.getByRole('button', { name: /^Create key$/ }));
   await waitFor(() => expect(requests).toHaveLength(2));
-  expect(JSON.parse(requests[1]!.init?.body as string)).toMatchObject({ scopes: write ? ['tools:read', 'tools:write'] : ['tools:read'] });
+  expect(JSON.parse(requests[1]!.init?.body as string)).toMatchObject({
+    name: 'Agent key', scopes: write ? ['tools:read', 'tools:write'] : ['tools:read'],
+    selection: { profile: 'standard', providers: ['google'] },
+  });
+  await act(async () => requests[1]!.resolve(Response.json({ key: 'fixture-key-secret' })));
+  const result = within(screen.getByRole('dialog', { name: 'API key created' }));
+  expect(result.getByLabelText('New API key')).toHaveProperty('type', 'password');
+  fireEvent.click(result.getByRole('button', { name: 'Show key' }));
+  expect(result.getByLabelText('New API key')).toHaveProperty('value', 'fixture-key-secret');
+  fireEvent.click(result.getByRole('button', { name: 'Done' }));
+  expect(screen.queryByLabelText('New API key')).toBeNull();
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Create API key' }));
+  expect(requests[0]!.init?.signal?.aborted).toBe(true);
+  await act(async () => {
+    requests[2]!.resolve(Response.json({ keys: [{ id: 'new', name: 'Agent key', keyPrefix: 'fixture', createdAt: new Date().toISOString(), lastUsedAt: null }] }));
+    requests[0]!.resolve(Response.json({ keys: [] }));
+  });
+  expect(screen.getByText('Agent key', { exact: true })).toBeTruthy();
 });
 
 it('copies the API tool search configuration with a placeholder for the key', async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
-  render(<ToastProvider><ApiKeyManager organizationId="fixture-project" suggestedProviders={[]} baseUrl="https://app.adport.test" openToolSearch /></ToastProvider>);
-  expect(screen.getByText('Tool search for OpenAI and Claude APIs').closest('details')?.open).toBe(true);
+  render(<ToastProvider><DeveloperReference baseUrl="https://app.adport.test" /></ToastProvider>);
+  expect(screen.getByRole('heading', { name: /Tool search/ }).closest('section')?.id).toBe('tool-search');
   fireEvent.click(screen.getByRole('button', { name: 'Copy OpenAI Responses API tool search config' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Claude Messages API' }));
+  expect(screen.getByRole('button', { name: 'Claude Messages API' }).getAttribute('aria-pressed')).toBe('true');
   fireEvent.click(screen.getByRole('button', { name: 'Copy Claude Messages API tool search config' }));
-  await waitFor(() => expect(writeText).toHaveBeenCalledTimes(2));
+  fireEvent.click(screen.getByRole('button', { name: 'Copy List ad accounts URL' }));
+  await waitFor(() => expect(writeText).toHaveBeenCalledTimes(3));
   expect(JSON.parse(writeText.mock.calls[0]![0]).tools).toEqual([
     { type: 'tool_search' },
     expect.objectContaining({ type: 'mcp', server_url: 'https://app.adport.test/mcp', authorization: 'YOUR_ADPORT_API_KEY', defer_loading: true }),
@@ -182,6 +204,7 @@ it('copies the API tool search configuration with a placeholder for the key', as
       { type: 'mcp_toolset', mcp_server_name: 'adport', default_config: { defer_loading: true } },
     ],
   });
+  expect(writeText.mock.calls[2]![0]).toBe('https://app.adport.test/api/v1/accounts');
   expect(await screen.findByText('Copied to clipboard.')).toBeTruthy();
   expect(screen.getAllByText('Copied to clipboard.')).toHaveLength(1);
 });

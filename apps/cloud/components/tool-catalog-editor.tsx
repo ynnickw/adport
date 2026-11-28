@@ -88,7 +88,7 @@ export function ToolCatalogEditor({ organizationId, connection, initialSelection
         <div className="assistant-access-footer">
           <p className="assistant-access-note">{connection.type === 'oauth' && (connection.organization_group_id || connection.organization_grant_id) ? 'Applies to all projects on this connection. ' : ''}Account permissions and approval rules still apply.</p>
           {(draft?.profile ?? savedSelection.profile) === 'full' ? <p className="assistant-access-note">
-            <DashboardLink href="/dashboard/developer?toolSearch=1#tool-search">Set up on-demand tool loading for API clients</DashboardLink>
+            <DashboardLink href="/dashboard/developer#tool-search" onNavigate={close}>Set up on-demand tool loading for API clients</DashboardLink>
           </p> : null}
           {error ? <p className="error-callout" role="alert">{error}</p> : null}
           <div className="assistant-access-actions">

@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useId, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Policy } from '@adport/core';
-import { Button, Checkbox, Disclosure, Input, Switch } from '@/components/controls';
+import { Button, Checkbox, Input, Switch } from '@/components/controls';
+import { Dialog } from '@/components/dialog';
+import { SearchField } from '@/components/list-controls';
 import { PlanLimitModal } from '@/components/plan-limit-modal';
 import { UpgradeButton } from '@/components/upgrade-button';
 import { Field, Provider } from '@/components/ui';
@@ -19,6 +21,50 @@ interface PolicyAccount {
   currency: string | null;
   status: string | null;
   enabled: boolean;
+}
+
+type ReadOnlySelection = Pick<PolicySettingsDraft, 'protectedAccounts' | 'otherAccountIds'>;
+
+function ReadOnlyAccountsDialog({ accounts, selection, editable, writeAccess, onClose, onDone }: {
+  accounts: PolicyAccount[];
+  selection: ReadOnlySelection;
+  editable: boolean;
+  writeAccess: boolean;
+  onClose: () => void;
+  onDone: (selection: ReadOnlySelection) => void;
+}) {
+  const [draft, setDraft] = useState(selection);
+  const [query, setQuery] = useState('');
+  const idsField = useId();
+  const search = query.trim().toLowerCase();
+  const visible = accounts.filter(account => `${account.name} ${account.accountId}`.toLowerCase().includes(search));
+  return <Dialog title="Read-only accounts" onClose={onClose}>
+    <div className="stack">
+      {accounts.length > 6 ? <SearchField aria-label="Search ad accounts" placeholder="Find an account…" value={query} onChange={event => setQuery(event.target.value)} /> : null}
+      {visible.length ? <div className="policy-account-list">{visible.map(account => {
+        const isProtected = draft.protectedAccounts.includes(account.accountId);
+        return <label className="policy-account" key={`${account.provider}:${account.accountId}`}>
+          <Checkbox disabled={!editable} checked={isProtected} aria-label={`Make ${account.name} read only`}
+            onChange={event => {
+              const checked = event.target.checked;
+              setDraft(current => ({ ...current, protectedAccounts: checked
+                ? [...current.protectedAccounts, account.accountId] : current.protectedAccounts.filter(id => id !== account.accountId) }));
+            }} />
+          <Provider name={account.provider} />
+          <span className="policy-account-copy"><strong>{account.name}</strong><small>{account.accountId}{account.currency ? ` · ${account.currency}` : ''}</small></span>
+          <span className={`status ${!account.enabled || isProtected || !writeAccess ? 'neutral' : ''}`}>{!account.enabled ? 'Disabled' : isProtected || !writeAccess ? 'Read only' : 'Preview required'}</span>
+        </label>;
+      })}</div> : <p className="settings-note">{accounts.length ? 'No matching ad accounts.' : 'Connect a platform to choose from its ad accounts.'}</p>}
+      <Field label="Other account IDs" htmlFor={idsField} help="Use comma-separated IDs for accounts that are temporarily absent from this list.">
+        <Input id={idsField} value={draft.otherAccountIds} readOnly={!editable}
+          onChange={event => { const value = event.currentTarget.value; setDraft(current => ({ ...current, otherAccountIds: value })); }} />
+      </Field>
+      <div className="settings-row-actions settings-dialog-actions">
+        <Button type="button" className="button secondary" onClick={onClose}>{editable ? 'Cancel' : 'Close'}</Button>
+        {editable ? <Button type="button" className="button" onClick={() => onDone(draft)}>Done</Button> : null}
+      </div>
+    </div>
+  </Dialog>;
 }
 
 export function PolicyForm({ organizationId, canAdminister, policy, dataRetentionDays, planName, maxRetentionDays, writeAccess, accounts }: {
@@ -38,7 +84,10 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [planLimit, setPlanLimit] = useState<PlanLimitDetails>();
-  const dirty = JSON.stringify(policySettingsInput(draft)) !== JSON.stringify(policySettingsInput(saved));
+  const [managingAccounts, setManagingAccounts] = useState(false);
+  const input = policySettingsInput(draft);
+  const readOnlyCount = input.policy.protected_accounts.length;
+  const dirty = JSON.stringify(input) !== JSON.stringify(policySettingsInput(saved));
   const disabled = !canAdminister || busy;
 
   useEffect(() => {
@@ -61,7 +110,7 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
     try {
       const response = await fetch('/api/settings', {
         method: 'PATCH', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ organizationId, ...policySettingsInput(draft) }),
+        body: JSON.stringify({ organizationId, ...input }),
       });
       const result = await response.json().catch(() => ({})) as { error?: string };
       const limit = planLimitFromResponse(result);
@@ -76,9 +125,10 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
   }
 
   return (
+    <>
     <form className="form" onSubmit={(event) => void save(event)}>
       <PlanLimitModal limit={planLimit} onClose={() => setPlanLimit(undefined)} />
-      <fieldset className="form" style={{ border: 0, margin: 0, padding: 0 }}>
+      <fieldset className="form">
         {!writeAccess ? <div className="policy-plan-note"><div><strong>{planName} is read only</strong><p>Your safeguards apply when write access is enabled.</p></div>{canAdminister ? <UpgradeButton kind="write_access" message="Paid plans let an assistant preview ad changes and apply them after approval. Your project’s safeguards still apply." className="button secondary small" /> : null}</div> : null}
         <section className="policy-section">
           <div className="policy-section-copy"><h3>Creation <InfoTooltip label="About paused creation">When enabled, supported new campaigns, ad groups, and ads start paused. Turning this off uses the requested status. Existing campaigns are unaffected.</InfoTooltip></h3></div>
@@ -99,23 +149,14 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
             </div>
           </div>
         </section>
-        <section className="policy-section protected-section">
+        <section className="policy-section">
           <div className="policy-section-copy"><h3>Read-only accounts <InfoTooltip label="About read-only accounts">Select accounts to block advertising changes while keeping read access. Account access and plan restrictions still apply.</InfoTooltip></h3></div>
-          <div className="policy-controls">
-            {accounts.length > 0 ? <Disclosure label={`Manage accounts · ${draft.protectedAccounts.length} read only`}>
-            <div className="policy-account-list">
-              {accounts.map((account) => {
-                const protectedAccount = draft.protectedAccounts.includes(account.accountId);
-                return <label className="policy-account" key={`${account.provider}:${account.accountId}`}>
-                  <Checkbox disabled={disabled} name="protectedAccount" value={account.accountId} checked={protectedAccount} aria-label={`Make ${account.name} read only`} onChange={event => update('protectedAccounts', event.target.checked ? [...draft.protectedAccounts, account.accountId] : draft.protectedAccounts.filter(id => id !== account.accountId))} />
-                  <Provider name={account.provider} />
-                  <span className="policy-account-copy"><strong>{account.name}</strong><small>{account.accountId}{account.currency ? ` · ${account.currency}` : ''}</small></span>
-                  <span className={`status ${!account.enabled || protectedAccount || !writeAccess ? 'neutral' : ''}`}>{!account.enabled ? 'Disabled' : protectedAccount || !writeAccess ? 'Read only' : 'Preview required'}</span>
-                </label>;
-              })}
-            </div>
-            </Disclosure> : <div className="inline-note">Connect a platform to choose read-only accounts.</div>}
-            <Disclosure label="Other account IDs"><Field label="Read-only account IDs" htmlFor="other-account-ids" help="Use this for accounts temporarily absent from the list. Separate IDs with commas."><Input disabled={disabled} id="other-account-ids" name="manualProtectedAccounts" value={draft.otherAccountIds} onChange={event => update('otherAccountIds', event.target.value)} /></Field></Disclosure>
+          <div className="settings-row-actions policy-accounts-action">
+            <p className="settings-note" role="status">{readOnlyCount ? `${readOnlyCount} selected` : 'No accounts selected'}</p>
+            <Button type="button" className="button secondary small" disabled={busy} onClick={event => {
+              event.currentTarget.focus({ preventScroll: true });
+              setManagingAccounts(true);
+            }}>{canAdminister ? 'Choose accounts' : 'View accounts'}</Button>
           </div>
         </section>
         <section className="policy-section">
@@ -140,5 +181,12 @@ export function PolicyForm({ organizationId, canAdminister, policy, dataRetentio
         </> : null}
       </div> : null : <p className="inline-note">Owners and admins can change the policy.</p>}
     </form>
+    {managingAccounts ? <ReadOnlyAccountsDialog accounts={accounts} selection={{ protectedAccounts: draft.protectedAccounts, otherAccountIds: draft.otherAccountIds }}
+      editable={canAdminister} writeAccess={writeAccess} onClose={() => setManagingAccounts(false)} onDone={selection => {
+        setDraft(current => ({ ...current, ...selection }));
+        setMessage({});
+        setManagingAccounts(false);
+      }} /> : null}
+    </>
   );
 }

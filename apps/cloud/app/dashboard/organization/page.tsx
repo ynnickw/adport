@@ -37,7 +37,7 @@ export default async function OrganizationPage() {
     { value: 'viewer', label: 'Viewer' },
     ...(isOwner ? [{ value: 'admin', label: 'Admin' }, { value: 'owner', label: 'Owner' }] : []),
   ];
-  return <main className="page">
+  return <main className="page settings-page">
     <PageHeader title="Organization" action={<>
       <DialogTrigger label="Edit organization" title={`Edit ${tenant.organizationGroupName}`}>
         <div className="stack">
@@ -57,10 +57,9 @@ export default async function OrganizationPage() {
         </WorkspaceForm>
       </DialogTrigger>
     </>} />
-    <div className="stack">
-    <section className="card">
-      <div className="card-head people-card-head">
-        <div className="people-heading"><h2>People</h2><TeamRolesTooltip scope="organization" /></div>
+    <section className="settings-section people-settings" aria-labelledby="organization-people">
+      <div className="settings-section-head">
+        <h2 id="organization-people">People <TeamRolesTooltip scope="organization" /></h2>
         <p className="card-note people-counts">
           <span>{usage.editingMembers}{entitlement.plan.maxMembers === null ? '' : ` / ${entitlement.plan.maxMembers}`} team seats</span>
           <span>{usage.viewers} free {usage.viewers === 1 ? 'viewer' : 'viewers'}</span>
@@ -99,6 +98,5 @@ export default async function OrganizationPage() {
       })} />
     </section>
     <PendingMemberInvitations invitations={invitations} />
-    </div>
   </main>;
 }

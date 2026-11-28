@@ -84,14 +84,24 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
   }
   const pricing = <div className="billing-plans" id="plans"><DashboardPricing key={`${tenant.organizationId}:${interval}`} currentPlanId={entitlement.plan.id} requestedPlan={requestedPlan} initialInterval={interval} billingLinks={{ monthly: queryPath('monthly'), annual: queryPath('annual') }} actions={actions} notes={notes} canManageBilling={canManage} freeAction={freeAction}
     context={intent ? <div className="paywall-context"><p><strong>{PLAN_LIMIT_TITLES[intent]}</strong>{requestedPlan && requestedPlan !== entitlement.plan.id ? ` · ${PLANS[requestedPlan].name} was selected for this request.` : ''}</p></div> : undefined} /></div>;
-  return <main className="page plan-page">
+  return <main className="page plan-page settings-page">
     <PageHeader title="Plan & billing" description="One subscription covers every project in your organization. Read-only viewers are free." action={<>
       {resumeSetup ? <Link className="button secondary" href="/onboarding?resume=1&return_to=%2Fdashboard">Continue setup</Link> : null}
       {showPlans ? <Link className="button secondary" href="/dashboard/billing#usage">Back to usage</Link>
         : <Link className="button secondary" href={queryPath(interval) + '#plans'}>Compare plans</Link>}
     </>} />
     {query.checkout === 'complete' || query.checkout === 'canceled' ? <CheckoutStatus status={query.checkout === 'canceled' ? 'canceled' : subscriptionReady ? 'ready' : 'pending'} planName={entitlement.plan.name} /> : null}
-    <section className="plan-summary"><div><div className="plan-current-line"><strong>{entitlement.plan.name}</strong><span className={`status ${lifecycle.tone}`}>{complimentary ? 'Complimentary' : lifecycle.label}</span></div>{lifecycle.message ? <p role="status">{lifecycle.message}</p> : hasSubscription && entitlement.currentPeriodEnd ? <p>{entitlement.status === 'trialing' ? 'Trial ends' : 'Current period ends'} {formatDate(entitlement.currentPeriodEnd)}.</p> : null}</div>{entitlement.providerCustomerId && canManage && configured ? <BillingForm action={openProjectBillingPortalForm.bind(null, tenant.organizationId)} label="Manage billing" pendingLabel="Opening billing…" className="button secondary" /> : null}</section>
+    <section className="settings-section" aria-labelledby="current-plan">
+      <div className="settings-section-head"><h2 id="current-plan">Current plan</h2></div>
+      <div className="settings-row">
+        <div className="settings-row-copy">
+          <div className="plan-current-line"><strong>{entitlement.plan.name}</strong><span className={`status ${lifecycle.tone}`}>{complimentary ? 'Complimentary' : lifecycle.label}</span></div>
+          {lifecycle.message ? <p className="settings-note" role="status">{lifecycle.message}</p> : hasSubscription && entitlement.currentPeriodEnd
+            ? <p className="settings-note">{entitlement.status === 'trialing' ? 'Trial ends' : 'Current period ends'} {formatDate(entitlement.currentPeriodEnd)}.</p> : null}
+        </div>
+        {entitlement.providerCustomerId && canManage && configured ? <BillingForm action={openProjectBillingPortalForm.bind(null, tenant.organizationId)} label="Manage billing" pendingLabel="Opening billing…" className="button secondary" /> : null}
+      </div>
+    </section>
     {details?.scheduled ? <p className="inline-note" role="status">{details.scheduled.name}{details.scheduled.interval ? `, billed ${details.scheduled.interval === 'annual' ? 'yearly' : 'monthly'},` : ''} starts {formatDate(details.scheduled.startsAt)}. Your {entitlement.plan.name} access stays active until then. You can review the scheduled change in Manage billing.</p> : null}
     {!canManage ? <p className="upgrade-owner-note">Only your organization owner can change plans. Share the plan details with them to request an upgrade.</p> : null}
     {showPlans ? pricing : null}

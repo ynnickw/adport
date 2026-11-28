@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import { updateProjectAction } from '@/app/dashboard/projects/actions';
-import { Button, Disclosure, Input } from './controls';
+import { Button, Input } from './controls';
 import { FilterButtons, ListToolbar, SearchField } from './list-controls';
 import { Dialog } from './dialog';
+import { InfoTooltip } from './info-tooltip';
 import { WorkspaceForm } from './workspace-form';
 import { WorkspaceLogo } from './workspace-logo';
 import { WorkspaceLogoEditor } from './workspace-logo-editor';
@@ -27,10 +28,11 @@ export function ProjectManager({ projects, currentProjectId, defaultProjectId, o
   const [status, setStatus] = useState(initialStatus);
   const [editingId, setEditingId] = useState<string | null>(null);
   const editing = projects.find(project => project.id === editingId);
-  const visible = projects.filter(project => Boolean(project.archivedAt) === (status === 'archived') && project.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  const search = query.trim().toLocaleLowerCase();
+  const visible = projects.filter(project => Boolean(project.archivedAt) === (status === 'archived') && project.name.toLocaleLowerCase().includes(search));
   const activeCount = projects.filter(project => !project.archivedAt).length;
   return <>
-    <section className="card project-directory" aria-label={`Projects in ${organizationName}`}>
+    <section className="settings-section project-directory" aria-label={`Projects in ${organizationName}`}>
       <ListToolbar divided filters={<FilterButtons label="Project status" value={status} onChange={setStatus} options={[
         { value: 'active', label: 'Active', count: activeCount },
         ...(canManage ? [{ value: 'archived' as const, label: 'Archived', count: projects.length - activeCount }] : []),
@@ -43,18 +45,30 @@ export function ProjectManager({ projects, currentProjectId, defaultProjectId, o
           {canManage || project.id === currentProjectId && dangerZone ? <Button type="button" className="button secondary small" aria-label={`Settings for ${project.name}`} onClick={event => { event.currentTarget.focus({ preventScroll: true }); setEditingId(project.id); }}>Settings</Button> : null}
         </div>
       </div>)}</div>
-      {visible.length === 0 ? <div className="project-directory-empty"><h2>{query ? 'No matching projects' : 'No archived projects'}</h2><p>{query ? 'Try another project name.' : 'Projects you archive will appear here. You can restore them anytime.'}</p>{query ? <Button type="button" className="button secondary small" onClick={() => setQuery('')}>Clear search</Button> : null}</div> : null}
+      {visible.length === 0 ? <div className="project-directory-empty">
+        <h2>{search ? 'No matching projects' : status === 'archived' ? 'No archived projects' : 'No active projects'}</h2>
+        {search ? <><p>Try another project name.</p><Button type="button" className="button secondary small" onClick={() => setQuery('')}>Clear search</Button></>
+          : status === 'archived' ? <p>Projects you archive can be restored here.</p> : null}
+      </div> : null}
     </section>
     {editing ? <Dialog title={`Settings for ${editing.name}`} onClose={() => setEditingId(null)}><div className="stack">
       {canManage ? <>
       <WorkspaceLogoEditor key={editing.id} kind="project" id={editing.id} name={editing.name} logoUrl={workspaceLogoUrl('project', editing.id, editing.logoPath)} />
       <WorkspaceForm action={updateProjectAction} label="Save name"><input type="hidden" name="projectId" value={editing.id} /><label>Project name<Input data-autofocus name="name" defaultValue={editing.name} required maxLength={120} /></label></WorkspaceForm>
-      <div className="project-archive-settings"><h3>{editing.archivedAt ? 'Restore project' : 'Archive project'}</h3><p className="inline-note">{editing.id === defaultProjectId ? 'Your default project is always available and cannot be archived.' : editing.archivedAt ? 'Restore this project, then enable the ad accounts you need.' : 'Suspend access for your team and connected assistants. Your ad campaigns will keep running. You can restore the project later.'}</p>
-        {editing.id !== defaultProjectId ? <WorkspaceForm action={updateProjectAction} label={editing.archivedAt ? 'Restore project' : 'Archive project'} danger={!editing.archivedAt} confirmation={!editing.archivedAt ? { title: `Archive ${editing.name}?`, description: 'Adport will disable this project’s account access. Connected assistants cannot use it while archived. Campaigns keep running. You can restore the project later, then enable the accounts you need.', confirmLabel: 'Archive project' } : undefined}><input type="hidden" name="projectId" value={editing.id} /><input type="hidden" name="archived" value={String(!editing.archivedAt)} /></WorkspaceForm> : null}
+      <div className="settings-row project-settings-row">
+        <div className="settings-row-copy">
+          <h3 className="settings-inline-label">Availability <InfoTooltip label="About archiving projects">Archiving suspends access for your team and connected assistants. Campaigns keep running. You can restore the project and enable its ad accounts again.</InfoTooltip></h3>
+          <p className="settings-note">{editing.id === defaultProjectId ? 'The default project is always available.' : editing.archivedAt ? 'Archived' : 'Active'}</p>
+        </div>
+        {editing.id !== defaultProjectId ? <WorkspaceForm action={updateProjectAction} label={editing.archivedAt ? 'Restore project' : 'Archive project'} secondary
+          confirmation={!editing.archivedAt ? { title: `Archive ${editing.name}?`, description: 'Adport will disable this project’s account access. Connected assistants cannot use it while archived. Campaigns keep running. You can restore the project later, then enable the accounts you need.', confirmLabel: 'Archive project' } : undefined}>
+          <input type="hidden" name="projectId" value={editing.id} />
+          <input type="hidden" name="archived" value={String(!editing.archivedAt)} />
+        </WorkspaceForm> : null}
       </div></> : null}
       {transfer ? <ProjectTransfer project={editing} defaultProject={editing.id === defaultProjectId}
         sourceName={organizationName} options={transfer} /> : null}
-      {editing.id === currentProjectId && dangerZone ? <Disclosure label="Danger zone">{dangerZone}</Disclosure> : null}
+      {editing.id === currentProjectId ? dangerZone : null}
     </div></Dialog> : null}
   </>;
 }

@@ -15,13 +15,11 @@ export default async function TeamPage() {
     canAdminister(tenant) ? listPendingInvitations(tenant.userId, { scope: 'project', targetId: tenant.organizationId }) : [],
   ]);
   return (
-    <main className="page">
+    <main className="page settings-page">
       <PageHeader title="Project team"
         action={['owner', 'admin'].includes(tenant.organizationRole) ? <Link className="button secondary" href="/dashboard/organization">Organization access</Link> : undefined} />
-      <div className="stack">
-        <TeamMembers key={tenant.organizationId} organizationId={tenant.organizationId} currentUserId={tenant.userId} currentRole={tenant.role} members={members} />
-        <PendingMemberInvitations invitations={invitations} />
-      </div>
+      <TeamMembers key={tenant.organizationId} organizationId={tenant.organizationId} currentUserId={tenant.userId} currentRole={tenant.role} members={members} />
+      <PendingMemberInvitations invitations={invitations} />
     </main>
   );
 }

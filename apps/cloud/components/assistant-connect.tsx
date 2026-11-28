@@ -3,7 +3,8 @@
 import { useEffect, useId, useState, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AGENT_SETUPS, AgentIdentityLogo, CopyButton, cursorInstallUrl } from '@/app/dashboard/agents/agent-setup-guide';
+import { AGENT_SETUPS, AgentIdentityLogo, cursorInstallUrl } from '@/app/dashboard/agents/agent-setup-guide';
+import { CopyButton } from './copy-button';
 import type { AssistantConnectionStatus } from '@/lib/cloud/assistant-connection';
 import type { AssistantListings } from '@/lib/assistant-listings';
 import { Button } from './controls';
