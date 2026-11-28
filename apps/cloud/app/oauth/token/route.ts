@@ -43,7 +43,7 @@ export async function POST(request: Request) {
         const claims = verifyAccessTokenSignature(pair.accessToken);
         const name = client.clientName.toLowerCase();
         const agent = name.includes('codex') ? 'codex' : name.includes('chatgpt') ? 'chatgpt' : name.includes('claude') ? 'claude' : name.includes('cursor') ? 'cursor' : 'other';
-        captureProductEvent({ userId: claims.sub, organizationId: claims.organization_id }, { event: 'agent_connected', agent });
+        if (claims.organization_id) captureProductEvent({ userId: claims.sub, organizationId: claims.organization_id }, { event: 'agent_connected', agent });
       } catch { /* Analytics must not invalidate an issued authorization grant. */ }
       oauthDiagnostic('authorization_code_exchanged');
       return tokenResponse(pair);

@@ -1,5 +1,6 @@
 import type { NextConfig } from 'next';
 import path from 'node:path';
+import { PROFILE_AVATAR_ORIGINS } from './lib/member-profiles';
 
 export function buildContentSecurityPolicy(supabaseOrigin: string, allowOAuthRedirects = false, development = false): string {
   const formAction = allowOAuthRedirects
@@ -10,7 +11,7 @@ export function buildContentSecurityPolicy(supabaseOrigin: string, allowOAuthRed
     "base-uri 'self'",
     "object-src 'none'",
     "frame-ancestors 'none'",
-    `img-src 'self' data: ${supabaseOrigin}`,
+    `img-src 'self' data: ${supabaseOrigin} ${PROFILE_AVATAR_ORIGINS.join(' ')}`,
     `media-src 'self' ${supabaseOrigin}`,
     "font-src 'self' data:",
     "style-src 'self' 'unsafe-inline'",
@@ -60,6 +61,7 @@ const config: NextConfig = {
       },
       { source: '/dashboard', headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }] },
       { source: '/dashboard/:path*', headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }] },
+      { source: '/auth/:path*', headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }, { key: 'Referrer-Policy', value: 'no-referrer' }] },
       { source: '/api/:path*', headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }] },
       { source: '/oauth/provider-complete', headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }, { key: 'Referrer-Policy', value: 'no-referrer' }] },
       { source: '/mcp', headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }] },

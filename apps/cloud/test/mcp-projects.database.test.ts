@@ -7,12 +7,13 @@ import { resolveMembership, upsertGoogleConnection } from '@/lib/cloud/repositor
 import { registerMcpOAuthClient, createMcpAuthorizationCode, exchangeMcpAuthorizationCode, exchangeMcpRefreshToken, authenticateMcpOAuthAccessToken, listMcpOAuthGrants, listMcpProjects } from '@/lib/cloud/mcp-oauth-repository';
 import { apiPrincipal } from '@/lib/cloud/auth';
 import { getAssistantConnectionStatus } from '@/lib/cloud/assistant-connection';
-import { mcpResourceUrl, pkceChallenge } from '@/lib/mcp-oauth';
+import { mcpResourceUrl, pkceChallenge, type McpOAuthScope } from '@/lib/mcp-oauth';
 import { resetEnvForTests } from '@/lib/env';
 import { POST } from '@/app/mcp/route';
 import { GoogleAdsProvider } from '@adport/provider-google';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { removeOrganizationMember } from '@/lib/cloud/tenant-admin';
+import { loadToolSelection, saveToolSelection } from '@/lib/cloud/tool-catalog';
 
 const describeDatabase = process.env.ADPORT_RUN_DATABASE_TESTS === '1' ? describe : describe.skip;
 
@@ -25,10 +26,10 @@ describeDatabase('all-project MCP authorization and HTTP routing', () => {
   const verifier = 'v'.repeat(64);
   const redirectUri = 'http://127.0.0.1:45897/callback';
 
-  async function authorize(userId: string, projectId: string, groupId?: string) {
+  async function authorize(userId: string, projectId: string, target?: Parameters<typeof createMcpAuthorizationCode>[2], scopes: McpOAuthScope[] = ['tools:read', 'tools:write']) {
     const code = await createMcpAuthorizationCode({ organizationId: projectId, userId, scopes: ['tools:read', 'tools:write'] }, {
-      clientId, clientName: 'Projects integration test', redirectUri, scopes: ['tools:read', 'tools:write'], codeChallenge: pkceChallenge(verifier), resource: mcpResourceUrl(),
-    }, groupId);
+      clientId, clientName: 'Projects integration test', redirectUri, scopes, codeChallenge: pkceChallenge(verifier), resource: mcpResourceUrl(),
+    }, target);
     return exchangeMcpAuthorizationCode({ clientId, code, codeVerifier: verifier, redirectUri, resource: mcpResourceUrl() });
   }
 
@@ -185,5 +186,54 @@ describeDatabase('all-project MCP authorization and HTTP routing', () => {
     expect(await listMcpProjects({ organizationId: company, userId: viewer, oauthOrganizationGroupId: company, scopes: [] })).toEqual([]);
     await expect(apiPrincipal(new Request(mcpResourceUrl(), { headers: { authorization: `Bearer ${grant.accessToken}` } }))).rejects.toThrow(/Invalid|revoked/);
     await expect(exchangeMcpRefreshToken({ clientId, refreshToken: grant.refreshToken, resource: mcpResourceUrl() })).rejects.toThrow(/revoked/);
+  });
+
+  it('maintains one explicit multi-organization connection through refresh and project changes', async () => {
+    const target = { organizationIds: [company, separate], selection: { profile: 'standard' as const, providers: ['google', 'ga4'] as const } };
+    await expect(authorize(viewer, (await resolveMembership(viewer)).organizationId, target)).rejects.toThrow('every selected organization');
+    const grant = await authorize(owner, company, target);
+    const scope = (await authenticateMcpOAuthAccessToken(grant.accessToken))!;
+    expect(scope.oauthOrganizationGrantId).toEqual(expect.any(String));
+    expect(scope.oauthOrganizationGroupIds?.sort()).toEqual([company, separate].sort());
+    expect(await loadToolSelection(scope)).toEqual(target.selection);
+    const readOnly = await authorize(owner, company, { ...target, selection: { profile: 'full', providers: null } }, ['tools:read']);
+    expect((await authenticateMcpOAuthAccessToken(readOnly.accessToken))?.oauthOrganizationGrantId).not.toBe(scope.oauthOrganizationGrantId);
+    expect(await loadToolSelection(scope)).toEqual(target.selection);
+    expect((await call(grant.accessToken, 'projects_list')).projects.map((project: { id: string }) => project.id)).toContain(separate);
+    vi.stubEnv('GA4_OAUTH_ENABLED', 'false');
+    vi.stubEnv('ANALYTICS_TEST_ORGANIZATION_IDS', separate);
+    resetEnvForTests();
+    try {
+      expect((await rpc(grant.accessToken, 'tools/list')).tools.map((tool: { name: string }) => tool.name)).toContain('analytics_acquisition_report');
+    } finally {
+      vi.stubEnv('ANALYTICS_TEST_ORGANIZATION_IDS', undefined);
+      resetEnvForTests();
+    }
+    expect(await call(grant.accessToken, 'accounts_list', { project_id: second, provider: 'google' }))
+      .toMatchObject({ accounts: [{ id: '1234567890' }] });
+    expect((await getAssistantConnectionStatus({ userId: owner, organizationId: separate, scopes: [] })).verified).toBe(true);
+    expect(await call(grant.accessToken, 'google_set_budget', { project_id: separate, account_id: '1234567890', campaign_id: '1', daily_budget_micros: 1_000_000 }))
+      .toMatchObject({ error: 'PLAN_LIMIT', planLimit: { projectId: separate } });
+    expect((await listMcpOAuthGrants(separate)).find(connection => connection.organizationGrantId === scope.oauthOrganizationGrantId)?.toolSelection).toEqual(target.selection);
+    await saveToolSelection(scope, { profile: 'reporting', providers: ['google'] });
+    expect(await loadToolSelection((await authenticateMcpOAuthAccessToken(all.accessToken))!)).toMatchObject({ profile: 'full' });
+
+    const futureProject = await createProject(owner, company, 'Future within consent');
+    const excludedOrganization = await createOrganization(owner, 'New organization outside consent');
+    const refreshed = await exchangeMcpRefreshToken({ clientId, refreshToken: grant.refreshToken, resource: mcpResourceUrl() });
+    const refreshedScope = (await authenticateMcpOAuthAccessToken(refreshed.accessToken))!;
+    expect(refreshedScope.oauthOrganizationGrantId).toBe(scope.oauthOrganizationGrantId);
+    expect(await loadToolSelection(refreshedScope)).toMatchObject({ profile: 'reporting' });
+    const projectIds = (await listMcpProjects(refreshedScope)).map(project => project.id);
+    expect(projectIds).toContain(futureProject);
+    expect(projectIds).not.toContain(excludedOrganization);
+    expect(await call(refreshed.accessToken, 'accounts_list', { project_id: excludedOrganization })).toMatchObject({ error: 'POLICY_VIOLATION' });
+    expect(await getAssistantConnectionStatus({ userId: owner, organizationId: excludedOrganization, scopes: [] }, 'chatgpt'))
+      .toMatchObject({ authorized: false, existingConnection: { coversProject: false } });
+
+    await db()`delete from public.organizations where id = ${separate}`;
+    const remaining = await exchangeMcpRefreshToken({ clientId, refreshToken: refreshed.refreshToken, resource: mcpResourceUrl() });
+    expect(await listMcpProjects((await authenticateMcpOAuthAccessToken(remaining.accessToken))!)).toEqual(expect.arrayContaining([expect.objectContaining({ id: company })]));
+    expect(await call(remaining.accessToken, 'accounts_list', { project_id: separate })).toMatchObject({ error: 'POLICY_VIOLATION' });
   });
 });

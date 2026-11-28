@@ -1,4 +1,4 @@
-export function toolAccessPath(projectId: string, connectionId: string, kind: 'oauth' | 'key', organizationGroupId?: string): string {
+export function toolAccessPath(projectId: string, connectionId: string, kind: 'oauth' | 'key', scopeId?: string): string {
   return `/dashboard/agents?${new URLSearchParams({ projectId, connection: connectionId, kind,
-    ...(kind === 'oauth' ? { scope: organizationGroupId ?? 'project' } : {}) })}#connected-assistants`;
+    ...(kind === 'oauth' ? { scope: scopeId ?? 'project' } : {}) })}#connected-assistants`;
 }

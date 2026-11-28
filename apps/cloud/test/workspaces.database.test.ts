@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
+import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { db, closeDbForTests } from '@/lib/db';
-import { createOrganization, createProject, listProjectAccess, saveOrganizationMember, removeCompanyMember, updateProject, renameCompany } from '@/lib/cloud/workspaces';
+import { createOrganization, createProject, listOrganizationTeam, listProjectAccess, saveOrganizationMember, removeCompanyMember, updateProject, renameCompany, saveSetupWorkspaceNames } from '@/lib/cloud/workspaces';
 import { listOrganizationMembers, removeOrganizationMember } from '@/lib/cloud/tenant-admin';
 import { resolveMembership, createApiKey, authenticateApiKey, upsertGoogleConnection, setOrganizationAdAccountEnabled, PostgresPendingStore, listConnections } from '@/lib/cloud/repository';
 import { stageAccountSelection } from '@/lib/cloud/account-selection';
@@ -12,12 +13,18 @@ import { mcpResourceUrl, pkceChallenge } from '@/lib/mcp-oauth';
 import { processStripeEvent, stripeClient } from '@/lib/cloud/billing';
 import { resetEnvForTests } from '@/lib/env';
 import { getOrganizationUsage } from '@/lib/cloud/usage';
+import { findInviteProfiles } from '@/lib/cloud/member-profiles';
+import { readProfilePhoto, updateProfile } from '@/lib/cloud/profile';
+import { getOnboardingState } from '@/lib/cloud/onboarding';
+import { sendMemberInvitation } from '@/lib/cloud/member-invitations';
 
 const describeDatabase = process.env.ADPORT_RUN_DATABASE_TESTS === '1' ? describe : describe.skip;
 
 describeDatabase('company organizations and isolated projects', () => {
   const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SECRET_KEY!, { auth: { persistSession: false, autoRefreshToken: false } });
   const users: string[] = [];
+  const emails: string[] = [];
+  const clientAvatar = 'https://avatars.githubusercontent.com/u/100';
   let owner: string;
   let client: string;
   let outsider: string;
@@ -33,9 +40,17 @@ describeDatabase('company organizations and isolated projects', () => {
   beforeAll(async () => {
     for (const label of ['owner', 'client', 'outsider']) {
       const email = `agency-${label}-${randomUUID()}@example.test`;
-      const created = await admin.auth.admin.createUser({ email, password: 'Local-Agency-Test-Passw0rd!', email_confirm: true });
+      const created = await admin.auth.admin.createUser({
+        email, password: 'Local-Agency-Test-Passw0rd!', email_confirm: true,
+        user_metadata: {
+          full_name: `Agency fixture ${label}`,
+          ...(label === 'client' ? { avatar_url: clientAvatar } : {}),
+          ...(label === 'outsider' ? { picture: 'https://images.example.test/outsider.png' } : {}),
+        },
+      });
       if (created.error || !created.data.user) throw created.error ?? new Error('Local user creation failed');
       users.push(created.data.user.id);
+      emails.push(email);
       if (label === 'client') {
         const signedIn = await createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!).auth.signInWithPassword({ email, password: 'Local-Agency-Test-Passw0rd!' });
         if (signedIn.error || !signedIn.data.session) throw signedIn.error ?? new Error('Local sign in failed');
@@ -68,6 +83,24 @@ describeDatabase('company organizations and isolated projects', () => {
     const separate = await createOrganization(owner, 'Independent company');
     expect((await getOrganizationEntitlement(separate)).plan.id).toBe('reader');
     await expect(createProject(outsider, company, 'Unauthorized project')).rejects.toThrow('owner or admin');
+  });
+
+  it('uses neutral signup names and saves both first workspace names with setup progress', async () => {
+    expect((await listProjectAccess(owner)).find(project => project.id === company)).toMatchObject({
+      name: 'General', organizationName: 'My organization',
+    });
+    expect((await getOnboardingState(company)).currentStep).toBe('welcome');
+    const names = { organizationName: 'Fixture Studio', projectName: 'Growth', advance: true };
+    await expect(saveSetupWorkspaceNames(outsider, company, names)).rejects.toThrow('owner or admin');
+    await expect(saveSetupWorkspaceNames(owner, firstProject, names)).rejects.toThrow('Only the first project');
+    await saveSetupWorkspaceNames(owner, company, names);
+    expect((await listProjectAccess(owner)).find(project => project.id === company)).toMatchObject({
+      name: 'Growth', organizationName: 'Fixture Studio',
+    });
+    expect((await getOnboardingState(company)).currentStep).toBe('connect');
+    await db()`update public.organization_onboarding set current_step = 'agent' where organization_id = ${company}`;
+    await saveSetupWorkspaceNames(owner, company, { ...names, projectName: 'Paid media' });
+    expect((await getOnboardingState(company)).currentStep).toBe('agent');
   });
 
   it('limits client members to explicitly selected projects in both backend and RLS reads', async () => {
@@ -108,6 +141,62 @@ describeDatabase('company organizations and isolated projects', () => {
       await removeCompanyMember(owner, company, outsider);
     }
     await expect(resolveMembership(client, secondProject)).rejects.toThrow('access');
+  });
+
+  it('finds profiles within the visible team or by exact email and keeps existing access intact', async () => {
+    expect(await findInviteProfiles(owner, company, 'organization', 'fixture client')).toEqual([{
+      displayName: 'Agency fixture client', email: emails[1], avatarUrl: clientAvatar, alreadyHasAccess: true,
+    }]);
+    expect(await findInviteProfiles(owner, secondProject, 'project', 'fixture client')).toMatchObject([{
+      email: emails[1], alreadyHasAccess: false,
+    }]);
+    expect(await findInviteProfiles(owner, firstProject, 'project', 'fixture owner')).toMatchObject([{
+      email: emails[0], alreadyHasAccess: true,
+    }]);
+    expect(await findInviteProfiles(owner, company, 'organization', 'fixture outsider')).toEqual([]);
+    expect(await findInviteProfiles(owner, company, 'organization', emails[2]!.toUpperCase())).toMatchObject([{
+      email: emails[2], avatarUrl: null, alreadyHasAccess: false,
+    }]);
+    expect(await findInviteProfiles(client, firstProject, 'project', emails[2]!)).toEqual([]);
+    expect(await findInviteProfiles(outsider, company, 'organization', emails[1]!)).toEqual([]);
+    expect((await listOrganizationTeam(owner, company)).find(member => member.userId === client)?.avatarUrl).toBe(clientAvatar);
+    expect((await listOrganizationMembers(firstProject)).find(member => member.userId === client)?.avatarUrl).toBe(clientAvatar);
+    await expect(sendMemberInvitation({
+      actorUserId: owner, scope: 'organization', targetId: company, email: emails[1]!, role: 'member', projectIds: [secondProject],
+    })).rejects.toThrow('already has access');
+    expect((await resolveMembership(client, firstProject)).role).toBe('viewer');
+    await expect(resolveMembership(client, secondProject)).rejects.toThrow('access');
+    try {
+      await saveOrganizationMember({
+        actorUserId: owner, organizationId: company, userId: outsider, role: 'viewer', projectIds: [secondProject],
+      });
+      expect((await resolveMembership(outsider, secondProject)).role).toBe('viewer');
+      await db()`update public.organization_memberships set role = 'admin'
+        where organization_id = ${firstProject} and user_id = ${client}`;
+      expect(await findInviteProfiles(client, firstProject, 'project', 'fixture owner')).toMatchObject([{
+        email: emails[0], alreadyHasAccess: true,
+      }]);
+      expect(await findInviteProfiles(client, firstProject, 'project', 'fixture outsider')).toEqual([]);
+    } finally {
+      await db()`update public.organization_memberships set role = 'viewer'
+        where organization_id = ${firstProject} and user_id = ${client}`;
+      await removeCompanyMember(owner, company, outsider);
+    }
+  });
+
+  it('shows an uploaded thumbnail in both team directories and retires it when removed', async () => {
+    const bytes = await sharp({ create: { width: 250, height: 180, channels: 3, background: '#194f62' } }).png().toBuffer();
+    const file = new File([new Uint8Array(bytes)], 'profile.png', { type: 'image/png' });
+    const profile = await updateProfile(client, 'Updated fixture name', file);
+    expect(profile.avatarUrl).toMatch(/^\/api\/profile\/photo\//);
+    const imageId = profile.avatarUrl!.split('/').at(-1)!;
+    expect(await sharp(await readProfilePhoto(imageId)).metadata()).toMatchObject({ format: 'webp', width: 192, height: 192 });
+    const identity = { displayName: 'Updated fixture name', avatarUrl: profile.avatarUrl };
+    expect((await listOrganizationTeam(owner, company)).find(member => member.userId === client)).toMatchObject(identity);
+    expect((await listOrganizationMembers(firstProject)).find(member => member.userId === client)).toMatchObject(identity);
+    expect(await findInviteProfiles(owner, firstProject, 'project', 'Updated fixture name')).toMatchObject([identity]);
+    expect(await updateProfile(client, 'Updated fixture name', null)).toEqual({ displayName: 'Updated fixture name', avatarUrl: null });
+    await expect(readProfilePhoto(imageId)).rejects.toThrow('Profile photo not found');
   });
 
   it('keeps credentials, approval tokens and OAuth grants bound to a single project', async () => {

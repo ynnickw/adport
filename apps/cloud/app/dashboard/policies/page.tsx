@@ -26,7 +26,6 @@ export default async function PoliciesPage({ searchParams }: { searchParams: Pro
   const setupHref = '/onboarding?' + new URLSearchParams({ resume: '1', return_to: safeDashboardReturnPath(params.return_to ?? null) });
   return (
     <main className="page policy-page">
-      <p className="workspace-context-label">{tenant.organizationName} · Cloud assistants</p>
       <PageHeader title="Policies"
         action={<Link className="button secondary" href={params.setup === '1' ? setupHref : '/dashboard/accounts'}>{params.setup === '1' ? 'Back to setup' : 'Manage accounts'}</Link>} />
       <section className="policy-overview" aria-label="Policy coverage">

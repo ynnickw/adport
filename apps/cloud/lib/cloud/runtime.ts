@@ -53,6 +53,8 @@ export interface TenantRuntimeOptions {
   enforceAccountScope?: boolean;
   surface?: 'dashboard' | 'mcp' | 'api';
   catalog?: ToolSelection;
+  /** Only the routed discovery runtime uses the union of accessible projects. */
+  discoveryProjectIds?: readonly string[];
 }
 
 /**
@@ -195,10 +197,11 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
   const engine = new PolicyEngine(policy, new PostgresPendingStore(principal), new PostgresAuditStore(principal));
   const authorizeAccounts = createAccountScopeAuthorizer(enabledAccountIds);
   const connected = new Set(modules.map(module => module.provider.id));
+  const discoveryProjects = options.discoveryProjectIds ?? [principal.organizationId];
   const runtime = await createContext({
     providerModules: modules,
     capabilityProviders: CLOUD_PROVIDERS,
-    analyticsProviders: options.surface === 'mcp' ? ANALYTICS_PROVIDERS.filter(id => providerAllowedForOrganization(id, principal.organizationId)) : undefined,
+    analyticsProviders: options.surface === 'mcp' ? ANALYTICS_PROVIDERS.filter(id => discoveryProjects.some(project => providerAllowedForOrganization(id, project))) : undefined,
     engine,
     authorizeToolCall: enforceAccountScope ? (tool, input) => {
       const platform = tool.namespace === 'analytics' ? String(input.provider) : tool.namespace;
@@ -211,10 +214,11 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     findings: new PostgresFindingsStore(principal.organizationId),
     media,
   });
-  if (options.surface === 'mcp') completeMcpCatalog(runtime, principal.organizationId);
+  if (options.surface === 'mcp') completeMcpCatalog(runtime, discoveryProjects);
   const selected = options.catalog ? selectRuntimeCatalog(runtime, options.catalog, false, {
     canWrite: principal.scopes.includes('tools:write'), excludedTools: ['recommendation_apply'],
-    manageAccessUrl: new URL(toolAccessPath(principal.organizationId, principal.apiKeyId ?? principal.clientId ?? '', principal.apiKeyId ? 'key' : 'oauth', principal.oauthOrganizationGroupId), env().ADPORT_CLOUD_BASE_URL).href,
+    manageAccessUrl: new URL(toolAccessPath(principal.organizationId, principal.apiKeyId ?? principal.clientId ?? '', principal.apiKeyId ? 'key' : 'oauth',
+      principal.oauthOrganizationGrantId ?? principal.oauthOrganizationGroupId), env().ADPORT_CLOUD_BASE_URL).href,
   }) : runtime;
   return enforceAccountScope ? instrumentCloudTools(selected, principal, options.surface ?? 'dashboard') : selected;
 }
@@ -229,11 +233,11 @@ function unavailableTools<T extends object>(provider: string, factory: (provider
 }
 
 /** A stable catalog lets clients use platforms connected after OAuth consent. */
-function completeMcpCatalog(runtime: AdportRuntime, organizationId: string): void {
+function completeMcpCatalog(runtime: AdportRuntime, projectIds: readonly string[]): void {
   const registered = new Set(runtime.registry.list().map(tool => tool.name));
   const catalog = [
-    ...(providerAllowedForOrganization('gtm', organizationId) ? unavailableTools('gtm', gtmTools) : []),
-    ...(providerAllowedForOrganization('gsc', organizationId) ? unavailableTools('gsc', gscTools) : []),
+    ...(projectIds.some(id => providerAllowedForOrganization('gtm', id)) ? unavailableTools('gtm', gtmTools) : []),
+    ...(projectIds.some(id => providerAllowedForOrganization('gsc', id)) ? unavailableTools('gsc', gscTools) : []),
     ...unavailableTools('google', googleTools), ...unavailableTools('meta', metaTools),
     ...unavailableTools('tiktok', tiktokTools), ...unavailableTools('apple', appleTools),
     ...unavailableTools('microsoft', microsoftTools), ...unavailableTools('reddit', redditTools),

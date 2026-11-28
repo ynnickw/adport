@@ -2,6 +2,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import type { ToolSelection, ToolProvider } from '@adport/core';
 import { db } from '@/lib/db';
+import { HttpError } from '@/lib/http';
 import { mcpResourceUrl } from '@/lib/mcp-oauth';
 import { LEGACY_TOOL_SELECTION, toolSelectionSchema } from '@/lib/mcp-tool-selection';
 import type { TenantPrincipal } from './types';
@@ -11,6 +12,7 @@ export interface CatalogConnection {
   userId?: string;
   clientId?: string;
   oauthOrganizationGroupId?: string;
+  oauthOrganizationGrantId?: string;
   resource?: string;
   apiKeyId?: string;
 }
@@ -26,6 +28,14 @@ export function catalogConnectionKey(connection: CatalogConnection): string {
 }
 
 export async function loadToolSelection(connection: CatalogConnection): Promise<ToolSelection> {
+  if (connection.oauthOrganizationGrantId) {
+    const [selection] = await db()<Array<{ profile: string; providers: ToolProvider[] | null }>>`
+      select profile, providers from private.mcp_oauth_organization_grants where id = ${connection.oauthOrganizationGrantId}
+        and user_id = ${connection.userId ?? null} and client_id = ${connection.clientId ?? null}
+        and resource = ${connection.resource ?? mcpResourceUrl()}`;
+    if (!selection) throw new HttpError('This assistant connection is no longer available.', 403);
+    return toolSelectionSchema.parse(selection);
+  }
   const rows = await db()<Array<{ profile: string; providers: ToolProvider[] | null }>>`
     select profile, providers from private.mcp_tool_catalog_settings
     where connection_key = ${catalogConnectionKey(connection)}
@@ -35,6 +45,13 @@ export async function loadToolSelection(connection: CatalogConnection): Promise<
 
 export async function saveToolSelection(connection: CatalogConnection, selection: ToolSelection): Promise<void> {
   const parsed = toolSelectionSchema.parse(selection);
+  if (connection.oauthOrganizationGrantId) {
+    const updated = await db()`update private.mcp_oauth_organization_grants set profile = ${parsed.profile}, providers = ${parsed.providers}
+      where id = ${connection.oauthOrganizationGrantId} and user_id = ${connection.userId ?? null}
+        and client_id = ${connection.clientId ?? null} and resource = ${connection.resource ?? mcpResourceUrl()}`;
+    if (!updated.count) throw new HttpError('This assistant connection is no longer available.', 403);
+    return;
+  }
   await db()`
     insert into private.mcp_tool_catalog_settings
       (connection_key, organization_id, organization_group_id, user_id, client_id, api_key_id, profile, providers)

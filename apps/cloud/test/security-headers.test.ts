@@ -16,9 +16,9 @@ describe('content security policy', () => {
     expect(buildContentSecurityPolicy(supabaseOrigin, false, true)).toContain("script-src 'self' 'unsafe-inline' 'unsafe-eval'");
   });
 
-  it('permits private media previews from the configured Storage origin without broadening scripts or other image origins', () => {
+  it('limits images to Adport, Storage, and the sign-in providers’ avatar hosts', () => {
     const directives = buildContentSecurityPolicy(supabaseOrigin).split('; ');
-    expect(directives).toContain(`img-src 'self' data: ${supabaseOrigin}`);
+    expect(directives).toContain(`img-src 'self' data: ${supabaseOrigin} https://lh3.googleusercontent.com https://avatars.githubusercontent.com`);
     expect(directives).toContain(`media-src 'self' ${supabaseOrigin}`);
     expect(directives.find(value => value.startsWith('script-src'))).not.toContain(supabaseOrigin);
     expect(directives.find(value => value.startsWith('img-src'))).not.toContain('https: ');

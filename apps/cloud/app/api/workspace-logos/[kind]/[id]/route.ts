@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { env } from '@/lib/env';
 import { enforceRateLimit } from '@/lib/cloud/repository';
+import { readImageUploadForm } from '@/lib/cloud/image-upload';
 import { readWorkspaceLogo, updateWorkspaceLogo } from '@/lib/cloud/workspace-logos';
 import { MAX_LOGO_BYTES, workspaceLogoUrl } from '@/lib/workspace-logos';
 import { apiError, HttpError, noStoreJson } from '@/lib/http';
@@ -17,29 +18,7 @@ async function actor(): Promise<string> {
 }
 
 async function uploadFile(request: Request): Promise<File> {
-  const contentType = request.headers.get('content-type') ?? '';
-  if (!contentType.startsWith('multipart/form-data;')) throw new HttpError('Choose an image to upload.', 400);
-  const limit = MAX_LOGO_BYTES + 65_536;
-  if (Number(request.headers.get('content-length')) > limit) throw new HttpError('Choose an image up to 2 MB.', 413);
-  if (!request.body) throw new HttpError('Choose an image to upload.', 400);
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > limit) {
-        await reader.cancel();
-        throw new HttpError('Choose an image up to 2 MB.', 413);
-      }
-      chunks.push(value);
-    }
-  } finally { reader.releaseLock(); }
-  let form: FormData;
-  try { form = await new Response(Buffer.concat(chunks), { headers: { 'content-type': contentType } }).formData(); }
-  catch { throw new HttpError('The upload could not be read. Please try again.', 400); }
+  const form = await readImageUploadForm(request, MAX_LOGO_BYTES);
   const file = form.get('file');
   if (!(file instanceof File)) throw new HttpError('Choose an image to upload.', 400);
   return file;

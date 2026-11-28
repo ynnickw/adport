@@ -1,15 +1,11 @@
 import 'server-only';
 import { randomUUID } from 'node:crypto';
 import type postgres from 'postgres';
-import { env } from '@/lib/env';
-import { invitationRedirectUrl } from '@/lib/invitations';
 import { db } from '@/lib/db';
 import { HttpError } from '@/lib/http';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { getOrganizationEntitlement, recommendedUpgradePlan } from './plans';
-import { PlanLimitError } from './plan-limit';
+import { safeProfileAvatarUrl } from '@/lib/member-profiles';
 import type { TenantPrincipal } from './types';
-import { editingMemberCapacity } from './member-capacity';
+import { lockProjectOrganization, requireEditingSeat } from './member-capacity';
 
 export type OrganizationRole = NonNullable<TenantPrincipal['role']>;
 export interface ProjectAccess {
@@ -88,13 +84,8 @@ export async function createProject(userId: string, organizationId: string, name
 
 export async function updateProject(userId: string, projectId: string, input: { name?: string; archived?: boolean }): Promise<void> {
   await db().begin(async sql => {
-    const projects = await sql<Array<{ organizationGroupId: string }>>`
-      select organization_group_id from public.organizations where id = ${projectId}
-    `;
-    const project = projects[0];
-    if (!project) throw new HttpError('Project not found.', 404);
-    await sql`select id from public.organization_groups where id = ${project.organizationGroupId} for update`;
-    await requireOrganizationAdmin(userId, project.organizationGroupId, sql);
+    const organizationId = await lockProjectOrganization(projectId, sql);
+    await requireOrganizationAdmin(userId, organizationId, sql);
     if (input.name !== undefined) await sql`update public.organizations set name = ${checkedName(input.name)} where id = ${projectId}`;
     if (input.archived !== undefined) {
       await sql`update public.organizations set archived_at = ${input.archived ? new Date() : null} where id = ${projectId}`;
@@ -129,13 +120,18 @@ export async function organizationActiveAccounts(projectId: string): Promise<num
 export async function listOrganizationTeam(userId: string, organizationId: string) {
   await requireOrganizationAdmin(userId, organizationId);
   const [members, grants] = await Promise.all([
-    db()<Array<{ userId: string; email: string; displayName: string; role: OrganizationRole }>>`
-      select * from private.organization_group_member_directory(${organizationId})`,
+    db()<Array<{ userId: string; email: string; displayName: string; avatarUrl: string | null; role: OrganizationRole }>>`
+      select directory.*, private.profile_avatar_url(directory.user_id) as avatar_url
+      from private.organization_group_member_directory(${organizationId}) directory`,
     db()<Array<{ userId: string; projectId: string }>>`
       select member.user_id, project.id as project_id from public.organization_memberships member
       join public.organizations project on project.id = member.organization_id where project.organization_group_id = ${organizationId}`,
   ]);
-  return members.map(member => ({ ...member, projectIds: grants.filter(grant => grant.userId === member.userId).map(grant => grant.projectId) }));
+  return members.map(member => ({
+    ...member,
+    avatarUrl: safeProfileAvatarUrl(member.avatarUrl),
+    projectIds: grants.filter(grant => grant.userId === member.userId).map(grant => grant.projectId),
+  }));
 }
 
 export async function renameCompany(userId: string, organizationId: string, name: string): Promise<void> {
@@ -148,40 +144,54 @@ export async function renameCompany(userId: string, organizationId: string, name
   });
 }
 
-export async function saveOrganizationMember(input: {
-  actorUserId: string; organizationId: string; email?: string; userId?: string;
-  role: OrganizationRole; projectIds: string[];
-}): Promise<void> {
-  const actor = await requireOrganizationAdmin(input.actorUserId, input.organizationId);
-  if (actor.role !== 'owner' && ['owner', 'admin'].includes(input.role)) throw new HttpError('Only an owner can grant organization owner or admin access.', 403);
-  const projectIds = [...new Set(input.projectIds)];
-  if (!['owner', 'admin'].includes(input.role) && !projectIds.length) throw new HttpError('Select at least one project for this member.', 400);
-  const projects = await db()<Array<{ id: string }>>`select id from public.organizations
-    where organization_group_id = ${input.organizationId} and archived_at is null`;
-  if (projectIds.some(id => !projects.some(project => project.id === id))) throw new HttpError('A selected project does not belong to this organization.', 403);
-  let targetUserId = input.userId;
-  if (!targetUserId) {
-    if (!input.email) throw new HttpError('An email address is required.', 400);
-    const email = input.email.trim().toLowerCase();
-    const rows = await db()<Array<{ id: string | null }>>`select private.find_auth_user_id(${email}) as id`;
-    targetUserId = rows[0]?.id ?? undefined;
-    if (!targetUserId) {
-      const entitlement = await getOrganizationEntitlement(actor.defaultProjectId);
-      const members = await editingMemberCapacity(actor.defaultProjectId);
-      if (input.role !== 'viewer' && entitlement.plan.maxMembers !== null && members.count >= entitlement.plan.maxMembers) throw new PlanLimitError({ kind: 'members', currentPlan: entitlement.plan.name, recommendedPlan: recommendedUpgradePlan(entitlement.plan.id, { members: members.count + 1 }), message: 'Your organization has reached its editing-member limit. Read-only viewers are free.' });
-      const result = await createAdminClient().auth.admin.inviteUserByEmail(email, {
-        redirectTo: invitationRedirectUrl(env().ADPORT_CLOUD_BASE_URL, projectIds[0] ?? actor.defaultProjectId),
-      });
-      if (result.error || !result.data.user) throw new HttpError('The invitation could not be sent.', 400);
-      targetUserId = result.data.user.id;
-    }
-  }
-  const target = targetUserId;
+export async function saveSetupWorkspaceNames(
+  actorUserId: string,
+  projectId: string,
+  input: { organizationName: string; projectName: string; advance: boolean },
+): Promise<void> {
+  const organizationName = checkedName(input.organizationName);
+  const projectName = checkedName(input.projectName);
   await db().begin(async sql => {
+    const [company] = await sql<Array<{ id: string }>>`
+      select id from public.organization_groups where default_project_id = ${projectId} for update`;
+    if (!company) throw new HttpError('Only the first project can be named with its organization.', 404);
+    await requireOrganizationAdmin(actorUserId, company.id, sql);
+    const organizations = await sql`update public.organization_groups set name = ${organizationName}
+      where id = ${company.id} and name is distinct from ${organizationName}`;
+    const projects = await sql`update public.organizations set name = ${projectName}
+      where id = ${projectId} and name is distinct from ${projectName}`;
+    if (organizations.count || projects.count) await sql`
+      insert into public.audit_events (organization_id, actor_user_id, event, provider, tool, account_id, summary)
+      values (${projectId}, ${actorUserId}, 'settings_updated', 'cloud', 'setup_workspace_names', '*', 'Updated workspace names during setup')`;
+    if (input.advance) await sql`
+      insert into public.organization_onboarding (organization_id, current_step) values (${projectId}, 'connect')
+      on conflict (organization_id) do update set current_step = excluded.current_step
+      where organization_onboarding.current_step = 'welcome'`;
+  });
+}
+
+export async function validateMemberProjects(sql: postgres.Sql | postgres.TransactionSql, organizationId: string, role: OrganizationRole, projectIds: string[]) {
+  if (['owner', 'admin'].includes(role)) return;
+  if (!projectIds.length) throw new HttpError('Select at least one project for this member.', 400);
+  const projects = await sql<Array<{ id: string }>>`select id from public.organizations
+    where organization_group_id = ${organizationId} and archived_at is null`;
+  if (projectIds.some(id => !projects.some(project => project.id === id))) throw new HttpError('A selected project is no longer available in this organization.', 403);
+}
+
+export async function saveOrganizationMember(input: {
+  actorUserId: string; organizationId: string; userId: string;
+  role: OrganizationRole; projectIds: string[]; existingOnly?: boolean; acceptedBy?: string;
+}, transaction?: postgres.TransactionSql): Promise<void> {
+  const target = input.userId;
+  const write = async (sql: postgres.TransactionSql) => {
     await sql`select id from public.organization_groups where id = ${input.organizationId} for update`;
     const organization = await requireOrganizationAdmin(input.actorUserId, input.organizationId, sql);
     const existing = await sql<Array<{ role: OrganizationRole }>>`select role from public.organization_group_memberships
       where organization_group_id = ${input.organizationId} and user_id = ${target}`;
+    if (input.existingOnly) {
+      if (!existing.length) throw new HttpError('This person must accept an invitation before you can edit access.', 409);
+      if (input.role === 'owner' && existing[0]?.role !== 'owner') throw new HttpError('The member must accept an ownership invitation.', 409);
+    }
     if (organization.role !== 'owner' && (['owner', 'admin'].includes(input.role) || ['owner', 'admin'].includes(existing[0]?.role ?? ''))) {
       throw new HttpError('Only an owner can manage organization owners or admins.', 403);
     }
@@ -190,16 +200,12 @@ export async function saveOrganizationMember(input: {
         where organization_group_id = ${input.organizationId} and role = 'owner'`;
       if (owners[0]!.count <= 1) throw new HttpError('The last organization owner cannot be demoted.', 409);
     }
-    const entitlement = await getOrganizationEntitlement(organization.defaultProjectId, sql);
-    const members = await editingMemberCapacity(organization.defaultProjectId, target, sql);
-    if (input.role !== 'viewer' && !members.existing && entitlement.plan.maxMembers !== null && members.count >= entitlement.plan.maxMembers) {
-      throw new PlanLimitError({ kind: 'members', currentPlan: entitlement.plan.name, recommendedPlan: recommendedUpgradePlan(entitlement.plan.id, { members: members.count + 1 }), message: 'Your organization has reached its editing-member limit. Read-only viewers are free.' });
-    }
-    const projectIds = [...new Set(input.projectIds)];
-    const projects = await sql<Array<{ id: string }>>`select id from public.organizations
-      where organization_group_id = ${input.organizationId} and archived_at is null`;
-    if (projectIds.some(id => !projects.some(project => project.id === id))) throw new HttpError('A selected project does not belong to this organization.', 403);
-    if (!['owner', 'admin'].includes(input.role) && !projectIds.length) throw new HttpError('Select at least one project for this member.', 400);
+    await requireEditingSeat(sql, organization.defaultProjectId, input.role, target);
+    const projectIds = ['owner', 'admin'].includes(input.role) ? [] : [...new Set(input.projectIds)];
+    await validateMemberProjects(sql, input.organizationId, input.role, projectIds);
+    if (input.existingOnly && input.role !== existing[0]?.role) await sql`
+      update private.member_invitations set canceled_at = now() where organization_group_id = ${input.organizationId}
+        and recipient_user_id = ${target} and previous_role is not null and canceled_at is null and accepted_at is null`;
     await sql`insert into public.organization_group_memberships (organization_group_id, user_id, role)
       values (${input.organizationId}, ${target}, ${input.role}) on conflict (organization_group_id, user_id) do update set role = excluded.role`;
     await sql`delete from public.organization_memberships where user_id = ${target}
@@ -221,9 +227,13 @@ export async function saveOrganizationMember(input: {
       and code.organization_id in (select id from public.organizations where organization_group_id = ${input.organizationId})
       and not exists (select 1 from private.project_memberships access where access.organization_id = code.organization_id and access.user_id = ${target})`;
     await sql`insert into public.audit_events (organization_id, actor_user_id, event, provider, tool, account_id, summary, details)
-      values (${organization.defaultProjectId}, ${input.actorUserId}, 'member_role_updated', 'cloud', 'organization_member_save', ${target},
-        'Updated organization membership and project access', ${sql.json({ role: input.role, projectIds } as never)})`;
-  });
+      values (${organization.defaultProjectId}, ${input.acceptedBy ?? input.actorUserId}, 'member_role_updated', 'cloud',
+        ${input.acceptedBy ? 'organization_invitation_accept' : 'organization_member_save'}, ${target},
+        ${input.acceptedBy ? 'Accepted organization invitation' : 'Updated organization membership and project access'},
+        ${sql.json({ role: input.role, projectIds } as never)})`;
+  };
+  if (transaction) await write(transaction);
+  else await db().begin(write);
 }
 
 export async function removeCompanyMember(actorUserId: string, organizationId: string, targetUserId: string): Promise<void> {
@@ -236,6 +246,8 @@ export async function removeCompanyMember(actorUserId: string, organizationId: s
     if (!target) throw new HttpError('Member not found.', 404);
     if (organization.role !== 'owner' && ['owner', 'admin'].includes(target.role)) throw new HttpError('Only an owner can remove owners or admins.', 403);
     if (target.role === 'owner' && members.filter(member => member.role === 'owner').length <= 1) throw new HttpError('The last organization owner cannot be removed.', 409);
+    await sql`update private.member_invitations set canceled_at = now() where organization_group_id = ${organizationId}
+      and recipient_user_id = ${targetUserId} and canceled_at is null and accepted_at is null`;
     await sql`delete from public.organization_memberships where user_id = ${targetUserId}
       and organization_id in (select id from public.organizations where organization_group_id = ${organizationId})`;
     await sql`delete from public.organization_group_memberships where organization_group_id = ${organizationId} and user_id = ${targetUserId}`;

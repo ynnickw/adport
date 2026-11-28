@@ -1,13 +1,13 @@
 import 'server-only';
 import type { Policy } from '@adport/core';
-import { createAdminClient } from '@/lib/supabase/admin';
+import type postgres from 'postgres';
 import { db } from '@/lib/db';
+import { safeProfileAvatarUrl } from '@/lib/member-profiles';
 import type { TenantPrincipal } from './types';
 import { getOrganizationEntitlement, recommendedUpgradePlan } from './plans';
 import { PlanLimitError } from './plan-limit';
-import { env } from '@/lib/env';
-import { invitationRedirectUrl } from '@/lib/invitations';
-import { editingMemberCapacity, lockProjectOrganization } from './member-capacity';
+import { lockProjectOrganization } from './member-capacity';
+import { requireProjectAdminAccess, resolveMembership } from './repository';
 
 export type AssignableRole = 'admin' | 'member' | 'viewer';
 
@@ -20,76 +20,23 @@ function requireAssignableRole(principal: TenantPrincipal, role: AssignableRole)
   if (role === 'admin' && principal.role !== 'owner') throw new Error('Only an owner can grant admin access.');
 }
 
-async function requireProjectManagedMember(projectId: string, userId: string): Promise<void> {
-  const inherited = await db()`select 1 from public.organization_group_memberships member
+async function requireProjectManagedMember(sql: postgres.TransactionSql, projectId: string, userId: string): Promise<void> {
+  const inherited = await sql`select 1 from public.organization_group_memberships member
     join public.organizations project on project.organization_group_id = member.organization_group_id
     where project.id = ${projectId} and member.user_id = ${userId} and member.role in ('owner', 'admin')`;
   if (inherited.length) throw new Error('Manage organization owners and admins in Organization settings.');
 }
 
 export async function listOrganizationMembers(organizationId: string) {
-  return db()<Array<{ userId: string; email: string; displayName: string; role: string; createdAt: Date; inheritedFromOrganization: boolean }>>`
-    select directory.*, coalesce(member.role in ('owner', 'admin'), false) as inherited_from_organization
+  const members = await db()<Array<{ userId: string; email: string; displayName: string; avatarUrl: string | null; role: string; createdAt: Date; inheritedFromOrganization: boolean }>>`
+    select directory.*, private.profile_avatar_url(directory.user_id) as avatar_url,
+      coalesce(member.role in ('owner', 'admin'), false) as inherited_from_organization
     from private.organization_member_directory(${organizationId}) directory
     join public.organizations project on project.id = ${organizationId}
     left join public.organization_group_memberships member
       on member.organization_group_id = project.organization_group_id and member.user_id = directory.user_id
   `;
-}
-
-export async function inviteOrganizationMember(
-  principal: TenantPrincipal,
-  email: string,
-  role: AssignableRole,
-): Promise<{ added: boolean; invitationSent: boolean; targetUserId: string }> {
-  requireAssignableRole(principal, role);
-  const normalizedEmail = email.trim().toLowerCase();
-  const users = await db()<Array<{ id: string | null }>>`
-    select private.find_auth_user_id(${normalizedEmail}) as id
-  `;
-  let targetUserId = users[0]?.id;
-  const entitlement = await getOrganizationEntitlement(principal.organizationId);
-  if (role !== 'viewer' && entitlement.plan.maxMembers !== null) {
-    const totals = await editingMemberCapacity(principal.organizationId, targetUserId ?? undefined);
-    if (!totals.existing && totals.count >= entitlement.plan.maxMembers) {
-      throw new PlanLimitError({
-        kind: 'members', currentPlan: entitlement.plan.name,
-        recommendedPlan: recommendedUpgradePlan(entitlement.plan.id, { members: totals.count + 1 }),
-        message: `${entitlement.plan.name} supports ${entitlement.plan.maxMembers} editing member${entitlement.plan.maxMembers === 1 ? '' : 's'}. Read-only viewers are free.`,
-      });
-    }
-  }
-  let invitationSent = false;
-  if (!targetUserId) {
-    const result = await createAdminClient().auth.admin.inviteUserByEmail(normalizedEmail, {
-      data: { full_name: normalizedEmail.split('@')[0] },
-      redirectTo: invitationRedirectUrl(env().ADPORT_CLOUD_BASE_URL, principal.organizationId),
-    });
-    if (result.error || !result.data.user) throw result.error ?? new Error('Invitation failed.');
-    targetUserId = result.data.user.id;
-    invitationSent = true;
-  }
-
-  const added = await db().begin(async (sql) => {
-    await lockProjectOrganization(principal.organizationId, sql);
-    const inserted = await sql<Array<{ userId: string }>>`
-      insert into public.organization_memberships (organization_id, user_id, role)
-      values (${principal.organizationId}, ${targetUserId}, ${role})
-      on conflict (organization_id, user_id) do nothing
-      returning user_id
-    `;
-    await sql`
-      insert into public.audit_events
-        (organization_id, actor_user_id, api_key_id, event, provider, tool, account_id, summary, details)
-      values
-        (${principal.organizationId}, ${principal.userId ?? null}, ${principal.apiKeyId ?? null}, 'member_invited',
-         'cloud', 'member_invite', ${targetUserId},
-         ${inserted.length ? `Added ${normalizedEmail} as ${role}` : `${normalizedEmail} is already a member`},
-         ${sql.json({ role, invitationSent } as never)})
-    `;
-    return inserted.length === 1;
-  });
-  return { added, invitationSent, targetUserId };
+  return members.map(member => ({ ...member, avatarUrl: safeProfileAvatarUrl(member.avatarUrl) }));
 }
 
 export async function changeOrganizationMemberRole(
@@ -98,9 +45,11 @@ export async function changeOrganizationMemberRole(
   role: AssignableRole,
 ): Promise<void> {
   requireAssignableRole(principal, role);
-  await requireProjectManagedMember(principal.organizationId, targetUserId);
   await db().begin(async (sql) => {
     await lockProjectOrganization(principal.organizationId, sql);
+    const { role: actorRole } = await resolveMembership(principal.userId!, principal.organizationId, sql);
+    requireAssignableRole({ ...principal, role: actorRole }, role);
+    await requireProjectManagedMember(sql, principal.organizationId, targetUserId);
     const rows = await sql<Array<{ role: string }>>`
       select role from public.organization_memberships
       where organization_id = ${principal.organizationId} and user_id = ${targetUserId}
@@ -108,7 +57,7 @@ export async function changeOrganizationMemberRole(
     `;
     const target = rows[0];
     if (!target) throw new Error('Member not found.');
-    if (principal.role === 'admin' && ['owner', 'admin'].includes(target.role)) throw new Error('Admins cannot change owners or other admins.');
+    if (actorRole === 'admin' && ['owner', 'admin'].includes(target.role)) throw new Error('Admins cannot change owners or other admins.');
     if (target.role === 'owner') {
       const owners = await sql<Array<{ count: number }>>`
         select count(*)::int as count from public.organization_memberships
@@ -131,9 +80,11 @@ export async function changeOrganizationMemberRole(
 
 export async function removeOrganizationMember(principal: TenantPrincipal, targetUserId: string): Promise<void> {
   requireMemberAdmin(principal);
-  await requireProjectManagedMember(principal.organizationId, targetUserId);
   await db().begin(async (sql) => {
     await lockProjectOrganization(principal.organizationId, sql);
+    const { role: actorRole } = await resolveMembership(principal.userId!, principal.organizationId, sql);
+    requireMemberAdmin({ ...principal, role: actorRole });
+    await requireProjectManagedMember(sql, principal.organizationId, targetUserId);
     const rows = await sql<Array<{ role: string }>>`
       select role from public.organization_memberships
       where organization_id = ${principal.organizationId} and user_id = ${targetUserId}
@@ -141,7 +92,7 @@ export async function removeOrganizationMember(principal: TenantPrincipal, targe
     `;
     const target = rows[0];
     if (!target) throw new Error('Member not found.');
-    if (principal.role === 'admin' && ['owner', 'admin'].includes(target.role)) throw new Error('Admins cannot remove owners or other admins.');
+    if (actorRole === 'admin' && ['owner', 'admin'].includes(target.role)) throw new Error('Admins cannot remove owners or other admins.');
     if (target.role === 'owner') {
       const owners = await sql<Array<{ count: number }>>`
         select count(*)::int as count from public.organization_memberships
@@ -193,15 +144,17 @@ export async function updateOrganizationSettings(
   dataRetentionDays: number,
 ): Promise<void> {
   requireMemberAdmin(principal);
-  const entitlement = await getOrganizationEntitlement(principal.organizationId);
-  if (dataRetentionDays > entitlement.plan.maxRetentionDays) {
-    throw new PlanLimitError({
-      kind: 'retention', currentPlan: entitlement.plan.name,
-      recommendedPlan: recommendedUpgradePlan(entitlement.plan.id, { retentionDays: dataRetentionDays }),
-      message: `${entitlement.plan.name} supports up to ${entitlement.plan.maxRetentionDays} days of retention. Upgrade for a longer audit history.`,
-    });
-  }
   await db().begin(async (sql) => {
+    await lockProjectOrganization(principal.organizationId, sql);
+    await requireProjectAdminAccess(principal.userId, principal.organizationId, sql);
+    const entitlement = await getOrganizationEntitlement(principal.organizationId, sql);
+    if (dataRetentionDays > entitlement.plan.maxRetentionDays) {
+      throw new PlanLimitError({
+        kind: 'retention', currentPlan: entitlement.plan.name,
+        recommendedPlan: recommendedUpgradePlan(entitlement.plan.id, { retentionDays: dataRetentionDays }),
+        message: `${entitlement.plan.name} supports up to ${entitlement.plan.maxRetentionDays} days of retention. Upgrade for a longer audit history.`,
+      });
+    }
     await sql`
       update public.organization_settings
       set policy = ${sql.json(policy as never)}, data_retention_days = ${dataRetentionDays}

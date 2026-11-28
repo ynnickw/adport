@@ -6,7 +6,9 @@ import type { AssistantConnectionStatus } from '@/lib/cloud/assistant-connection
 import type { OAuthProviderView } from '@/app/dashboard/connections/provider-connections';
 
 const router = vi.hoisted(() => ({ replace: vi.fn(), refresh: vi.fn() }));
+const saveNames = vi.hoisted(() => vi.fn(async (_state: unknown, _form: FormData) => ({ success: 'Workspace names saved.' })));
 vi.mock('next/navigation', () => ({ useRouter: () => router }));
+vi.mock('@/app/onboarding/actions', () => ({ saveWorkspaceNamesAction: saveNames }));
 vi.mock('@/components/support-widget', () => ({ SupportLauncher: () => null }));
 vi.mock('@/components/assistant-connect', () => ({ AssistantConnect: ({ onStatusChange }: { onStatusChange(status: AssistantConnectionStatus): void }) =>
   <button onClick={() => onStatusChange({ authorized: true, verified: true, hasAccounts: true, clientName: 'Fixture' })}>Simulate verified read</button>,
@@ -18,6 +20,23 @@ const props = { organizationId: 'project', projectName: 'Northstar', setupKind: 
 
 beforeEach(() => { vi.clearAllMocks(); vi.stubGlobal('fetch', vi.fn(async () => Response.json({ updated: true }))); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+it('starts a first workspace with independent names and preserves the dashboard destination', async () => {
+  render(<OnboardingFlow {...props} initialStep="workspace" workspace={{ organizationName: 'My organization', projectName: 'General' }} />);
+  expect(screen.getByRole('heading', { name: 'Name your workspace' })).toBeTruthy();
+  expect(screen.getByRole('list', { name: 'Project setup progress' }).querySelector('[aria-current="step"]')?.textContent).toContain('Workspace');
+  const organizationName = screen.getByRole('textbox', { name: 'Organization name' });
+  const projectName = screen.getByRole('textbox', { name: 'First project name' });
+  expect(organizationName).toHaveProperty('value', 'My organization');
+  expect(projectName).toHaveProperty('value', 'General');
+  fireEvent.change(organizationName, { target: { value: 'Northstar Studio' } });
+  fireEvent.change(projectName, { target: { value: 'Paid media' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Continue to platforms' }));
+  await waitFor(() => expect(saveNames).toHaveBeenCalledOnce());
+  expect(Object.fromEntries(saveNames.mock.calls[0]![1])).toEqual({
+    projectId: 'project', organizationName: 'Northstar Studio', projectName: 'Paid media', return_to: '/dashboard/agents', advance: '1',
+  });
+});
 
 it('starts at searchable platform selection without writing progress on page load', () => {
   render(<OnboardingFlow {...props} />);
@@ -40,13 +59,13 @@ it('keeps the current step after a save error and resumes the assistant step on 
   const progress = screen.getByRole('list', { name: 'Project setup progress' });
   expect(progress.querySelector('[aria-current="step"]')?.textContent).toContain('Assistant');
   expect(window.location.pathname + window.location.search).toBe('/onboarding?return_to=%2Fdashboard%2Fagents&step=agent');
-  expect(screen.getByRole('button', { name: 'Finish setup' }).hasAttribute('disabled')).toBe(true);
+  expect(screen.getByRole('button', { name: 'Skip assistant setup' })).toHaveProperty('disabled', false);
   expect(router.replace).not.toHaveBeenCalled();
 });
 
 it('separates leaving setup from completing it after a verified read', async () => {
   const view = render(<OnboardingFlow {...props} initialStep="agent" />);
-  fireEvent.click(screen.getByRole('button', { name: 'Set up later' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Skip assistant setup' }));
   await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/dashboard/agents'));
   expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body))).toEqual({ currentStep: 'agent', selectedAgent: 'chatgpt', setupKind: 'first_project', skip: true });
   view.unmount();
@@ -55,4 +74,12 @@ it('separates leaving setup from completing it after a verified read', async () 
   fireEvent.click(screen.getByRole('button', { name: 'Finish setup' }));
   await waitFor(() => expect(router.replace).toHaveBeenCalledTimes(2));
   expect(JSON.parse(String(vi.mocked(fetch).mock.calls[1]?.[1]?.body))).toEqual({ currentStep: 'complete', selectedAgent: 'chatgpt', setupKind: 'first_project', complete: true });
+});
+
+it('can continue with an existing connection before a test read', async () => {
+  render(<OnboardingFlow {...props} initialStep="agent" initialAssistantStatus={{ authorized: true, verified: false, hasAccounts: true, clientName: 'Fixture' }} />);
+  expect(screen.getByRole('heading', { name: 'Your assistant is connected' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Continue to dashboard' }));
+  await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/dashboard/agents'));
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body))).toEqual({ currentStep: 'agent', selectedAgent: 'chatgpt', setupKind: 'first_project', skip: true });
 });

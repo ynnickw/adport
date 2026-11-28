@@ -20,7 +20,7 @@ function selectionKey(selection: ToolSelection) {
 
 export function ToolCatalogEditor({ organizationId, connection, initialSelection, onSaved, name, openOnLoad }: {
   organizationId: string;
-  connection: { type: 'oauth'; client_id: string; user_id: string; resource: string; organization_group_id: string | null } | { type: 'key'; id: string };
+  connection: { type: 'oauth'; client_id: string; user_id: string; resource: string; organization_group_id: string | null; organization_grant_id?: string | null } | { type: 'key'; id: string };
   initialSelection: ToolSelection;
   onSaved: () => void;
   name?: string;
@@ -71,7 +71,7 @@ export function ToolCatalogEditor({ organizationId, connection, initialSelection
           <ToolCatalogFields initialSelection={savedSelection} disabled={busy} manage onSelectionChange={setDraft} />
         </div>
         <div className="assistant-access-footer">
-          <p className="assistant-access-note">{connection.type === 'oauth' && connection.organization_group_id ? 'Applies to all projects on this connection. ' : ''}Account permissions and approval rules still apply.</p>
+          <p className="assistant-access-note">{connection.type === 'oauth' && (connection.organization_group_id || connection.organization_grant_id) ? 'Applies to all projects on this connection. ' : ''}Account permissions and approval rules still apply.</p>
           {error ? <p className="error-callout" role="alert">{error}</p> : null}
           <div className="assistant-access-actions">
             <Button className="button secondary" type="button" disabled={busy} onClick={close}>Cancel</Button>

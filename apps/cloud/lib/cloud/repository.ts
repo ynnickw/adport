@@ -1,4 +1,5 @@
 import 'server-only';
+import type postgres from 'postgres';
 import { usesAdAccountSlot } from './providers';
 import { randomBytes } from 'node:crypto';
 import type {
@@ -15,6 +16,7 @@ import { db } from '@/lib/db';
 import { decryptSecret, digestApiKey, digestState, encryptSecret } from '@/lib/crypto';
 import { openPendingOperation, sealPendingOperation } from './pending-operation';
 import { PlanLimitError, type UpgradePlanId } from './plan-limit';
+import { lockProjectOrganization } from './member-capacity';
 import type {
   CloudProvider,
   MatomoApplication,
@@ -30,8 +32,7 @@ interface MembershipRow {
   role: TenantPrincipal['role'];
 }
 
-export async function resolveMembership(userId: string, requestedOrganizationId?: string): Promise<MembershipRow> {
-  const sql = db();
+export async function resolveMembership(userId: string, requestedOrganizationId?: string, sql: postgres.Sql | postgres.TransactionSql = db()): Promise<MembershipRow> {
   const rows = requestedOrganizationId
     ? await sql<MembershipRow[]>`
         select organization_id, role
@@ -51,6 +52,12 @@ export async function resolveMembership(userId: string, requestedOrganizationId?
   const membership = rows[0];
   if (!membership) throw new Error('You do not have access to this organization.');
   return membership;
+}
+
+export async function requireProjectAdminAccess(userId: string | undefined, projectId: string, sql: postgres.TransactionSql): Promise<void> {
+  if (!userId) throw new Error('Owner or admin access is required.');
+  const { role } = await resolveMembership(userId, projectId, sql);
+  if (role !== 'owner' && role !== 'admin') throw new Error('Owner or admin access is required.');
 }
 
 export async function getOrganizationPolicy(organizationId: string): Promise<Policy> {
@@ -152,6 +159,8 @@ export async function upsertProviderConnection<P extends CloudProvider>(input: {
   selectionId?: string;
 }): Promise<string> {
   return db().begin(async (sql) => {
+    await lockProjectOrganization(input.organizationId, sql);
+    await requireProjectAdminAccess(input.userId, input.organizationId, sql);
     const rows = await sql<Array<{ id: string }>>`
       insert into public.connections
         (organization_id, provider, status, external_subject, external_label, scopes, connected_by, last_verified_at, last_error, revoked_at, account_selection_id)
@@ -326,6 +335,8 @@ export async function createApiKey(input: {
   const key = `adp_${randomBytes(32).toString('base64url')}`;
   const prefix = key.slice(0, 12);
   return db().begin(async (sql) => {
+    await lockProjectOrganization(input.organizationId, sql);
+    await requireProjectAdminAccess(input.userId, input.organizationId, sql);
     const rows = await sql<Array<{ id: string }>>`
       insert into public.api_keys (organization_id, name, key_prefix, secret_hash, scopes, created_by)
       values (${input.organizationId}, ${input.name}, ${prefix}, ${digestApiKey(key)}, ${input.scopes}, ${input.userId})
@@ -691,9 +702,8 @@ export async function setOrganizationAdAccountEnabled(input: {
 }): Promise<void> {
   if (!['owner', 'admin'].includes(input.principal.role ?? '')) throw new Error('Owner or admin access is required.');
   await db().begin(async (sql) => {
-    await sql`select company.id from public.organization_groups company
-      join public.organizations project on project.organization_group_id = company.id
-      where project.id = ${input.principal.organizationId} for update of company`;
+    await lockProjectOrganization(input.principal.organizationId, sql);
+    await requireProjectAdminAccess(input.principal.userId, input.principal.organizationId, sql);
     const connections = await sql<Array<{ accountSelectionId: string | null; status: string }>>`
       select account_selection_id, status from public.connections
       where organization_id = ${input.principal.organizationId} and provider = ${input.provider} for update

@@ -21,7 +21,7 @@ const ROUTES: Record<string, [string, 'grid' | 'list']> = {
   '/dashboard/team': ['Project team', 'list'],
   '/dashboard/developer': ['Developer settings', 'list'],
   '/dashboard/policies': ['Policies', 'list'],
-  '/dashboard/preferences': ['Preferences', 'list'],
+  '/dashboard/preferences': ['Account settings', 'list'],
   '/dashboard/billing': ['Plan & billing', 'grid'],
   '/account-selection': ['Choose accounts', 'list'],
 };
