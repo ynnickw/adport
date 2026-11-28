@@ -30,6 +30,14 @@
 .resource-mark { display: inline-flex; align-items: center; justify-content: center; width: 2.65rem; height: 2.65rem; border: 1px solid var(--rule); border-radius: .65rem; background: #fff; }
 .resource-mark svg { display: block; width: 1.65rem; height: 1.65rem; fill: currentColor; }
 .resource-mark svg.meta-logo { width: 1.9rem; }
+.resource-mark img { width: 1.75rem; height: 1.75rem; object-fit: contain; }
+.resource-topic-hero { padding: 2rem 0 1.8rem; }
+.resource-topic-hero .resource-marks { margin-bottom: .9rem; }
+.resource-topic-hero h1 { margin-bottom: .75rem; }
+.topic-layout { display: grid; grid-template-columns: minmax(0, 44rem) minmax(12rem, 19rem); align-items: start; gap: clamp(2rem, 6vw, 6rem); padding: 1.6rem 0 1rem; border-top: 1px solid var(--rule); }
+.topic-body { min-width: 0; }
+.topic-body .guide-code code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.guide-table caption { padding: .8rem; text-align: left; color: var(--ink-soft); font-weight: 600; }
 .resource-connector { color: var(--muted); font-size: .875rem; }
 .resource-cta { display: flex; align-items: center; justify-content: space-between; gap: 2rem; padding: 2.5rem; margin: 4.5rem 0; border: 1px solid var(--rule); border-radius: .85rem; background: var(--raised); }
 .resource-cta h2 { margin: 0 0 .65rem; font-size: 1.7rem; font-weight: 700; letter-spacing: -.03em; }
@@ -106,6 +114,8 @@
   .resource-cta { align-items: flex-start; flex-direction: column; padding: 1.5rem; margin: 3rem 0; }
   .resource-cta > div:last-child { align-items: flex-start; }
   .guide-layout { display: block; }
+  .topic-layout { display: block; }
+  .resource-topic-hero { padding: 1.5rem 0; }
   .guide-toc { display: none; }
   .guide-header { margin-top: 2.2rem; margin-bottom: 2.5rem; }
   .guide-header h1 { margin: 1.2rem 0; }
