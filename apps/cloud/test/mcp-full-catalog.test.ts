@@ -14,6 +14,15 @@ const projectId = '11111111-1111-4111-8111-111111111111';
 const oauth = vi.hoisted(() => ({ client: vi.fn() }));
 const catalog = vi.hoisted(() => ({ selection: vi.fn() }));
 
+const publishedWidgetAliases = {
+  meta_create_campaign: 'ui://adport/summary-card-v30.html',
+  google_create_performance_max_campaign: 'ui://adport/summary-card-v30.html',
+  reddit_ads: 'ui://adport/insight-card-v34.html',
+  pinterest_catalog_items: 'ui://adport/insight-card-v36.html',
+  x_preroll_ctas: 'ui://adport/insight-card-v36.html',
+  x_get_preroll_cta: 'ui://adport/insight-card-v36.html',
+};
+
 vi.mock('@/lib/cloud/auth', () => ({ apiPrincipal: async () => ({
   organizationId: projectId,
   userId: 'test-user',
@@ -125,7 +134,14 @@ it('keeps the full hosted tools/list response within its wire budget on both tra
       });
       console.info(`Hosted catalog ${transport}: ${names.length} tools, ${result.wireBytes} bytes`);
     }
-    expect(modern.tools).toEqual(legacy.tools);
+    const unchanged = (tool: { name: string }) => !Object.hasOwn(publishedWidgetAliases, tool.name);
+    expect(modern.tools.filter(unchanged)).toEqual(legacy.tools.filter(unchanged));
+    const latestSummary = legacy.tools.find(tool => tool.name === 'projects_list')?._meta?.['openai/outputTemplate'];
+    const latestCreative = legacy.tools.find(tool => tool.name === 'media_list')?._meta?.['openai/outputTemplate'];
+    for (const [name, alias] of Object.entries(publishedWidgetAliases)) {
+      expect(legacy.tools.find(tool => tool.name === name)?._meta?.['openai/outputTemplate'], name)
+        .toBe(alias.includes('summary-card') ? latestSummary : latestCreative);
+    }
     const outputDir = process.env.ADPORT_TOOL_BENCHMARK_CATALOGS;
     if (outputDir) {
       await mkdir(outputDir, { recursive: true });
@@ -170,6 +186,23 @@ it('keeps the expanded publisher catalog below the metadata limit with GTM and S
     }
     expect(toolsByName.get('meta_create_campaign')?.title).toBe('Meta Create Campaign');
     expect(toolsByName.get('google_create_performance_max_campaign')?.title).toBe('Google Create Performance Max Campaign');
+    for (const [name, resourceUri] of Object.entries(publishedWidgetAliases)) {
+      expect(toolsByName.get(name)?._meta, name).toMatchObject({
+        'openai/outputTemplate': resourceUri,
+        ui: { resourceUri },
+      });
+      expect(resourcesByUri.get(resourceUri)?.mimeType, resourceUri).toBe('text/html;profile=mcp-app');
+    }
+    for (const name of ['meta_create_campaign', 'google_create_performance_max_campaign']) {
+      const definition = toolsByName.get(name);
+      expect(definition?.description).toMatch(/\n\nOmit pending_operation_id to preview\. To apply, repeat IDENTICAL arguments with the returned ID\.$/);
+      expect(definition?.inputSchema.properties?.pending_operation_id).toMatchObject({
+        type: 'string',
+        description: 'Omit to get a dry-run preview; pass the returned id to apply.',
+      });
+      expect(definition?.inputSchema.required).not.toContain('pending_operation_id');
+      expect(definition?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true, openWorldHint: true });
+    }
     expect(toolsByName.get('projects_list')?.title).toBeUndefined();
     expect(toolsByName.get('projects_list')?._meta?.ui).not.toHaveProperty('visibility');
     const summaryUri = String(tools.find(tool => tool.name === 'projects_list')?._meta?.['openai/outputTemplate']);
