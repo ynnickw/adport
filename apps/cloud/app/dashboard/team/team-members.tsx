@@ -67,11 +67,11 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
   }
 
   return (
-    <section className="card">
+    <section className="settings-section people-settings" aria-labelledby="project-people">
       {confirmationDialog}
       <PlanLimitModal limit={planLimit} onClose={() => setPlanLimit(undefined)} />
-      <div className="card-head people-card-head">
-        <div className="people-heading"><h2>People with access</h2><TeamRolesTooltip scope="project" /></div>
+      <div className="settings-section-head">
+        <h2 id="project-people">People with access <TeamRolesTooltip scope="project" /></h2>
         <div className="people-card-actions">
           <span className="card-note">{members.length} {members.length === 1 ? 'person' : 'people'}</span>
           {canAdminister ? <DialogTrigger label="Invite to project" title="Invite to this project" className="button secondary small">
@@ -85,7 +85,7 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
           </DialogTrigger> : null}
         </div>
       </div>
-      {error?.operation === 'member' ? <div className="card-body" style={{ paddingBottom: 0 }}><div className="error-callout" role="alert" style={{ marginBottom: 0 }}>{error.message}</div></div> : null}
+      {error?.operation === 'member' ? <p className="error-callout" role="alert">{error.message}</p> : null}
       <PeopleTable rows={members.map(member => ({
         id: member.userId, name: member.displayName, email: member.email, avatarUrl: member.avatarUrl, isSelf: member.userId === currentUserId,
         access: member.inheritedFromOrganization ? 'Inherited · All projects' : 'This project',

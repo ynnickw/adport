@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import { AdportError } from '../errors.js';
 import { DATE_PRESETS } from '../model.js';
-import { defineTool, type AnyToolDefinition } from '../tools/registry.js';
+import { defineTool, type AnyToolDefinition, type ToolContext } from '../tools/registry.js';
+import { standardCampaignReplacement } from '../tools/campaign-mappings.js';
 import { AuditRunner } from './runner.js';
 import { FindingsStore } from './store.js';
+import type { AuditFinding } from './types.js';
 import { auditOutput, recommendationsOutput, dismissOutput, recommendationApplyOutput } from '../tools/outputs.js';
 
 const dateRangeSchema = z.union([
@@ -13,6 +15,26 @@ const dateRangeSchema = z.union([
     end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   }),
 ]);
+
+function visibleFindings(findings: AuditFinding[], ctx: ToolContext): AuditFinding[] {
+  if (ctx.catalog?.selection.profile !== 'standard') return findings;
+  const sources = ctx.registry?.list().find(tool => tool.name === 'campaign_set_status')?.sourceProviders;
+  return findings.map(finding => {
+    const action = finding.proposedAction;
+    if (!action || action.tool !== finding.provider + '_set_campaign_status'
+      || standardCampaignReplacement(action.tool) !== 'campaign_set_status'
+      || !sources?.some(provider => provider === finding.provider)) return finding;
+    const { account_id, campaign_id, campaign_ids, status, operation_status, configured_status } = action.input;
+    const paused = status === 'PAUSED' || status === 'Paused' || status === 'paused'
+      || operation_status === 'DISABLE' || configured_status === 'PAUSED';
+    const id = campaign_id ?? (Array.isArray(campaign_ids) && campaign_ids.length === 1 ? campaign_ids[0] : undefined);
+    if (!paused || account_id !== finding.accountId || id !== finding.entity.id) return finding;
+    return { ...finding, proposedAction: {
+      tool: 'campaign_set_status',
+      input: { provider: finding.provider, account_id, campaign_id: id, status: 'paused' },
+    } };
+  });
+}
 
 export function auditTools(): AnyToolDefinition[] {
   return [
@@ -31,12 +53,13 @@ export function auditTools(): AnyToolDefinition[] {
       annotations: { readOnly: true, openWorld: false },
       async handler(input, ctx) {
         const runner = new AuditRunner(ctx.providers, ctx.findings ?? new FindingsStore());
-        return runner.run({
+        const result = await runner.run({
           provider: input.provider,
           accountIds: input.account_ids,
           dateRange: input.date_range,
           persist: false,
         });
+        return { ...result, findings: visibleFindings(result.findings, ctx) };
       },
     }),
     defineTool({
@@ -60,7 +83,7 @@ export function auditTools(): AnyToolDefinition[] {
           accountIds: input.account_ids,
           dateRange: input.date_range,
         });
-        return result;
+        return { ...result, findings: visibleFindings(result.findings, ctx) };
       },
     }),
     defineTool({
@@ -75,7 +98,7 @@ export function auditTools(): AnyToolDefinition[] {
       annotations: { readOnly: true },
       async handler(input, ctx) {
         const findings = await (ctx.findings ?? new FindingsStore()).list(input);
-        return { findings, count: findings.length };
+        return { findings: visibleFindings(findings, ctx), count: findings.length };
       },
     }),
     defineTool({

@@ -55,6 +55,7 @@ export { PolicyEngine, hashOperation, type ApplyOutcome, type ValidationOutcome 
 export {
   ToolRegistry,
   defineTool,
+  toolProvider,
   nextPageArguments,
   additionalAccountIds,
   type AnyToolDefinition,
@@ -74,11 +75,13 @@ export { MockProvider, mockTools } from './testing/mock-provider.js';
 export { SyntheticProvider, syntheticTools, syntheticSeed, syntheticStateSchema, type SyntheticCampaign, type SyntheticStateStore } from './testing/synthetic-provider.js';
 export {
   createContext,
+  createToolRegistry,
   selectRuntimeCatalog,
   type AdportRuntime,
   type CreateContextOptions,
   type ProviderModule,
 } from './context.js';
+export { CAMPAIGN_PROVIDERS } from './tools/campaign-mappings.js';
 
 export { gscTools, gscReportSchema, searchConsoleSite, GA4_SCOPES, GSC_SCOPES, type GscReader, type GscReportInput } from './tools/analytics.js';
 export { analyticsTools, acquisitionInput, acquisitionRow, type AcquisitionAnalytics, type AnalyticsGoal, type AcquisitionQuery, type AcquisitionRow, type AcquisitionReport } from './tools/acquisition.js';

@@ -3,19 +3,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AgentsPage from '@/app/dashboard/agents/page';
 import { AssistantConnections } from '@/app/dashboard/agents/assistant-connections';
 import DeveloperPage from '@/app/dashboard/developer/page';
+import { listAssistantGrants } from '@/lib/cloud/assistant-tool-catalog';
 
-const mocks = vi.hoisted(() => ({ tenant: vi.fn(), grants: vi.fn(), connected: vi.fn() }));
+const mocks = vi.hoisted(() => ({ tenant: vi.fn(), grants: vi.fn(), projects: vi.fn(), connected: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock('@/lib/cloud/dashboard', () => ({ requireDashboardTenant: mocks.tenant, canAdminister: (tenant: { role: string }) => ['owner', 'admin'].includes(tenant.role) }));
 vi.mock('@/lib/cloud/repository', () => ({ listOrganizationAdAccounts: async () => [{ enabled: true, provider: 'meta' }] }));
-vi.mock('@/lib/cloud/mcp-oauth-repository', () => ({ listMcpOAuthGrants: mocks.grants }));
+vi.mock('@/lib/cloud/mcp-oauth-repository', () => ({ listMcpOAuthGrants: mocks.grants, listMcpProjects: mocks.projects }));
 vi.mock('@/lib/cloud/tool-catalog', () => ({ connectedCatalogProviders: mocks.connected }));
 
 const grant = { clientId: 'client', userId: 'user', clientName: 'Codex', clientUri: null, scopes: ['tools:read'], resource: 'https://app.adport.test/mcp', createdAt: new Date(), expiresAt: new Date(Date.now() + 86400000), lastUsedAt: new Date(), status: 'active' };
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.tenant.mockResolvedValue({ organizationId: 'project', organizationName: 'Acme', userId: 'user', role: 'owner' });
+  mocks.tenant.mockResolvedValue({
+    organizationId: 'project', organizationName: 'Acme', organizationGroupId: 'org', userId: 'user', role: 'owner',
+    projects: [{ id: 'project', organizationId: 'org' }, { id: 'sibling', organizationId: 'org' }, { id: 'other-project', organizationId: 'other-org' }],
+  });
   mocks.grants.mockResolvedValue([grant]);
+  mocks.projects.mockResolvedValue([{ id: 'project', providers: ['google', 'meta'] }]);
   mocks.connected.mockResolvedValue({ project: ['google', 'meta'] });
 });
 
@@ -32,8 +37,8 @@ describe('project assistant access', () => {
   });
   it('puts an existing connection first and shows actual use metadata', async () => {
     const html = renderToStaticMarkup(await AgentsPage());
-    expect(mocks.grants).toHaveBeenCalledWith('project');
-    expect(mocks.connected).not.toHaveBeenCalled();
+    expect(mocks.grants).toHaveBeenCalledWith('project', 'user');
+    expect(mocks.projects).toHaveBeenCalledExactlyOnceWith({ organizationId: 'project', userId: 'user', oauthOrganizationGroupIds: undefined });
     expect(html).toContain('This project');
     expect(html).toContain('Read only');
     expect(html).not.toContain('Related settings');
@@ -70,6 +75,18 @@ describe('project assistant access', () => {
     expect(html).toContain('Codex (organization) access');
     expect(html).not.toContain('>Codex access<');
     expect(html).toContain('Applies to all projects on this connection.');
+    expect(html).toContain('tools with Standard');
+  });
+
+  it('suggests platforms across the authorized organizations on an owned multi-organization connection', async () => {
+    mocks.grants.mockResolvedValue([{ ...grant, organizationGrantId: 'multi', organizationGroupIds: ['org', 'other-org'] },
+      { ...grant, userId: 'teammate', organizationGrantId: 'other-grant' }]);
+    mocks.projects.mockResolvedValue([{ id: 'project', providers: ['google', 'meta'] }, { id: 'other-project', providers: ['meta', 'apple'] }]);
+    const [owned, teammate] = await listAssistantGrants('project', 'user');
+    expect(mocks.projects).toHaveBeenCalledExactlyOnceWith({ organizationId: 'project', userId: 'user', oauthOrganizationGroupIds: ['org', 'other-org'] });
+    expect(owned).toMatchObject({ organizationGrantId: 'multi', suggestedProviders: ['google', 'meta', 'apple'] });
+    expect(owned).not.toHaveProperty('organizationGroupIds');
+    expect(teammate).not.toHaveProperty('suggestedProviders');
   });
 
   it('offers one setup action when no assistant has been authorized', async () => {

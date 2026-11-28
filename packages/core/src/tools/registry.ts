@@ -65,6 +65,10 @@ export interface AnyToolDefinition {
   handler: (input: never, ctx: ToolContext) => Promise<unknown>;
 }
 
+export function toolProvider(tool: Pick<AnyToolDefinition, 'namespace' | 'sourceProviders'>, input: Record<string, unknown>): string {
+  return tool.sourceProviders && typeof input.provider === 'string' ? input.provider : tool.namespace;
+}
+
 export function defineTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   name: string;
   namespace: string;

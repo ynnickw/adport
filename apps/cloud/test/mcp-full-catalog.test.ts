@@ -6,7 +6,8 @@ import { expect, it, vi } from 'vitest';
 import { POST } from '@/app/mcp/route';
 import { resetEnvForTests } from '@/lib/env';
 import { CLOUD_PROVIDERS } from '@/lib/cloud/types';
-import { createTenantRuntime } from '@/lib/cloud/runtime';
+import { createTenantRuntime, hostedToolCatalogCounts } from '@/lib/cloud/runtime';
+import { catalogToolCount } from '@/lib/mcp-tool-selection';
 import mcpPackage from '../../../packages/mcp/package.json';
 
 const projectId = '11111111-1111-4111-8111-111111111111';
@@ -65,6 +66,26 @@ it('returns only platforms supported by the hosted runtime in capability discove
   const runtime = await createTenantRuntime({ organizationId: projectId, scopes: ['tools:read'] }, { surface: 'mcp' });
   const result = await runtime.registry.call('capabilities_list', { limit: 1 }, runtime.ctx);
   expect(result).toMatchObject({ platforms: CLOUD_PROVIDERS.map(id => ({ id })) });
+});
+
+it('counts the advertised Standard catalog and keeps the native campaign tools in Full', async () => {
+  const providers = ['google', 'meta', 'linkedin'] as const;
+  const catalog = hostedToolCatalogCounts([projectId]);
+  const scopes = ['tools:read', 'tools:write'];
+  const standard = { profile: 'standard', providers } as const;
+  const full = { profile: 'full', providers } as const;
+  const standardResult = await listCatalog(standard, false);
+  const fullResult = await listCatalog(full, false);
+  const names = standardResult.tools.map(tool => tool.name);
+  expect(names).toEqual(expect.arrayContaining(['campaigns_list', 'campaign_set_status', 'google_gaql', 'linkedin_set_campaign_status']));
+  expect(names).not.toContain('meta_list_campaigns');
+  expect(names).not.toContain('meta_set_campaign_status');
+  expect(standardResult.tools.find(tool => tool.name === 'campaign_set_status')?.inputSchema.properties?.provider).toEqual({
+    type: 'string', enum: expect.arrayContaining([...providers]),
+  });
+  expect(fullResult.tools.map(tool => tool.name)).toEqual(expect.arrayContaining(['meta_list_campaigns', 'meta_set_campaign_status']));
+  expect(catalogToolCount(catalog, standard, scopes, true)).toBe(standardResult.tools.length);
+  expect(catalogToolCount(catalog, full, scopes, true)).toBe(fullResult.tools.length);
 });
 
 it('keeps the full hosted tools/list response within its wire budget on both transports', async () => {

@@ -6,7 +6,7 @@ import { ConnectAssistantButton } from '@/components/assistant-connect';
 import { getAssistantListings } from '@/lib/cloud/assistant-listings';
 import { AssistantConnections } from './assistant-connections';
 import { DashboardLink as Link } from '@/components/dashboard-navigation';
-import { listMcpOAuthGrants } from '@/lib/cloud/mcp-oauth-repository';
+import { listAssistantGrants } from '@/lib/cloud/assistant-tool-catalog';
 import { selectProjectAction } from '../projects/actions';
 import { Button } from '@/components/controls';
 
@@ -24,7 +24,7 @@ export default async function AgentsPage({ searchParams }: { searchParams?: Prom
   if (query.kind === 'key') redirect('/dashboard/developer?' + new URLSearchParams({ kind: 'key', ...(query.connection ? { connection: query.connection } : {}) }));
   const baseUrl = env().ADPORT_CLOUD_BASE_URL.replace(/\/$/, '');
   const canManage = canAdminister(tenant);
-  const grants = canManage ? await listMcpOAuthGrants(tenant.organizationId) : [];
+  const grants = canManage ? await listAssistantGrants(tenant.organizationId, tenant.userId) : [];
   const initialGrants = grants.map(grant => ({ ...grant, createdAt: grant.createdAt.toISOString(), expiresAt: grant.expiresAt.toISOString(), lastUsedAt: grant.lastUsedAt?.toISOString() ?? null }));
   return (
     <main className="page">

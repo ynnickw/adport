@@ -4,6 +4,8 @@ import { agencyArticles } from './resource-content/agencies.mjs';
 import { claudeArticles } from './resource-content/claude-connections.mjs';
 import { chatgptArticles } from './resource-content/chatgpt-connections.mjs';
 import { marketingAnalyticsArticles } from './resource-content/marketing-analytics.mjs';
+import { matomoArticles } from './resource-content/matomo-analytics.mjs';
+import { gravityArticles } from './resource-content/gravity-advertising.mjs';
 import { metaReportingArticles } from './resource-content/meta-reporting.mjs';
 import { paidSearchArticles } from './resource-content/paid-search.mjs';
 import { appleAcquisitionArticles } from './resource-content/apple-acquisition.mjs';
@@ -35,12 +37,26 @@ export const workflowClusters = [
 ];
 export const clusters = [
   ...workflowClusters,
+  {
+    slug: 'matomo-analytics', title: 'Matomo analytics for marketing teams',
+    description: 'Connect Matomo to ChatGPT or Claude to report on tagged campaigns, landing pages and the goals visitors complete.',
+    intro: 'Which campaign brought a qualified lead, and which page did that visitor land on? Connect your Matomo Cloud or self-hosted site to Adport and ask in ChatGPT or Claude. Start with site setup, trace a campaign through its tags, or compare landing pages against a goal you already measure.',
+    firstReport: 'Connect one Matomo site, choose a goal and ask which campaigns brought visitors who completed it.',
+    keywords: ['Matomo MCP', 'Matomo ChatGPT integration', 'Matomo campaign tracking', 'Matomo landing page conversions'],
+  },
+  {
+    slug: 'gravity-ai-advertising', title: 'Gravity advertising in AI chat apps', providers: ['gravity'],
+    description: 'Plan contextual ads for AI conversations, review Gravity campaign performance and check which conversions your advertiser can attribute.',
+    intro: 'Think about the question someone asks just before buying what you sell. Use that question to plan an ad for Gravity’s participating AI chat apps. If you already buy through Gravity, start with a campaign report or trace a conversion from your site to the advertiser account.',
+    firstReport: 'Connect a Gravity advertiser with read access and ask for spend, clicks and conversions over the last seven complete days.',
+    keywords: ['Gravity Ads MCP', 'advertise in AI chat apps', 'Gravity Ads campaign reporting', 'Gravity conversion tracking'],
+  },
   { slug: 'connect-ads-to-claude', title: 'Connect ads to Claude', description: 'Connect Google, Meta, TikTok, Snapchat, LinkedIn, Microsoft, and Reddit Ads to Claude or Claude Code with MCP.', intro: 'Choose your advertising platform for the account setup, Claude Code commands, and a useful first report. Start with the shared MCP setup if you manage several platforms, then follow the guide for the metrics and permissions that matter to your account.', keywords: ['connect Google Ads to Claude', 'connect Meta Ads to Claude', 'connect Snapchat Ads to Claude Code', 'Claude Code ads'] },
   { slug: 'connect-ads-to-chatgpt', title: 'Connect ads to ChatGPT', description: 'Connect Google, Meta, TikTok, Snapchat, LinkedIn, and Microsoft Ads to ChatGPT with an MCP plugin and OAuth.', intro: 'Install Adport in ChatGPT, authorize the right client project, and verify the advertising accounts available to your conversation. Start with the shared plugin setup, then choose a provider guide for useful reporting prompts, measurement checks, and troubleshooting.', keywords: ['connect ad accounts to ChatGPT', 'Google Ads ChatGPT', 'Facebook Ads ChatGPT', 'Snapchat Ads ChatGPT', 'ChatGPT MCP advertising'] },
   { slug: 'ai-ad-management', title: 'AI ad management', description: 'Connect AI assistants to real advertising accounts and build a useful review workflow.', intro: 'An AI assistant is more useful when it can work with the account you mean. These guides start with project scope and authorization, then show how to ask grounded questions and review exact changes. Choose your preferred client, verify a small read, and build the same repeatable process around it.', keywords: ['Google Ads MCP server', 'Claude Google Ads', 'Google Ads ChatGPT', 'Codex Google Ads'] },
   { slug: 'google-ads-optimization', title: 'Google Ads optimization', description: 'Audit measurement, review search intent, and keep spending aligned with the plan.', intro: 'A useful account review starts with reliable measurement and a clear business question. Work through the audit before making isolated changes. Then use the search-term and budget-pacing guides to investigate specific issues, record the evidence, and choose a small action you can verify.', keywords: ['Google Ads audit checklist', 'Google Ads negative keywords', 'Google Ads budget pacing'] },
-  { slug: 'marketing-analytics', title: 'Marketing analytics with MCP', description: 'Connect GA4 and Google Search Console to your AI assistant, review organic search, and check conversion differences across Google Ads and GA4.', intro: 'Measure what happens before and after someone reaches your site. Use Google Search Console for organic search queries and clicks, GA4 for sessions and events, and Google Ads for campaign performance and attributed conversions. Connect the properties you need and compare each report on its own terms.' },
+  { slug: 'marketing-analytics', title: 'Marketing analytics with MCP', description: 'Connect Matomo, GA4 or Google Search Console to your AI assistant. Find which campaigns bring visitors and what they do on your site.', intro: 'Measure what happens before and after someone reaches your site. Use Search Console for organic queries and clicks, Matomo or GA4 for visits and conversions, and your ad platform for campaign spend. Choose the guide for the property and the question you want to investigate.' },
   { slug: 'agency-operations', title: 'Agency operations', description: 'Keep clients separate, give people the right access, and report numbers they can use.', intro: 'A repeatable agency process needs clear client boundaries as much as useful reports. Organize projects, assign the right people, and keep commercial approval alongside exact advertising previews. These guides connect the permission model to the day-to-day work of client reporting and decision-making.', keywords: ['agency ad management', 'Google Ads read only access', 'CPA vs ROAS'] },
 ];
-export const articles = [...metaReportingArticles, ...paidSearchArticles, ...appleAcquisitionArticles, ...claudeArticles, ...chatgptArticles, ...aiArticles, ...optimizationArticles, ...marketingAnalyticsArticles, ...agencyArticles];
+export const articles = [...metaReportingArticles, ...paidSearchArticles, ...appleAcquisitionArticles, ...claudeArticles, ...chatgptArticles, ...aiArticles, ...optimizationArticles, ...marketingAnalyticsArticles, ...agencyArticles, ...matomoArticles, ...gravityArticles];
 export const articlesInCluster = slug => articles.filter(article => article.cluster === slug || article.relatedClusters?.includes(slug));

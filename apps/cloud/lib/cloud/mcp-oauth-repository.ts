@@ -61,6 +61,7 @@ export interface McpOAuthGrantSummary {
   toolSelection: ToolSelection;
   organizationGroupId?: string | null;
   organizationGrantId?: string | null;
+  organizationGroupIds?: string[] | null;
   clientId: string;
   userId: string;
   clientName: string;
@@ -78,7 +79,7 @@ export interface McpOAuthGrantSummary {
  * metadata. Historical grants remain visible after rotation, expiry, or
  * revocation; raw access and refresh tokens are never recoverable or returned.
  */
-export async function listMcpOAuthGrants(organizationId: string): Promise<McpOAuthGrantSummary[]> {
+export async function listMcpOAuthGrants(organizationId: string, viewerUserId?: string): Promise<McpOAuthGrantSummary[]> {
   const grants = await db()<Array<Omit<McpOAuthGrantSummary, 'status'> & {
     consumedAt: Date | null;
     revokedAt: Date | null;
@@ -87,6 +88,7 @@ export async function listMcpOAuthGrants(organizationId: string): Promise<McpOAu
       refresh.client_id,
       refresh.organization_group_id,
       refresh.organization_grant_id,
+      case when refresh.user_id = ${viewerUserId ?? null} then grant_row.organization_group_ids end as organization_group_ids,
       refresh.user_id,
       client.client_name,
       client.client_uri,
@@ -99,6 +101,8 @@ export async function listMcpOAuthGrants(organizationId: string): Promise<McpOAu
       access.last_used_at
     from private.mcp_oauth_refresh_tokens refresh
     join private.mcp_oauth_clients client on client.client_id = refresh.client_id
+    left join private.mcp_oauth_organization_grants grant_row on grant_row.id = refresh.organization_grant_id
+      and grant_row.user_id = refresh.user_id and grant_row.client_id = refresh.client_id and grant_row.resource = refresh.resource
     left join lateral (
       select token.last_used_at
       from private.mcp_oauth_access_tokens token
@@ -114,10 +118,9 @@ export async function listMcpOAuthGrants(organizationId: string): Promise<McpOAu
     ) access on true
     where refresh.organization_id = ${organizationId}
       or refresh.organization_group_id = (select organization_group_id from public.organizations where id = ${organizationId})
-      or refresh.organization_grant_id in (select grant_row.id from private.mcp_oauth_organization_grants grant_row
-        join public.organizations project on project.id = ${organizationId}
+      or exists (select 1 from public.organizations project
         join private.project_memberships membership on membership.organization_id = project.id and membership.user_id = grant_row.user_id
-        where grant_row.organization_group_ids @> array[project.organization_group_id])
+        where project.id = ${organizationId} and project.organization_group_id = any(grant_row.organization_group_ids))
     order by refresh.client_id, refresh.user_id, refresh.resource, refresh.organization_group_id, refresh.organization_grant_id, refresh.created_at desc
   `;
   return Promise.all(grants.map(async ({ consumedAt, revokedAt, ...grant }) => ({

@@ -1,5 +1,7 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_POLICY, policySchema } from '@adport/core';
 import { PolicyForm } from '@/app/dashboard/policies/policy-form';
 import { PolicySummary } from '@/components/policy-summary';
@@ -8,6 +10,14 @@ import { OnboardingFlow } from '@/app/onboarding/onboarding-flow';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 vi.mock('@/components/assistant-connect', () => ({ AssistantConnect: () => <div>Assistant setup fixture</div>, AssistantPicker: () => <div /> }));
+
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+const accounts = [
+  { provider: 'google', accountId: 'readonly', name: 'Read account', currency: 'EUR', status: null, enabled: true },
+  { provider: 'meta', accountId: 'editable', name: 'Edit account', currency: 'USD', status: null, enabled: true },
+  { provider: 'apple', accountId: 'disabled', name: 'Disabled account', currency: 'EUR', status: null, enabled: false },
+];
 
 describe('optional policy settings', () => {
   it('turns off both limits without disabling previews or losing other safeguards', () => {
@@ -38,24 +48,52 @@ describe('optional policy settings', () => {
   });
 
   it('renders named switches, explicit unlimited states, account access, and custom info controls', () => {
-    const html = renderToStaticMarkup(<PolicyForm organizationId="project" canAdminister policy={{ ...DEFAULT_POLICY, max_budget_delta_pct: null, protected_accounts: ['readonly'] }} dataRetentionDays={30} planName="Growth" maxRetentionDays={90} writeAccess accounts={[
-      { provider: 'google', accountId: 'readonly', name: 'Read account', currency: 'EUR', status: null, enabled: true },
-      { provider: 'meta', accountId: 'editable', name: 'Edit account', currency: 'USD', status: null, enabled: true },
-      { provider: 'apple', accountId: 'disabled', name: 'Disabled account', currency: 'EUR', status: null, enabled: false },
-    ]} />);
+    const html = renderToStaticMarkup(<PolicyForm organizationId="project" canAdminister policy={{ ...DEFAULT_POLICY, max_budget_delta_pct: null, protected_accounts: ['readonly'] }} dataRetentionDays={30} planName="Growth" maxRetentionDays={90} writeAccess accounts={accounts} />);
     expect(html).toContain('role="switch"');
     expect(html).toContain('No percentage limit');
     expect(html).toContain('No daily budget limit');
     expect(html).not.toContain('name="maxBudgetDeltaPct"');
     expect(html).not.toContain('name="maxDailyBudget"');
-    expect(html).toContain('Read only</span>');
-    expect(html).toContain('Preview required</span>');
-    expect(html).toContain('Disabled</span>');
     expect(html).toContain('aria-label="About budget limits"');
-    expect(html).toContain('Manage accounts · 1 read only');
+    expect(html).toContain('1 selected');
+    expect(html).toContain('Choose accounts');
+    expect(html).not.toContain('<details');
     expect(html).not.toContain('Discard</button>');
     expect(html).not.toContain('Save policy');
     expect(html).not.toContain('name="require_validation"');
+  });
+
+  it('reviews account choices locally and applies them only when the policy is saved', async () => {
+    HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
+    HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
+    const fetch = vi.fn().mockResolvedValue(Response.json({}));
+    vi.stubGlobal('fetch', fetch);
+    render(<PolicyForm organizationId="project" canAdminister policy={{ ...DEFAULT_POLICY, protected_accounts: ['readonly'] }}
+      dataRetentionDays={30} planName="Growth" maxRetentionDays={90} writeAccess accounts={accounts} />);
+    const choose = screen.getByRole('button', { name: 'Choose accounts' });
+    fireEvent.click(choose);
+    let dialog = within(screen.getByRole('dialog', { name: 'Read-only accounts' }));
+    expect(dialog.getByText('Read only')).toBeTruthy();
+    expect(dialog.getByText('Preview required')).toBeTruthy();
+    expect(dialog.getByText('Disabled')).toBeTruthy();
+    fireEvent.click(dialog.getByRole('checkbox', { name: 'Make Edit account read only' }));
+    fireEvent.click(dialog.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByText('1 selected')).toBeTruthy();
+
+    fireEvent.click(choose);
+    dialog = within(screen.getByRole('dialog', { name: 'Read-only accounts' }));
+    const account = dialog.getByRole('checkbox', { name: 'Make Edit account read only' });
+    expect(account).toHaveProperty('checked', false);
+    fireEvent.click(account);
+    fireEvent.change(dialog.getByRole('textbox', { name: 'Other account IDs' }), { target: { value: 'unlisted' } });
+    fireEvent.click(dialog.getByRole('button', { name: 'Done' }));
+    expect(screen.getByText('3 selected')).toBeTruthy();
+    expect(fetch).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save policy' }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(fetch.mock.calls[0]![1].body)).toMatchObject({
+      organizationId: 'project', policy: { protected_accounts: ['editable', 'readonly', 'unlisted'], require_validation: true },
+    });
   });
 });
 

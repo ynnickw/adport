@@ -1,8 +1,7 @@
 'use client';
 
-import { useToast } from '@/components/toast';
-
 import { Button, Disclosure } from '@/components/controls';
+import { CopyButton } from '@/components/copy-button';
 import { useState } from 'react';
 import { SiClaude, SiCursor, SiModelcontextprotocol } from 'react-icons/si';
 import { matchesAssistant } from '@/lib/assistant-client';
@@ -35,16 +34,6 @@ export function AgentIdentityLogo({ name, clientUri }: { name: string; clientUri
   const setup = AGENT_SETUPS.find(item => item.id !== 'mcp' && matchesAssistant(item.id, { clientName: name, clientUri: clientUri ?? null, kind: 'oauth' }));
   const provider = setup?.provider ?? 'mcp';
   return <span className={`agent-logo ${provider}`} aria-hidden="true"><AgentLogo provider={provider} /></span>;
-}
-
-export function CopyButton({ value, label, className = '', onCopyFailure }: { value: string; label: string; className?: string; onCopyFailure?: () => void }) {
-  const [failed, setFailed] = useState(false);
-  const toast = useToast();
-  async function copy() {
-    try { await navigator.clipboard.writeText(value); setFailed(false); toast('Copied to clipboard.'); }
-    catch { setFailed(true); onCopyFailure?.(); }
-  }
-  return <Button className={'button secondary small ' + className} type="button" onClick={() => void copy()} aria-label={label}><span aria-live="polite">{failed ? 'Select text to copy' : label}</span></Button>;
 }
 
 export function AgentSetupGuide({ baseUrl, projectName, initialSelectedId, onSelectionChange, canCheckConnection = false, hasConnections = false, variant = 'default' }: { baseUrl: string; projectName?: string; initialSelectedId?: string; onSelectionChange?: (id: string) => void; canCheckConnection?: boolean; hasConnections?: boolean; variant?: 'default' | 'onboarding' }) {
