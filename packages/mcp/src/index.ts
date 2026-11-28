@@ -160,6 +160,18 @@ const explicitHostedUiVisibility = new Set([
   'linkedin_get_sponsored_post',
 ]);
 
+// OpenAI held these definition updates while keeping their cached versions live.
+// Keep the reviewed resource aliases on the hosted publisher surface. Resource
+// reads still serve the current renderer at those aliases, with their existing CSP.
+const reviewedPublisherMetadata = new Map<string, { resourceUri: string; previewCopy?: true }>([
+  ['meta_create_campaign', { resourceUri: 'ui://adport/summary-card-v30.html', previewCopy: true }],
+  ['google_create_performance_max_campaign', { resourceUri: 'ui://adport/summary-card-v30.html', previewCopy: true }],
+  ['reddit_ads', { resourceUri: 'ui://adport/insight-card-v34.html' }],
+  ['pinterest_catalog_items', { resourceUri: 'ui://adport/insight-card-v36.html' }],
+  ['x_preroll_ctas', { resourceUri: 'ui://adport/insight-card-v36.html' }],
+  ['x_get_preroll_cta', { resourceUri: 'ui://adport/insight-card-v36.html' }],
+]);
+
 /**
  * Thin adapter: every tool in the shared registry becomes an MCP tool.
  * No tool logic lives here — see the "one tool-definition layer" principle.
@@ -185,7 +197,8 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
     const scopeDenial = scopes && !scopes.includes(requiredScope) ? scopeDenials?.[requiredScope] : undefined;
     if (scopes && !scopes.includes(requiredScope) && !scopeDenial) continue;
     const view = tool.presentation ?? viewForTool(tool.name, tool.annotations.readOnly ?? false);
-    const resourceUri = productionOnly && view !== 'creatives' ? ADPORT_SUMMARY_UI_URI : ADPORT_UI_URI;
+    const reviewed = productionOnly && uiDomain === ADPORT_UI_DOMAIN ? reviewedPublisherMetadata.get(tool.name) : undefined;
+    const resourceUri = reviewed?.resourceUri ?? (productionOnly && view !== 'creatives' ? ADPORT_SUMMARY_UI_URI : ADPORT_UI_URI);
     const canRefresh = tool.annotations.readOnly && (view === 'creatives' || view === 'records' || tool.pagination !== undefined);
     const canPage = canRefresh && tool.pagination !== undefined;
     // MCP structuredContent must be an object. Preserve legacy raw arrays in
@@ -196,13 +209,24 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
       ? output instanceof z.ZodObject ? output : z.object({ value: output })
       : undefined;
     const definition = productionOnly ? tool.hosted ?? tool : tool;
+    // Preserve the reviewed preview instructions without changing the registry
+    // schema, write handler, or compact metadata on the rest of the catalog.
+    const pendingId = definition.input.shape.pending_operation_id;
+    const useReviewedCopy = reviewed?.previewCopy && pendingId instanceof z.ZodOptional;
+    const description = useReviewedCopy
+      ? definition.description.replace(/\n\nApply with IDENTICAL arguments and the ID from preview\.$/,
+        '\n\nOmit pending_operation_id to preview. To apply, repeat IDENTICAL arguments with the returned ID.')
+      : definition.description;
+    const inputSchema = useReviewedCopy
+      ? definition.input.safeExtend({ pending_operation_id: pendingId.describe('Omit to get a dry-run preview; pass the returned id to apply.') })
+      : definition.input;
     const title = toolTitle(tool.name);
     const config = {
       ...(!productionOnly || explicitHostedTitle.has(tool.name) ? { title } : {}),
       description: scopeDenial
-        ? `${definition.description}\n\nUnavailable on the current plan: ${scopeDenial.message}`
-        : definition.description,
-      inputSchema: definition.input,
+        ? `${description}\n\nUnavailable on the current plan: ${scopeDenial.message}`
+        : description,
+      inputSchema,
       ...(objectOutput ? { outputSchema: objectOutput.extend({
         ...(view ? { _adport: productionOnly ? z.looseObject({}) : z.object({
           tool: z.literal(tool.name), view: z.literal(view), providerNames: z.record(z.string(), z.string()),
