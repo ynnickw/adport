@@ -17,6 +17,7 @@ import { createPinterestModule } from '@adport/provider-pinterest';
 import { createLinkedInModule } from '@adport/provider-linkedin';
 import { createXModule } from '@adport/provider-x';
 import { createOpenAIModule } from '@adport/provider-openai';
+import { createGravityModule } from '@adport/provider-gravity';
 import { createMatomoModule } from '@adport/provider-matomo';
 import packageJson from '../package.json';
 import {
@@ -61,7 +62,7 @@ export async function assembleRuntime(options: AssembleRuntimeOptions = {}): Pro
   const modules: ProviderModule[] = [];
   const includeMock = options.includeMock ?? process.env.ADPORT_DEMO === 'true';
   if (!includeMock) {
-    for (const factory of [createGa4Module, createGscModule, createGtmModule, createGoogleModule, createMetaModule, createTikTokModule, createAppleModule, createMicrosoftModule, createRedditModule, createSnapchatModule, createSpotifyModule, createPinterestModule, createLinkedInModule, createXModule, createOpenAIModule, createMatomoModule]) {
+    for (const factory of [createGa4Module, createGscModule, createGtmModule, createGoogleModule, createMetaModule, createTikTokModule, createAppleModule, createMicrosoftModule, createRedditModule, createSnapchatModule, createSpotifyModule, createPinterestModule, createLinkedInModule, createXModule, createOpenAIModule, createMatomoModule, createGravityModule]) {
       const module = await factory(store);
       if (module) modules.push(module);
     }
@@ -144,7 +145,7 @@ const hostedWriteOutput = z.looseObject({
   applied: writeOutput.shape.applied,
   preview: z.looseObject(writeOutput.shape.preview.pick({ summary: true, serverValidated: true }).shape),
   pending_operation_id: z.string().optional(),
-  expires_at: writeOutput.shape.expires_at.describe('Preview expiration.'),
+  expires_at: z.string().optional(),
   result: z.looseObject({}).optional(),
 });
 

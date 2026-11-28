@@ -324,12 +324,17 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
         await connectOpenAI({ io });
         return;
       }
+      if (provider === 'gravity') {
+        const { connectGravity } = await import('./connect/gravity.js');
+        await connectGravity({ io });
+        return;
+      }
       if (provider === 'matomo') {
         const { connectMatomo } = await import('./connect/matomo.js');
         await connectMatomo({ io });
         return;
       }
-      io.err(`Provider "${provider}" is not supported. Available: ga4, gsc, gtm, google, meta, tiktok, apple, microsoft, reddit, snapchat, spotify, pinterest, linkedin, x, openai, matomo, mock.`);
+      io.err(`Provider "${provider}" is not supported. Available: ga4, gsc, gtm, google, meta, tiktok, apple, microsoft, reddit, snapchat, spotify, pinterest, linkedin, x, openai, gravity, matomo, mock.`);
       process.exitCode = 1;
     });
 
@@ -337,8 +342,8 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
     .command('disconnect <provider>')
     .description('Remove a provider connection from this machine')
     .action(async (provider: string) => {
-      if (!['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai', 'matomo'].includes(provider)) {
-        io.err(`Provider "${provider}" is not supported. Available: ga4, gsc, gtm, google, meta, tiktok, apple, microsoft, reddit, snapchat, spotify, pinterest, linkedin, x, openai, matomo.`);
+      if (!['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai', 'gravity', 'matomo'].includes(provider)) {
+        io.err(`Provider "${provider}" is not supported. Available: ga4, gsc, gtm, google, meta, tiktok, apple, microsoft, reddit, snapchat, spotify, pinterest, linkedin, x, openai, gravity, matomo.`);
         process.exitCode = 1;
         return;
       }
@@ -413,7 +418,7 @@ export function buildProgram(io: ProgramIO = defaultIO): Command {
       for (const record of records) {
         io.out(`${record.provider}: credentials stored (source: ${record.source}, updated ${record.updatedAt})`);
       }
-      for (const id of ['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai', 'matomo'] as const) {
+      for (const id of ['ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai', 'gravity', 'matomo'] as const) {
         const provider = rt.ctx.providers.list().find((p) => p.id === id);
         if (!provider) {
           io.out(`${id}: not connected (run \`adport connect ${id}\`)`);

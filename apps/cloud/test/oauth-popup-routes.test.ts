@@ -114,6 +114,11 @@ describe('shared popup OAuth routes', () => {
     const response = await start(new Request(`https://app.adport.test/api/oauth/${suffix}`), { params: Promise.resolve({ provider: suffix.startsWith('meta') ? 'meta' : 'google' }) });
     expect(response.status).toBe(400); expect(mocks.create).not.toHaveBeenCalled();
   });
+  it.each(['', '&iss=https%3A%2F%2Fother.example', '&iss=https%3A%2F%2Fplatform.trygravity.ai&iss=other'])('rejects a missing, foreign or ambiguous Gravity issuer before token exchange', async suffix => {
+    await callback(new Request('https://app.adport.test/api/oauth/gravity/callback?code=c&state=s' + suffix), { params: Promise.resolve({ provider: 'gravity' }) });
+    expect(mocks.exchange).not.toHaveBeenCalled();
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
   it('rejects a callback for a different Matomo instance before exchanging any code', async () => {
     const context = { params: Promise.resolve({ provider: 'matomo' }) };
     mocks.consume.mockResolvedValue({ organizationId: 'org', verifier: 'v', returnPath: '/dashboard/analytics',
@@ -128,7 +133,7 @@ describe('shared popup OAuth routes', () => {
     const response = await start(new Request(`https://untrusted.test/api/oauth/${provider}/start?popup_id=${id}&return_to=%2Fonboarding`), context);
     expect(response.headers.get('location')).toBe('https://provider.test/authorize');
     expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ returnPath: popupReturnPath(id, '/onboarding') }));
-    const result = await callback(new Request(`https://untrusted.test/api/oauth/${provider}/callback?code=code&state=state`), context);
+    const result = await callback(new Request(`https://untrusted.test/api/oauth/${provider}/callback?code=code&state=state${provider === 'gravity' ? '&iss=https%3A%2F%2Fplatform.trygravity.ai' : ''}`), context);
     const location = new URL(result.headers.get('location')!);
     expect(location.origin).toBe('https://app.adport.test'); expect(location.pathname).toBe('/oauth/provider-complete');
     expect(location.searchParams.get('popup_id')).toBe(id);

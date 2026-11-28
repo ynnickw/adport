@@ -33,6 +33,9 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
     const { provider } = await params;
     if (!isOAuthProvider(provider)) return failure(new Error('Unknown OAuth provider.'), 404);
     if (provider === 'matomo') return failure(new Error('Start from the Matomo instance form.'), 400);
+    const access = url.searchParams.get('gravity_access') ?? 'read';
+    if (url.searchParams.has('gravity_access') && (provider !== 'gravity' || url.searchParams.getAll('gravity_access').length !== 1)) return failure(new Error('Invalid Gravity access option.'), 400);
+    if (access !== 'read' && access !== 'write' && access !== 'spend') return failure(new Error('Invalid Gravity access level.'), 400);
     const dataManager = url.searchParams.get('data_manager') === '1';
     if (url.searchParams.has('data_manager') && (provider !== 'google' || url.searchParams.getAll('data_manager').length !== 1 || !dataManager)) return failure(new Error('Invalid Google Data Manager authorization option.'), 400);
     const redditConversions = url.searchParams.get('conversions') === '1';
@@ -46,7 +49,7 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
     const principal = await sessionPrincipal(url.searchParams.get('organization_id') ?? undefined);
     if (!['owner', 'admin'].includes(principal.role ?? '')) throw new Error('Owner or admin access is required.');
     if (!providerAllowedForOrganization(provider, principal.organizationId)) return failure(new Error('This provider is not enabled for this organization.'), 403);
-    const adapter = oauthAdapter(provider, { googleDataManager: dataManager, redditConversions, pinterestPinManagement: pinManagement, pinterestSecretPins: secretPins, pinterestCatalogManagement: catalogManagement });
+    const adapter = oauthAdapter(provider, { gravityAccess: access, googleDataManager: dataManager, redditConversions, pinterestPinManagement: pinManagement, pinterestSecretPins: secretPins, pinterestCatalogManagement: catalogManagement });
     if (!adapter.configured()) return failure(new Error(`The hosted ${provider} application is not available yet.`), 503);
     const prepared = await adapter.prepare?.();
     const state = prepared?.state ?? randomBytes(32).toString('base64url');
@@ -60,6 +63,7 @@ export async function GET(request: Request, { params }: RouteContext<'/api/oauth
       provider,
       state,
       verifier: prepared?.verifier ?? pkce.verifier,
+      ...(provider === 'gravity' ? { gravityAccess: access } : {}),
       ...(dataManager ? { googleDataManager: true } : {}),
       ...(redditConversions ? { redditConversions: true } : {}),
       ...(pinManagement ? { pinterestPinManagement: true } : {}),

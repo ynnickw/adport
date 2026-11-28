@@ -31,7 +31,7 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   contextTarget?: (ctx: ToolContext) => { provider: AdProvider; accountId: string };
 }): AnyToolDefinition {
   const approvalFields = {
-    ...(def.contextTarget ? {} : { account_id: z.string().min(1).describe('Target account id') }),
+    ...(def.contextTarget ? {} : { account_id: z.string().min(1) }),
     pending_operation_id: z
       .string()
       .optional()

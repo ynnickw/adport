@@ -68,6 +68,7 @@ export async function createOAuthTransaction(input: {
   verifier: string;
   returnPath?: string;
   matomoApplication?: MatomoApplication;
+  gravityAccess?: 'read' | 'write' | 'spend';
   googleDataManager?: boolean;
   redditConversions?: boolean;
   pinterestPinManagement?: boolean;
@@ -80,7 +81,7 @@ export async function createOAuthTransaction(input: {
       (organization_id, user_id, provider, state_hash, verifier_ciphertext, return_path, expires_at)
     values
       (${input.organizationId}, ${input.userId}, ${input.provider}, ${digestState(input.state)},
-       ${encryptSecret({ verifier: input.verifier, ...(input.provider === 'matomo' ? { matomoApplication: input.matomoApplication } : {}), ...(input.provider === 'google' && input.googleDataManager ? { googleDataManager: true } : {}), ...(input.provider === 'reddit' && input.redditConversions ? { redditConversions: true } : {}), ...(input.provider === 'pinterest' && input.pinterestPinManagement ? { pinterestPinManagement: true } : {}), ...(input.provider === 'pinterest' && input.pinterestSecretPins ? { pinterestSecretPins: true } : {}), ...(input.provider === 'pinterest' && input.pinterestCatalogManagement ? { pinterestCatalogManagement: true } : {}) }, aad)}, ${input.returnPath ?? '/dashboard/connections'}, now() + interval '10 minutes')
+       ${encryptSecret({ verifier: input.verifier, ...(input.provider === 'gravity' ? { gravityAccess: input.gravityAccess } : {}), ...(input.provider === 'matomo' ? { matomoApplication: input.matomoApplication } : {}), ...(input.provider === 'google' && input.googleDataManager ? { googleDataManager: true } : {}), ...(input.provider === 'reddit' && input.redditConversions ? { redditConversions: true } : {}), ...(input.provider === 'pinterest' && input.pinterestPinManagement ? { pinterestPinManagement: true } : {}), ...(input.provider === 'pinterest' && input.pinterestSecretPins ? { pinterestSecretPins: true } : {}), ...(input.provider === 'pinterest' && input.pinterestCatalogManagement ? { pinterestCatalogManagement: true } : {}) }, aad)}, ${input.returnPath ?? '/dashboard/connections'}, now() + interval '10 minutes')
   `;
 }
 
@@ -89,6 +90,7 @@ export async function consumeOAuthTransaction(provider: OAuthProvider, state: st
   verifier: string;
   returnPath: string;
   matomoApplication?: MatomoApplication;
+  gravityAccess?: 'read' | 'write' | 'spend';
   googleDataManager?: boolean;
   redditConversions?: boolean;
   pinterestPinManagement?: boolean;
@@ -116,8 +118,8 @@ export async function consumeOAuthTransaction(provider: OAuthProvider, state: st
     }
     await sql`update private.oauth_transactions set consumed_at = now() where id = ${transaction.id}`;
     const aad = `oauth:${transaction.organizationId}:${userId}:${provider}`;
-    const secret = decryptSecret<{ verifier: string; matomoApplication?: MatomoApplication; googleDataManager?: boolean; redditConversions?: boolean; pinterestPinManagement?: boolean; pinterestSecretPins?: boolean; pinterestCatalogManagement?: boolean }>(transaction.verifierCiphertext, aad);
-    return { organizationId: transaction.organizationId, verifier: secret.verifier, returnPath: transaction.returnPath, ...(provider === 'matomo' ? { matomoApplication: secret.matomoApplication } : {}), ...(provider === 'google' && secret.googleDataManager === true ? { googleDataManager: true } : {}), ...(provider === 'reddit' && secret.redditConversions === true ? { redditConversions: true } : {}), ...(provider === 'pinterest' && secret.pinterestPinManagement === true ? { pinterestPinManagement: true } : {}), ...(provider === 'pinterest' && secret.pinterestSecretPins === true ? { pinterestSecretPins: true } : {}), ...(provider === 'pinterest' && secret.pinterestCatalogManagement === true ? { pinterestCatalogManagement: true } : {}) };
+    const secret = decryptSecret<{ verifier: string; gravityAccess?: 'read' | 'write' | 'spend'; matomoApplication?: MatomoApplication; googleDataManager?: boolean; redditConversions?: boolean; pinterestPinManagement?: boolean; pinterestSecretPins?: boolean; pinterestCatalogManagement?: boolean }>(transaction.verifierCiphertext, aad);
+    return { organizationId: transaction.organizationId, verifier: secret.verifier, returnPath: transaction.returnPath, ...(provider === 'gravity' ? { gravityAccess: secret.gravityAccess } : {}), ...(provider === 'matomo' ? { matomoApplication: secret.matomoApplication } : {}), ...(provider === 'google' && secret.googleDataManager === true ? { googleDataManager: true } : {}), ...(provider === 'reddit' && secret.redditConversions === true ? { redditConversions: true } : {}), ...(provider === 'pinterest' && secret.pinterestPinManagement === true ? { pinterestPinManagement: true } : {}), ...(provider === 'pinterest' && secret.pinterestSecretPins === true ? { pinterestSecretPins: true } : {}), ...(provider === 'pinterest' && secret.pinterestCatalogManagement === true ? { pinterestCatalogManagement: true } : {}) };
   });
 }
 

@@ -14,6 +14,7 @@ import {
 } from './google-oauth';
 import type { OAuthProvider, ProviderCredentialMap, StoredProviderCredential } from './types';
 import { extraOAuthAdapters, pinterestManagementAdapter } from './provider-oauth-extra';
+import { gravityOAuth } from './gravity-oauth';
 import { matomoOAuth } from './matomo-oauth';
 import type { MatomoApplication } from './types';
 import { xOAuthAdapter } from './provider-oauth-x';
@@ -431,9 +432,10 @@ function analyticsAdapter<P extends 'ga4' | 'gsc'>(provider: P, scopes: string[]
 }
 const ga4 = analyticsAdapter('ga4', GA4_SCOPES), gsc = analyticsAdapter('gsc', GSC_SCOPES);
 
-const adapters = { matomo: matomoOAuth(), ga4, gsc, gtm, google, meta, tiktok, microsoft, reddit, apple, ...extraOAuthAdapters, x: xOAuthAdapter } satisfies { [P in OAuthProvider]: OAuthAdapter<P> };
+const adapters = { gravity: gravityOAuth(), matomo: matomoOAuth(), ga4, gsc, gtm, google, meta, tiktok, microsoft, reddit, apple, ...extraOAuthAdapters, x: xOAuthAdapter } satisfies { [P in OAuthProvider]: OAuthAdapter<P> };
 
-export function oauthAdapter<P extends OAuthProvider>(provider: P, options: { matomoApplication?: MatomoApplication; googleDataManager?: boolean; redditConversions?: boolean; pinterestPinManagement?: boolean; pinterestSecretPins?: boolean; pinterestCatalogManagement?: boolean } = {}): OAuthAdapter<P> {
+export function oauthAdapter<P extends OAuthProvider>(provider: P, options: { gravityAccess?: 'read' | 'write' | 'spend'; matomoApplication?: MatomoApplication; googleDataManager?: boolean; redditConversions?: boolean; pinterestPinManagement?: boolean; pinterestSecretPins?: boolean; pinterestCatalogManagement?: boolean } = {}): OAuthAdapter<P> {
+  if (provider === 'gravity') return gravityOAuth(options.gravityAccess) as OAuthAdapter<P>;
   if (provider === 'matomo') return matomoOAuth(options.matomoApplication) as OAuthAdapter<P>;
   if (options.pinterestPinManagement || options.pinterestSecretPins || options.pinterestCatalogManagement) {
     if (provider !== 'pinterest' || options.googleDataManager) throw new Error('Pin management authorization is supported only for Pinterest.');
@@ -468,6 +470,7 @@ export function revokeGrant(provider: OAuthProvider, credential: StoredProviderC
 /** Availability of every hosted OAuth application, for the connections UI. */
 export function oauthAvailability(organizationId?: string): Record<OAuthProvider, boolean> {
   const availability: Record<OAuthProvider, boolean> = {
+    gravity: true,
     matomo: true,
     ga4: ga4.configured(),
     gsc: gsc.configured(),

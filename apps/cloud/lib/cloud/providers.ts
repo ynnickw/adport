@@ -26,6 +26,7 @@ export function providerConnectionsPath(provider: string): string {
 
 export const PROVIDER_LABELS: Record<CloudProvider, string> = {
   openai: 'OpenAI Ads',
+  gravity: 'Gravity',
   matomo: 'Matomo',
   ga4: 'Google Analytics 4',
   gsc: 'Google Search Console',

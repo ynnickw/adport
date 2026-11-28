@@ -9,6 +9,7 @@ const resourcePatterns: Record<string, RegExp> = {
   linkedin: /^(?:[1-9]\d{0,18}|urn:li:(?:(?:sponsoredCampaign|sponsoredCampaignGroup|sponsoredCreative|ugcPost|share):\d+|(?:image|video|document):[A-Za-z0-9_-]+))$/,
   x: /^(?:[0-9a-z]{1,32}|\d+_\d+)$/,
   openai: /^[A-Za-z0-9_-]{1,128}$/,
+  gravity: /^[A-Za-z0-9_-]{1,128}$/,
   mock: /^(?:c|g|a)\d+$/,
 };
 

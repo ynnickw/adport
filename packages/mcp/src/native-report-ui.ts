@@ -3,7 +3,7 @@ import { META_INSIGHTS_UI } from './meta-insights-ui.js';
 
 export const NATIVE_REPORT_TOOLS = [
   'gsc_search_analytics',
-  'google_gaql',
+  'google_gaql', 'gravity_conversion_stats',
   'linkedin_demographic_report',
   'meta_insights', 'tiktok_report', 'reddit_report', 'spotify_insight_report',
   'microsoft_keyword_report', 'microsoft_search_term_report',
@@ -76,7 +76,7 @@ export const NATIVE_REPORT_UI_SCRIPT = String.raw`
     function nativeReportRecord(row,index,meta,payload) {
       if(!object(row))return null;
       const provider=meta.tool.split('_')[0],dimensions=object(row.dimensions)?row.dimensions:provider==='google'&&object(row.segments)?row.segments:{},metrics=['tiktok','google','linkedin','ga4','gsc','matomo'].includes(provider)&&object(row.metrics)?row.metrics:row;
-      const names=provider==='microsoft'?['SearchQuery','Keyword','ConversionName','UploadDate']:provider==='apple'?['searchTerm','appName']:['ad_name','adgroup_name','adset_name','campaign_name','account_name','advertiser_name','name','entity_name'];
+      const names=provider==='gravity'?['date']:provider==='microsoft'?['SearchQuery','Keyword','ConversionName','UploadDate']:provider==='apple'?['searchTerm','appName']:['ad_name','adgroup_name','adset_name','campaign_name','account_name','advertiser_name','name','entity_name'];
       const ids=['ad_id','adgroup_id','adset_id','campaign_id','advertiser_id','account_id','entity_id','id','GoalId','urn'];
       const first=(keys,sources)=>keys.flatMap(key=>sources.map(source=>source[key])).find(value=>(typeof value==='string'&&value.trim())||typeof value==='number');
       const googleDimensions=provider==='google'?gaqlDimensions(row):null;
@@ -132,9 +132,9 @@ export const NATIVE_REPORT_UI_SCRIPT = String.raw`
       return '<article class="record-row"><div class="record-heading"><div class="record-name"><strong>'+esc(name)+'</strong></div>'+(status?'<span>'+esc(status)+'</span>':'')+'</div>'+(context.length?'<p class="apple-report-dimensions">'+context.map(esc).join(' · ')+'</p>':'')+(shown.length?'<dl class="record-fields apple-report-metrics native-report-metrics">'+shown.map(([key,value])=>'<div><dt>'+esc(nativeReportLabel(key))+'</dt><dd>'+esc(nativeReportMetric(key,value,provider,currency,moneyFields,percentFields,durationFields))+'</dd></div>').join('')+'</dl>':'<p class="operation-note">No metrics returned for this row.</p>')+details+'</article>';
     }
     function renderNativeReport(data,meta) {
-      const payload=meta.tool==='linkedin_demographic_report'?data:recordPayload(data),rows=meta.tool==='reddit_report'?payload?.metrics:payload?.rows;
+      const payload=meta.tool==='linkedin_demographic_report'?data:recordPayload(data),rows=meta.tool==='reddit_report'?payload?.metrics:meta.tool==='gravity_conversion_stats'?payload?.time_series:payload?.rows;
       const entries=Array.isArray(rows)?rows:[],provider=meta.tool.split('_')[0];
-      const title=meta.tool.includes('offline_conversion')?'Upload diagnostics':meta.tool==='apple_impression_share'?'Impression share':meta.tool==='apple_search_term_popularity'?'Search popularity':provider==='ga4'?'Website analytics':provider==='gsc'?'Organic search':provider==='matomo'?'Matomo analytics':'Performance';
+      const title=meta.tool==='gravity_conversion_stats'?'Conversions by day':meta.tool.includes('offline_conversion')?'Upload diagnostics':meta.tool==='apple_impression_share'?'Impression share':meta.tool==='apple_search_term_popularity'?'Search popularity':provider==='ga4'?'Website analytics':provider==='gsc'?'Organic search':provider==='matomo'?'Matomo analytics':'Performance';
       const missing=Array.isArray(rows)?'No report rows returned.':'Report rows unavailable. The response is in Details.';
       const clean={...data};delete clean._adport;
       const errors=arr(data.errors).filter(error=>error?.error_code).map(error=>'<p class="notice">Goal '+esc(error.goal_id||'unavailable')+': '+esc(error.error_code)+'</p>').join('');

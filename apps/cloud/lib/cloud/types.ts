@@ -80,6 +80,7 @@ export interface HostedOAuthGrant {
 export interface MatomoApplication { url: string; clientId: string; clientSecret: string }
 
 export interface ProviderCredentialMap {
+  gravity: { apiKey: string } | (HostedOAuthGrant & { scopes: string[] });
   openai: { apiKey: string };
   matomo: { url: string; tokenAuth: string } | (MatomoApplication & HostedOAuthGrant);
   ga4: { refreshToken: string };
@@ -101,10 +102,15 @@ export interface ProviderCredentialMap {
 export type CloudProvider = keyof ProviderCredentialMap;
 export type StoredProviderCredential = ProviderCredentialMap[CloudProvider];
 
-export const CLOUD_PROVIDERS = ['ga4', 'gsc', 'matomo', 'gtm', 'google', 'meta', 'tiktok', 'microsoft', 'reddit', 'apple', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai'] as const satisfies readonly CloudProvider[];
+export const CLOUD_PROVIDERS = ['ga4', 'gsc', 'matomo', 'gtm', 'google', 'meta', 'tiktok', 'microsoft', 'reddit', 'apple', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai', 'gravity'] as const satisfies readonly CloudProvider[];
 /** Providers whose connection is established through the Adport-owned OAuth application. */
-export const OAUTH_PROVIDERS = ['matomo', 'ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'microsoft', 'reddit', 'apple', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const satisfies readonly CloudProvider[];
+export const OAUTH_PROVIDERS = ['gravity', 'matomo', 'ga4', 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'microsoft', 'reddit', 'apple', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x'] as const satisfies readonly CloudProvider[];
 export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
+const credentialProviders = ['openai', 'gravity', 'matomo'] as const satisfies readonly CloudProvider[];
+export type CredentialProvider = (typeof credentialProviders)[number];
+export function acceptsProviderCredential(value: string): value is CredentialProvider {
+  return (credentialProviders as readonly string[]).includes(value);
+}
 
 export function isOAuthProvider(value: string): value is OAuthProvider {
   return (OAUTH_PROVIDERS as readonly string[]).includes(value);
