@@ -90,6 +90,8 @@ const featured = [
   ['advertise-on-duckduckgo', 'Advertising on DuckDuckGo'],
   ['agency-multi-client-ad-management', 'Multi-client ad management'],
   ['marketing-analytics', 'GA4 and Search Console'],
+  ['matomo-analytics', 'Matomo campaign analytics'],
+  ['gravity-ai-advertising', 'Gravity ads in AI chat apps'],
 ];
 const claudeFeatured = ['meta-ads-with-claude', 'snapchat-ads-with-claude', 'tiktok-ads-with-claude'].map(slug => articles.find(a => a.slug === slug));
 const chatgptFeatured = ['google-ads-with-chatgpt', 'meta-ads-with-chatgpt', 'snapchat-ads-with-chatgpt'].map(slug => articles.find(a => a.slug === slug));
