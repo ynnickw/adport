@@ -9,7 +9,7 @@ export const marketingAnalyticsArticles = [
     title: 'Google Search Console MCP for SEO reporting',
     description: 'Connect Search Console to Claude, ChatGPT, or Codex. Compare organic clicks, queries, and pages, and inspect indexing with read-only access.',
     summary: 'Connect one property, compare organic search periods, and find pages worth investigating.',
-    marks: ['google', 'mcp'], sources: ['searchConsolePerformance', 'searchConsoleApi', 'searchConsoleInspection'],
+    marks: ['gsc', 'mcp'], sources: ['searchConsolePerformance', 'searchConsoleApi', 'searchConsoleInspection'],
     intro: 'A Search Console MCP server lets your assistant ask the same kinds of questions you answer in the Performance report. Use it to find pages losing organic clicks, understand which searches bring visitors to an integration page, and check how Google indexed a URL. Start with one property and a report you can compare with Search Console.',
     sections: [
       section('connect-a-property', 'Connect the Search Console property you want to review', `<p>Open <strong>Analytics &amp; tracking</strong> in the Adport Cloud project for your site. Connect Google Search Console with a Google account that already has access to the property. Select it and enable access for your assistant. This connection uses the <code>webmasters.readonly</code> scope and does not use an ad-account slot.</p><p>Check the exact property before running a report. A Domain property such as <code>sc-domain:example.com</code> covers the domain and its subdomains across protocols. A URL-prefix property such as <code>https://www.example.com/</code> covers the matching prefix. Keep the same property when you compare the report with the Google dashboard.</p>`),
@@ -24,7 +24,7 @@ export const marketingAnalyticsArticles = [
     title: 'Google Analytics MCP for GA4 reports in Claude and ChatGPT',
     description: 'Connect a GA4 property to Claude, ChatGPT, or Codex with read-only MCP. Run landing-page and acquisition reports with sessions and key events.',
     summary: 'Connect GA4 and see which acquisition sources and landing pages lead to key events.',
-    marks: ['google', 'mcp'], sources: ['ga4Reports', 'ga4Schema', 'analyticsClicksSessions'],
+    marks: ['ga4', 'mcp'], sources: ['ga4Reports', 'ga4Schema', 'analyticsClicksSessions'],
     intro: 'Connect Google Analytics 4 to your assistant when you want to ask which landing pages get used, how visitors arrived, or where important actions happen. Pick one named property and start with a small report. A reliable first read makes it easier to spot when a custom event or acquisition filter changes the meaning of a result.',
     sections: [
       section('choose-property', 'Connect GA4 and enable one property', `<p>In Adport Cloud, choose the client or brand project and open <strong>Analytics &amp; tracking</strong>. Connect Google Analytics 4 as an administrator of the Adport project, sign in with a Google account that can read the intended property, and select it. Enable it for agent access when the account picker is complete.</p><p>Use the numeric GA4 property ID. A measurement ID such as <code>G-EXAMPLE</code> identifies a tag stream and will not identify the property to the reporting API. The connection uses <code>analytics.readonly</code>, and selected analytics properties do not take up paid-media account slots.</p>`),
@@ -39,7 +39,7 @@ export const marketingAnalyticsArticles = [
     title: 'Why Google Ads and GA4 conversions differ',
     description: 'Check conversion gaps between Google Ads and GA4 with a read-only MCP workflow. Compare dates, conversion actions, and attribution before changing campaigns.',
     summary: 'Trace discrepancies by conversion action, date basis, and tracking setup before adjusting spend.',
-    marks: ['google', 'mcp'], sources: ['analyticsClicksSessions', 'analyticsConversions', 'lag', 'ga4Reports'],
+    marks: ['google', 'ga4'], sources: ['analyticsClicksSessions', 'analyticsConversions', 'lag', 'ga4Reports'],
     intro: 'A conversion discrepancy can come from tracking, attribution, or the date you used for each report. Before adjusting bids or replacing tags, trace one business action through both systems. This workflow uses a connected Google Ads account and a GA4 property to make a short list of checks your team can reproduce.',
     sections: [
       section('scope-the-check', 'Choose one account, one property, and one business event', `<p>In one Adport project, connect the exact <a href="/providers/google-ads">Google Ads account</a> and the <a href="/resources/google-analytics-mcp">GA4 property</a> that measures its landing pages. Verify both IDs. Record the conversion action name from Google Ads and the corresponding event name in GA4. “Purchase” in one tool can refer to a different action than a similarly named row in the other.</p><p>Start with a completed date range long enough for the typical conversion lag of the action. Match the days as closely as the reporting time zones permit, and record both zones. A lead that arrives after midnight can fall on different days in two systems even when both recorded it.</p>`),

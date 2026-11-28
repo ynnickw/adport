@@ -6,6 +6,7 @@ import test from 'node:test';
 import { articles, articlesInCluster, clusters, sources, workflowClusters } from './website-resources.mjs';
 import { providers } from './website-providers.mjs';
 import { escape } from './resource-content/shared.mjs';
+import { topicGuides } from './resource-content/topic-guides.mjs';
 import { chatgptGuideForProvider } from './resource-content/chatgpt-connections.mjs';
 import { agentSetups, CHATGPT_PLUGIN_URL, mcpBaseUrl } from './website-agent-setups.mjs';
 const site = fileURLToPath(new URL('../../website/', import.meta.url));
@@ -89,6 +90,32 @@ test('hubs, sitemap and related guides make every article discoverable', () => {
   }
   assert(home.includes('href="/resources"'));
   assert(home.includes('id="resources-title"'));
+});
+
+test('every topic teaches its workflow in the initial HTML before linking to more guides', () => {
+  for (const {slug} of clusters) {
+    const html = pages.find(([file]) => file === `resources/${slug}.html`)[1];
+    const body = html.split('<div class="guide-body topic-body">')[1]?.split('</div><aside class="guide-toc">')[0];
+    assert(body && html.indexOf(body) < html.indexOf('<section class="resource-cluster" id="related-guides">'), slug);
+    for (const {id, title, html: content} of topicGuides[slug].sections) {
+      assert(body.includes(`<section id="${id}"><h2>${escape(title)}</h2>${content}</section>`), `${slug} / ${id}`);
+    }
+    assert(body.includes('href="https://'), `${slug} needs a primary source`);
+  }
+});
+
+test('resource headers show the topic provider and its product artwork', () => {
+  for (const [slug, image] of [
+    ['matomo-analytics', 'matomo.png'], ['gravity-ai-advertising', 'gravity.svg'],
+    ['google-analytics-mcp', 'ga4.png'], ['google-search-console-mcp', 'gsc.png'],
+    ['advertise-on-duckduckgo', 'duckduckgo.png'],
+    ...articlesInCluster('matomo-analytics').map(a => [a.slug, 'matomo.png']),
+    ...articlesInCluster('gravity-ai-advertising').map(a => [a.slug, 'gravity.svg']),
+  ]) {
+    const html = pages.find(([file]) => file === `resources/${slug}.html`)[1];
+    const header = html.match(/<header class="(?:guide-header|resources-hero resource-topic-hero)">([\s\S]*?)<\/header>/)?.[1];
+    assert(header?.includes(`src="/media/brands/${image}"`), slug);
+  }
 });
 
 test('homepage workflows and provider setup pages lead to each other through the topic hub', async () => {

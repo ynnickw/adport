@@ -28,3 +28,12 @@ on the artwork rather than inheriting surrounding text color.
 
 Provider marks belong to their respective owners. Their use identifies a
 connection provider, not a partnership or endorsement.
+
+The public resource pages serve the following vendor artwork locally from `website/media/brands/`.
+
+| Product | Asset source |
+| --- | --- |
+| Matomo | [Matomo’s current site icon](https://matomo.org/wp-content/uploads/2026/04/favicon-matomo-2026-150x150.png), as used on its press page |
+| Gravity | [Black solid symbol](https://www.trygravity.com/brand/gravity-symbol-solid-black.svg) for small placements |
+| DuckDuckGo | Dax Solo from the [DuckDuckGo press kit](https://staticcdn.duckduckgo.com/press/DuckDuckGo-Brand-Logo.zip) |
+| Google Analytics and Search Console | Google’s [Analytics](https://www.gstatic.com/images/branding/product/2x/analytics_64dp.png) and [Search Console](https://www.gstatic.com/images/branding/product/2x/search_console_64dp.png) product icons |

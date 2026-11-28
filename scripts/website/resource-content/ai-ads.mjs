@@ -55,7 +55,7 @@ export const aiArticles = [
     title: 'Use Codex for Google Ads reporting and repeatable account reviews',
     description: 'Configure Adport MCP in Codex, verify OAuth and account scope, and build a repeatable Google Ads review with explicit write previews.',
     summary: 'Connect Codex to Adport and turn campaign reviews into a repeatable, inspectable workflow.',
-    marks: ['google', 'chatgpt'], sources: ['codex', 'mcp'],
+    marks: ['google', 'codex'], sources: ['codex', 'mcp'],
     intro: `Codex can work with Google Ads through an MCP connection as well as with the files in your project. That makes it useful for teams who want a repeatable campaign review, a written decision record, or a reporting workflow alongside their product work. The advertising access still comes from the Adport project you authorize.`,
     sections: [
       section('configure-server', 'Configure the hosted Adport server', `<p>First connect Google and enable the intended accounts in Adport. Then register the hosted MCP server in Codex:</p>${code('codex mcp add adport --url https://app.adport.dev/mcp')}<p>If authorization has not started or the connection needs a fresh sign-in, run:</p>${code('codex mcp login adport')}<p>Check the registered connection with <code>codex mcp list</code>. Complete OAuth for the intended project. ${cite('codex', 'OpenAI documents MCP configuration and OAuth sign-in for Codex')}.</p>`),
