@@ -18,6 +18,7 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   namespace: string;
   description: string;
   provider: string;
+  sourceProviders?: AnyToolDefinition['sourceProviders'];
   kind: WriteKind;
   payload: S;
   hosted?: { description: string; payload: z.ZodObject<z.ZodRawShape> };
@@ -27,8 +28,8 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   sensitiveInputs?: AnyToolDefinition['sensitiveInputs'];
   additionalAccountInputs?: AnyToolDefinition['additionalAccountInputs'];
   catalog?: AnyToolDefinition['catalog'];
-  /** Project resources use the same policy gate without inventing an ad account. */
-  contextTarget?: (ctx: ToolContext) => { provider: AdProvider; accountId: string };
+  /** Resolve project resources or an explicitly selected provider before entering the policy gate. */
+  contextTarget?: (ctx: ToolContext, input: z.infer<S>) => { provider: AdProvider; accountId: string };
 }): AnyToolDefinition {
   const approvalFields = {
     ...(def.contextTarget ? {} : { account_id: z.string().min(1) }),
@@ -41,6 +42,7 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
   return defineTool({
     name: def.name,
     namespace: def.namespace,
+    ...(def.sourceProviders ? { sourceProviders: def.sourceProviders } : {}),
     description: `${def.description}\n\n${TWO_STEP_NOTE}`,
     input: def.payload.safeExtend(approvalFields),
     ...(def.hosted ? { hosted: {
@@ -58,7 +60,7 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
         account_id: string;
         pending_operation_id?: string;
       };
-      const target = def.contextTarget?.(ctx);
+      const target = def.contextTarget?.(ctx, raw as z.infer<S>);
       let provider = target?.provider ?? ctx.providers.get(def.provider);
       const trackUpload = ctx.media?.trackUpload?.bind(ctx.media);
       if (trackUpload && MEDIA_UPLOAD_TOOLS.has(def.name) && typeof payload.media_id === 'string' && typeof payload.expected_sha256 === 'string') {
@@ -69,7 +71,7 @@ export function guardedWriteTool<S extends z.ZodObject<z.ZodRawShape>>(def: {
       const accounts = additionalAccountIds(def, payload);
       const op: WriteOperation = {
         tool: def.name,
-        provider: def.provider,
+        provider: target?.provider.id ?? def.provider,
         accountId: target?.accountId ?? account_id,
         ...(accounts.length ? { affectedAccountIds: accounts } : {}),
         kind: def.kind,

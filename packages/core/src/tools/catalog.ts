@@ -1,4 +1,5 @@
 import type { AnyToolDefinition } from './registry.js';
+import { standardCampaignReplacement } from './campaign-mappings.js';
 
 export const ANALYTICS_PROVIDERS = ['ga4', 'matomo'] as const;
 export const TOOL_PROVIDERS = [...ANALYTICS_PROVIDERS, 'gsc', 'gtm', 'google', 'meta', 'tiktok', 'apple', 'microsoft', 'reddit', 'snapchat', 'spotify', 'pinterest', 'linkedin', 'x', 'openai', 'gravity'] as const;
@@ -40,19 +41,19 @@ const STANDARD_TOOLS = new Set([
   'pinterest_boards', 'pinterest_get_board', 'pinterest_get_media_upload', 'pinterest_create_image_pin', 'pinterest_create_video_pin',
   'linkedin_media_context', 'linkedin_get_image', 'linkedin_get_library_image', 'linkedin_get_library_video', 'linkedin_get_document', 'linkedin_upload_document',
   'x_authenticated_user_access', 'x_media_library', 'x_get_media_library_item', 'x_upload_media', 'x_media_upload_status', 'x_register_uploaded_media',
-  'google_gaql', 'google_create_campaign', 'google_set_campaign_status', 'google_set_budget', 'google_set_bid_ceiling',
+  'google_gaql', 'google_create_campaign', 'google_set_budget', 'google_set_bid_ceiling',
   'google_set_bidding_strategy', 'google_create_ad_group', 'google_set_ad_group_status', 'google_add_keywords',
   'google_set_keyword_status', 'google_remove_keywords', 'google_update_keyword_urls', 'google_create_responsive_search_ad',
   'google_negative_keyword_lists', 'google_create_negative_keyword_list', 'google_update_negative_keyword_list',
   'google_link_negative_keyword_list', 'google_add_campaign_negative_keywords',
-  'meta_list_campaigns', 'meta_get_campaign', 'meta_insights', 'meta_list_ad_sets', 'meta_list_ads',
+  'meta_get_campaign', 'meta_insights', 'meta_list_ad_sets', 'meta_list_ads',
   'meta_list_pages', 'meta_advertisable_applications', 'meta_create_campaign', 'meta_create_ad_set', 'meta_create_ad', 'meta_create_link_creative',
   'meta_list_creatives', 'meta_list_images', 'meta_list_videos', 'meta_upload_image', 'meta_upload_video',
-  'meta_set_campaign_status', 'meta_set_ad_set_status', 'meta_set_ad_status', 'meta_set_budget',
+  'meta_set_ad_set_status', 'meta_set_ad_status', 'meta_set_budget',
   'meta_set_lifetime_budget', 'meta_set_ad_set_bidding', 'meta_update_ad', 'meta_update_targeting', 'meta_search_targeting',
-  'apple_campaigns', 'apple_adgroups', 'apple_keywords', 'apple_negative_keywords', 'apple_ads', 'apple_creatives',
+  'apple_adgroups', 'apple_keywords', 'apple_negative_keywords', 'apple_ads', 'apple_creatives',
   'apple_product_pages', 'apple_create_campaign', 'apple_create_ad_group', 'apple_create_keyword', 'apple_create_keywords',
-  'apple_create_negative_keywords', 'apple_create_creative', 'apple_create_ad', 'apple_set_campaign_status',
+  'apple_create_negative_keywords', 'apple_create_creative', 'apple_create_ad',
   'apple_set_budget', 'apple_set_bid', 'apple_set_campaign_schedule',
 ]);
 
@@ -60,6 +61,7 @@ const COMMON_OPERATIONS = /^(?:list_campaigns|get_campaign|campaigns|report|insi
 
 export function classifyTool(name: string, namespace: string): ToolCatalogMetadata {
   if (/_api_(read|create|update|delete|remove)$/.test(name)) return { category: 'administration', exposure: 'raw' };
+  if (standardCampaignReplacement(name)) return { category: 'campaigns', exposure: 'specialist' };
   const operation = name.startsWith(`${namespace}_`) ? name.slice(namespace.length + 1) : name;
   const standard = namespace === 'analytics' || isTrackingSource(namespace) || STANDARD_TOOLS.has(name) || (TOOL_PROVIDERS.includes(namespace as ToolProvider) && COMMON_OPERATIONS.test(operation));
   const category: ToolCatalogMetadata['category'] = ['analytics', 'gsc'].includes(namespace) ? 'reporting' : namespace === 'gtm' ? 'measurement' : /experiment|lift_test/.test(operation) ? 'experiments'

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { sessionPrincipal } from '@/lib/cloud/auth';
 import { createApiKey, revokeApiKey } from '@/lib/cloud/repository';
-import { listMcpOAuthGrants } from '@/lib/cloud/mcp-oauth-repository';
+import { listAssistantGrants } from '@/lib/cloud/assistant-tool-catalog';
 import { db } from '@/lib/db';
 import { apiError, noStoreJson } from '@/lib/http';
 import { connectedCatalogProviders, loadToolSelection, saveToolSelection } from '@/lib/cloud/tool-catalog';
@@ -22,13 +22,13 @@ export async function GET(request: Request) {
     const principal = await sessionPrincipal(organizationId);
     if (!['owner', 'admin'].includes(principal.role ?? '')) throw new Error('Owner or admin access is required.');
     const [keys, oauthGrants] = await Promise.all([
-      view === 'connections' ? [] : db()<Array<{ id: string; name: string; keyPrefix: string; createdAt: Date; lastUsedAt: Date | null }>>`
-        select id, name, key_prefix, created_at, last_used_at
+      view === 'connections' ? [] : db()<Array<{ id: string; name: string; keyPrefix: string; createdAt: Date; lastUsedAt: Date | null; scopes: string[] }>>`
+        select id, name, key_prefix, created_at, last_used_at, scopes
         from public.api_keys
         where organization_id = ${principal.organizationId} and revoked_at is null
         order by created_at desc
       `,
-      view === 'keys' ? [] : listMcpOAuthGrants(principal.organizationId),
+      view === 'keys' ? [] : listAssistantGrants(principal.organizationId, principal.userId),
     ]);
     const selectedKeys = await Promise.all(keys.map(async key => ({ ...key,
       toolSelection: await loadToolSelection({ organizationId: principal.organizationId, apiKeyId: key.id }),

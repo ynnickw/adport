@@ -90,6 +90,7 @@ async function run(test, catalog, catalogPath, profile, loading) {
       '-c', 'mcp_servers.adport_fixture.args=' + JSON.stringify(serverArgs),
       // The local fixture returns a synthetic preview and rejects apply calls.
       '-c', 'mcp_servers.adport_fixture.tools.google_set_budget.approval_mode="approve"',
+      '-c', 'mcp_servers.adport_fixture.tools.campaign_set_status.approval_mode="approve"',
       role + '\n\n' + test.prompt,
     ], process.env);
   }

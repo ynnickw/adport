@@ -1,17 +1,19 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
-import type { ToolSelection } from '@adport/core/tool-catalog';
+import type { ToolProvider, ToolSelection } from '@adport/core/tool-catalog';
 import { Button } from '@/components/controls';
 import { formatDate, formatRelative } from '@/components/ui';
 import { ToolCatalogEditor, toolAccessSummary } from '@/components/tool-catalog-editor';
-import { LEGACY_TOOL_SELECTION } from '@/lib/mcp-tool-selection';
+import { LEGACY_TOOL_SELECTION, type ToolCatalogCountGroup } from '@/lib/mcp-tool-selection';
 import { AgentIdentityLogo } from './agent-setup-guide';
 
 export interface OAuthGrantSummary {
   toolSelection?: ToolSelection;
   organizationGroupId?: string | null;
   organizationGrantId?: string | null;
+  catalogCounts?: readonly ToolCatalogCountGroup[];
+  suggestedProviders?: readonly ToolProvider[];
   clientId: string;
   userId: string;
   clientName: string;
@@ -104,6 +106,7 @@ export function AssistantConnections({ organizationId, currentUserId, initialGra
           <small>{grant.scopes.includes('tools:write') && selection.profile !== 'reporting' && selection.providers?.length !== 0 ? 'Read and propose changes' : 'Read only'}</small>
         </div> : null}
         {activeGrant && own ? <div className="assistant-list-action"><ToolCatalogEditor organizationId={organizationId} name={grant.clientName} openOnLoad={grant === requested}
+          catalogCounts={grant.catalogCounts} scopes={grant.scopes} suggestedProviders={grant.suggestedProviders}
           connection={{ type: 'oauth', client_id: grant.clientId, user_id: grant.userId, resource: grant.resource,
             organization_group_id: grant.organizationGroupId ?? null, organization_grant_id: grant.organizationGrantId ?? null }}
           initialSelection={selection} onSaved={() => void load(true)} /></div> : null}

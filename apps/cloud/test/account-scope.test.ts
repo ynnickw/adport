@@ -68,6 +68,16 @@ describe('createAccountScopeAuthorizer', () => {
     expect(() => authorize(googleTool, { customer_id: '123-456-7890' })).not.toThrow();
     expect(() => authorize(googleTool, { customer_id: '999-999-9999' })).toThrow(/not active/);
   });
+  it('checks the selected provider for shared campaign tools even when the account is enabled elsewhere', () => {
+    const authorize = createAccountScopeAuthorizer({ google: new Set(['1234567890']), meta: new Set(['999']) });
+    const shared = defineTool({
+      name: 'campaign_set_status', namespace: 'campaigns', sourceProviders: ['google', 'meta'],
+      description: 'Shared campaign test', input: z.object({ provider: z.string(), account_id: z.string() }),
+      handler: async () => ({}),
+    });
+    expect(() => authorize(shared, { provider: 'google', account_id: '123-456-7890' })).not.toThrow();
+    expect(() => authorize(shared, { provider: 'meta', account_id: '1234567890' })).toThrow(/not active/);
+  });
   it('uses shared schema metadata for read/write destination authorization', () => {
     const authorize = createAccountScopeAuthorizer({ tiktok: new Set(['111', '222']) }), tool = defineTool({ name: 'tiktok_audience_sharing_context', namespace: 'tiktok', description: 'Synthetic scope fixture', input: z.object({ account_id: z.string(), shared_advertiser_ids: z.array(z.string()).optional(), shared_advertiser_id: z.string().optional() }), additionalAccountInputs: ['shared_advertiser_ids'], annotations: { readOnly: true }, handler: async () => ({}) });
     expect(() => authorize(tool, { account_id: '111', shared_advertiser_ids: ['222'] })).not.toThrow();expect(() => authorize(tool, { account_id: '111', shared_advertiser_ids: ['333'] })).toThrow(/not active/);

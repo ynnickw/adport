@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { classifyTool, isTrackingSource, TOOL_CATEGORIES, TOOL_PROVIDERS, toolInSelection, type ToolCatalogMetadata, type ToolProvider } from './catalog.js';
+import { standardCampaignReplacement } from './campaign-mappings.js';
 import { defineTool, type AnyToolDefinition } from './registry.js';
 
 const categories = Object.keys(TOOL_CATEGORIES) as [ToolCatalogMetadata['category'], ...ToolCatalogMetadata['category'][]];
@@ -49,7 +50,7 @@ export function capabilityTools(providers: readonly ToolProvider[] = TOOL_PROVID
           ? input.provider ? [input.provider] : tool.sourceProviders
           : TOOL_PROVIDERS.filter(id => id === tool.namespace);
         const selected = platforms.filter(id => selection.providers === null || selection.providers.includes(id));
-        const target = input.provider ?? (tool.namespace === 'analytics' ? (selected.length ? selected : platforms).join(' or ') : tool.namespace);
+        const target = input.provider ?? (tool.sourceProviders ? (selected.length ? selected : platforms).join(' or ') : tool.namespace);
         const blockers: z.infer<typeof blocker>[] = [];
         const next_steps: string[] = [];
         if (platforms.length > 0 && !selected.length) {
@@ -63,6 +64,12 @@ export function capabilityTools(providers: readonly ToolProvider[] = TOOL_PROVID
         }
         if (!toolInSelection(tool, { ...selection, providers: null }, catalog?.includeRawTools)) {
           blockers.push('profile_disabled');
+          const shared = selection.profile === 'standard' && standardCampaignReplacement(tool.name);
+          if (shared && source.some(candidate => candidate.name === shared
+            && candidate.sourceProviders?.some(id => id === tool.namespace)
+            && toolInSelection(candidate, selection, catalog?.includeRawTools))) {
+            next_steps.push('Use ' + shared + ' with provider ' + tool.namespace + ' for the shared campaign workflow.');
+          }
           next_steps.push(`Choose ${tool.annotations.readOnly ? 'Reporting (read-only) or Full' : metadata.exposure === 'standard' ? 'Standard or Full' : 'Full'} under Tool access for this connection.`);
         }
         if (!tool.annotations.readOnly && catalog?.canWrite === false) {

@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
-import type { ToolSelection } from '@adport/core/tool-catalog';
+import type { ToolProvider, ToolSelection } from '@adport/core/tool-catalog';
 import { Button } from './controls';
 import { Dialog } from './dialog';
 import { ToolCatalogFields } from './tool-catalog-fields';
 import { useToast } from './toast';
-import { toolSelectionFromForm, TOOL_PROFILE_OPTIONS } from '@/lib/mcp-tool-selection';
+import { catalogToolCount, standardToolSelection, toolSelectionFromForm, TOOL_PROFILE_OPTIONS, type ToolCatalogCountGroup } from '@/lib/mcp-tool-selection';
+import { DashboardLink } from './dashboard-navigation';
 
 export function toolAccessSummary(selection: ToolSelection) {
   const profile = TOOL_PROFILE_OPTIONS.find(option => option.value === selection.profile)!.label;
@@ -18,10 +19,13 @@ function selectionKey(selection: ToolSelection) {
   return JSON.stringify([selection.profile, selection.providers === null ? null : [...selection.providers].sort()]);
 }
 
-export function ToolCatalogEditor({ organizationId, connection, initialSelection, onSaved, name, openOnLoad }: {
+export function ToolCatalogEditor({ organizationId, connection, initialSelection, catalogCounts, scopes, suggestedProviders, onSaved, name, openOnLoad }: {
   organizationId: string;
   connection: { type: 'oauth'; client_id: string; user_id: string; resource: string; organization_group_id: string | null; organization_grant_id?: string | null } | { type: 'key'; id: string };
   initialSelection: ToolSelection;
+  catalogCounts?: readonly ToolCatalogCountGroup[];
+  scopes?: readonly string[];
+  suggestedProviders?: readonly ToolProvider[];
   onSaved: () => void;
   name?: string;
   openOnLoad?: boolean;
@@ -36,6 +40,12 @@ export function ToolCatalogEditor({ organizationId, connection, initialSelection
   const [error, setError] = useState<string>();
   const connectionId = connection.type === 'key' ? connection.id : connection.client_id;
   const dirty = draft !== undefined && selectionKey(draft) !== selectionKey(savedSelection);
+  const proposed = dirty ? draft : savedSelection.profile === 'full' ? standardToolSelection(savedSelection, suggestedProviders) : savedSelection;
+  const projectDiscovery = connection.type === 'oauth';
+  const counts = catalogCounts && scopes && proposed ? {
+    current: catalogToolCount(catalogCounts, savedSelection, scopes, projectDiscovery),
+    proposed: catalogToolCount(catalogCounts, proposed, scopes, projectDiscovery),
+  } : undefined;
   useEffect(() => {
     if (openOnLoad) { setOpen(true); return; }
     if (connection.type !== 'key') return;
@@ -68,10 +78,18 @@ export function ToolCatalogEditor({ organizationId, connection, initialSelection
     {open ? <Dialog title={name ? `${name} access` : 'API key tool access'} className="assistant-access-dialog" onClose={() => { if (!busy) close(); }}>
       <form className="assistant-access-form" onSubmit={event => void save(event)}>
         <div className="assistant-access-scroll">
-          <ToolCatalogFields initialSelection={savedSelection} disabled={busy} manage onSelectionChange={setDraft} />
+          {counts ? <p className="assistant-tool-count field-hint" role="status" aria-label="Estimated tool count">
+            {dirty ? <><strong>{counts.current} → {counts.proposed}</strong> tools after saving</>
+              : savedSelection.profile === 'full' ? <><strong>{counts.current} → {counts.proposed}</strong> tools with Standard</>
+                : <><strong>{counts.current}</strong> tools in your current profile</>}
+          </p> : null}
+          <ToolCatalogFields initialSelection={savedSelection} suggestedProviders={suggestedProviders} disabled={busy} manage onSelectionChange={setDraft} />
         </div>
         <div className="assistant-access-footer">
           <p className="assistant-access-note">{connection.type === 'oauth' && (connection.organization_group_id || connection.organization_grant_id) ? 'Applies to all projects on this connection. ' : ''}Account permissions and approval rules still apply.</p>
+          {(draft?.profile ?? savedSelection.profile) === 'full' ? <p className="assistant-access-note">
+            <DashboardLink href="/dashboard/developer?toolSearch=1#tool-search">Set up on-demand tool loading for API clients</DashboardLink>
+          </p> : null}
           {error ? <p className="error-callout" role="alert">{error}</p> : null}
           <div className="assistant-access-actions">
             <Button className="button secondary" type="button" disabled={busy} onClick={close}>Cancel</Button>

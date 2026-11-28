@@ -2,11 +2,15 @@
 
 Use the Standard profile scoped to the project's connected providers for everyday workflows. Full exposes specialist operations. An API client can defer the tools it already has access to. If the profile hides an operation, `capabilities_list` can explain how to enable it. The connector's discovery response and directory review still use the selected profile's tool catalog.
 
+In **AI assistants → Manage access**, **Use Standard** prepares the change and shows the estimated tool count before you save. It keeps any explicit platform selection. For a connection that includes all platforms, it suggests the connected platforms across the projects in that connection. From a Full connection's access settings, **Set up on-demand tool loading for API clients** opens the copyable request fields.
+
+Standard uses `campaigns_list` and `campaign_set_status` with explicit `provider` and `account_id` arguments. Update saved Standard calls that use a provider's campaign list or status tool. Full and the local CLI still offer the native names and provider-specific inputs. Google GAQL stays available for custom queries. For LinkedIn activation, use `linkedin_set_campaign_status` with advertiser consent. Preview shared status changes before applying them with the same arguments and the returned pending operation ID.
+
 ## Configure an API client
 
-In Adport Cloud, open **AI assistants → Advanced: API keys & custom integrations → Tool search for OpenAI and Claude APIs** for copyable request fields. New keys default to Standard with the project's connected providers. Choose Full for a key used for specialist workflows.
+In Adport Cloud, open **Developer settings → Tool search for OpenAI and Claude APIs** for copyable request fields. New keys default to Standard with the project's connected providers. Choose Full for a key used for specialist workflows.
 
-For the [OpenAI Responses API](https://developers.openai.com/api/docs/guides/tools-connectors-mcp#defer-loading-tools-in-an-mcp-server), use a [model that supports tool search](https://developers.openai.com/api/docs/guides/tools-tool-search). In the request's `tools` array, add `tool_search` and defer the MCP server. Supply the Adport OAuth access token for the authorized project in `authorization`.
+For the [OpenAI Responses API](https://developers.openai.com/api/docs/guides/tools-connectors-mcp#defer-loading-tools-in-an-mcp-server), use a [model that supports tool search](https://developers.openai.com/api/docs/guides/tools-tool-search). In the request's `tools` array, add `tool_search` and defer the MCP server. Supply the Adport API key or scoped OAuth access token in `authorization`.
 
 ```json
 [
@@ -47,7 +51,7 @@ node scripts/connectors/benchmark-tool-search.mjs --catalogs "$catalogs" --outpu
 node scripts/connectors/benchmark-tool-search.mjs --catalogs "$catalogs" --output "$catalogs/results" --client codex --model gpt-6.1-sol
 ```
 
-The export uses the hosted `tools/list` route with mocked authentication and repository data. The runners use the exported definitions, two synthetic projects and synthetic tool results. The scoring checks tool choice, arguments, project scope, answer contents and apply attempts. A local MCP fixture always rejects apply calls.
+The export uses the hosted `tools/list` route with mocked authentication and repository data. The runners use the exported definitions, two synthetic projects and synthetic tool results. The scenarios include shared campaign listing and status previews. The scoring checks tool choice, arguments, project scope, answer contents and apply attempts. A local MCP fixture always rejects apply calls.
 
 Use `--client openai-api` with `OPENAI_API_KEY` or `--client claude-api` with `ANTHROPIC_API_KEY` to compare API-native search with eager loading. These modes send the same input schemas as function definitions and execute synthetic results locally. The remote MCP examples above are for integrating a real connection. Use a dedicated test project for a remote integration check. The benchmark writes per-task token usage, wall time, search counts where visible, pass/fail, and tool traces. Use `--case`, `--profile`, and `--loading` to select a subset.
 

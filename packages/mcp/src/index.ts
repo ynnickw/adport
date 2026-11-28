@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod';
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
-import { TOOL_PROVIDERS, AdportError, CredentialStore, createContext, selectRuntimeCatalog, nextPageArguments, writeOutput, type ToolSelection, type AdportRuntime, type ProviderModule } from '@adport/core';
+import { TOOL_PROVIDERS, AdportError, CredentialStore, createContext, selectRuntimeCatalog, nextPageArguments, toolProvider, writeOutput, type ToolSelection, type AdportRuntime, type ProviderModule } from '@adport/core';
 import { createGa4Module, createGscModule } from '@adport/provider-analytics';
 import { createGtmModule } from '@adport/provider-gtm';
 import { createGoogleModule } from '@adport/provider-google';
@@ -228,7 +228,7 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
       },
     };
     const callback = async (args: Record<string, unknown>) => {
-      const platform = tool.namespace === 'analytics' ? args.provider : tool.namespace;
+      const platform = toolProvider(tool, args);
       const descriptor = {
         ...(typeof platform === 'string' && PROVIDER_IDS.includes(platform as typeof PROVIDER_IDS[number]) ? { provider: platform } : {}),
         ...(typeof args.account_id === 'string' ? { accountId: args.account_id } : {}),
