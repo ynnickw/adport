@@ -134,6 +134,15 @@ describe('minimal guarded operation review', () => {
     ui.message({ jsonrpc: '2.0', id: call.id, result: { structuredContent: { status: 'applied', applied: true } } }); await settle();
     expect(visible(ui.app.innerHTML)).toContain('Hold to apply'); expect(visible(ui.app.innerHTML)).not.toContain('>Applied<');
   });
+  it('honors an error inside a forwarded tool reply even when the payload claims success', async () => {
+    const ui = widget(); send(ui, preview()); ui.approvals[0]!.click();
+    const failure = { isError: true, structuredContent: { status: 'applied', applied: true, message: 'Provider could not confirm.' } };
+    ui.message({ jsonrpc: '2.0', id: calls(ui)[0]!.id, result: { content: [{ type: 'text', text: JSON.stringify(failure) }] } });
+    await settle();
+    expect(visible(ui.app.innerHTML)).toContain('Unconfirmed');
+    expect(visible(ui.app.innerHTML)).not.toContain('>Applied<');
+    expect(calls(ui)).toHaveLength(1);
+  });
   it.each([['PENDING_EXPIRED','Expired'],['POLICY_VIOLATION','Blocked'],['PROVIDER_ERROR','Unconfirmed']])('classifies %s without inviting another write', async (error, phase) => {
     const ui = widget(); send(ui, preview(error)); ui.approvals[0]!.click();
     ui.message({ jsonrpc: '2.0', id: calls(ui)[0]!.id, result: { isError: true, content: [{ type: 'text', text: JSON.stringify({ error, message: 'Provider detail' }) }] } }); await settle();
