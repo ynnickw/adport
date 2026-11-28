@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { AdportError, LocalMediaResolver, creativesOutput, defineTool, guardedWriteTool, mediaSourceFields, type AnyToolDefinition, type MediaResolver, type WriteOperation, type WritePreview, type WriteResult } from '@adport/core';
+import { AdportError, LocalMediaResolver, creativeSchema, creativesOutput, defineTool, guardedWriteTool, mediaSourceFields, type AnyToolDefinition, type MediaResolver, type WriteOperation, type WritePreview, type WriteResult } from '@adport/core';
 import { z } from 'zod';
 import { LinkedInAdsClient } from './client.js';
 import type { LinkedInAdsProvider } from './provider.js';
@@ -13,6 +13,14 @@ const uploadVideo = source.safeExtend({ name, owner_organization: z.string().reg
 const updateVideo = z.object({ video_id: videoUrn, expected_library_hash: hash, asset_name: name.optional(), library_status: z.enum(['ACTIVE', 'ARCHIVED']).optional() }).strict().refine(v => v.asset_name !== undefined || v.library_status !== undefined, 'Provide video library changes');
 const metadata = z.looseObject({ associatedAccount: accountUrn, assetName: z.string(), mediaLibraryStatus: z.enum(['ACTIVE', 'ARCHIVED']) });
 const videoSchema = z.looseObject({ id: videoUrn, owner: z.string(), status: z.enum(['WAITING_UPLOAD', 'PROCESSING', 'PROCESSING_FAILED', 'AVAILABLE']), mediaLibraryMetadata: metadata.optional() });
+// Listing and previewing video assets is read-only. Library edits are exposed
+// independently through the guarded linkedin_update_video tool.
+const listedVideoPreview = z.strictObject(creativeSchema.shape).omit({ actions: true });
+const listedVideosOutput = creativesOutput.extend({
+  creatives: z.array(listedVideoPreview),
+  items: z.array(videoSchema.extend({ library_snapshot_hash: hash })),
+  next_start: z.number().int().nonnegative().optional(),
+});
 const documentSchema = z.looseObject({ id: documentUrn, owner: z.string(), status: z.enum(['WAITING_UPLOAD', 'PROCESSING', 'PROCESSING_FAILED', 'AVAILABLE']) });
 const aurn = (account: string) => `urn:li:sponsoredAccount:${linkedinId.parse(account)}`;
 const kinds = { linkedin_upload_video: 'create', linkedin_upload_document: 'create', linkedin_update_video: 'update' } as const;
@@ -55,7 +63,7 @@ export class LinkedInMediaService {
     const result = await this.page(account, input.start, input.count, input.library_status);
     return { items: result.items.map(v => ({ ...v, library_snapshot_hash: libraryHash(v) })), truncated: result.next, ...(result.next ? { next_start: input.start + result.items.length } : {}), creatives: result.items.map(v => {
       const library = v.mediaLibraryMetadata!, video = v.status === 'AVAILABLE' ? safeMediaUrl(v.downloadUrl) : undefined, thumbnail = safeMediaUrl(v.thumbnail);
-      return { id: v.id, provider: 'linkedin', account_id: account, name: library.assetName, type: 'VIDEO_ASSET', status: v.status, headlines: [], descriptions: [`Media library: ${library.mediaLibraryStatus}; processing: ${v.status}${typeof v.processingFailureReason === 'string' ? ` — ${v.processingFailureReason}` : ''}`], landing_urls: [], media: video ? [{ type: 'video', url: video, ...(thumbnail ? { poster_url: thumbnail } : {}) }] : thumbnail ? [{ type: 'image', url: thumbnail }] : [], actions: [{ label: 'Edit video library entry', tool: 'linkedin_update_video', arguments: { account_id: account, video_id: v.id, expected_library_hash: libraryHash(v) }, fields: [{ key: 'asset_name', label: 'Name', type: 'text', value: library.assetName }, { key: 'library_status', label: 'Library status', type: 'select', value: library.mediaLibraryStatus, options: [{ label: 'Active in library', value: 'ACTIVE' }, { label: 'Archived in library', value: 'ARCHIVED' }] }] }] };
+      return { id: v.id, provider: 'linkedin', account_id: account, name: library.assetName, type: 'VIDEO_ASSET', status: v.status, headlines: [], descriptions: [`Media library: ${library.mediaLibraryStatus}; processing: ${v.status}${typeof v.processingFailureReason === 'string' ? ` — ${v.processingFailureReason}` : ''}`], landing_urls: [], media: video ? [{ type: 'video', url: video, ...(thumbnail ? { poster_url: thumbnail } : {}) }] : thumbnail ? [{ type: 'image', url: thumbnail }] : [] };
     }) };
   }
   async document(account: string, resource: string) {
@@ -114,7 +122,7 @@ export function linkedinMediaTools(provider: LinkedInAdsProvider): AnyToolDefini
   const account = { account_id: linkedinId };
   return [
     defineTool({ name: 'linkedin_media_context', namespace: 'linkedin', description: 'Read the account organization reference or an owned campaign’s associatedEntity for video ownership, plus the sponsored-account document owner. Pass video_owner as owner_organization on upload. Does not infer Page permissions or request new grants.', input: z.object({ ...account, campaign_id: linkedinId.optional() }), annotations: { readOnly: true }, handler: v => provider.media.context(v.account_id, v.campaign_id) }),
-    defineTool({ name: 'linkedin_videos', namespace: 'linkedin', description: 'View account-library video readiness, actual native previews and bound name/archive actions. ACTIVE/ARCHIVED describe library visibility, not ad delivery. Continue next_start as start.', input: z.object({ ...account, library_status: z.enum(['ACTIVE', 'ARCHIVED']).optional(), start: z.number().int().nonnegative().default(0), count: z.number().int().min(1).max(100).default(20) }), output: creativesOutput.passthrough(), annotations: { readOnly: true }, presentation: 'creatives', pagination: { cursorInput: 'start', cursorOutput: 'next_start' }, handler: v => provider.media.videos(v) }),
+    defineTool({ name: 'linkedin_videos', namespace: 'linkedin', description: 'List one page of videos in the selected LinkedIn ad account library. Returns processing status, video previews and a snapshot hash. ACTIVE/ARCHIVED filter library visibility, not ad delivery. Continue next_start as start.', input: z.object({ ...account, library_status: z.enum(['ACTIVE', 'ARCHIVED']).optional(), start: z.number().int().nonnegative().default(0), count: z.number().int().min(1).max(100).default(20) }), output: listedVideosOutput, annotations: { readOnly: true, openWorld: true }, presentation: 'creatives', pagination: { cursorInput: 'start', cursorOutput: 'next_start' }, handler: v => provider.media.videos(v) }),
     defineTool({ name: 'linkedin_get_library_video', namespace: 'linkedin', description: 'Resolve an exact video through the selected account’s media-library finder, including archived entries. Returns processing status and library_snapshot_hash; membership lookup is bounded to 5,000 entries.', input: z.object({ ...account, video_id: videoUrn }), annotations: { readOnly: true }, handler: v => provider.media.libraryVideo(v.account_id, v.video_id) }),
     defineTool({ name: 'linkedin_get_document', namespace: 'linkedin', description: 'Read a PDF document’s native processing status and expiring download URL, requiring its owner to match the selected sponsored account. Organization/member-owned documents need their own access workflow.', input: z.object({ ...account, document_id: documentUrn }), annotations: { readOnly: true }, handler: v => provider.media.document(v.account_id, v.document_id) }),
     guardedWriteTool({ name: 'linkedin_upload_video', namespace: 'linkedin', provider: 'linkedin', kind: 'create', destructive: false, description: 'Upload checksum-bound MP4 parts and finalize in the account’s video library. owner_organization must match media context; optional campaign_id selects its owned associatedEntity. Native Page ADMIN/DSC permission required. No post/ad is created. Processing readiness is a separate read; hosted uploads use media_id.', payload: uploadVideo }),
