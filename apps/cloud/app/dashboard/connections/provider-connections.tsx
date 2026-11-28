@@ -56,11 +56,19 @@ export function ProviderConnections({ organizationId, projectName, canManage, co
   const chooser = variant === 'chooser';
   const byProvider = new Map(connections.map(connection => [connection.provider, connection]));
   const needsAttention = (connection?: ConnectionView) => Boolean(connection && (connection.status !== 'connected' || connection.accountSelectionId));
+  const sourcesOnly = oauthProviders.every(provider => !usesAdAccountSlot(provider.id));
   const visibleProviders = oauthProviders.filter(provider => provider.available || find(provider.id))
-    .sort((a, b) => Number(!usesAdAccountSlot(a.id)) - Number(!usesAdAccountSlot(b.id)) || Number(!needsAttention(find(a.id))) - Number(!needsAttention(find(b.id))) || Number(!find(a.id)) - Number(!find(b.id)));
+    .sort((a, b) => Number(!usesAdAccountSlot(a.id)) - Number(!usesAdAccountSlot(b.id)) || connectionRank(a.id) - connectionRank(b.id));
 
   function find(provider: string): ConnectionView | undefined {
     return byProvider.get(provider);
+  }
+
+  function connectionRank(provider: string): number {
+    const connection = find(provider);
+    if (!connection) return 2;
+    if (settings && sourcesOnly) return needsAttention(connection) ? 1 : 0;
+    return needsAttention(connection) ? 0 : 1;
   }
 
   async function disconnect(provider: string, label: string) {
@@ -92,7 +100,7 @@ export function ProviderConnections({ organizationId, projectName, canManage, co
       {notice ? <Notice tone={notice.error ? 'error' : 'info'}>{notice.message}</Notice> : null}
       {!visibleProviders.length ? <div className="card"><div className="empty"><h2>Platform connections are temporarily unavailable</h2><p>{canManage ? 'You can finish setup now and connect your accounts later. Contact support if this continues.' : 'Ask your organization owner or an admin to connect an ad platform.'}</p></div></div> : <>
       <div className="connection-list">
-      {visibleProviders.length ? <div className="connection-list-heading" aria-hidden="true"><span>Platform</span><span>Status</span><span>{oauthProviders.every(provider => !usesAdAccountSlot(provider.id)) ? 'Sources' : 'Accounts'}</span><span>Actions</span></div> : null}
+      {visibleProviders.length ? <div className="connection-list-heading" aria-hidden="true"><span>Platform</span><span>Status</span><span>{sourcesOnly ? 'Sources' : 'Accounts'}</span><span>Actions</span></div> : null}
       <ul className="connection-rows" role="list">
       {visibleProviders.map((provider, index) => {
         const connection = find(provider.id);

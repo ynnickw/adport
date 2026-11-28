@@ -17,7 +17,8 @@ export function providerResourceName(provider: string, count = 2): string {
 }
 
 export function providerAccountsPath(provider: string): string {
-  return `${usesAdAccountSlot(provider) ? '/dashboard/accounts' : '/dashboard/analytics'}?select_provider=${encodeURIComponent(provider)}`;
+  const query = '?select_provider=' + encodeURIComponent(provider);
+  return usesAdAccountSlot(provider) ? '/dashboard/accounts' + query : '/dashboard/analytics' + query + '#account-access';
 }
 
 export function providerConnectionsPath(provider: string): string {
