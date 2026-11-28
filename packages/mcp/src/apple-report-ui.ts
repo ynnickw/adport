@@ -30,9 +30,12 @@ export const APPLE_REPORT_UI_SCRIPT = String.raw`
       const fields=[['Spend',appleReportMoney(metrics.localSpend)],['Taps',taps===null?'—':taps.toLocaleString(state.host.locale||'en')],['Installs',installs===null?'—':installs.toLocaleString(state.host.locale||'en')],['CPI',installs===0?'—':appleReportMoney(metrics.totalAvgCPI)]];
       return '<dl class="record-fields apple-report-metrics">'+fields.map(([label,value])=>'<div><dt>'+esc(label)+'</dt><dd>'+esc(value)+'</dd></div>').join('')+'</dl>';
     }
+    function appleEntityName(metadata) {
+      return [metadata?.searchTermText,metadata?.text,metadata?.name,metadata?.keyword?.text].find(value=>typeof value==='string' && value.trim()) ?? String(metadata?.id ?? '');
+    }
     function appleReportRow(row,index) {
       const metadata=object(row?.metadata)?row.metadata:{},keyword=object(metadata.keyword)?metadata.keyword:{};
-      const name=[metadata.searchTermText,metadata.text,metadata.name,keyword.text].find(value=>typeof value==='string'&&value.trim()) ?? (metadata.id!==undefined?String(metadata.id):'Unnamed result '+(index+1));
+      const name=appleEntityName(metadata) || 'Unnamed result '+(index+1);
       const status=[metadata.displayStatus,metadata.systemStatus,metadata.status].find(value=>typeof value==='string'&&value);
       const dimensions=['countryOrRegion','countryCode','adminArea','locality','deviceClass','ageRange','gender'].flatMap(key=>typeof metadata[key]==='string'&&metadata[key]?[metadata[key]]:[]);
       const matchType=metadata.matchType||keyword.matchType;
@@ -42,8 +45,8 @@ export const APPLE_REPORT_UI_SCRIPT = String.raw`
       return '<article class="record-row"><div class="record-heading"><strong>'+esc(name)+'</strong>'+(status?'<span>'+esc(human(status.toLowerCase()))+'</span>':'')+'</div>'+(dimensions.length?'<p class="apple-report-dimensions">'+dimensions.map(esc).join(' · ')+'</p>':'')+(hasTotals||!periods.length?appleReportMetrics(row?.totalMetrics):'')+breakdown+'</article>';
     }
     function appleChartRecord(row,index,metrics=row?.totalMetrics) {
-      const metadata=object(row?.metadata)?row.metadata:{},keyword=object(metadata.keyword)?metadata.keyword:{};
-      const name=[metadata.searchTermText,metadata.text,metadata.name,keyword.text].find(value=>typeof value==='string'&&value.trim())??String(metadata.id??'Unnamed result '+(index+1));
+      const metadata=object(row?.metadata)?row.metadata:{};
+      const name=appleEntityName(metadata) || 'Unnamed result '+(index+1);
       const context=['countryOrRegion','countryCode','deviceClass','ageRange','gender'].flatMap(key=>typeof metadata[key]==='string'?[metadata[key]]:[]);
       const fields=[['spend','Spend',metrics?.localSpend?.amount,appleReportMoney(metrics?.localSpend),currencyOf(metrics?.localSpend||{})||'Account units'],['taps','Taps',metrics?.taps,appleReportNumber(metrics?.taps)===null?'—':String(metrics.taps),''],['installs','Installs',metrics?.totalInstalls,appleReportNumber(metrics?.totalInstalls)===null?'—':String(metrics.totalInstalls),'']].map(([key,label,raw,display,unit])=>({key,label,value:appleReportNumber(raw),display,unit}));
       for(const [key,raw] of Object.entries(metrics||{}))if(!['localSpend','taps','totalInstalls','date'].includes(key)) {
@@ -52,10 +55,13 @@ export const APPLE_REPORT_UI_SCRIPT = String.raw`
       }
       return {name,context:typeof metrics?.date==='string'&&!reportDate(metrics.date)?[...context,metrics.date]:context,series:[name,...context].join(' · '),date:reportDate(metrics?.date),fields};
     }
-    function appleReportOverview(metrics) {
+    function appleReportOverview(metrics,entityName) {
       if(!object(metrics))return '';
       const taps=appleReportNumber(metrics.taps),installs=appleReportNumber(metrics.totalInstalls);
-      return '<div class="report-overview apple-report-total" aria-label="Report total"><div><small>Total spend</small><strong>'+esc(appleReportMoney(metrics.localSpend))+'</strong></div><dl><div><dt>Taps</dt><dd>'+esc(taps??'—')+'</dd></div><div><dt>Installs</dt><dd>'+esc(installs??'—')+'</dd></div>'+(installs>0&&object(metrics.totalAvgCPI)?'<div><dt>CPI</dt><dd>'+esc(appleReportMoney(metrics.totalAvgCPI))+'</dd></div>':'')+'</dl></div>';
+      if(taps===null && installs===null && appleReportNumber(metrics.localSpend?.amount)===null)return '';
+      const grandTotal=entityName===undefined,label=grandTotal?'Report total':'Returned row metrics';
+      const spend=grandTotal?'Total spend':entityName?'Spend · '+entityName:'Spend for this row';
+      return '<div class="report-overview'+(grandTotal?' apple-report-total':'')+'" aria-label="'+label+'"><div><small>'+esc(spend)+'</small><strong>'+esc(appleReportMoney(metrics.localSpend))+'</strong></div><dl><div><dt>Taps</dt><dd>'+esc(taps??'—')+'</dd></div><div><dt>Installs</dt><dd>'+esc(installs??'—')+'</dd></div>'+(installs>0&&object(metrics.totalAvgCPI)?'<div><dt>CPI</dt><dd>'+esc(appleReportMoney(metrics.totalAvgCPI))+'</dd></div>':'')+'</dl></div>';
     }
     function renderAppleReport(data,meta) {
       const payload=recordPayload(data),hasRows=object(payload)&&Array.isArray(payload.rows),rows=hasRows?payload.rows:[];
@@ -63,7 +69,8 @@ export const APPLE_REPORT_UI_SCRIPT = String.raw`
       const grandTotal=payload?.summary?.grandTotal;
       // Use Apple's explicit total, which can cover more rows than this page.
       // Never sum breakdowns, average CPIs, or mix currencies in the widget.
-      const summary=rows.length?appleReportOverview(grandTotal):'';
+      const single=rows.length===1?rows[0]:null;
+      const summary=rows.length?appleReportOverview(grandTotal) || (single?appleReportOverview(single.totalMetrics,appleEntityName(single.metadata)):''):'';
       const pagination=data.pagination,offset=pagination?.offset,count=pagination?.totalCount;
       const page=rows.length&&Number.isSafeInteger(offset)&&offset>=0&&Number.isSafeInteger(count)&&count>=offset+rows.length&&(offset>0||count>rows.length)?'<p class="apple-report-page">Showing '+(offset+1)+'–'+(offset+Math.min(rows.length,1000))+' of '+count+' results</p>':'';
       const clean={...data};delete clean._adport;

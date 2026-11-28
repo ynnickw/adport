@@ -1,6 +1,6 @@
 {
   "name": "@adport/provider-gravity",
-  "version": "0.13.1",
+  "version": "0.13.2",
   "description": "Gravity advertiser API provider (ads in AI assistants) for adport",
   "license": "Apache-2.0",
   "type": "module",
