@@ -1,4 +1,6 @@
 export const sources = {
+  matomoTags: { title: 'Matomo campaign tracking parameters', url: 'https://matomo.org/faq/reports/what-is-campaign-tracking-and-why-it-is-important/' },
+  adportCatalog: { title: 'Adport campaign tools and hosted access profiles', url: 'https://github.com/ynnickw/adport/blob/main/docs/releases/v0.15.0.md' },
   matomoOAuth: { title: 'Matomo OAuth authorization code flow', url: 'https://developer.matomo.org/guides/oauth2/authorization-code' },
   matomoApi: { title: 'Matomo Reporting API', url: 'https://developer.matomo.org/guides/reporting-api' },
   matomoCampaigns: { title: 'Matomo Marketing Campaigns Reporting plugin', url: 'https://github.com/matomo-org/plugin-MarketingCampaignsReporting' },

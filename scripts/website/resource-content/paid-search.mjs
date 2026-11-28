@@ -49,7 +49,7 @@ export const paidSearchArticles = [
     title: 'How to advertise on DuckDuckGo with Microsoft Ads',
     description: 'Buy DuckDuckGo Search ads through Microsoft Advertising. Check your search ad group’s distribution and connect the same advertiser to ChatGPT or Claude with Adport.',
     summary: 'Find the Microsoft account, ad group and distribution setting that can put your search ad on DuckDuckGo.',
-    marks: ['microsoft'], sources: ['duckduckgoAdvertising', 'microsoftSearchNetwork', 'microsoftDistribution', 'duckduckgoSearchAds'],
+    marks: ['duckduckgo', 'microsoft'], sources: ['duckduckgoAdvertising', 'microsoftSearchNetwork', 'microsoftDistribution', 'duckduckgoSearchAds'],
     intro: 'You buy DuckDuckGo Search ads through Microsoft Advertising. If you already run Microsoft search campaigns, start with the ad group you have. If this is your first campaign, Microsoft is where you set your budget, choose keywords and write the ad. Adport connects to that same advertiser account.',
     sections: [
       section('where-to-buy', 'Start with the Microsoft advertiser that pays for the ads', `<p>DuckDuckGo directs search advertisers to Microsoft, and Microsoft lists DuckDuckGo among the sites where its search ads can appear. An advertiser that already buys Bing search ads can use the same Microsoft Advertising account. Check which advertiser owns the campaign if your login also manages accounts for other businesses. ${cite('duckduckgoAdvertising')} · ${cite('microsoftSearchNetwork')}.</p>
@@ -70,7 +70,7 @@ export const paidSearchArticles = [
     title: 'Can you see DuckDuckGo ad clicks in Microsoft Advertising?',
     description: 'Use Microsoft’s Website URL (publisher) report to check DuckDuckGo ad clicks and spend. See how to read grouped traffic and reconcile it with Adport campaign totals.',
     summary: 'Read the publisher export and answer how much DuckDuckGo traffic Microsoft can identify for your campaign.',
-    marks: ['microsoft'], sources: ['microsoftDistribution', 'microsoftPublisherReport', 'duckduckgoAdvertising'],
+    marks: ['duckduckgo', 'microsoft'], sources: ['microsoftDistribution', 'microsoftPublisherReport', 'duckduckgoAdvertising'],
     intro: 'Microsoft groups its own sites and select partner traffic in reporting. When DuckDuckGo delivery sits in that group, its individual clicks and spend are unavailable. Here’s how to tell what the report supports when a client asks how much of last week’s Microsoft Ads budget went to DuckDuckGo.',
     sections: [
       section('get-the-export', 'Open the Website URL (publisher) report', `<p>In Microsoft Advertising, open <strong>Reports</strong> and choose <strong>Website URL (publisher)</strong>. The reporting API calls it the Publisher Usage Performance Report. Select one advertiser account, the search campaigns you are reviewing and a completed date range. Keep the account ID, currency, reporting time zone and date range with the export. ${cite('microsoftPublisherReport')}.</p>

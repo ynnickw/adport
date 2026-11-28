@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { articles, articlesInCluster, clusters, published, sources, workflowClusters } from './website-resources.mjs';
 import { escape } from './resource-content/shared.mjs';
+import { topicGuides, topicContentDate } from './resource-content/topic-guides.mjs';
 import { providers } from './website-providers.mjs';
 import { cloudSignupUrl } from './website-agent-setups.mjs';
 
@@ -22,7 +23,12 @@ const latestModification = items => items.map(lastModified).sort().at(-1);
 const formatDate = date => new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(date));
 const words = article => (article.intro + ' ' + article.sections.map(section => `${section.title} ${section.html.replace(/<[^>]*>/g, ' ')}`).join(' ')).trim().split(/\s+/).length;
 const minutes = article => Math.ceil(words(article) / 200);
+const brandImages = {
+  matomo: 'matomo.png', gravity: 'gravity.svg', duckduckgo: 'duckduckgo.png',
+  ga4: 'ga4.png', gsc: 'gsc.png',
+};
 const mark = id => {
+  if (brandImages[id]) return `<span class="resource-mark" aria-hidden="true"><img src="/media/brands/${brandImages[id]}" width="28" height="28" alt="" /></span>`;
   let svg;
   if (providers.some(provider => provider.id === id)) svg = home.match(new RegExp(`<svg[^>]*class="${id}-logo"[\\s\\S]*?<\\/svg>`))?.[0];
   else if (id === 'mcp') svg = home.match(/<svg class="agent-brand-logo agent-brand-mcp"[\s\S]*?<\/svg>/)?.[0];
@@ -31,6 +37,7 @@ const mark = id => {
   return `<span class="resource-mark" aria-hidden="true">${svg}</span>`;
 };
 const marks = ids => `<div class="resource-marks" aria-hidden="true">${ids.map(mark).join('<span class="resource-connector">+</span>')}</div>`;
+const renderSections = sections => sections.map(s => `<section id="${s.id}"><h2>${escape(s.title)}</h2>${s.html}</section>`).join('\n');
 const resourceCard = ({ slug, brands, meta, title, summary, action }) => `<article class="resource-card"><a href="/resources/${escape(slug)}">${marks(brands)}<span class="resource-card-meta">${escape(meta)}</span><h3>${escape(title)}</h3><p>${escape(summary)}</p><span class="resource-read">${escape(action)} <span aria-hidden="true">↗</span></span></a></article>`;
 const card = article => resourceCard({
   slug: article.slug, brands: article.marks, meta: `${clusterFor(article).title} · ${minutes(article)} min read`,
@@ -68,12 +75,16 @@ const output = new Map();
 output.set('resources.html', document({ title: 'Adport resources | ChatGPT, Claude & ads MCP guides', description: 'Review paid search, Meta creative and App Store acquisition. Find MCP setup guides for ChatGPT and Claude, campaign reporting, GA4 and Search Console.', pathname: '/resources', content: `${breadcrumbs()}<section class="resources-hero"><p class="resource-eyebrow">The Adport field guide</p><h1>Useful guides for people who run ads.</h1><p>Choose the work in front of you, from reviewing a Meta ad to measuring an App Store download. You can also start with your AI assistant or an account setup guide.</p><nav class="resource-topics" aria-label="Guide topics">${clusters.map(c => `<a href="#${c.slug}">${escape(c.title)}<span>${articlesInCluster(c.slug).length}</span></a>`).join('')}</nav></section>
 ${clusters.map(c => `<section class="resource-cluster" id="${c.slug}" aria-labelledby="${c.slug}-title"><div class="resource-section-head"><div><h2 id="${c.slug}-title">${escape(c.title)}</h2><p>${escape(c.description)}</p></div><a href="/resources/${c.slug}">Explore topic <span aria-hidden="true">↗</span></a></div><div class="resource-grid">${articlesInCluster(c.slug).map(card).join('\n')}</div></section>`).join('\n')}` }));
 for (const cluster of clusters) {
+  const topic = topicGuides[cluster.slug];
+  const contents = `<aside class="guide-toc"><nav aria-label="On this page"><p>On this page</p>${topic.sections.map(s => `<a href="#${s.id}">${escape(s.title)}</a>`).join('')}<a href="#related-guides">Related guides</a></nav></aside>`;
   const setupLinks = cluster.providers?.map(id => {
     const provider = providers.find(p => p.id === id);
     return `<a href="/providers/${escape(provider.slug)}">Connect ${escape(provider.name)}</a>`;
   });
-  output.set(`resources/${cluster.slug}.html`, document({ title: `${cluster.title} guides | Adport`, description: cluster.description, pathname: `/resources/${cluster.slug}`, cluster,
-    content: `${breadcrumbs(cluster)}<section class="resources-hero resource-topic-hero"><p class="resource-eyebrow">Guides & workflows</p><h1>${escape(cluster.title)}</h1><p>${escape(cluster.intro)}</p>${setupLinks ? `<nav class="resource-topics" aria-label="Account setup">${setupLinks.join('')}</nav>` : ''}</section><section class="resource-cluster"><div class="resource-section-head"><h2>Start here</h2><span>${articlesInCluster(cluster.slug).length} guides</span></div><div class="resource-grid">${articlesInCluster(cluster.slug).map(card).join('\n')}</div></section>` }));
+  output.set(`resources/${cluster.slug}.html`, document({ title: `${topic.title} | Adport`, description: cluster.description, pathname: `/resources/${cluster.slug}`, cluster,
+    content: `${breadcrumbs(cluster)}<header class="resources-hero resource-topic-hero">${marks(topic.marks)}<h1>${escape(cluster.title)}</h1><p>${escape(cluster.intro)}</p></header>
+<div class="topic-layout"><div class="guide-body topic-body">${renderSections(topic.sections)}</div>${contents}</div>
+<section class="resource-cluster" id="related-guides"><div class="resource-section-head"><h2>Related guides</h2><span>${articlesInCluster(cluster.slug).length} guides</span></div><div class="resource-grid">${articlesInCluster(cluster.slug).map(card).join('\n')}</div>${setupLinks ? `<nav class="resource-topics" aria-label="Account setup">${setupLinks.join('')}</nav>` : ''}</section>` }));
 }
 for (const article of articles) {
   const cluster = clusterFor(article);
@@ -81,7 +92,7 @@ for (const article of articles) {
     ? `<p><a href="${cloudSignupUrl}">Create a free Adport Cloud account</a> to follow the hosted setup instructions below.</p>` : '';
   output.set(`resources/${article.slug}.html`, document({ title: `${article.title} | Adport`, description: article.description, pathname: url(article), article, cluster,
     content: `${breadcrumbs(cluster, article)}<article class="guide"><header class="guide-header">${marks(article.marks)}<h1>${escape(article.title)}</h1><p class="guide-deck">${escape(article.intro)}</p><div class="guide-meta"><span>By Adport</span><time datetime="${publicationDate(article)}">${formatDate(publicationDate(article))}</time>${article.updated ? `<span>Updated <time datetime="${article.updated}">${formatDate(article.updated)}</time></span>` : ''}<span>${minutes(article)} min read</span></div></header>
-<div class="guide-layout"><aside class="guide-toc"><nav aria-label="In this guide"><p>In this guide</p>${article.sections.map(s => `<a href="#${s.id}">${escape(s.title)}</a>`).join('')}<a href="#sources">Sources</a></nav></aside><div class="guide-body">${accessNote}${article.sections.map(s => `<section id="${s.id}"><h2>${escape(s.title)}</h2>${s.html}</section>`).join('\n')}<section class="guide-sources" id="sources"><h2>Sources & further reading</h2><p>Provider documentation for the setup and platform behavior described above.</p><ul>${article.sources.map(id => `<li><a href="${escape(sources[id].url)}" rel="noreferrer">${escape(sources[id].title)}</a><span>${new URL(sources[id].url).hostname}</span></li>`).join('')}</ul></section></div></div></article>
+<div class="guide-layout"><aside class="guide-toc"><nav aria-label="In this guide"><p>In this guide</p>${article.sections.map(s => `<a href="#${s.id}">${escape(s.title)}</a>`).join('')}<a href="#sources">Sources</a></nav></aside><div class="guide-body">${accessNote}${renderSections(article.sections)}<section class="guide-sources" id="sources"><h2>Sources & further reading</h2><p>Provider documentation for the setup and platform behavior described above.</p><ul>${article.sources.map(id => `<li><a href="${escape(sources[id].url)}" rel="noreferrer">${escape(sources[id].title)}</a><span>${new URL(sources[id].url).hostname}</span></li>`).join('')}</ul></section></div></div></article>
 <section class="resource-related"><div class="resource-section-head"><h2>Keep reading</h2><a href="/resources/${cluster.slug}">${escape(cluster.title)} <span aria-hidden="true">↗</span></a></div><div class="resource-grid">${articlesInCluster(cluster.slug).filter(a => a.slug !== article.slug).slice(0, 3).map(card).join('')}</div></section>` }));
 }
 const featured = [
@@ -103,7 +114,7 @@ let sitemap = await readFile(path.join(site, 'sitemap.xml'), 'utf8');
 sitemap = sitemap.replace(/\s*<url><loc>https:\/\/www\.adport\.dev\/resources(?:\/[^<]+)?<\/loc>(?:<lastmod>[^<]+<\/lastmod>)?<\/url>/g, '');
 const paths = [
   ['/resources', latestModification(articles)],
-  ...clusters.map(c => [`/resources/${c.slug}`, latestModification(articlesInCluster(c.slug))]),
+  ...clusters.map(c => [`/resources/${c.slug}`, [topicContentDate, latestModification(articlesInCluster(c.slug))].sort().at(-1)]),
   ...articles.map(article => [url(article), lastModified(article)]),
 ];
 const entries = paths.map(([resourcePath, lastmod]) => `  <url><loc>https://www.adport.dev${resourcePath}</loc><lastmod>${lastmod}</lastmod></url>`).join('\n');
