@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { invitationRedirectUrl, invitationTokens } from '@/lib/invitations';
+import { invitationTokens, pendingInvitationRedirectUrl } from '@/lib/invitations';
 
 describe('email invitations', () => {
-  it('uses the existing approved callback and carries only a project hint', () => {
-    const url = new URL(invitationRedirectUrl('https://app.adport.dev', 'project-id'));
+  it('uses the approved callback and carries a pending invitation token', () => {
+    const url = new URL(pendingInvitationRedirectUrl('https://app.adport.dev', 'fixture-token'));
     expect(url.pathname).toBe('/auth/callback');
-    expect(url.searchParams.get('return_to')).toBe('/auth/invite?project_id=project-id');
+    expect(url.searchParams.get('return_to')).toBe('/auth/invite?token=fixture-token');
     expect(url.hash).toBe('');
   });
   it('accepts only complete invitation sessions, not unrelated or expired fragments', () => {
@@ -14,5 +14,8 @@ describe('email invitations', () => {
     expect(() => invitationTokens('#type=recovery&access_token=local-access&refresh_token=local-refresh')).toThrow('invalid or expired');
     expect(() => invitationTokens('#type=invite&access_token=local-access')).toThrow('incomplete');
     expect(() => invitationTokens('#error=access_denied')).toThrow('invalid or expired');
+    const signIn = '#type=magiclink&access_token=local-access&refresh_token=local-refresh';
+    expect(invitationTokens(signIn, true)).toEqual({ access_token: 'local-access', refresh_token: 'local-refresh' });
+    expect(() => invitationTokens(signIn)).toThrow('invalid or expired');
   });
 });

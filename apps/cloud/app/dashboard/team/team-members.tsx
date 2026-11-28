@@ -41,12 +41,12 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
     const failedOperation = method === 'POST' ? 'invite' : 'member';
     try {
       const response = await fetch('/api/members', { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ organizationId, ...body }) });
-      const result = await response.json().catch(() => ({})) as { error?: string; added?: boolean; invitationSent?: boolean };
+      const result = await response.json().catch(() => ({})) as { error?: string };
       const limit = planLimitFromResponse(result);
       if (limit) setPlanLimit(limit);
       else if (!response.ok) setError({ operation: failedOperation, message: result.error ?? 'The request failed.' });
       else {
-        toast(success ?? (result.invitationSent ? 'Invitation sent.' : result.added ? 'Member added.' : 'This person already has project access.'));
+        toast(success ?? 'Invitation sent. Access starts after they accept.');
         router.refresh();
       }
       return response.ok;
@@ -76,10 +76,11 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
           <span className="card-note">{members.length} {members.length === 1 ? 'person' : 'people'}</span>
           {canAdminister ? <DialogTrigger label="Invite to project" title="Invite to this project" className="button secondary small">
             <form className="form" onSubmit={event => void invite(event)}>
+              <p className="field-hint">Access starts when the recipient accepts the email invitation.</p>
               <InviteProfileField scope="project" targetId={organizationId} />
               <MemberRoleField scope="project" defaultValue="member" options={roles} />
               {error?.operation === 'invite' ? <p className="field-error" role="alert">{error.message}</p> : null}
-              <div><Button className="button" type="submit" disabled={busy} pending={operation === 'invite'} pendingLabel="Inviting…">Invite</Button></div>
+              <div><Button className="button" type="submit" disabled={busy} pending={operation === 'invite'} pendingLabel="Inviting…">Send invitation</Button></div>
             </form>
           </DialogTrigger> : null}
         </div>

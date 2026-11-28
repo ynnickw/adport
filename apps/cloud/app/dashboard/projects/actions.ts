@@ -12,6 +12,7 @@ import { createOrganization, createProject, updateProject, renameCompany, saveOr
 import { HttpError } from '@/lib/http';
 import { PlanLimitError, type PlanLimitDetails } from '@/lib/cloud/plan-limit';
 import { safeProjectSwitchReturnPath } from '@/lib/return-path';
+import { cancelMemberInvitation, sendMemberInvitation } from '@/lib/cloud/member-invitations';
 
 export interface WorkspaceActionState { error?: string; success?: string; planLimit?: PlanLimitDetails; }
 const uuid = z.string().uuid();
@@ -88,16 +89,28 @@ export async function renameCompanyAction(_state: WorkspaceActionState, form: Fo
 
 export async function saveMemberAction(_state: WorkspaceActionState, form: FormData): Promise<WorkspaceActionState> {
   return mutation(async actor => {
-    const userId = form.get('userId') ? uuid.parse(form.get('userId')) : undefined;
-    const { invitationSent } = await saveOrganizationMember({
-      actorUserId: actor,
-      organizationId: uuid.parse(form.get('organizationId')),
-      userId,
-      email: form.get('email') ? z.string().email().max(320).parse(form.get('email')) : undefined,
-      role: z.enum(['owner', 'admin', 'member', 'viewer']).parse(form.get('role')),
-      projectIds: z.array(uuid).max(500).parse(form.getAll('projectIds')),
-    });
-    return userId ? 'Access saved.' : invitationSent ? 'Invitation sent.' : 'Member added.';
+    const targetId = uuid.parse(form.get('organizationId'));
+    const role = z.enum(['owner', 'admin', 'member', 'viewer']).parse(form.get('role'));
+    const projectIds = z.array(uuid).max(500).parse(form.getAll('projectIds'));
+    const targetUserId = form.get('userId') ? uuid.parse(form.get('userId')) : undefined;
+    const invitation = { actorUserId: actor, scope: 'organization' as const, targetId };
+    if (!targetUserId) {
+      await sendMemberInvitation({ ...invitation, email: z.string().trim().email().max(320).parse(form.get('email')), role, projectIds });
+      return 'Invitation sent. Access starts after they accept.';
+    }
+    if (role === 'owner') {
+      const sent = await sendMemberInvitation({ ...invitation, promoteUserId: targetUserId, role });
+      return sent ? 'Ownership invitation sent. Their role changes after they accept.' : 'This member is already an owner.';
+    }
+    await saveOrganizationMember({ actorUserId: actor, organizationId: targetId, userId: targetUserId, role, projectIds, existingOnly: true });
+    return 'Access saved.';
+  });
+}
+
+export async function cancelMemberInvitationAction(_state: WorkspaceActionState, form: FormData): Promise<WorkspaceActionState> {
+  return mutation(async actor => {
+    await cancelMemberInvitation(actor, uuid.parse(form.get('invitationId')));
+    return 'Invitation canceled.';
   });
 }
 

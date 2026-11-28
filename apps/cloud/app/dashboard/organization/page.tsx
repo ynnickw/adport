@@ -13,6 +13,8 @@ import { renameCompanyAction, saveMemberAction, removeMemberAction } from '../pr
 import { WorkspaceLogoEditor } from '@/components/workspace-logo-editor';
 import { workspaceLogoUrl } from '@/lib/workspace-logos';
 import { PeopleTable } from '@/components/people-table';
+import { PendingMemberInvitations } from '@/components/pending-member-invitations';
+import { listPendingInvitations } from '@/lib/cloud/member-invitations';
 
 export const metadata = { title: 'Organization' };
 
@@ -20,11 +22,12 @@ export default async function OrganizationPage() {
   const tenant = await requireDashboardTenant();
   const canManage = ['owner', 'admin'].includes(tenant.organizationRole);
   if (!canManage) return <main className="page"><PageHeader title="Organization" /><p>Only organization owners and admins can manage people and settings.</p></main>;
-  const [members, projects, usage, entitlement] = await Promise.all([
+  const [members, projects, usage, entitlement, invitations] = await Promise.all([
     listOrganizationTeam(tenant.userId, tenant.organizationGroupId),
     listOrganizationProjects(tenant.userId, tenant.organizationGroupId),
     getOrganizationUsage(tenant.organizationId),
     getOrganizationEntitlement(tenant.organizationId),
+    listPendingInvitations(tenant.userId, { scope: 'organization', targetId: tenant.organizationGroupId }),
   ]);
   const activeProjects = projects.filter(project => !project.archivedAt);
   const seatAvailable = entitlement.plan.maxMembers === null || usage.editingMembers < entitlement.plan.maxMembers;
@@ -46,13 +49,15 @@ export default async function OrganizationPage() {
         </div>
       </DialogTrigger>
       <DialogTrigger label="Invite member" title="Invite a teammate" className="button">
-        <WorkspaceForm action={saveMemberAction} label="Invite member" resetOnSuccess>
+        <WorkspaceForm action={saveMemberAction} label="Send invitation" resetOnSuccess>
+          <p className="field-hint">Access starts when the recipient accepts the email invitation.</p>
           <input type="hidden" name="organizationId" value={tenant.organizationGroupId} />
           <InviteProfileField key={tenant.organizationGroupId} scope="organization" targetId={tenant.organizationGroupId} />
           <MemberAccessFields key={String(seatAvailable)} roles={roles} projects={activeProjects} initialRole={seatAvailable ? 'member' : 'viewer'} initialProjectIds={[tenant.organizationId]} seatAvailable={seatAvailable} requiredSeats={usage.editingMembers + 1} />
         </WorkspaceForm>
       </DialogTrigger>
     </>} />
+    <div className="stack">
     <section className="card">
       <div className="card-head people-card-head">
         <div className="people-heading"><h2>People</h2><TeamRolesTooltip scope="organization" /></div>
@@ -77,7 +82,7 @@ export default async function OrganizationPage() {
               <WorkspaceForm action={saveMemberAction} label="Save access">
                 <input type="hidden" name="organizationId" value={tenant.organizationGroupId} />
                 <input type="hidden" name="userId" value={member.userId} />
-                <MemberAccessFields roles={roles} projects={activeProjects} initialRole={member.role} initialProjectIds={member.projectIds}
+                <MemberAccessFields roles={roles} projects={activeProjects} initialRole={member.role} initialProjectIds={member.projectIds} editing
                   seatAvailable={seatAvailable || member.role !== 'viewer'} requiredSeats={usage.editingMembers + 1} />
               </WorkspaceForm>
               {!isSelf ? <WorkspaceForm action={removeMemberAction} label="Remove from organization" danger confirmation={{
@@ -93,5 +98,7 @@ export default async function OrganizationPage() {
         };
       })} />
     </section>
+    <PendingMemberInvitations invitations={invitations} />
+    </div>
   </main>;
 }

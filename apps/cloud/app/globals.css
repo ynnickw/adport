@@ -591,6 +591,11 @@ select { min-width: 11rem; border: 1px solid var(--line); border-radius: 999px; 
 .profile-identity-copy .person-email { display: block; margin-top: .12rem; }
 .person-you { display: inline-block; margin-inline-start: .45rem; color: var(--muted); font-size: .75rem; }
 .people-table td:last-child { text-align: right; }
+.pending-members { margin: 0; padding: 0; list-style: none; }
+.pending-member { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .65rem 1.25rem; padding: .9rem 1.35rem; }
+.pending-member + .pending-member { border-top: 1px solid var(--line-soft); }
+.pending-member > div { min-width: 0; overflow-wrap: anywhere; }
+.pending-member p { margin: .15rem 0 0; color: var(--muted); font-size: .8125rem; }
 .invite-profile-status { margin: 0; color: var(--muted); font-size: .8125rem; }
 .invite-profile-results, .invite-profile-selected { margin: 0; padding: 0; border: 1px solid var(--line); border-radius: .4rem; }
 .invite-profile-results { max-height: 13rem; overflow-y: auto; overscroll-behavior: contain; list-style: none; }

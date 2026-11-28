@@ -1,16 +1,11 @@
 import 'server-only';
 import { randomUUID } from 'node:crypto';
 import type postgres from 'postgres';
-import { env } from '@/lib/env';
-import { invitationRedirectUrl } from '@/lib/invitations';
 import { db } from '@/lib/db';
 import { HttpError } from '@/lib/http';
 import { safeProfileAvatarUrl } from '@/lib/member-profiles';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { getOrganizationEntitlement, recommendedUpgradePlan } from './plans';
-import { PlanLimitError } from './plan-limit';
 import type { TenantPrincipal } from './types';
-import { editingMemberCapacity } from './member-capacity';
+import { requireEditingSeat } from './member-capacity';
 
 export type OrganizationRole = NonNullable<TenantPrincipal['role']>;
 export interface ProjectAccess {
@@ -180,44 +175,27 @@ export async function saveSetupWorkspaceNames(
   });
 }
 
+export async function validateMemberProjects(sql: postgres.Sql | postgres.TransactionSql, organizationId: string, role: OrganizationRole, projectIds: string[]) {
+  if (['owner', 'admin'].includes(role)) return;
+  if (!projectIds.length) throw new HttpError('Select at least one project for this member.', 400);
+  const projects = await sql<Array<{ id: string }>>`select id from public.organizations
+    where organization_group_id = ${organizationId} and archived_at is null`;
+  if (projectIds.some(id => !projects.some(project => project.id === id))) throw new HttpError('A selected project is no longer available in this organization.', 403);
+}
+
 export async function saveOrganizationMember(input: {
-  actorUserId: string; organizationId: string; email?: string; userId?: string;
-  role: OrganizationRole; projectIds: string[];
-}): Promise<{ invitationSent: boolean }> {
-  const actor = await requireOrganizationAdmin(input.actorUserId, input.organizationId);
-  if (actor.role !== 'owner' && ['owner', 'admin'].includes(input.role)) throw new HttpError('Only an owner can grant organization owner or admin access.', 403);
-  const projectIds = [...new Set(input.projectIds)];
-  if (!['owner', 'admin'].includes(input.role) && !projectIds.length) throw new HttpError('Select at least one project for this member.', 400);
-  const projects = await db()<Array<{ id: string }>>`select id from public.organizations
-    where organization_group_id = ${input.organizationId} and archived_at is null`;
-  if (projectIds.some(id => !projects.some(project => project.id === id))) throw new HttpError('A selected project does not belong to this organization.', 403);
-  let targetUserId = input.userId;
-  let invitationSent = false;
-  if (!targetUserId) {
-    if (!input.email) throw new HttpError('An email address is required.', 400);
-    const email = input.email.trim().toLowerCase();
-    const rows = await db()<Array<{ id: string | null }>>`select private.find_auth_user_id(${email}) as id`;
-    targetUserId = rows[0]?.id ?? undefined;
-    if (!targetUserId) {
-      const entitlement = await getOrganizationEntitlement(actor.defaultProjectId);
-      const members = await editingMemberCapacity(actor.defaultProjectId);
-      if (input.role !== 'viewer' && entitlement.plan.maxMembers !== null && members.count >= entitlement.plan.maxMembers) throw new PlanLimitError({ kind: 'members', currentPlan: entitlement.plan.name, recommendedPlan: recommendedUpgradePlan(entitlement.plan.id, { members: members.count + 1 }), message: 'Your organization has reached its editing-member limit. Read-only viewers are free.' });
-      const result = await createAdminClient().auth.admin.inviteUserByEmail(email, {
-        redirectTo: invitationRedirectUrl(env().ADPORT_CLOUD_BASE_URL, projectIds[0] ?? actor.defaultProjectId),
-      });
-      if (result.error || !result.data.user) throw new HttpError('The invitation could not be sent.', 400);
-      targetUserId = result.data.user.id;
-      invitationSent = true;
-    }
-  }
-  const target = targetUserId;
-  await db().begin(async sql => {
+  actorUserId: string; organizationId: string; userId: string;
+  role: OrganizationRole; projectIds: string[]; existingOnly?: boolean; acceptedBy?: string;
+}, transaction?: postgres.TransactionSql): Promise<void> {
+  const target = input.userId;
+  const write = async (sql: postgres.TransactionSql) => {
     await sql`select id from public.organization_groups where id = ${input.organizationId} for update`;
     const organization = await requireOrganizationAdmin(input.actorUserId, input.organizationId, sql);
     const existing = await sql<Array<{ role: OrganizationRole }>>`select role from public.organization_group_memberships
       where organization_group_id = ${input.organizationId} and user_id = ${target}`;
-    if (!input.userId && existing.length) {
-      throw new HttpError('This person already belongs to the organization. Use Edit access in the People list.', 409);
+    if (input.existingOnly) {
+      if (!existing.length) throw new HttpError('This person must accept an invitation before you can edit access.', 409);
+      if (input.role === 'owner' && existing[0]?.role !== 'owner') throw new HttpError('The member must accept an ownership invitation.', 409);
     }
     if (organization.role !== 'owner' && (['owner', 'admin'].includes(input.role) || ['owner', 'admin'].includes(existing[0]?.role ?? ''))) {
       throw new HttpError('Only an owner can manage organization owners or admins.', 403);
@@ -227,16 +205,12 @@ export async function saveOrganizationMember(input: {
         where organization_group_id = ${input.organizationId} and role = 'owner'`;
       if (owners[0]!.count <= 1) throw new HttpError('The last organization owner cannot be demoted.', 409);
     }
-    const entitlement = await getOrganizationEntitlement(organization.defaultProjectId, sql);
-    const members = await editingMemberCapacity(organization.defaultProjectId, target, sql);
-    if (input.role !== 'viewer' && !members.existing && entitlement.plan.maxMembers !== null && members.count >= entitlement.plan.maxMembers) {
-      throw new PlanLimitError({ kind: 'members', currentPlan: entitlement.plan.name, recommendedPlan: recommendedUpgradePlan(entitlement.plan.id, { members: members.count + 1 }), message: 'Your organization has reached its editing-member limit. Read-only viewers are free.' });
-    }
-    const projectIds = [...new Set(input.projectIds)];
-    const projects = await sql<Array<{ id: string }>>`select id from public.organizations
-      where organization_group_id = ${input.organizationId} and archived_at is null`;
-    if (projectIds.some(id => !projects.some(project => project.id === id))) throw new HttpError('A selected project does not belong to this organization.', 403);
-    if (!['owner', 'admin'].includes(input.role) && !projectIds.length) throw new HttpError('Select at least one project for this member.', 400);
+    await requireEditingSeat(sql, organization.defaultProjectId, input.role, target);
+    const projectIds = ['owner', 'admin'].includes(input.role) ? [] : [...new Set(input.projectIds)];
+    await validateMemberProjects(sql, input.organizationId, input.role, projectIds);
+    if (input.existingOnly && input.role !== existing[0]?.role) await sql`
+      update private.member_invitations set canceled_at = now() where organization_group_id = ${input.organizationId}
+        and recipient_user_id = ${target} and previous_role is not null and canceled_at is null and accepted_at is null`;
     await sql`insert into public.organization_group_memberships (organization_group_id, user_id, role)
       values (${input.organizationId}, ${target}, ${input.role}) on conflict (organization_group_id, user_id) do update set role = excluded.role`;
     await sql`delete from public.organization_memberships where user_id = ${target}
@@ -258,10 +232,13 @@ export async function saveOrganizationMember(input: {
       and code.organization_id in (select id from public.organizations where organization_group_id = ${input.organizationId})
       and not exists (select 1 from private.project_memberships access where access.organization_id = code.organization_id and access.user_id = ${target})`;
     await sql`insert into public.audit_events (organization_id, actor_user_id, event, provider, tool, account_id, summary, details)
-      values (${organization.defaultProjectId}, ${input.actorUserId}, 'member_role_updated', 'cloud', 'organization_member_save', ${target},
-        'Updated organization membership and project access', ${sql.json({ role: input.role, projectIds } as never)})`;
-  });
-  return { invitationSent };
+      values (${organization.defaultProjectId}, ${input.acceptedBy ?? input.actorUserId}, 'member_role_updated', 'cloud',
+        ${input.acceptedBy ? 'organization_invitation_accept' : 'organization_member_save'}, ${target},
+        ${input.acceptedBy ? 'Accepted organization invitation' : 'Updated organization membership and project access'},
+        ${sql.json({ role: input.role, projectIds } as never)})`;
+  };
+  if (transaction) await write(transaction);
+  else await db().begin(write);
 }
 
 export async function removeCompanyMember(actorUserId: string, organizationId: string, targetUserId: string): Promise<void> {
@@ -274,6 +251,8 @@ export async function removeCompanyMember(actorUserId: string, organizationId: s
     if (!target) throw new HttpError('Member not found.', 404);
     if (organization.role !== 'owner' && ['owner', 'admin'].includes(target.role)) throw new HttpError('Only an owner can remove owners or admins.', 403);
     if (target.role === 'owner' && members.filter(member => member.role === 'owner').length <= 1) throw new HttpError('The last organization owner cannot be removed.', 409);
+    await sql`update private.member_invitations set canceled_at = now() where organization_group_id = ${organizationId}
+      and recipient_user_id = ${targetUserId} and canceled_at is null and accepted_at is null`;
     await sql`delete from public.organization_memberships where user_id = ${targetUserId}
       and organization_id in (select id from public.organizations where organization_group_id = ${organizationId})`;
     await sql`delete from public.organization_group_memberships where organization_group_id = ${organizationId} and user_id = ${targetUserId}`;

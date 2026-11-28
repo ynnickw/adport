@@ -6,13 +6,14 @@ import { InfoTooltip } from './info-tooltip';
 import { MemberRoleField } from './team-access-guide';
 import { UpgradeButton } from './upgrade-button';
 
-export function MemberAccessFields({ roles, projects, initialRole, initialProjectIds, seatAvailable, requiredSeats }: {
+export function MemberAccessFields({ roles, projects, initialRole, initialProjectIds, seatAvailable, requiredSeats, editing = false }: {
   roles: Array<{ value: string; label: string }>;
   projects: Array<{ id: string; name: string }>;
   initialRole: string;
   initialProjectIds: string[];
   seatAvailable: boolean;
   requiredSeats?: number;
+  editing?: boolean;
 }) {
   const [role, setRole] = useState(initialRole);
   const [selected, setSelected] = useState(new Set(initialProjectIds));
@@ -20,6 +21,7 @@ export function MemberAccessFields({ roles, projects, initialRole, initialProjec
   return <>
     <MemberRoleField scope="organization" value={role} onValueChange={setRole}
       options={roles.map(option => ({ ...option, disabled: !seatAvailable && option.value !== 'viewer' }))} />
+    {editing && role === 'owner' && initialRole !== 'owner' ? <p className="field-hint">The member must accept an email invitation before becoming an owner.</p> : null}
     {!seatAvailable ? <p className="member-seat-note">No team seats available. <UpgradeButton kind="members" required={requiredSeats} message="Your organization has used all of its editing-member seats. Read-only viewers remain free." /></p> : null}
     {allProjects ? <div className="member-project-scope"><strong>All current and future projects</strong></div>
       : <fieldset className="project-access-fields"><legend>Project access <InfoTooltip>Only the selected projects will be available to this person.</InfoTooltip></legend>

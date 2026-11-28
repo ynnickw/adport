@@ -1,14 +1,11 @@
 import 'server-only';
 import type { Policy } from '@adport/core';
-import { createAdminClient } from '@/lib/supabase/admin';
 import { db } from '@/lib/db';
 import { safeProfileAvatarUrl } from '@/lib/member-profiles';
 import type { TenantPrincipal } from './types';
 import { getOrganizationEntitlement, recommendedUpgradePlan } from './plans';
 import { PlanLimitError } from './plan-limit';
-import { env } from '@/lib/env';
-import { invitationRedirectUrl } from '@/lib/invitations';
-import { editingMemberCapacity, lockProjectOrganization } from './member-capacity';
+import { lockProjectOrganization } from './member-capacity';
 
 export type AssignableRole = 'admin' | 'member' | 'viewer';
 
@@ -38,65 +35,6 @@ export async function listOrganizationMembers(organizationId: string) {
       on member.organization_group_id = project.organization_group_id and member.user_id = directory.user_id
   `;
   return members.map(member => ({ ...member, avatarUrl: safeProfileAvatarUrl(member.avatarUrl) }));
-}
-
-export async function inviteOrganizationMember(
-  principal: TenantPrincipal,
-  email: string,
-  role: AssignableRole,
-): Promise<{ added: boolean; invitationSent: boolean; targetUserId: string }> {
-  requireAssignableRole(principal, role);
-  const normalizedEmail = email.trim().toLowerCase();
-  const users = await db()<Array<{ id: string | null }>>`
-    select private.find_auth_user_id(${normalizedEmail}) as id
-  `;
-  let targetUserId = users[0]?.id;
-  const entitlement = await getOrganizationEntitlement(principal.organizationId);
-  if (role !== 'viewer' && entitlement.plan.maxMembers !== null) {
-    const totals = await editingMemberCapacity(principal.organizationId, targetUserId ?? undefined);
-    if (!totals.existing && totals.count >= entitlement.plan.maxMembers) {
-      throw new PlanLimitError({
-        kind: 'members', currentPlan: entitlement.plan.name,
-        recommendedPlan: recommendedUpgradePlan(entitlement.plan.id, { members: totals.count + 1 }),
-        message: `${entitlement.plan.name} supports ${entitlement.plan.maxMembers} editing member${entitlement.plan.maxMembers === 1 ? '' : 's'}. Read-only viewers are free.`,
-      });
-    }
-  }
-  let invitationSent = false;
-  if (!targetUserId) {
-    const result = await createAdminClient().auth.admin.inviteUserByEmail(normalizedEmail, {
-      data: { full_name: normalizedEmail.split('@')[0] },
-      redirectTo: invitationRedirectUrl(env().ADPORT_CLOUD_BASE_URL, principal.organizationId),
-    });
-    if (result.error || !result.data.user) throw result.error ?? new Error('Invitation failed.');
-    targetUserId = result.data.user.id;
-    invitationSent = true;
-  }
-
-  const added = await db().begin(async (sql) => {
-    await lockProjectOrganization(principal.organizationId, sql);
-    const inserted = await sql<Array<{ userId: string }>>`
-      insert into public.organization_memberships (organization_id, user_id, role)
-      select ${principal.organizationId}::uuid, ${targetUserId}::uuid, ${role}::public.organization_role
-      where not exists (
-        select 1 from private.project_memberships
-        where organization_id = ${principal.organizationId} and user_id = ${targetUserId}
-      )
-      on conflict (organization_id, user_id) do nothing
-      returning user_id
-    `;
-    await sql`
-      insert into public.audit_events
-        (organization_id, actor_user_id, api_key_id, event, provider, tool, account_id, summary, details)
-      values
-        (${principal.organizationId}, ${principal.userId ?? null}, ${principal.apiKeyId ?? null}, 'member_invited',
-         'cloud', 'member_invite', ${targetUserId},
-         ${inserted.length ? `Added ${normalizedEmail} as ${role}` : `${normalizedEmail} is already a member`},
-         ${sql.json({ role, invitationSent } as never)})
-    `;
-    return inserted.length === 1;
-  });
-  return { added, invitationSent, targetUserId };
 }
 
 export async function changeOrganizationMemberRole(

@@ -5,14 +5,13 @@ import { closeDbForTests, db } from '@/lib/db';
 import { applyPlanToPrincipal, PLANS } from '@/lib/cloud/plans';
 import { createProject, saveOrganizationMember } from '@/lib/cloud/workspaces';
 import { editingMemberCapacity } from '@/lib/cloud/member-capacity';
-import { changeOrganizationMemberRole, inviteOrganizationMember } from '@/lib/cloud/tenant-admin';
+import { changeOrganizationMemberRole } from '@/lib/cloud/tenant-admin';
 import { resolveMembership, setOrganizationAdAccountEnabled, upsertProviderConnection } from '@/lib/cloud/repository';
 
 const describeDatabase = process.env.ADPORT_RUN_DATABASE_TESTS === '1' ? describe : describe.skip;
 describeDatabase('editing seats and competitive account allowances', () => {
   const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SECRET_KEY!, { auth: { persistSession: false, autoRefreshToken: false } });
   const users: string[] = [];
-  const emails: string[] = [];
   let company: string; let project: string; let otherProject: string;
   const principal = () => ({ organizationId: project, userId: users[0]!, role: 'owner' as const, scopes: [] });
   const save = (user: number, role: 'member' | 'viewer', projects = [project]) => saveOrganizationMember({ actorUserId: users[0]!, organizationId: company, userId: users[user]!, role, projectIds: projects });
@@ -22,7 +21,7 @@ describeDatabase('editing seats and competitive account allowances', () => {
       const email = `pricing-${randomUUID()}@example.test`;
       const { data, error } = await admin.auth.admin.createUser({ email, password: 'Local-Pricing-Test-Passw0rd!', email_confirm: true });
       if (error || !data.user) throw error ?? new Error('Local fixture user failed');
-      users.push(data.user.id); emails.push(email);
+      users.push(data.user.id);
     }
     company = (await resolveMembership(users[0]!)).organizationId;
     project = await createProject(users[0]!, company, 'Pricing client one');
@@ -41,7 +40,7 @@ describeDatabase('editing seats and competitive account allowances', () => {
   it('allows free client viewers at the editing limit and counts editors once across projects', async () => {
     await save(1, 'member', [project, otherProject]);
     await save(2, 'viewer'); await save(3, 'viewer');
-    await inviteOrganizationMember(principal(), emails[4]!, 'viewer');
+    await save(4, 'viewer');
     expect((await editingMemberCapacity(project)).count).toBe(2);
     const access = await applyPlanToPrincipal({ organizationId: project, userId: users[2]!, scopes: ['tools:read', 'tools:write'] });
     expect(access.role).toBe('viewer'); expect(access.scopes).toEqual(['tools:read']);

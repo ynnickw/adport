@@ -16,6 +16,7 @@ import { getOrganizationUsage } from '@/lib/cloud/usage';
 import { findInviteProfiles } from '@/lib/cloud/member-profiles';
 import { readProfilePhoto, updateProfile } from '@/lib/cloud/profile';
 import { getOnboardingState } from '@/lib/cloud/onboarding';
+import { sendMemberInvitation } from '@/lib/cloud/member-invitations';
 
 const describeDatabase = process.env.ADPORT_RUN_DATABASE_TESTS === '1' ? describe : describe.skip;
 
@@ -160,15 +161,15 @@ describeDatabase('company organizations and isolated projects', () => {
     expect(await findInviteProfiles(outsider, company, 'organization', emails[1]!)).toEqual([]);
     expect((await listOrganizationTeam(owner, company)).find(member => member.userId === client)?.avatarUrl).toBe(clientAvatar);
     expect((await listOrganizationMembers(firstProject)).find(member => member.userId === client)?.avatarUrl).toBe(clientAvatar);
-    await expect(saveOrganizationMember({
-      actorUserId: owner, organizationId: company, email: emails[1], role: 'member', projectIds: [secondProject],
-    })).rejects.toThrow('already belongs');
+    await expect(sendMemberInvitation({
+      actorUserId: owner, scope: 'organization', targetId: company, email: emails[1]!, role: 'member', projectIds: [secondProject],
+    })).rejects.toThrow('already has access');
     expect((await resolveMembership(client, firstProject)).role).toBe('viewer');
     await expect(resolveMembership(client, secondProject)).rejects.toThrow('access');
     try {
-      await expect(saveOrganizationMember({
-        actorUserId: owner, organizationId: company, email: emails[2], role: 'viewer', projectIds: [secondProject],
-      })).resolves.toEqual({ invitationSent: false });
+      await saveOrganizationMember({
+        actorUserId: owner, organizationId: company, userId: outsider, role: 'viewer', projectIds: [secondProject],
+      });
       expect((await resolveMembership(outsider, secondProject)).role).toBe('viewer');
       await db()`update public.organization_memberships set role = 'admin'
         where organization_id = ${firstProject} and user_id = ${client}`;

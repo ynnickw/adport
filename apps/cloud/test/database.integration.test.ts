@@ -28,11 +28,14 @@ import { createFeedbackMessage } from '@/lib/cloud/support';
 import { resetEnvForTests } from '@/lib/env';
 import {
   changeOrganizationMemberRole,
-  inviteOrganizationMember,
   listOrganizationMembers,
   removeOrganizationMember,
   updateOrganizationSettings,
 } from '@/lib/cloud/tenant-admin';
+import { acceptMemberInvitation, sendMemberInvitation } from '@/lib/cloud/member-invitations';
+
+const deliverInvitation = vi.hoisted(() => vi.fn(async (_email: string, _token: string, userId: string | null) => userId!));
+vi.mock('@/lib/cloud/invitation-email', () => ({ sendMemberInvitationEmail: deliverInvitation }));
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
@@ -334,8 +337,10 @@ describeDatabase('Supabase tenant boundary', () => {
   it('administers tenant members and settings atomically with audit events', async () => {
     await db()`update public.organization_subscriptions set plan = 'operator', status = 'active' where organization_id = ${firstOrgId}`;
     const owner = { organizationId: firstOrgId, userId: firstUserId, role: 'owner' as const, scopes: [] };
-    const invited = await inviteOrganizationMember(owner, secondEmail, 'member');
-    expect(invited).toMatchObject({ added: true, invitationSent: false, targetUserId: secondUserId });
+    await sendMemberInvitation({ actorUserId: firstUserId, scope: 'project', targetId: firstOrgId, email: secondEmail, role: 'member' });
+    expect((await listOrganizationMembers(firstOrgId)).map(member => member.userId)).not.toContain(secondUserId);
+    const token = deliverInvitation.mock.calls.at(-1)![1];
+    await acceptMemberInvitation(token, { email: secondEmail, userId: secondUserId });
     expect((await listOrganizationMembers(firstOrgId)).map((member) => member.userId)).toContain(secondUserId);
 
     await changeOrganizationMemberRole(owner, secondUserId, 'viewer');
@@ -375,7 +380,7 @@ describeDatabase('Supabase tenant boundary', () => {
         and event in ('member_invited', 'member_role_updated', 'member_removed', 'settings_updated')
       order by id asc
     `;
-    expect(events.map((event) => event.event)).toEqual(['member_invited', 'member_role_updated', 'settings_updated', 'member_removed']);
+    expect(events.map((event) => event.event)).toEqual(['member_invited', 'member_role_updated', 'member_role_updated', 'settings_updated', 'member_removed']);
   });
 
   it('enforces the two-step write contract with tenant-scoped Postgres stores', async () => {
