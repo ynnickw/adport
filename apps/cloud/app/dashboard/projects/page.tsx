@@ -14,7 +14,6 @@ export default async function ProjectsPage() {
     : tenant.projects.filter(project => project.organizationId === tenant.organizationGroupId);
   const defaultProjectId = tenant.projects.find(project => project.id === tenant.organizationId)!.defaultProjectId;
   return <main className="page">
-    <p className="workspace-context-label">{tenant.organizationGroupName}</p>
     <PageHeader title="Projects"
       action={canManage ? <NewProjectButton organizationId={tenant.organizationGroupId} organizationName={tenant.organizationGroupName} /> : undefined} />
     <ProjectManager key={tenant.organizationGroupId} projects={projects} currentProjectId={tenant.organizationId} defaultProjectId={defaultProjectId} organizationName={tenant.organizationGroupName} canManage={canManage}

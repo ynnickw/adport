@@ -5,6 +5,7 @@ import { env } from '@/lib/env';
 import { invitationRedirectUrl } from '@/lib/invitations';
 import { db } from '@/lib/db';
 import { HttpError } from '@/lib/http';
+import { safeProfileAvatarUrl } from '@/lib/member-profiles';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getOrganizationEntitlement, recommendedUpgradePlan } from './plans';
 import { PlanLimitError } from './plan-limit';
@@ -129,13 +130,18 @@ export async function organizationActiveAccounts(projectId: string): Promise<num
 export async function listOrganizationTeam(userId: string, organizationId: string) {
   await requireOrganizationAdmin(userId, organizationId);
   const [members, grants] = await Promise.all([
-    db()<Array<{ userId: string; email: string; displayName: string; role: OrganizationRole }>>`
-      select * from private.organization_group_member_directory(${organizationId})`,
+    db()<Array<{ userId: string; email: string; displayName: string; avatarUrl: string | null; role: OrganizationRole }>>`
+      select directory.*, private.profile_avatar_url(directory.user_id) as avatar_url
+      from private.organization_group_member_directory(${organizationId}) directory`,
     db()<Array<{ userId: string; projectId: string }>>`
       select member.user_id, project.id as project_id from public.organization_memberships member
       join public.organizations project on project.id = member.organization_id where project.organization_group_id = ${organizationId}`,
   ]);
-  return members.map(member => ({ ...member, projectIds: grants.filter(grant => grant.userId === member.userId).map(grant => grant.projectId) }));
+  return members.map(member => ({
+    ...member,
+    avatarUrl: safeProfileAvatarUrl(member.avatarUrl),
+    projectIds: grants.filter(grant => grant.userId === member.userId).map(grant => grant.projectId),
+  }));
 }
 
 export async function renameCompany(userId: string, organizationId: string, name: string): Promise<void> {
@@ -151,7 +157,7 @@ export async function renameCompany(userId: string, organizationId: string, name
 export async function saveOrganizationMember(input: {
   actorUserId: string; organizationId: string; email?: string; userId?: string;
   role: OrganizationRole; projectIds: string[];
-}): Promise<void> {
+}): Promise<{ invitationSent: boolean }> {
   const actor = await requireOrganizationAdmin(input.actorUserId, input.organizationId);
   if (actor.role !== 'owner' && ['owner', 'admin'].includes(input.role)) throw new HttpError('Only an owner can grant organization owner or admin access.', 403);
   const projectIds = [...new Set(input.projectIds)];
@@ -160,6 +166,7 @@ export async function saveOrganizationMember(input: {
     where organization_group_id = ${input.organizationId} and archived_at is null`;
   if (projectIds.some(id => !projects.some(project => project.id === id))) throw new HttpError('A selected project does not belong to this organization.', 403);
   let targetUserId = input.userId;
+  let invitationSent = false;
   if (!targetUserId) {
     if (!input.email) throw new HttpError('An email address is required.', 400);
     const email = input.email.trim().toLowerCase();
@@ -174,6 +181,7 @@ export async function saveOrganizationMember(input: {
       });
       if (result.error || !result.data.user) throw new HttpError('The invitation could not be sent.', 400);
       targetUserId = result.data.user.id;
+      invitationSent = true;
     }
   }
   const target = targetUserId;
@@ -182,6 +190,9 @@ export async function saveOrganizationMember(input: {
     const organization = await requireOrganizationAdmin(input.actorUserId, input.organizationId, sql);
     const existing = await sql<Array<{ role: OrganizationRole }>>`select role from public.organization_group_memberships
       where organization_group_id = ${input.organizationId} and user_id = ${target}`;
+    if (!input.userId && existing.length) {
+      throw new HttpError('This person already belongs to the organization. Use Edit access in the People list.', 409);
+    }
     if (organization.role !== 'owner' && (['owner', 'admin'].includes(input.role) || ['owner', 'admin'].includes(existing[0]?.role ?? ''))) {
       throw new HttpError('Only an owner can manage organization owners or admins.', 403);
     }
@@ -224,6 +235,7 @@ export async function saveOrganizationMember(input: {
       values (${organization.defaultProjectId}, ${input.actorUserId}, 'member_role_updated', 'cloud', 'organization_member_save', ${target},
         'Updated organization membership and project access', ${sql.json({ role: input.role, projectIds } as never)})`;
   });
+  return { invitationSent };
 }
 
 export async function removeCompanyMember(actorUserId: string, organizationId: string, targetUserId: string): Promise<void> {

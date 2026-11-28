@@ -2,6 +2,7 @@ import 'server-only';
 import type { Policy } from '@adport/core';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { db } from '@/lib/db';
+import { safeProfileAvatarUrl } from '@/lib/member-profiles';
 import type { TenantPrincipal } from './types';
 import { getOrganizationEntitlement, recommendedUpgradePlan } from './plans';
 import { PlanLimitError } from './plan-limit';
@@ -28,13 +29,15 @@ async function requireProjectManagedMember(projectId: string, userId: string): P
 }
 
 export async function listOrganizationMembers(organizationId: string) {
-  return db()<Array<{ userId: string; email: string; displayName: string; role: string; createdAt: Date; inheritedFromOrganization: boolean }>>`
-    select directory.*, coalesce(member.role in ('owner', 'admin'), false) as inherited_from_organization
+  const members = await db()<Array<{ userId: string; email: string; displayName: string; avatarUrl: string | null; role: string; createdAt: Date; inheritedFromOrganization: boolean }>>`
+    select directory.*, private.profile_avatar_url(directory.user_id) as avatar_url,
+      coalesce(member.role in ('owner', 'admin'), false) as inherited_from_organization
     from private.organization_member_directory(${organizationId}) directory
     join public.organizations project on project.id = ${organizationId}
     left join public.organization_group_memberships member
       on member.organization_group_id = project.organization_group_id and member.user_id = directory.user_id
   `;
+  return members.map(member => ({ ...member, avatarUrl: safeProfileAvatarUrl(member.avatarUrl) }));
 }
 
 export async function inviteOrganizationMember(
@@ -74,7 +77,11 @@ export async function inviteOrganizationMember(
     await lockProjectOrganization(principal.organizationId, sql);
     const inserted = await sql<Array<{ userId: string }>>`
       insert into public.organization_memberships (organization_id, user_id, role)
-      values (${principal.organizationId}, ${targetUserId}, ${role})
+      select ${principal.organizationId}::uuid, ${targetUserId}::uuid, ${role}::public.organization_role
+      where not exists (
+        select 1 from private.project_memberships
+        where organization_id = ${principal.organizationId} and user_id = ${targetUserId}
+      )
       on conflict (organization_id, user_id) do nothing
       returning user_id
     `;

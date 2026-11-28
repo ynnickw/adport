@@ -29,11 +29,12 @@ async function setProject(id: string): Promise<void> {
   });
 }
 
-async function mutation(work: (actor: string) => Promise<void>): Promise<WorkspaceActionState> {
+async function mutation(work: (actor: string) => Promise<void | string>): Promise<WorkspaceActionState> {
+  let success: void | string;
   try {
     const actor = await userId();
     if (!await enforceRateLimit(`workspace:${actor}`, 30)) throw new HttpError('Too many changes. Please try again in a minute.', 429);
-    await work(actor);
+    success = await work(actor);
   } catch (error) {
     if (error instanceof z.ZodError) return { error: 'Check the name, email, role, and selected projects.' };
     if (error instanceof PlanLimitError) return { error: error.message, planLimit: error.details };
@@ -44,7 +45,7 @@ async function mutation(work: (actor: string) => Promise<void>): Promise<Workspa
     return { error: 'The change could not be saved. Please try again.' };
   }
   revalidatePath('/dashboard', 'layout');
-  return { success: 'Changes saved.' };
+  return { success: success || 'Changes saved.' };
 }
 
 export async function selectProjectAction(form: FormData): Promise<void> {
@@ -86,14 +87,18 @@ export async function renameCompanyAction(_state: WorkspaceActionState, form: Fo
 }
 
 export async function saveMemberAction(_state: WorkspaceActionState, form: FormData): Promise<WorkspaceActionState> {
-  return mutation(actor => saveOrganizationMember({
-    actorUserId: actor,
-    organizationId: uuid.parse(form.get('organizationId')),
-    userId: form.get('userId') ? uuid.parse(form.get('userId')) : undefined,
-    email: form.get('email') ? z.string().email().max(320).parse(form.get('email')) : undefined,
-    role: z.enum(['owner', 'admin', 'member', 'viewer']).parse(form.get('role')),
-    projectIds: z.array(uuid).max(500).parse(form.getAll('projectIds')),
-  }));
+  return mutation(async actor => {
+    const userId = form.get('userId') ? uuid.parse(form.get('userId')) : undefined;
+    const { invitationSent } = await saveOrganizationMember({
+      actorUserId: actor,
+      organizationId: uuid.parse(form.get('organizationId')),
+      userId,
+      email: form.get('email') ? z.string().email().max(320).parse(form.get('email')) : undefined,
+      role: z.enum(['owner', 'admin', 'member', 'viewer']).parse(form.get('role')),
+      projectIds: z.array(uuid).max(500).parse(form.getAll('projectIds')),
+    });
+    return userId ? 'Access saved.' : invitationSent ? 'Invitation sent.' : 'Member added.';
+  });
 }
 
 export async function removeMemberAction(_state: WorkspaceActionState, form: FormData): Promise<WorkspaceActionState> {

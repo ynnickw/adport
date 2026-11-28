@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Input } from '@/components/controls';
+import { Button } from '@/components/controls';
 
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
@@ -11,9 +11,11 @@ import { useConfirm } from '@/components/use-confirm';
 import { TEAM_ROLES } from '@/lib/team-roles';
 import { PeopleTable } from '@/components/people-table';
 import { DialogTrigger } from '@/components/dialog';
+import { InviteProfileField } from '@/components/invite-profile-field';
+import { MemberRoleField, TeamRolesTooltip } from '@/components/team-access-guide';
 import { useToast } from '@/components/toast';
 
-interface Member { userId: string; email: string; displayName: string; role: string; inheritedFromOrganization: boolean; }
+interface Member { userId: string; email: string; displayName: string; avatarUrl?: string | null; role: string; inheritedFromOrganization: boolean; }
 
 export function TeamMembers({ organizationId, currentUserId, currentRole, members }: {
   organizationId: string;
@@ -31,7 +33,7 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
   const canAdminister = currentRole === 'owner' || currentRole === 'admin';
   const roles = [...(currentRole === 'owner' ? [{ value: 'admin', label: 'Admin' }] : []), { value: 'member', label: 'Member' }, { value: 'viewer', label: 'Viewer' }];
 
-  async function call(method: 'POST' | 'PATCH' | 'DELETE', body: Record<string, unknown>, success: string) {
+  async function call(method: 'POST' | 'PATCH' | 'DELETE', body: Record<string, unknown>, success?: string) {
     if (busy) return false;
     setOperation(method === 'POST' ? 'invite' : method === 'DELETE' ? String(body.userId) : 'role');
     setBusy(true);
@@ -39,11 +41,14 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
     const failedOperation = method === 'POST' ? 'invite' : 'member';
     try {
       const response = await fetch('/api/members', { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ organizationId, ...body }) });
-      const result = await response.json().catch(() => ({})) as { error?: string };
+      const result = await response.json().catch(() => ({})) as { error?: string; added?: boolean; invitationSent?: boolean };
       const limit = planLimitFromResponse(result);
       if (limit) setPlanLimit(limit);
       else if (!response.ok) setError({ operation: failedOperation, message: result.error ?? 'The request failed.' });
-      else { toast(success); router.refresh(); }
+      else {
+        toast(success ?? (result.invitationSent ? 'Invitation sent.' : result.added ? 'Member added.' : 'This person already has project access.'));
+        router.refresh();
+      }
       return response.ok;
     } catch {
       setError({ operation: failedOperation, message: 'Could not save the change. Check your connection and try again.' });
@@ -58,16 +63,30 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
     event.preventDefault();
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form).entries());
-    if (await call('POST', { email: data.email, role: data.role }, 'Member added or invited.')) form.reset();
+    if (await call('POST', { email: data.email, role: data.role })) form.reset();
   }
 
   return (
-    <>
+    <section className="card">
       {confirmationDialog}
       <PlanLimitModal limit={planLimit} onClose={() => setPlanLimit(undefined)} />
+      <div className="card-head people-card-head">
+        <div className="people-heading"><h2>People with access</h2><TeamRolesTooltip scope="project" /></div>
+        <div className="people-card-actions">
+          <span className="card-note">{members.length} {members.length === 1 ? 'person' : 'people'}</span>
+          {canAdminister ? <DialogTrigger label="Invite to project" title="Invite to this project" className="button secondary small">
+            <form className="form" onSubmit={event => void invite(event)}>
+              <InviteProfileField scope="project" targetId={organizationId} />
+              <MemberRoleField scope="project" defaultValue="member" options={roles} />
+              {error?.operation === 'invite' ? <p className="field-error" role="alert">{error.message}</p> : null}
+              <div><Button className="button" type="submit" disabled={busy} pending={operation === 'invite'} pendingLabel="Inviting…">Invite</Button></div>
+            </form>
+          </DialogTrigger> : null}
+        </div>
+      </div>
       {error?.operation === 'member' ? <div className="card-body" style={{ paddingBottom: 0 }}><div className="error-callout" role="alert" style={{ marginBottom: 0 }}>{error.message}</div></div> : null}
       <PeopleTable rows={members.map(member => ({
-        id: member.userId, name: member.displayName, email: member.email, isSelf: member.userId === currentUserId,
+        id: member.userId, name: member.displayName, email: member.email, avatarUrl: member.avatarUrl, isSelf: member.userId === currentUserId,
         access: member.inheritedFromOrganization ? 'Inherited · All projects' : 'This project',
         role: canAdminister && !member.inheritedFromOrganization && member.role !== 'owner' && (currentRole === 'owner' || member.role !== 'admin')
                 ? <Select aria-label={`Role for ${member.email}`} value={member.role} options={roles} disabled={busy} onValueChange={role => void call('PATCH', { userId: member.userId, role }, 'Member role updated.')} />
@@ -76,18 +95,6 @@ export function TeamMembers({ organizationId, currentUserId, currentRole, member
                 ? <Button className="button danger small" aria-label={`Remove ${member.email} from this project`} disabled={busy} pending={operation === member.userId} pendingLabel="Removing…" onClick={async () => { if (await confirm({ title: 'Remove project member?', description: `${member.email} will lose access to this project.`, confirmLabel: 'Remove member' })) void call('DELETE', { userId: member.userId }, 'Member removed.'); }}>Remove</Button>
                 : null,
       }))} />
-      {canAdminister ? (
-        <div className="card-body" style={{ borderTop: '1px solid var(--line-soft)' }}>
-          <DialogTrigger label="Invite to project" title="Invite to this project">
-            <form className="form" onSubmit={(event) => void invite(event)}>
-              <label>Email address<Input name="email" type="email" required placeholder="colleague@company.com" /></label>
-              <label>Role<Select name="role" defaultValue="member" aria-label="Role" options={roles} /></label>
-              {error?.operation === 'invite' ? <p className="field-error" role="alert">{error.message}</p> : null}
-              <div><Button className="button" disabled={busy} pending={operation === 'invite'} pendingLabel="Inviting…">Invite</Button></div>
-            </form>
-          </DialogTrigger>
-        </div>
-      ) : null}
-    </>
+    </section>
   );
 }

@@ -1,17 +1,24 @@
-import { Disclosure } from './controls';
+import { useId, type ComponentProps } from 'react';
 import { TEAM_ROLES } from '@/lib/team-roles';
+import type { InviteProfileScope } from '@/lib/member-profiles';
+import { InfoTooltip } from './info-tooltip';
+import { Select } from './select';
 
-export function TeamAccessGuide() {
-  return <Disclosure label="Roles and project access">
-    <p className="inline-note">People in the same project share its accounts, reports, approvals, and history. Roles control what they can change. Use separate projects for brands, departments, or clients that need separate access.</p>
-    <div className="table-wrap"><table>
-      <caption className="sr-only">Organization roles and project permissions</caption>
-      <thead><tr><th>Role</th><th>Project access</th><th>Permissions</th></tr></thead>
-      <tbody>{Object.entries(TEAM_ROLES).map(([role, details]) => <tr key={role}>
-        <th scope="row">{details.label}</th>
-        <td>{role === 'owner' || role === 'admin' ? 'All current and future projects' : 'Assigned projects only'}</td>
-        <td>{details.description}</td>
-      </tr>)}</tbody>
-    </table></div>
-  </Disclosure>;
+export function TeamRolesTooltip({ scope }: { scope: InviteProfileScope }) {
+  return <InfoTooltip label={scope === 'organization' ? 'Organization roles and project access' : 'Project roles and access'}>
+    <dl className="team-role-details">{Object.entries(TEAM_ROLES).map(([role, details]) => <div key={role}>
+      <dt>{details.label}</dt>
+      <dd>{details[scope]}</dd>
+    </div>)}</dl>
+    <p className="team-role-note">Owners, admins, and members use a team seat. People with access to a project share its accounts, reports, approvals, and history.</p>
+  </InfoTooltip>;
+}
+
+export function MemberRoleField({ scope, ...props }: { scope: InviteProfileScope } &
+  Pick<ComponentProps<typeof Select>, 'options' | 'value' | 'defaultValue' | 'onValueChange'>) {
+  const id = useId();
+  return <div className="field">
+    <div className="field-label"><label htmlFor={id}>Role</label><TeamRolesTooltip scope={scope} /></div>
+    <Select {...props} name="role" id={id} aria-label="Role" />
+  </div>;
 }

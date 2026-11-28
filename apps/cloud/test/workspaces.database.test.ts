@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { db, closeDbForTests } from '@/lib/db';
-import { createOrganization, createProject, listProjectAccess, saveOrganizationMember, removeCompanyMember, updateProject, renameCompany } from '@/lib/cloud/workspaces';
+import { createOrganization, createProject, listOrganizationTeam, listProjectAccess, saveOrganizationMember, removeCompanyMember, updateProject, renameCompany } from '@/lib/cloud/workspaces';
 import { listOrganizationMembers, removeOrganizationMember } from '@/lib/cloud/tenant-admin';
 import { resolveMembership, createApiKey, authenticateApiKey, upsertGoogleConnection, setOrganizationAdAccountEnabled, PostgresPendingStore, listConnections } from '@/lib/cloud/repository';
 import { stageAccountSelection } from '@/lib/cloud/account-selection';
@@ -12,12 +12,15 @@ import { mcpResourceUrl, pkceChallenge } from '@/lib/mcp-oauth';
 import { processStripeEvent, stripeClient } from '@/lib/cloud/billing';
 import { resetEnvForTests } from '@/lib/env';
 import { getOrganizationUsage } from '@/lib/cloud/usage';
+import { findInviteProfiles } from '@/lib/cloud/member-profiles';
 
 const describeDatabase = process.env.ADPORT_RUN_DATABASE_TESTS === '1' ? describe : describe.skip;
 
 describeDatabase('company organizations and isolated projects', () => {
   const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SECRET_KEY!, { auth: { persistSession: false, autoRefreshToken: false } });
   const users: string[] = [];
+  const emails: string[] = [];
+  const clientAvatar = 'https://avatars.githubusercontent.com/u/100';
   let owner: string;
   let client: string;
   let outsider: string;
@@ -33,9 +36,17 @@ describeDatabase('company organizations and isolated projects', () => {
   beforeAll(async () => {
     for (const label of ['owner', 'client', 'outsider']) {
       const email = `agency-${label}-${randomUUID()}@example.test`;
-      const created = await admin.auth.admin.createUser({ email, password: 'Local-Agency-Test-Passw0rd!', email_confirm: true });
+      const created = await admin.auth.admin.createUser({
+        email, password: 'Local-Agency-Test-Passw0rd!', email_confirm: true,
+        user_metadata: {
+          full_name: `Agency fixture ${label}`,
+          ...(label === 'client' ? { avatar_url: clientAvatar } : {}),
+          ...(label === 'outsider' ? { picture: 'https://images.example.test/outsider.png' } : {}),
+        },
+      });
       if (created.error || !created.data.user) throw created.error ?? new Error('Local user creation failed');
       users.push(created.data.user.id);
+      emails.push(email);
       if (label === 'client') {
         const signedIn = await createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!).auth.signInWithPassword({ email, password: 'Local-Agency-Test-Passw0rd!' });
         if (signedIn.error || !signedIn.data.session) throw signedIn.error ?? new Error('Local sign in failed');
@@ -108,6 +119,47 @@ describeDatabase('company organizations and isolated projects', () => {
       await removeCompanyMember(owner, company, outsider);
     }
     await expect(resolveMembership(client, secondProject)).rejects.toThrow('access');
+  });
+
+  it('finds profiles within the visible team or by exact email and keeps existing access intact', async () => {
+    expect(await findInviteProfiles(owner, company, 'organization', 'fixture client')).toEqual([{
+      displayName: 'Agency fixture client', email: emails[1], avatarUrl: clientAvatar, alreadyHasAccess: true,
+    }]);
+    expect(await findInviteProfiles(owner, secondProject, 'project', 'fixture client')).toMatchObject([{
+      email: emails[1], alreadyHasAccess: false,
+    }]);
+    expect(await findInviteProfiles(owner, firstProject, 'project', 'fixture owner')).toMatchObject([{
+      email: emails[0], alreadyHasAccess: true,
+    }]);
+    expect(await findInviteProfiles(owner, company, 'organization', 'fixture outsider')).toEqual([]);
+    expect(await findInviteProfiles(owner, company, 'organization', emails[2]!.toUpperCase())).toMatchObject([{
+      email: emails[2], avatarUrl: null, alreadyHasAccess: false,
+    }]);
+    expect(await findInviteProfiles(client, firstProject, 'project', emails[2]!)).toEqual([]);
+    expect(await findInviteProfiles(outsider, company, 'organization', emails[1]!)).toEqual([]);
+    expect((await listOrganizationTeam(owner, company)).find(member => member.userId === client)?.avatarUrl).toBe(clientAvatar);
+    expect((await listOrganizationMembers(firstProject)).find(member => member.userId === client)?.avatarUrl).toBe(clientAvatar);
+    await expect(saveOrganizationMember({
+      actorUserId: owner, organizationId: company, email: emails[1], role: 'member', projectIds: [secondProject],
+    })).rejects.toThrow('already belongs');
+    expect((await resolveMembership(client, firstProject)).role).toBe('viewer');
+    await expect(resolveMembership(client, secondProject)).rejects.toThrow('access');
+    try {
+      await expect(saveOrganizationMember({
+        actorUserId: owner, organizationId: company, email: emails[2], role: 'viewer', projectIds: [secondProject],
+      })).resolves.toEqual({ invitationSent: false });
+      expect((await resolveMembership(outsider, secondProject)).role).toBe('viewer');
+      await db()`update public.organization_memberships set role = 'admin'
+        where organization_id = ${firstProject} and user_id = ${client}`;
+      expect(await findInviteProfiles(client, firstProject, 'project', 'fixture owner')).toMatchObject([{
+        email: emails[0], alreadyHasAccess: true,
+      }]);
+      expect(await findInviteProfiles(client, firstProject, 'project', 'fixture outsider')).toEqual([]);
+    } finally {
+      await db()`update public.organization_memberships set role = 'viewer'
+        where organization_id = ${firstProject} and user_id = ${client}`;
+      await removeCompanyMember(owner, company, outsider);
+    }
   });
 
   it('keeps credentials, approval tokens and OAuth grants bound to a single project', async () => {

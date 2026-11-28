@@ -13,12 +13,7 @@ export default async function TeamPage() {
     <main className="page">
       <PageHeader title="Project team"
         action={['owner', 'admin'].includes(tenant.organizationRole) ? <Link className="button secondary" href="/dashboard/organization">Organization access</Link> : undefined} />
-      <div className="stack">
-        <section className="card">
-          <div className="card-head"><h2>People with access</h2><span className="card-note">{members.length} {members.length === 1 ? 'person' : 'people'}</span></div>
-          <TeamMembers organizationId={tenant.organizationId} currentUserId={tenant.userId} currentRole={tenant.role} members={members} />
-        </section>
-      </div>
+      <TeamMembers key={tenant.organizationId} organizationId={tenant.organizationId} currentUserId={tenant.userId} currentRole={tenant.role} members={members} />
     </main>
   );
 }

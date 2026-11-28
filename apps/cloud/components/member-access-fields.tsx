@@ -3,8 +3,7 @@
 import { useState } from 'react';
 import { Checkbox } from './controls';
 import { InfoTooltip } from './info-tooltip';
-import { Select } from './select';
-import { TEAM_ROLES } from '@/lib/team-roles';
+import { MemberRoleField } from './team-access-guide';
 import { UpgradeButton } from './upgrade-button';
 
 export function MemberAccessFields({ roles, projects, initialRole, initialProjectIds, seatAvailable, requiredSeats }: {
@@ -19,9 +18,8 @@ export function MemberAccessFields({ roles, projects, initialRole, initialProjec
   const [selected, setSelected] = useState(new Set(initialProjectIds));
   const allProjects = role === 'owner' || role === 'admin';
   return <>
-    <label>Role<Select name="role" value={role} onValueChange={setRole} aria-label="Organization role"
-      options={roles.map(option => ({ ...option, disabled: !seatAvailable && option.value !== 'viewer' }))} /></label>
-    <p className="inline-note" aria-live="polite">{role === 'viewer' ? 'Read-only access · No seat required' : role === 'member' ? 'Can propose ad changes · Uses a seat' : TEAM_ROLES[role as keyof typeof TEAM_ROLES]?.description}</p>
+    <MemberRoleField scope="organization" value={role} onValueChange={setRole}
+      options={roles.map(option => ({ ...option, disabled: !seatAvailable && option.value !== 'viewer' }))} />
     {!seatAvailable ? <p className="member-seat-note">No team seats available. <UpgradeButton kind="members" required={requiredSeats} message="Your organization has used all of its editing-member seats. Read-only viewers remain free." /></p> : null}
     {allProjects ? <div className="member-project-scope"><strong>All current and future projects</strong></div>
       : <fieldset className="project-access-fields"><legend>Project access <InfoTooltip>Only the selected projects will be available to this person.</InfoTooltip></legend>
