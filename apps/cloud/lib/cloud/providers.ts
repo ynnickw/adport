@@ -1,10 +1,10 @@
+import { isTrackingSource } from '@adport/core/tool-catalog';
 import type { CloudProvider } from './types';
 
 export type ProviderCategory = 'advertising' | 'analytics';
-const ANALYTICS_PROVIDERS: readonly string[] = ['ga4', 'gsc', 'gtm'];
 
 export function providerCategory(provider: string): ProviderCategory {
-  return ANALYTICS_PROVIDERS.includes(provider) ? 'analytics' : 'advertising';
+  return isTrackingSource(provider) ? 'analytics' : 'advertising';
 }
 
 export function usesAdAccountSlot(provider: string): boolean {
@@ -12,7 +12,7 @@ export function usesAdAccountSlot(provider: string): boolean {
 }
 
 export function providerResourceName(provider: string, count = 2): string {
-  const noun = provider === 'ga4' ? ['property', 'properties'] : provider === 'gsc' ? ['site', 'sites'] : provider === 'gtm' ? ['container', 'containers'] : ['account', 'accounts'];
+  const noun = provider === 'ga4' ? ['property', 'properties'] : (provider === 'gsc' || provider === 'matomo') ? ['site', 'sites'] : provider === 'gtm' ? ['container', 'containers'] : ['account', 'accounts'];
   return noun[count === 1 ? 0 : 1]!;
 }
 
@@ -26,6 +26,7 @@ export function providerConnectionsPath(provider: string): string {
 
 export const PROVIDER_LABELS: Record<CloudProvider, string> = {
   openai: 'OpenAI Ads',
+  matomo: 'Matomo',
   ga4: 'Google Analytics 4',
   gsc: 'Google Search Console',
   gtm: 'Google Tag Manager',

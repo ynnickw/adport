@@ -17,6 +17,7 @@ import { openPendingOperation, sealPendingOperation } from './pending-operation'
 import { PlanLimitError, type UpgradePlanId } from './plan-limit';
 import type {
   CloudProvider,
+  MatomoApplication,
   OAuthProvider,
   ProviderCredentialMap,
   StoredGoogleCredential,
@@ -66,6 +67,7 @@ export async function createOAuthTransaction(input: {
   state: string;
   verifier: string;
   returnPath?: string;
+  matomoApplication?: MatomoApplication;
   googleDataManager?: boolean;
   redditConversions?: boolean;
   pinterestPinManagement?: boolean;
@@ -78,7 +80,7 @@ export async function createOAuthTransaction(input: {
       (organization_id, user_id, provider, state_hash, verifier_ciphertext, return_path, expires_at)
     values
       (${input.organizationId}, ${input.userId}, ${input.provider}, ${digestState(input.state)},
-       ${encryptSecret({ verifier: input.verifier, ...(input.provider === 'google' && input.googleDataManager ? { googleDataManager: true } : {}), ...(input.provider === 'reddit' && input.redditConversions ? { redditConversions: true } : {}), ...(input.provider === 'pinterest' && input.pinterestPinManagement ? { pinterestPinManagement: true } : {}), ...(input.provider === 'pinterest' && input.pinterestSecretPins ? { pinterestSecretPins: true } : {}), ...(input.provider === 'pinterest' && input.pinterestCatalogManagement ? { pinterestCatalogManagement: true } : {}) }, aad)}, ${input.returnPath ?? '/dashboard/connections'}, now() + interval '10 minutes')
+       ${encryptSecret({ verifier: input.verifier, ...(input.provider === 'matomo' ? { matomoApplication: input.matomoApplication } : {}), ...(input.provider === 'google' && input.googleDataManager ? { googleDataManager: true } : {}), ...(input.provider === 'reddit' && input.redditConversions ? { redditConversions: true } : {}), ...(input.provider === 'pinterest' && input.pinterestPinManagement ? { pinterestPinManagement: true } : {}), ...(input.provider === 'pinterest' && input.pinterestSecretPins ? { pinterestSecretPins: true } : {}), ...(input.provider === 'pinterest' && input.pinterestCatalogManagement ? { pinterestCatalogManagement: true } : {}) }, aad)}, ${input.returnPath ?? '/dashboard/connections'}, now() + interval '10 minutes')
   `;
 }
 
@@ -86,6 +88,7 @@ export async function consumeOAuthTransaction(provider: OAuthProvider, state: st
   organizationId: string;
   verifier: string;
   returnPath: string;
+  matomoApplication?: MatomoApplication;
   googleDataManager?: boolean;
   redditConversions?: boolean;
   pinterestPinManagement?: boolean;
@@ -113,8 +116,8 @@ export async function consumeOAuthTransaction(provider: OAuthProvider, state: st
     }
     await sql`update private.oauth_transactions set consumed_at = now() where id = ${transaction.id}`;
     const aad = `oauth:${transaction.organizationId}:${userId}:${provider}`;
-    const secret = decryptSecret<{ verifier: string; googleDataManager?: boolean; redditConversions?: boolean; pinterestPinManagement?: boolean; pinterestSecretPins?: boolean; pinterestCatalogManagement?: boolean }>(transaction.verifierCiphertext, aad);
-    return { organizationId: transaction.organizationId, verifier: secret.verifier, returnPath: transaction.returnPath, ...(provider === 'google' && secret.googleDataManager === true ? { googleDataManager: true } : {}), ...(provider === 'reddit' && secret.redditConversions === true ? { redditConversions: true } : {}), ...(provider === 'pinterest' && secret.pinterestPinManagement === true ? { pinterestPinManagement: true } : {}), ...(provider === 'pinterest' && secret.pinterestSecretPins === true ? { pinterestSecretPins: true } : {}), ...(provider === 'pinterest' && secret.pinterestCatalogManagement === true ? { pinterestCatalogManagement: true } : {}) };
+    const secret = decryptSecret<{ verifier: string; matomoApplication?: MatomoApplication; googleDataManager?: boolean; redditConversions?: boolean; pinterestPinManagement?: boolean; pinterestSecretPins?: boolean; pinterestCatalogManagement?: boolean }>(transaction.verifierCiphertext, aad);
+    return { organizationId: transaction.organizationId, verifier: secret.verifier, returnPath: transaction.returnPath, ...(provider === 'matomo' ? { matomoApplication: secret.matomoApplication } : {}), ...(provider === 'google' && secret.googleDataManager === true ? { googleDataManager: true } : {}), ...(provider === 'reddit' && secret.redditConversions === true ? { redditConversions: true } : {}), ...(provider === 'pinterest' && secret.pinterestPinManagement === true ? { pinterestPinManagement: true } : {}), ...(provider === 'pinterest' && secret.pinterestSecretPins === true ? { pinterestSecretPins: true } : {}), ...(provider === 'pinterest' && secret.pinterestCatalogManagement === true ? { pinterestCatalogManagement: true } : {}) };
   });
 }
 
@@ -170,6 +173,15 @@ export async function upsertProviderConnection<P extends CloudProvider>(input: {
     const connectionId = rows[0]!.id;
     await sql`delete from private.provider_account_selections where connection_id = ${connectionId}`;
     const aad = `connection:${input.organizationId}:${input.provider}`;
+    if (input.provider === 'matomo' && 'url' in input.credential) {
+      // Site IDs are local to an instance. A different instance needs a fresh site selection.
+      const [previous] = await sql<Array<{ ciphertext: string }>>`
+        select ciphertext from private.provider_credentials where connection_id = ${connectionId}`;
+      if (previous && decryptSecret<ProviderCredentialMap['matomo']>(previous.ciphertext, aad).url !== input.credential.url) {
+        await sql`delete from public.organization_ad_accounts where organization_id = ${input.organizationId}
+          and connection_id = ${connectionId} and provider = 'matomo'`;
+      }
+    }
     await sql`
       insert into private.provider_credentials (connection_id, organization_id, provider, ciphertext)
       values (${connectionId}, ${input.organizationId}, ${input.provider}, ${encryptSecret(input.credential, aad)})

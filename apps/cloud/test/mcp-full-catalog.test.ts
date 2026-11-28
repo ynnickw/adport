@@ -5,6 +5,8 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import { expect, it, vi } from 'vitest';
 import { POST } from '@/app/mcp/route';
 import { resetEnvForTests } from '@/lib/env';
+import { CLOUD_PROVIDERS } from '@/lib/cloud/types';
+import { createTenantRuntime } from '@/lib/cloud/runtime';
 import mcpPackage from '../../../packages/mcp/package.json';
 
 const projectId = '11111111-1111-4111-8111-111111111111';
@@ -51,11 +53,19 @@ async function listCatalog(selection: ToolSelection, modern: boolean, inspectRes
     const result = await client.listTools();
     expect(result.nextCursor).toBeUndefined();
     expect(responseSizes).toHaveLength(1);
+    const capabilities = result.tools.find(tool => tool.name === 'capabilities_list')!;
+    expect(capabilities.inputSchema.properties?.provider).toMatchObject({ enum: [...CLOUD_PROVIDERS] });
     const resources = inspectResources ? (await client.listResources()).resources : [];
     const resourcesByUri = new Map(resources.map(resource => [resource.uri, resource]));
     return { tools: result.tools, wireBytes: responseSizes[0]!, instructions: client.getInstructions(), resourcesByUri, serverVersion: client.getServerVersion()?.version };
   } finally { await client.close(); }
 }
+
+it('returns only platforms supported by the hosted runtime in capability discovery', async () => {
+  const runtime = await createTenantRuntime({ organizationId: projectId, scopes: ['tools:read'] }, { surface: 'mcp' });
+  const result = await runtime.registry.call('capabilities_list', { limit: 1 }, runtime.ctx);
+  expect(result).toMatchObject({ platforms: CLOUD_PROVIDERS.map(id => ({ id })) });
+});
 
 it('keeps the full hosted tools/list response within its wire budget on both transports', async () => {
   vi.stubEnv('GA4_OAUTH_ENABLED', 'true');
@@ -72,7 +82,7 @@ it('keeps the full hosted tools/list response within its wire budget on both tra
       const names = result.tools.map(tool => tool.name);
       for (const tool of result.tools) expect(tool.annotations?.title).toEqual(expect.any(String));
       expect(new Set(names).size).toBe(names.length);
-      for (const [prefix, count] of [['ga4', 4], ['gsc', 4], ['gtm', 24]] as const) {
+      for (const [prefix, count] of [['analytics', 2], ['ga4', 0], ['gsc', 4], ['gtm', 24], ['matomo', 0]] as const) {
         expect(names.filter(name => name.startsWith(prefix + '_'))).toHaveLength(count);
       }
       expect(names).toContain('projects_list');
@@ -124,10 +134,12 @@ it('keeps the expanded publisher catalog below the metadata limit with GTM and S
     const { tools, resourcesByUri } = await listCatalog({ profile: 'full', providers: null }, true, true);
     const names = tools.map(tool => tool.name);
     const toolsByName = new Map(tools.map(tool => [tool.name, tool]));
-    expect(new Set(names).size).toBeGreaterThanOrEqual(867);
+    expect(new Set(names).size).toBeGreaterThanOrEqual(861);
     expect(names.filter(name => name.startsWith('gtm_'))).toHaveLength(24);
     expect(names.filter(name => name.startsWith('gsc_'))).toHaveLength(4);
     expect(names.some(name => name.startsWith('ga4_'))).toBe(false);
+    expect(names.filter(name => name.startsWith('matomo_'))).toHaveLength(0);
+    expect(names.filter(name => name.startsWith('analytics_')).sort()).toEqual(['analytics_acquisition_report', 'analytics_goals']);
     for (const name of ['spotify_update_pixel', 'spotify_update_capi_integration', 'spotify_update_dataset', 'spotify_update_mobile_app']) {
       expect(toolsByName.get(name)?.annotations, name).toMatchObject({ readOnlyHint: false, destructiveHint: true });
     }

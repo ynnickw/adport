@@ -7,7 +7,8 @@ import { saveAccountSelection, stageAccountSelection } from '@/lib/cloud/account
 import { applyOrganizationPlanLimits } from '@/lib/cloud/billing';
 import { getOrganizationUsage } from '@/lib/cloud/usage';
 import { createProject, listOrganizationProjects, organizationActiveAccounts } from '@/lib/cloud/workspaces';
-import { setOrganizationAdAccountEnabled, syncDiscoveredAccounts, upsertProviderConnection } from '@/lib/cloud/repository';
+import { disconnectHostedConnection, hostedAccessToken } from '@/lib/cloud/hosted-grant';
+import { loadProviderCredential, setOrganizationAdAccountEnabled, syncDiscoveredAccounts, upsertProviderConnection } from '@/lib/cloud/repository';
 import type { TenantPrincipal } from '@/lib/cloud/types';
 
 const databaseUrl = process.env.ADPORT_SELECTION_TEST_DATABASE_URL;
@@ -39,9 +40,9 @@ suite('analytics accounts do not consume advertising capacity', () => {
     await closeDbForTests(); await admin?.end();
   });
 
-  it.each(['gtm', 'ga4', 'gsc'] as const)('allows %s selection, activation and discovery at the full ad limit', async provider => {
+  it.each(['gtm', 'ga4', 'gsc', 'matomo'] as const)('allows %s selection, activation and discovery at the full ad limit', async provider => {
     const selectionId = randomUUID();
-    const connectionId = await upsertProviderConnection({ organizationId: principal.organizationId, userId, provider, credential: { refreshToken: 'local-analytics-fixture' }, selectionId });
+    const connectionId = await upsertProviderConnection({ organizationId: principal.organizationId, userId, provider, credential: provider === 'matomo' ? { url: 'https://analytics.example.test', tokenAuth: 'local-matomo-fixture' } : { refreshToken: 'local-analytics-fixture' }, selectionId });
     const ids = provider === 'gsc' ? ['sc-domain:example.test', 'https://example.test/'] : ['101', '102'];
     const accounts = ids.map(id => ({ provider, id, name: 'Local analytics fixture' }));
     await stageAccountSelection({ principal, id: selectionId, connectionId, provider, accounts, returnPath: '/dashboard/analytics' });
@@ -58,8 +59,8 @@ suite('analytics accounts do not consume advertising capacity', () => {
   });
 
   it('preserves analytics on downgrade across projects while limiting only advertising accounts', async () => {
-    for (const provider of ['gtm', 'ga4', 'gsc'] as const) {
-      const connectionId = await upsertProviderConnection({ organizationId: sibling, userId, provider, credential: { refreshToken: 'local-sibling-fixture' } });
+    for (const provider of ['gtm', 'ga4', 'gsc', 'matomo'] as const) {
+      const connectionId = await upsertProviderConnection({ organizationId: sibling, userId, provider, credential: provider === 'matomo' ? { url: 'https://sibling.example.test', tokenAuth: 'local-matomo-fixture' } : { refreshToken: 'local-sibling-fixture' } });
       await admin`insert into public.organization_ad_accounts (organization_id, connection_id, provider, account_id, name, enabled)
         values (${sibling}, ${connectionId}, ${provider}, ${provider === 'gsc' ? 'sc-domain:sibling.test' : '103'}, 'Sibling analytics', true)`;
     }
@@ -67,10 +68,42 @@ suite('analytics accounts do not consume advertising capacity', () => {
     await admin`update public.organization_ad_accounts set enabled = true where organization_id = ${principal.organizationId} and provider = 'google'`;
     await db().begin(sql => applyOrganizationPlanLimits(sql, principal.organizationId, 'reader'));
     const [counts] = await admin`select count(*) filter (where provider = 'google' and enabled)::int as ads,
-      count(*) filter (where provider in ('gtm', 'ga4', 'gsc') and enabled)::int as analytics from public.organization_ad_accounts
+      count(*) filter (where provider in ('gtm', 'ga4', 'gsc', 'matomo') and enabled)::int as analytics from public.organization_ad_accounts
       where organization_id in (${principal.organizationId}, ${sibling})`;
-    expect(counts).toMatchObject({ ads: 3, analytics: 9 });
+    expect(counts).toMatchObject({ ads: 3, analytics: 12 });
     expect(await organizationActiveAccounts(sibling)).toBe(3);
     expect(await getOrganizationUsage(sibling)).toMatchObject({ enabledAccounts: 3 });
+  });
+
+  it('clears site grants when a Matomo instance changes and preserves them for token rotation', async () => {
+    const connect = (url: string, tokenAuth: string) => upsertProviderConnection({ organizationId: sibling, userId,
+      provider: 'matomo', credential: { url, tokenAuth }, selectionId: randomUUID() });
+    const sites = () => admin`select account_id, enabled from public.organization_ad_accounts
+      where organization_id = ${sibling} and provider = 'matomo' and account_id = '51'`;
+    const connectionId = await connect('https://sibling.example.test', 'first');
+    await admin`insert into public.organization_ad_accounts (organization_id, connection_id, provider, account_id, name, enabled)
+      values (${sibling}, ${connectionId}, 'matomo', '51', 'Selected site', true)`;
+    await connect('https://sibling.example.test', 'rotated');
+    expect(await sites()).toHaveLength(1);
+    await connect('https://another.example.test', 'other-instance');
+    expect(await sites()).toHaveLength(0);
+  });
+
+  it('disconnects the rotated grant and preserves a replacement when an old disconnect arrives late', async () => {
+    const grant = { url: 'https://analytics.example.test', clientId: 'client', clientSecret: 'local-secret', grantId: randomUUID(), accessToken: 'old', refreshToken: 'old-refresh', expiresAt: 1 };
+    const connect = (credential: typeof grant) => upsertProviderConnection({ organizationId: sibling, userId, provider: 'matomo', credential });
+    const connectionId = await connect(grant);
+    const before = { ...grant, connectionId };
+    const token = hostedAccessToken(sibling, 'matomo', before, async () => ({ accessToken: 'new', refreshToken: 'new-refresh', expiresAt: Date.now() / 1000 + 3600 }));
+    expect(await token()).toBe('new');
+    await expect(disconnectHostedConnection(sibling, 'matomo', before, async current => {
+      expect(current).toMatchObject({ refreshToken: 'new-refresh' }); throw new Error('Provider unavailable');
+    })).rejects.toThrow(/Provider unavailable/);
+    const replacement = { ...grant, grantId: randomUUID() };
+    expect(await connect(replacement)).toBe(connectionId);
+    await expect(disconnectHostedConnection(sibling, 'matomo', before)).rejects.toThrow(/connection changed/);
+    expect(await loadProviderCredential(sibling, 'matomo')).toMatchObject({ grantId: replacement.grantId });
+    expect(await disconnectHostedConnection(sibling, 'matomo', { ...replacement, connectionId })).toBe(false);
+    expect(await loadProviderCredential(sibling, 'matomo')).toBeUndefined();
   });
 });

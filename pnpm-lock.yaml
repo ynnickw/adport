@@ -35,6 +35,9 @@ importers:
       '@adport/provider-linkedin':
         specifier: workspace:*
         version: link:../../packages/linkedin
+      '@adport/provider-matomo':
+        specifier: workspace:*
+        version: link:../../packages/matomo
       '@adport/provider-meta':
         specifier: workspace:*
         version: link:../../packages/meta
@@ -77,6 +80,9 @@ importers:
       '@swc/helpers':
         specifier: 0.5.24
         version: 0.5.24
+      ipaddr.js:
+        specifier: 2.5.0
+        version: 2.5.0
       next:
         specifier: 16.4.6
         version: 16.4.6(@types/node@26.6.6)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -104,6 +110,9 @@ importers:
       stripe:
         specifier: ^22.5.0
         version: 22.5.0(@types/node@26.6.6)
+      undici:
+        specifier: 7.30.2
+        version: 7.30.2
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -203,6 +212,9 @@ importers:
       '@adport/provider-linkedin':
         specifier: workspace:*
         version: link:../linkedin
+      '@adport/provider-matomo':
+        specifier: workspace:*
+        version: link:../matomo
       '@adport/provider-meta':
         specifier: workspace:*
         version: link:../meta
@@ -341,6 +353,28 @@ importers:
         specifier: ^5.1.1
         version: 5.1.1(@types/node@26.6.6)(jsdom@26.1.0)(vite@7.3.6(@types/node@26.6.6)(yaml@2.9.1))
 
+  packages/matomo:
+    dependencies:
+      '@adport/core':
+        specifier: workspace:*
+        version: link:../core
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.6
+        version: 26.6.6
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(postcss@8.5.33)(typescript@5.9.3)(yaml@2.9.1)
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^5.1.1
+        version: 5.1.1(@types/node@26.6.6)(jsdom@26.1.0)(vite@7.3.6(@types/node@26.6.6)(yaml@2.9.1))
+
   packages/mcp:
     dependencies:
       '@adport/core':
@@ -361,6 +395,9 @@ importers:
       '@adport/provider-linkedin':
         specifier: workspace:*
         version: link:../linkedin
+      '@adport/provider-matomo':
+        specifier: workspace:*
+        version: link:../matomo
       '@adport/provider-meta':
         specifier: workspace:*
         version: link:../meta
@@ -1972,6 +2009,10 @@ packages:
     resolution: {integrity: sha512-4fCk79wshMdzMp2rH06qWrJE4iolqLhCUH+OiuIgU++RB0+94NlDL81atO7GX55uUKueo0txHNtvEyI6D7WdMw==}
     engines: {node: '>=0.10.0'}
 
+  ipaddr.js@2.5.0:
+    resolution: {integrity: sha512-aq+t5NAc+cS6rZQQVWC2x98CPqGtKKTMDd4Gaodv0wShnItdKg/51djkGJ1hqH+Oy0ivDftCbSLCQob8zso01w==}
+    engines: {node: '>= 10'}
+
   is-potential-custom-element-name@1.0.1:
     resolution: {integrity: sha512-bCYeRA2rVibKZd+s2625gGnGF/t7DSqDs4dP7CrLA1m7jKWz6pps0LpYLJN8Q64HtmPKJ1hrN3nzPNKFEKOUiQ==}
 
@@ -2350,6 +2391,10 @@ packages:
 
   undici-types@8.9.0:
     resolution: {integrity: sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg==}
+
+  undici@7.30.2:
+    resolution: {integrity: sha512-mLyPQnHwUxaM/rideoK/+KL8DaAJLRl4aBCfmX444aCSLnIaomqPLtNRe2jdCYcsk5wZzXrDIQC8ZeYNRAYyIA==}
+    engines: {node: '>=20.18.1'}
 
   vite@7.3.6:
     resolution: {integrity: sha512-4XP60spRGjSZFf1qYH+dJIkK2znL3zQfl9KkOV9MkkRR/3Dls0dxaBsQPTloEc5BLXWPL9vsOxopxyKoMmDueg==}
@@ -3392,6 +3437,8 @@ snapshots:
     dependencies:
       safer-buffer: 2.1.2
 
+  ipaddr.js@2.5.0: {}
+
   is-potential-custom-element-name@1.0.1: {}
 
   isexe@2.0.0: {}
@@ -3804,6 +3851,8 @@ snapshots:
   ufo@1.6.4: {}
 
   undici-types@8.9.0: {}
+
+  undici@7.30.2: {}
 
   vite@7.3.6(@types/node@26.6.6)(yaml@2.9.1):
     dependencies:

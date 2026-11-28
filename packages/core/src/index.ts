@@ -65,7 +65,7 @@ export { gtmTools, gtmWriteSchemas, GTM_SCOPES, type GtmReader } from './tools/g
 export { guardedWriteTool } from './tools/write.js';
 export { hostedFeedUrl } from './tools/feed-source.js';
 export { writeOutput } from './tools/outputs.js';
-export { TOOL_PROVIDERS, classifyTool, toolInSelection, type ToolProvider, type ToolProfile, type ToolSelection, type ToolCatalogMetadata } from './tools/catalog.js';
+export { TOOL_PROVIDERS, ANALYTICS_PROVIDERS, isAnalyticsProvider, classifyTool, toolInSelection, type ToolProvider, type ToolProfile, type ToolSelection, type ToolCatalogMetadata } from './tools/catalog.js';
 export { reviewWrite, type ReviewField, type WriteReview } from './tools/review.js';
 export { planningViewSchema, type PlanningView } from './planning.js';
 export { builtinTools } from './tools/builtin.js';
@@ -80,4 +80,6 @@ export {
   type ProviderModule,
 } from './context.js';
 
-export { ga4Tools, gscTools, ga4ReportSchema, ga4RealtimeSchema, gscReportSchema, searchConsoleSite, GA4_SCOPES, GSC_SCOPES, type Ga4Reader, type GscReader, type Ga4ReportInput, type Ga4RealtimeInput, type GscReportInput } from './tools/analytics.js';
+export { gscTools, gscReportSchema, searchConsoleSite, GA4_SCOPES, GSC_SCOPES, type GscReader, type GscReportInput } from './tools/analytics.js';
+export { analyticsTools, acquisitionInput, acquisitionRow, type AcquisitionAnalytics, type AnalyticsGoal, type AcquisitionQuery, type AcquisitionRow, type AcquisitionReport } from './tools/acquisition.js';
+export { matomoBaseUrl, normalizeMatomoUrl } from './credentials/matomo.js';

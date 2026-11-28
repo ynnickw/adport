@@ -1,3 +1,4 @@
+import type { AcquisitionAnalytics } from './tools/acquisition.js';
 import { AdportError } from './errors.js';
 import type { NormalizedQuery, Report } from './model.js';
 import type { WriteReview } from './tools/review.js';
@@ -83,6 +84,7 @@ export interface StandardActions {
 }
 
 export interface AdProvider {
+  readonly acquisitionAnalytics?: AcquisitionAnalytics;
   readonly id: string;
   capabilities(): ProviderCapabilities;
   listAccounts(): Promise<Account[]>;

@@ -8,6 +8,8 @@ New in v0.6.0: [Snapchat](./providers/snapchat.md), [Spotify](./providers/spotif
 
 New: [OpenAI Ads](./providers/openai.md) (ads in ChatGPT), connected with an Advertiser API key.
 
+New: [Matomo](./providers/matomo.md), a read-only web analytics source for Matomo Cloud and self-hosted instances, connected with an auth token.
+
 For a source checkout, replace `adport` below with `node packages/cli/dist/index.js` after `pnpm build`.
 
 ## API versions and native coverage
@@ -28,6 +30,10 @@ The native tools accept provider-shaped payloads, so use the provider's current 
 ## Google Tag Manager
 
 Use `adport connect gtm` with your own Google Desktop OAuth client after enabling Tag Manager API. See the [GTM provider guide](../packages/gtm/README.md) for credentials, native configuration tools, fingerprints, and the separate version/publish workflow. GTM supplies tracking configuration and is excluded from performance reports. Hosted access is separately gated pending Google scope approval.
+
+## Analytics sources
+
+Google Analytics 4 and Search Console are covered in the [analytics guide](./providers/google-analytics.md). Connect Matomo under Analytics & tracking in Adport Cloud or run `adport connect matomo` locally. See the [Matomo guide](./providers/matomo.md). Analytics sources are read-only.
 
 ## Google Ads
 

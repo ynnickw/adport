@@ -1,17 +1,17 @@
 import { z } from 'zod';
-import { classifyTool, TOOL_CATEGORIES, TOOL_PROVIDERS, toolInSelection, type ToolCatalogMetadata, type ToolProvider } from './catalog.js';
+import { classifyTool, isTrackingSource, TOOL_CATEGORIES, TOOL_PROVIDERS, toolInSelection, type ToolCatalogMetadata, type ToolProvider } from './catalog.js';
 import { defineTool, type AnyToolDefinition } from './registry.js';
 
 const categories = Object.keys(TOOL_CATEGORIES) as [ToolCatalogMetadata['category'], ...ToolCatalogMetadata['category'][]];
 const blocker = z.enum(['platform_disabled', 'not_connected', 'profile_disabled', 'write_permission_required']);
 
-export function capabilityTools(): AnyToolDefinition[] {
+export function capabilityTools(providers: readonly ToolProvider[] = TOOL_PROVIDERS): AnyToolDefinition[] {
   return [defineTool({
     name: 'capabilities_list', namespace: 'core',
     description: 'Look up availability and access requirements for named Adport tools. Returns connection settings and status; this lookup changes no settings and executes no operations.',
     input: z.object({
       query: z.string().trim().min(1).max(200).optional().describe('Keywords such as lookalike, offline conversions, experiments, or an exact tool name.'),
-      provider: z.enum(TOOL_PROVIDERS).optional(),
+      provider: z.enum(providers).optional(),
       category: z.enum(categories).optional(),
       limit: z.number().int().positive().max(30).default(10),
     }),
@@ -35,7 +35,7 @@ export function capabilityTools(): AnyToolDefinition[] {
       const tokens = (input.query?.toLowerCase().match(/[a-z0-9]+/g) ?? [])
         .filter(word => !['a', 'an', 'the', 'to', 'for', 'and', 'with', 'my', 'how', 'can', 'i'].includes(word))
         .map(word => word.length > 4 && word.endsWith('s') ? word.slice(0, -1) : word);
-      const matches = source.filter(tool => (!input.provider || tool.namespace === input.provider)
+      const matches = source.filter(tool => (!input.provider || tool.namespace === input.provider || tool.sourceProviders?.includes(input.provider))
         && (!input.category || (tool.catalog ?? classifyTool(tool.name, tool.namespace)).category === input.category))
         .map(tool => {
           const description = catalog?.manageAccessUrl ? tool.hosted?.description ?? tool.description : tool.description;
@@ -45,14 +45,21 @@ export function capabilityTools(): AnyToolDefinition[] {
         .sort((a, b) => b.score - a.score || a.tool.name.localeCompare(b.tool.name));
       const tools = matches.map(({ tool, description }) => {
         const metadata = tool.catalog ?? classifyTool(tool.name, tool.namespace);
-        const platformTool = TOOL_PROVIDERS.includes(tool.namespace as ToolProvider);
+        const platforms = tool.sourceProviders
+          ? input.provider ? [input.provider] : tool.sourceProviders
+          : TOOL_PROVIDERS.filter(id => id === tool.namespace);
+        const selected = platforms.filter(id => selection.providers === null || selection.providers.includes(id));
+        const target = input.provider ?? (tool.namespace === 'analytics' ? (selected.length ? selected : platforms).join(' or ') : tool.namespace);
         const blockers: z.infer<typeof blocker>[] = [];
         const next_steps: string[] = [];
-        if (platformTool && selection.providers !== null && !selection.providers.includes(tool.namespace as ToolProvider)) {
-          blockers.push('platform_disabled'); next_steps.push(`Select ${tool.namespace} under Platforms in this connection’s Tool access settings.`);
+        if (platforms.length > 0 && !selected.length) {
+          blockers.push('platform_disabled'); next_steps.push(`Select ${target} under Platforms in this connection’s Tool access settings.`);
         }
-        if (platformTool && !connected.has(tool.namespace)) {
-          blockers.push('not_connected'); next_steps.push(`Connect ${tool.namespace} in this project, then enable its accounts under Accounts.`);
+        if (platforms.length > 0 && !(selected.length ? selected : platforms).some(id => connected.has(id))) {
+          blockers.push('not_connected');
+          next_steps.push(tool.namespace === 'analytics' || isTrackingSource(tool.namespace)
+            ? `Connect ${target} under Analytics & tracking and enable the sources this assistant can read.`
+            : `Connect ${target} in this project, then enable its accounts under Accounts.`);
         }
         if (!toolInSelection(tool, { ...selection, providers: null }, catalog?.includeRawTools)) {
           blockers.push('profile_disabled');
@@ -61,12 +68,12 @@ export function capabilityTools(): AnyToolDefinition[] {
         if (!tool.annotations.readOnly && catalog?.canWrite === false) {
           blockers.push('write_permission_required'); next_steps.push('Ask a project owner to review this connection’s write permissions, your role and plan. Changing the tool profile alone does not grant write access.');
         }
-        return { name: tool.name, provider: tool.namespace, category: metadata.category, description: description.slice(0, 220),
+        return { name: tool.name, provider: input.provider ?? tool.namespace, category: metadata.category, description: description.slice(0, 220),
           read_only: tool.annotations.readOnly === true, enabled: blockers.length === 0, blockers, next_steps };
       });
       return {
         profile: selection.profile, selected_providers: selection.providers,
-        platforms: TOOL_PROVIDERS.map(id => ({ id, selected: selection.providers === null || selection.providers.includes(id), connected: connected.has(id) })),
+        platforms: providers.map(id => ({ id, selected: selection.providers === null || selection.providers.includes(id), connected: connected.has(id) })),
         categories: categories.map(id => {
           const group = tools.filter(tool => tool.category === id);
           return { id, label: TOOL_CATEGORIES[id], enabled_tools: group.filter(tool => tool.enabled).length, disabled_tools: group.filter(tool => !tool.enabled).length };

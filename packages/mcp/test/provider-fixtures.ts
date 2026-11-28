@@ -10,6 +10,7 @@ import { PinterestAdsClient, PinterestAdsProvider, pinterestTools } from '@adpor
 import { LinkedInAdsClient, LinkedInAdsProvider, linkedinTools } from '@adport/provider-linkedin';
 import { XAdsClient, XAdsProvider, xTools } from '@adport/provider-x';
 import { OpenAIAdsClient, OpenAIAdsProvider, openaiTools } from '@adport/provider-openai';
+import { MatomoClient, MatomoProvider } from '@adport/provider-matomo';
 
 export function providerModules() {
   const google = new GoogleAdsProvider(new GoogleAdsRestClient({
@@ -32,6 +33,7 @@ export function providerModules() {
   const linkedin = new LinkedInAdsProvider(new LinkedInAdsClient({ accessToken: 'x' }));
   const x = new XAdsProvider(new XAdsClient({ consumerKey: 'x', consumerSecret: 'x', accessToken: 'x', accessTokenSecret: 'x' }));
   const openai = new OpenAIAdsProvider(new OpenAIAdsClient({ apiKey: 'x' }));
+  const matomo = new MatomoProvider(new MatomoClient({ url: 'https://example.matomo.cloud', tokenAuth: 'x' }));
 
   return [
       { provider: google, tools: googleTools(google) },
@@ -46,5 +48,6 @@ export function providerModules() {
       { provider: linkedin, tools: linkedinTools(linkedin) },
       { provider: x, tools: xTools(x) },
       { provider: openai, tools: openaiTools(openai) },
+      { provider: matomo, tools: [] },
   ];
 }
