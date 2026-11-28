@@ -8,20 +8,23 @@ import { Dialog } from './dialog';
 import { WorkspaceForm } from './workspace-form';
 import { WorkspaceLogo } from './workspace-logo';
 import { WorkspaceLogoEditor } from './workspace-logo-editor';
+import { ProjectTransfer, type ProjectTransferOptions } from './project-transfer';
 import { workspaceLogoUrl } from '@/lib/workspace-logos';
 
 interface ManagedProject { id: string; name: string; logoPath?: string | null; archivedAt: Date | null; enabledAccounts?: number; }
 
-export function ProjectManager({ projects, currentProjectId, defaultProjectId, organizationName, canManage, dangerZone }: {
+export function ProjectManager({ projects, currentProjectId, defaultProjectId, organizationName, canManage, dangerZone, transfer, initialStatus = 'active' }: {
   projects: ManagedProject[];
   currentProjectId: string;
   defaultProjectId: string;
   organizationName: string;
   canManage: boolean;
   dangerZone?: React.ReactNode;
+  transfer?: ProjectTransferOptions;
+  initialStatus?: 'active' | 'archived';
 }) {
   const [query, setQuery] = useState('');
-  const [status, setStatus] = useState<'active' | 'archived'>('active');
+  const [status, setStatus] = useState(initialStatus);
   const [editingId, setEditingId] = useState<string | null>(null);
   const editing = projects.find(project => project.id === editingId);
   const visible = projects.filter(project => Boolean(project.archivedAt) === (status === 'archived') && project.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
@@ -49,6 +52,8 @@ export function ProjectManager({ projects, currentProjectId, defaultProjectId, o
       <div className="project-archive-settings"><h3>{editing.archivedAt ? 'Restore project' : 'Archive project'}</h3><p className="inline-note">{editing.id === defaultProjectId ? 'Your default project is always available and cannot be archived.' : editing.archivedAt ? 'Restore this project, then enable the ad accounts you need.' : 'Suspend access for your team and connected assistants. Your ad campaigns will keep running. You can restore the project later.'}</p>
         {editing.id !== defaultProjectId ? <WorkspaceForm action={updateProjectAction} label={editing.archivedAt ? 'Restore project' : 'Archive project'} danger={!editing.archivedAt} confirmation={!editing.archivedAt ? { title: `Archive ${editing.name}?`, description: 'Adport will disable this project’s account access. Connected assistants cannot use it while archived. Campaigns keep running. You can restore the project later, then enable the accounts you need.', confirmLabel: 'Archive project' } : undefined}><input type="hidden" name="projectId" value={editing.id} /><input type="hidden" name="archived" value={String(!editing.archivedAt)} /></WorkspaceForm> : null}
       </div></> : null}
+      {transfer ? <ProjectTransfer project={editing} defaultProject={editing.id === defaultProjectId}
+        sourceName={organizationName} options={transfer} /> : null}
       {editing.id === currentProjectId && dangerZone ? <Disclosure label="Danger zone">{dangerZone}</Disclosure> : null}
     </div></Dialog> : null}
   </>;

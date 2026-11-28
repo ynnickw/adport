@@ -1213,6 +1213,7 @@ button.workspace-menu-heading:hover { background: #f6f6f3; }
 .project-archive-settings { display: grid; gap: .65rem; padding-top: 1.25rem; border-top: 1px solid var(--line-soft); }
 .project-archive-settings h3, .project-archive-settings p { margin: 0; }
 .project-archive-settings h3 { font-size: .875rem; }
+.project-transfer-settings .inline-note { margin: 0; }
 @media (max-width: 600px) {
   .project-row { align-items: flex-start; gap: .75rem; }
   .project-row .row-actions { width: 100%; padding-left: 2.75rem; }

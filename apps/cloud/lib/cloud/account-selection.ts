@@ -7,6 +7,8 @@ import type { CloudProvider, StoredMetaCredential, TenantPrincipal } from './typ
 import { providerLabel, usesAdAccountSlot } from './providers';
 import { PlanLimitError, recommendUpgradePlan } from './plan-limit';
 import type { PlanId } from './plans';
+import { lockProjectOrganization } from './member-capacity';
+import { requireProjectAdminAccess } from './repository';
 
 interface SelectionRow {
   id: string;
@@ -48,6 +50,8 @@ export async function stageAccountSelection(input: {
     currency: account.currency, status: account.status,
   }])).values()];
   await db().begin(async sql => {
+    await lockProjectOrganization(input.principal.organizationId, sql);
+    await requireProjectAdminAccess(input.principal.userId, input.principal.organizationId, sql);
     const connections = await sql`
       select id from public.connections where id = ${input.connectionId}
         and organization_id = ${input.principal.organizationId} and provider = ${input.provider}
@@ -89,9 +93,8 @@ export async function saveAccountSelection(principal: TenantPrincipal, id: strin
   requireManager(principal);
   return db().begin(async sql => {
     // Serialize inventory changes with account activation and other selections.
-    await sql`select company.id from public.organization_groups company
-      join public.organizations project on project.organization_group_id = company.id
-      where project.id = ${principal.organizationId} for update of company`;
+    await lockProjectOrganization(principal.organizationId, sql);
+    await requireProjectAdminAccess(principal.userId, principal.organizationId, sql);
     await sql`select id from public.organizations where id = ${principal.organizationId} for update`;
     const rows = await sql<SelectionRow[]>`
       select selection.id, selection.connection_id, selection.provider, selection.ciphertext, selection.return_path

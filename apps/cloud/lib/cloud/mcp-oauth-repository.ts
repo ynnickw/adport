@@ -17,6 +17,7 @@ import type { TenantPrincipal } from './types';
 import type { ToolSelection } from '@adport/core';
 import { loadToolSelection } from './tool-catalog';
 import { mcpProjectLogoUrls } from './mcp-project-logos';
+import { resolveMembership } from './repository';
 
 const ACCESS_TOKEN_SECONDS = 60 * 60;
 const REFRESH_TOKEN_SECONDS = 30 * 24 * 60 * 60;
@@ -154,29 +155,33 @@ export async function createMcpAuthorizationCode(
   request: AuthorizationRequest,
   organizationGroupId?: string,
 ): Promise<string> {
-  if (!principal.userId) throw new Error('A user session is required to authorize an MCP client.');
-  let organizationId = principal.organizationId;
-  if (organizationGroupId) {
-    const rows = await db()<Array<{ defaultProjectId: string }>>`
-      select company.default_project_id from public.organization_groups company
-      join public.organizations project on project.organization_group_id = company.id
-      join private.project_memberships access on access.organization_id = project.id
-      where company.id = ${organizationGroupId} and project.id = ${principal.organizationId} and access.user_id = ${principal.userId}
-    `;
-    if (!rows[0]) throw new Error('You do not have access to this organization.');
-    organizationId = rows[0].defaultProjectId;
-  }
+  const userId = principal.userId;
+  if (!userId) throw new Error('A user session is required to authorize an MCP client.');
   const credentialScopes = principal.grantedScopes ?? principal.scopes;
   const scopes = request.scopes.filter((scope) => credentialScopes.includes(scope));
   if (scopes.length === 0) throw new Error('This workspace does not grant any of the requested MCP scopes.');
   const code = `adp_code_${randomBytes(32).toString('base64url')}`;
-  await db()`
-    insert into private.mcp_oauth_authorization_codes
-      (code_hash, organization_id, organization_group_id, user_id, client_id, redirect_uri, scopes, code_challenge, resource, expires_at)
-    values
-      (${digestState(code)}, ${organizationId}, ${organizationGroupId ?? null}, ${principal.userId}, ${request.clientId},
-       ${request.redirectUri}, ${scopes}, ${request.codeChallenge}, ${request.resource}, now() + interval '10 minutes')
-  `;
+  await db().begin(async sql => {
+    let organizationId = principal.organizationId;
+    if (organizationGroupId) {
+      const [company] = await sql<Array<{ defaultProjectId: string }>>`
+        select company.default_project_id from public.organization_groups company
+        join public.organizations project on project.organization_group_id = company.id
+        join private.project_memberships access on access.organization_id = project.id
+        where company.id = ${organizationGroupId} and project.id = ${principal.organizationId} and access.user_id = ${userId}`;
+      if (!company) throw new Error('You do not have access to this organization.');
+      organizationId = company.defaultProjectId;
+    } else {
+      await sql`select id from public.organizations where id = ${organizationId} for share`;
+      await resolveMembership(userId, organizationId, sql);
+    }
+    await sql`
+      insert into private.mcp_oauth_authorization_codes
+        (code_hash, organization_id, organization_group_id, user_id, client_id, redirect_uri, scopes, code_challenge, resource, expires_at)
+      values
+        (${digestState(code)}, ${organizationId}, ${organizationGroupId ?? null}, ${userId}, ${request.clientId},
+         ${request.redirectUri}, ${scopes}, ${request.codeChallenge}, ${request.resource}, now() + interval '10 minutes')`;
+  });
   return code;
 }
 
@@ -227,7 +232,12 @@ export async function exchangeMcpAuthorizationCode(input: {
   redirectUri: string;
   resource: string;
 }): Promise<McpOAuthTokenPair> {
+  const codeHash = digestState(input.code);
   return db().begin(async (sql) => {
+    // Take the project lock before the credential lock, matching transfers.
+    await sql`select project.id from public.organizations project
+      join private.mcp_oauth_authorization_codes code on code.organization_id = project.id
+      where code.code_hash = ${codeHash} and code.organization_group_id is null for share of project`;
     const rows = await sql<Array<{
       codeHash: string;
       organizationId: string;
@@ -244,7 +254,7 @@ export async function exchangeMcpAuthorizationCode(input: {
       select code_hash, organization_id, organization_group_id, user_id, client_id, redirect_uri, scopes,
         code_challenge, resource, expires_at, consumed_at
       from private.mcp_oauth_authorization_codes
-      where code_hash = ${digestState(input.code)}
+      where code_hash = ${codeHash}
       for update
     `;
     const code = rows[0];
@@ -267,7 +277,11 @@ export async function exchangeMcpRefreshToken(input: {
   scopes?: string;
   resource: string;
 }): Promise<McpOAuthTokenPair> {
+  const tokenHash = digestState(input.refreshToken);
   return db().begin(async (sql) => {
+    await sql`select project.id from public.organizations project
+      join private.mcp_oauth_refresh_tokens refresh on refresh.organization_id = project.id
+      where refresh.token_hash = ${tokenHash} and refresh.organization_group_id is null for share of project`;
     const rows = await sql<Array<{
       tokenHash: string;
       organizationId: string;
@@ -283,7 +297,7 @@ export async function exchangeMcpRefreshToken(input: {
     }>>`
       select token_hash, organization_id, organization_group_id, user_id, client_id, scopes, resource, expires_at, consumed_at, revoked_at, verified_at
       from private.mcp_oauth_refresh_tokens
-      where token_hash = ${digestState(input.refreshToken)}
+      where token_hash = ${tokenHash}
       for update
     `;
     const refresh = rows[0];

@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import { HttpError } from '@/lib/http';
 import { safeProfileAvatarUrl } from '@/lib/member-profiles';
 import type { TenantPrincipal } from './types';
-import { requireEditingSeat } from './member-capacity';
+import { lockProjectOrganization, requireEditingSeat } from './member-capacity';
 
 export type OrganizationRole = NonNullable<TenantPrincipal['role']>;
 export interface ProjectAccess {
@@ -84,13 +84,8 @@ export async function createProject(userId: string, organizationId: string, name
 
 export async function updateProject(userId: string, projectId: string, input: { name?: string; archived?: boolean }): Promise<void> {
   await db().begin(async sql => {
-    const projects = await sql<Array<{ organizationGroupId: string }>>`
-      select organization_group_id from public.organizations where id = ${projectId}
-    `;
-    const project = projects[0];
-    if (!project) throw new HttpError('Project not found.', 404);
-    await sql`select id from public.organization_groups where id = ${project.organizationGroupId} for update`;
-    await requireOrganizationAdmin(userId, project.organizationGroupId, sql);
+    const organizationId = await lockProjectOrganization(projectId, sql);
+    await requireOrganizationAdmin(userId, organizationId, sql);
     if (input.name !== undefined) await sql`update public.organizations set name = ${checkedName(input.name)} where id = ${projectId}`;
     if (input.archived !== undefined) {
       await sql`update public.organizations set archived_at = ${input.archived ? new Date() : null} where id = ${projectId}`;

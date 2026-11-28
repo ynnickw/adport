@@ -14,7 +14,13 @@ const request = (body: unknown) => new Request('https://app.adport.test/api/sett
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.session.mockResolvedValue({ organizationId, userId: 'owner', role: 'owner', scopes: [] });
-  mocks.query.mockResolvedValue([]);
+  mocks.query.mockImplementation(async (parts: TemplateStringsArray) => {
+    const query = parts.join(' ');
+    if (query.includes('for update of company')) return [{ id: organizationId }];
+    if (query.includes('select organization_group_id')) return [{ organizationGroupId: organizationId }];
+    if (query.includes('from private.project_memberships')) return [{ organizationId, role: 'owner' }];
+    return [];
+  });
   mocks.json.mockImplementation(value => value);
 });
 

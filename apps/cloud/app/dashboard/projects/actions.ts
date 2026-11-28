@@ -13,6 +13,7 @@ import { HttpError } from '@/lib/http';
 import { PlanLimitError, type PlanLimitDetails } from '@/lib/cloud/plan-limit';
 import { safeProjectSwitchReturnPath } from '@/lib/return-path';
 import { cancelMemberInvitation, sendMemberInvitation } from '@/lib/cloud/member-invitations';
+import { transferProject } from '@/lib/cloud/project-transfers';
 
 export interface WorkspaceActionState { error?: string; success?: string; planLimit?: PlanLimitDetails; }
 const uuid = z.string().uuid();
@@ -81,6 +82,21 @@ export async function updateProjectAction(_state: WorkspaceActionState, form: Fo
     name: form.has('name') ? name.parse(form.get('name')) : undefined,
     archived: form.has('archived') ? z.enum(['true', 'false']).parse(form.get('archived')) === 'true' : undefined,
   }));
+}
+
+export async function transferProjectAction(_state: WorkspaceActionState, form: FormData): Promise<WorkspaceActionState> {
+  const input = z.object({ projectId: uuid, sourceOrganizationId: uuid, destinationOrganizationId: uuid }).safeParse({
+    projectId: form.get('projectId'),
+    sourceOrganizationId: form.get('sourceOrganizationId'),
+    destinationOrganizationId: form.get('destinationOrganizationId'),
+  });
+  if (!input.success) return { error: 'Choose a destination organization.' };
+  const result = await mutation(async actor => {
+    const transfer = await transferProject({ actorUserId: actor, ...input.data });
+    await setProject(transfer.archived ? transfer.destinationProjectId : input.data.projectId);
+  });
+  if (result.error) return result;
+  redirect(`/dashboard/projects?transferred=${input.data.projectId}`);
 }
 
 export async function renameCompanyAction(_state: WorkspaceActionState, form: FormData): Promise<WorkspaceActionState> {
