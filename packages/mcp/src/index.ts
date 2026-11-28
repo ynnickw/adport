@@ -35,6 +35,9 @@ import {
 
 export const PROVIDER_IDS = TOOL_PROVIDERS;
 export { ADPORT_UI_RESOURCE_DOMAINS };
+const REVIEWED_CAMPAIGN_UI_URI = 'ui://adport/summary-card-v30.html';
+const REVIEWED_CAMPAIGN_WIDGET_DESCRIPTION =
+  'Shows the proposed campaign, approval status, and result. A preview does not create a campaign.';
 // Old cards reference their original URI. Summary cards first shipped at v30 and skipped v31.
 const uiVersions = Array.from({ length: ADPORT_UI_VERSION - 1 }, (_, i) => ADPORT_UI_VERSION - i);
 export const ADPORT_UI_RESOURCE_URIS: readonly string[] = [
@@ -128,6 +131,10 @@ function registerUiResources(server: McpServer, uiDomain: string | null, uiResou
         csp: { connectDomains: summary ? [] : [...uiConnectDomains], resourceDomains: summary ? summaryDomains : [...uiResourceDomains] },
       },
       ...(uiDomain?.startsWith('https://') ? { 'openai/widgetDomain': uiDomain } : {}),
+      // A shared resource needs its own description so the publisher does not
+      // fall back to the description of whichever tool references it first.
+      ...(uri === REVIEWED_CAMPAIGN_UI_URI && uiDomain === ADPORT_UI_DOMAIN
+        ? { 'openai/widgetDescription': REVIEWED_CAMPAIGN_WIDGET_DESCRIPTION } : {}),
     };
     const title = uri === ADPORT_UI_URI ? 'Adport insight card' : 'Adport insight card (previous URI)';
     registerAppResource(
@@ -148,6 +155,9 @@ const hostedWriteOutput = z.looseObject({
   expires_at: z.string().optional(),
   result: z.looseObject({}).optional(),
 });
+const reviewedCampaignWriteOutput = hostedWriteOutput.extend({
+  expires_at: hostedWriteOutput.shape.expires_at.describe('Preview expiration.'),
+});
 
 // Preserve the title and widget visibility fields on previously reviewed definitions.
 // Other hosted tools use annotation titles and default visibility to fit the catalog budget.
@@ -163,13 +173,13 @@ const explicitHostedUiVisibility = new Set([
 // OpenAI held these definition updates while keeping their cached versions live.
 // Keep the reviewed resource aliases on the hosted publisher surface. Resource
 // reads still serve the current renderer at those aliases, with their existing CSP.
-const reviewedPublisherMetadata = new Map<string, { resourceUri: string; previewCopy?: true }>([
-  ['meta_create_campaign', { resourceUri: 'ui://adport/summary-card-v30.html', previewCopy: true }],
-  ['google_create_performance_max_campaign', { resourceUri: 'ui://adport/summary-card-v30.html', previewCopy: true }],
-  ['reddit_ads', { resourceUri: 'ui://adport/insight-card-v34.html' }],
-  ['pinterest_catalog_items', { resourceUri: 'ui://adport/insight-card-v36.html' }],
-  ['x_preroll_ctas', { resourceUri: 'ui://adport/insight-card-v36.html' }],
-  ['x_get_preroll_cta', { resourceUri: 'ui://adport/insight-card-v36.html' }],
+const reviewedPublisherResources = new Map([
+  ['meta_create_campaign', REVIEWED_CAMPAIGN_UI_URI],
+  ['google_create_performance_max_campaign', REVIEWED_CAMPAIGN_UI_URI],
+  ['reddit_ads', 'ui://adport/insight-card-v34.html'],
+  ['pinterest_catalog_items', 'ui://adport/insight-card-v36.html'],
+  ['x_preroll_ctas', 'ui://adport/insight-card-v36.html'],
+  ['x_get_preroll_cta', 'ui://adport/insight-card-v36.html'],
 ]);
 
 /**
@@ -197,28 +207,33 @@ export function createMcpServer({ runtime, catalog = { profile: 'full', provider
     const scopeDenial = scopes && !scopes.includes(requiredScope) ? scopeDenials?.[requiredScope] : undefined;
     if (scopes && !scopes.includes(requiredScope) && !scopeDenial) continue;
     const view = tool.presentation ?? viewForTool(tool.name, tool.annotations.readOnly ?? false);
-    const reviewed = productionOnly && uiDomain === ADPORT_UI_DOMAIN ? reviewedPublisherMetadata.get(tool.name) : undefined;
-    const resourceUri = reviewed?.resourceUri ?? (productionOnly && view !== 'creatives' ? ADPORT_SUMMARY_UI_URI : ADPORT_UI_URI);
+    const reviewedUri = productionOnly && uiDomain === ADPORT_UI_DOMAIN ? reviewedPublisherResources.get(tool.name) : undefined;
+    const reviewedCampaign = reviewedUri === REVIEWED_CAMPAIGN_UI_URI;
+    const resourceUri = reviewedUri ?? (productionOnly && view !== 'creatives' ? ADPORT_SUMMARY_UI_URI : ADPORT_UI_URI);
     const canRefresh = tool.annotations.readOnly && (view === 'creatives' || view === 'records' || tool.pagination !== undefined);
     const canPage = canRefresh && tool.pagination !== undefined;
     // MCP structuredContent must be an object. Preserve legacy raw arrays in
     // text/CLI results, exposing their declared schema under a value envelope.
     const wrapOutput = !!tool.output && !(tool.output instanceof z.ZodObject);
-    const output = productionOnly && tool.output === writeOutput ? hostedWriteOutput : tool.output;
+    const output = productionOnly && tool.output === writeOutput
+      ? (reviewedCampaign ? reviewedCampaignWriteOutput : hostedWriteOutput) : tool.output;
     const objectOutput = output
       ? output instanceof z.ZodObject ? output : z.object({ value: output })
       : undefined;
     const definition = productionOnly ? tool.hosted ?? tool : tool;
     // Preserve the reviewed preview instructions without changing the registry
     // schema, write handler, or compact metadata on the rest of the catalog.
-    const pendingId = definition.input.shape.pending_operation_id;
-    const useReviewedCopy = reviewed?.previewCopy && pendingId instanceof z.ZodOptional;
-    const description = useReviewedCopy
+    const { account_id: accountId, project_id: projectId, pending_operation_id: pendingId } = definition.input.shape;
+    const description = reviewedCampaign
       ? definition.description.replace(/\n\nApply with IDENTICAL arguments and the ID from preview\.$/,
         '\n\nOmit pending_operation_id to preview. To apply, repeat IDENTICAL arguments with the returned ID.')
       : definition.description;
-    const inputSchema = useReviewedCopy
-      ? definition.input.safeExtend({ pending_operation_id: pendingId.describe('Omit to get a dry-run preview; pass the returned id to apply.') })
+    const inputSchema = reviewedCampaign
+      ? definition.input.safeExtend({
+        ...(accountId instanceof z.ZodString ? { account_id: accountId.describe('Target account id') } : {}),
+        ...(projectId instanceof z.ZodOptional ? { project_id: projectId.describe('From projects_list; required with multiple projects.') } : {}),
+        ...(pendingId instanceof z.ZodOptional ? { pending_operation_id: pendingId.describe('Omit to get a dry-run preview; pass the returned id to apply.') } : {}),
+      })
       : definition.input;
     const title = toolTitle(tool.name);
     const config = {

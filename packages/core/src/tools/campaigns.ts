@@ -77,7 +77,7 @@ export function campaignTools(registry: ToolRegistry, sources: readonly Campaign
     }),
     output: campaignsOutput,
     presentation: 'records',
-    annotations: { readOnly: true, openWorld: false },
+    annotations: { readOnly: true, openWorld: true },
     async handler({ provider, account_id, limit }, ctx) {
       ctx.providers.get(provider);
       const mapping = campaignMapping(provider);
@@ -106,7 +106,7 @@ export function campaignTools(registry: ToolRegistry, sources: readonly Campaign
   if (writeSources.length) tools.push(guardedWriteTool({
     name: 'campaign_set_status', namespace: 'campaigns', sourceProviders: writeSources, catalog,
     description: 'Pause or activate one campaign. For LinkedIn activation, use linkedin_set_campaign_status with advertiser consent.',
-    provider: 'campaigns', kind: 'update', openWorld: false,
+    provider: 'campaigns', kind: 'update', openWorld: true,
     payload: z.strictObject({
       provider: z.enum(writeSources),
       account_id: id,

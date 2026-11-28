@@ -92,6 +92,10 @@ it('counts the advertised Standard catalog and keeps the native campaign tools i
   expect(standardResult.tools.find(tool => tool.name === 'campaign_set_status')?.inputSchema.properties?.provider).toEqual({
     type: 'string', enum: expect.arrayContaining([...providers]),
   });
+  expect(standardResult.tools.find(tool => tool.name === 'campaign_set_status')?.annotations)
+    .toMatchObject({ readOnlyHint: false, destructiveHint: true, openWorldHint: true });
+  expect(standardResult.tools.find(tool => tool.name === 'campaigns_list')?.annotations)
+    .toMatchObject({ readOnlyHint: true, destructiveHint: false, openWorldHint: true });
   expect(fullResult.tools.map(tool => tool.name)).toEqual(expect.arrayContaining(['meta_list_campaigns', 'meta_set_campaign_status']));
   expect(catalogToolCount(catalog, standard, scopes, true)).toBe(standardResult.tools.length);
   expect(catalogToolCount(catalog, full, scopes, true)).toBe(fullResult.tools.length);
@@ -196,13 +200,31 @@ it('keeps the expanded publisher catalog below the metadata limit with GTM and S
     for (const name of ['meta_create_campaign', 'google_create_performance_max_campaign']) {
       const definition = toolsByName.get(name);
       expect(definition?.description).toMatch(/\n\nOmit pending_operation_id to preview\. To apply, repeat IDENTICAL arguments with the returned ID\.$/);
-      expect(definition?.inputSchema.properties?.pending_operation_id).toMatchObject({
-        type: 'string',
-        description: 'Omit to get a dry-run preview; pass the returned id to apply.',
+      expect(definition?.inputSchema.properties).toMatchObject({
+        account_id: { type: 'string', description: 'Target account id' },
+        project_id: { type: 'string', format: 'uuid', description: 'From projects_list; required with multiple projects.' },
+        pending_operation_id: { type: 'string', description: 'Omit to get a dry-run preview; pass the returned id to apply.' },
       });
+      expect(definition?.outputSchema?.properties?.expires_at).toMatchObject({ type: 'string', description: 'Preview expiration.' });
       expect(definition?.inputSchema.required).not.toContain('pending_operation_id');
       expect(definition?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true, openWorldHint: true });
     }
+    expect(resourcesByUri.get(publishedWidgetAliases.meta_create_campaign)?._meta).toMatchObject({
+      'openai/widgetDescription': 'Shows the proposed campaign, approval status, and result. A preview does not create a campaign.',
+      ui: { csp: { connectDomains: [] } },
+    });
+    const linkedinVideos = toolsByName.get('linkedin_videos');
+    expect(linkedinVideos?.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false, openWorldHint: true });
+    expect(linkedinVideos?.outputSchema?.properties).toMatchObject({
+      creatives: { items: { type: 'object' } },
+      items: { items: { properties: { library_snapshot_hash: { type: 'string' } } } },
+      next_start: { type: 'integer' },
+    });
+    expect(linkedinVideos?.outputSchema?.properties?.creatives).not.toHaveProperty('items.properties.actions');
+    expect(toolsByName.get('linkedin_update_video')).toMatchObject({
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      inputSchema: { properties: { video_id: {}, expected_library_hash: {}, pending_operation_id: {} } },
+    });
     expect(toolsByName.get('projects_list')?.title).toBeUndefined();
     expect(toolsByName.get('projects_list')?._meta?.ui).not.toHaveProperty('visibility');
     const summaryUri = String(tools.find(tool => tool.name === 'projects_list')?._meta?.['openai/outputTemplate']);
@@ -232,7 +254,7 @@ it('keeps the expanded publisher catalog below the metadata limit with GTM and S
         metadata: tool._meta,
         templates: [{
           resource_uri: uri,
-          meta: { ...resource?._meta, 'openai/widgetDescription': resource?.description },
+          meta: { 'openai/widgetDescription': resource?.description, ...resource?._meta },
         }],
       };
       return total + Buffer.byteLength(JSON.stringify(definition)) + 360;

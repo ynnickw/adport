@@ -99,11 +99,15 @@ describe('LinkedIn multipart video and PDF media', () => {
     const f = fixture(); f.override(c => c.url.searchParams.get('action') === 'initializeUpload' ? Response.json({ value: { document: D, uploadUrl: 'https://attacker.example/dms-uploads/QA_document/ads-uploadedDocument/0', uploadUrlExpiresAt: Date.now() + 60_000 } }) : undefined);
     await expect(f.provider.applyWrite(f.upload('document'), guard)).rejects.toMatchObject({ details: { resource_ids: [D] } }); expect(mutations(f)).toHaveLength(1);
   });
-  it('encodes the video finder’s scalar status and exposes actual account-owned video actions', async () => {
+  it('lists actual account-owned video previews without embedding an editable action', async () => {
     const f = fixture(), result = await f.provider.media.videos({ account_id: A, library_status: 'ACTIVE', start: 0, count: 20 });
     const request = f.calls.find(c => c.url.pathname === '/rest/videos')!;
     expect(request.url.searchParams.get('associatedAccount')).toBe(account); expect(request.url.searchParams.get('mediaLibraryStatus')).toBe('ACTIVE');
-    expect(result.creatives[0]).toMatchObject({ media: [{ type: 'video', url: f.state.videos[0].downloadUrl }], actions: [{ arguments: { account_id: A, video_id: V, expected_library_hash: expect.stringMatching(/^[a-f0-9]{64}$/) } }] });
+    expect(result.creatives[0]).toMatchObject({ id: V, account_id: A, media: [{ type: 'video', url: f.state.videos[0].downloadUrl }] });
+    expect(result.creatives[0]).not.toHaveProperty('actions');
+    expect(result.items[0]).toMatchObject({ id: V, library_snapshot_hash: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    expect(linkedinTools(f.provider).find(tool => tool.name === 'linkedin_videos')?.output?.safeParse(result).success).toBe(true);
+    expect(mutations(f)).toHaveLength(0);
     f.state.videos[0].mediaLibraryMetadata.associatedAccount = 'urn:li:sponsoredAccount:999'; await expect(f.provider.media.videos({ account_id: A, start: 0, count: 20 })).rejects.toThrow('mismatch');
   });
   it('binds edits to library metadata rather than expiring URLs, uses nested patches and verifies readback', async () => {
