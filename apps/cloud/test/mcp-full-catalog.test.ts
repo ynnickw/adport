@@ -205,7 +205,7 @@ it('keeps the expanded publisher catalog below the metadata limit with GTM and S
         project_id: { type: 'string', format: 'uuid', description: 'From projects_list; required with multiple projects.' },
         pending_operation_id: { type: 'string', description: 'Omit to get a dry-run preview; pass the returned id to apply.' },
       });
-      expect(definition?.outputSchema?.properties?.expires_at).toMatchObject({ type: 'string', description: 'Preview expiration.' });
+      expect(definition?.outputSchema).toMatchObject({ properties: { expires_at: { type: 'string', description: 'Preview expiration.' } } });
       expect(definition?.inputSchema.required).not.toContain('pending_operation_id');
       expect(definition?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true, openWorldHint: true });
     }
@@ -215,12 +215,12 @@ it('keeps the expanded publisher catalog below the metadata limit with GTM and S
     });
     const linkedinVideos = toolsByName.get('linkedin_videos');
     expect(linkedinVideos?.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false, openWorldHint: true });
-    expect(linkedinVideos?.outputSchema?.properties).toMatchObject({
+    expect(linkedinVideos?.outputSchema).toMatchObject({ properties: {
       creatives: { items: { type: 'object' } },
       items: { items: { properties: { library_snapshot_hash: { type: 'string' } } } },
       next_start: { type: 'integer' },
-    });
-    expect(linkedinVideos?.outputSchema?.properties?.creatives).not.toHaveProperty('items.properties.actions');
+    } });
+    expect(linkedinVideos?.outputSchema).not.toHaveProperty('properties.creatives.items.properties.actions');
     expect(toolsByName.get('linkedin_update_video')).toMatchObject({
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       inputSchema: { properties: { video_id: {}, expected_library_hash: {}, pending_operation_id: {} } },
