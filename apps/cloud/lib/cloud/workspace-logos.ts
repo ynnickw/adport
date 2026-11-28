@@ -1,11 +1,11 @@
 import 'server-only';
 import { randomUUID } from 'node:crypto';
 import type postgres from 'postgres';
-import sharp from 'sharp';
 import { db } from '@/lib/db';
 import { HttpError } from '@/lib/http';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { LOGO_ACCEPT, MAX_LOGO_BYTES, type WorkspaceLogoKind } from '@/lib/workspace-logos';
+import { MAX_LOGO_BYTES, type WorkspaceLogoKind } from '@/lib/workspace-logos';
+import { normalizeUploadedImage } from './image-upload';
 
 const BUCKET = 'workspace-logos';
 interface LogoTarget {
@@ -35,18 +35,8 @@ async function targetFor(userId: string, kind: WorkspaceLogoKind, id: string, sq
 }
 
 export async function normalizeWorkspaceLogo(file: File): Promise<Buffer> {
-  if (!file.size || file.size > MAX_LOGO_BYTES) throw new HttpError('Choose an image up to 2 MB.', 400);
-  if (!LOGO_ACCEPT.split(',').includes(file.type)) throw new HttpError('Choose a PNG, JPG, or WebP image.', 400);
-  try {
-    const image = sharp(Buffer.from(await file.arrayBuffer()), { limitInputPixels: 16_777_216, failOn: 'warning' });
-    const metadata = await image.metadata();
-    const expectedFormat = { 'image/png': 'png', 'image/jpeg': 'jpeg', 'image/webp': 'webp' }[file.type];
-    if (metadata.format !== expectedFormat || (metadata.pages ?? 1) !== 1) throw new Error('Unsupported image');
-    // Decode and re-encode to strip metadata and preserve the complete logo, including transparency.
-    return await image.autoOrient().resize(256, 256, { fit: 'inside', withoutEnlargement: true }).png().toBuffer();
-  } catch {
-    throw new HttpError('This image could not be read. Choose a valid PNG, JPG, or WebP image.', 400);
-  }
+  return normalizeUploadedImage(file, MAX_LOGO_BYTES, image =>
+    image.resize(256, 256, { fit: 'inside', withoutEnlargement: true }).png().toBuffer());
 }
 
 export async function removeWorkspaceLogoObjects(paths: string[]): Promise<void> {

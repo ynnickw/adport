@@ -56,7 +56,7 @@ export function ProductAnalytics() {
     <section className="analytics-notice" role="region" aria-label="Optional product analytics">
       <h2>Help us improve Adport</h2>
       <p>Allow optional analytics to help us improve setup, useful features, and plans. PostHog receives pseudonymous dashboard and hosted-agent usage, role, plan, and outcome metadata. We exclude ad content, account details, credentials, and session recordings.</p>
-      <p>You can change your choice in Settings → Preferences. <a href="https://adport.dev/privacy#product-analytics" target="_blank" rel="noreferrer">Learn more</a></p>
+      <p>You can change your choice in Settings → Account. <a href="https://adport.dev/privacy#product-analytics" target="_blank" rel="noreferrer">Learn more</a></p>
       {!configured ? <p>Product analytics is currently disabled.</p> : null}
       {error ? <p role="alert">{error}</p> : null}
       <div className="analytics-notice-actions">

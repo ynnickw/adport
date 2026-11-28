@@ -43,6 +43,11 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
   const requestedStep = params.step === 'connect' || params.step === 'accounts' || params.step === 'agent' ? params.step : undefined;
   const resumeStep = state.currentStep !== 'welcome' ? state.currentStep : enabledAccounts.length ? 'agent'
     : accounts.length || connections.some(connection => connection.status === 'connected' && connection.accountSelectionId) ? 'accounts' : 'connect';
+  const currentProject = tenant.projects.find(project => project.id === tenant.organizationId);
+  const workspace = currentProject?.defaultProjectId === tenant.organizationId && ['owner', 'admin'].includes(tenant.organizationRole)
+    ? { organizationName: tenant.organizationGroupName, projectName: tenant.organizationName } : undefined;
+  const startWithNames = workspace && tenant.organizationRole === 'owner' && state.currentStep === 'welcome' && !state.completedAt && !state.skippedAt
+    && resumeStep === 'connect' && !requestedStep && !params.connected && !params.accounts_saved && !params.error && !selectionUnavailable;
   const availability = oauthAvailability(tenant.organizationId);
   const providers: OAuthProviderView[] = CLOUD_PROVIDERS.map(id => ({ id, available: isOAuthProvider(id) ? availability[id] : true }));
   return (
@@ -56,7 +61,8 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
         projectSwitcher={<ProjectSwitcher projects={tenant.projects} currentProjectId={tenant.organizationId} />}
         resuming={params.resume === '1'}
         canManage={canAdminister(tenant)}
-        initialStep={selection ? 'accounts' : requestedStep ?? resumeStep}
+        initialStep={selection ? 'accounts' : startWithNames ? 'workspace' : requestedStep ?? resumeStep}
+        workspace={workspace}
         initialAgent={state.selectedAgent}
         baseUrl={env().ADPORT_CLOUD_BASE_URL.replace(/\/$/, '')}
         listings={getAssistantListings()}

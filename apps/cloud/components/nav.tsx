@@ -38,9 +38,7 @@ const SETTINGS_ITEMS: NavItem[] = [
   { label: 'Policies', href: '/dashboard/policies', icon: icon.policies },
   { label: 'Plan & usage', href: '/dashboard/billing', icon: icon.billing },
   { label: 'Developer', href: '/dashboard/developer', icon: icon.agents },
-];
-const UTILITY_ITEMS: NavItem[] = [
-  { label: 'Settings', href: '/dashboard/organization', icon: icon.policies, paths: SETTINGS_ITEMS.map(item => item.href) },
+  { label: 'Account', href: '/dashboard/preferences', icon: icon.team },
 ];
 
 const isActive = (item: NavItem, pathname: string) => item.exact ? pathname === item.href : (item.paths ?? [item.href]).some(path => pathname === path || pathname.startsWith(`${path}/`));
@@ -63,15 +61,16 @@ export function Nav({ pendingApprovals = 0 }: { pendingApprovals?: number }) {
   return <nav className="nav" aria-label="Cloud navigation"><NavLinks items={items} /></nav>;
 }
 
-export function UtilityNav() {
+export function UtilityNav({ canManageOrganization }: { canManageOrganization: boolean }) {
   return (
     <nav className="nav utility-nav" aria-label="Workspace and help">
-      <NavLinks items={UTILITY_ITEMS} />
+      <NavLinks items={[{ label: 'Settings', href: canManageOrganization ? '/dashboard/organization' : '/dashboard/preferences',
+        icon: icon.policies, paths: SETTINGS_ITEMS.map(item => item.href) }]} />
     </nav>
   );
 }
 
-export function ContextNav({ canManage = false }: { canManage?: boolean }) {
+export function ContextNav({ canManage = false, canManageOrganization = canManage }: { canManage?: boolean; canManageOrganization?: boolean }) {
   const pathname = useDashboardPath(usePathname());
   const navigation = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -89,7 +88,8 @@ export function ContextNav({ canManage = false }: { canManage?: boolean }) {
     reveal();
     return () => observer.disconnect();
   }, [pathname]);
-  const tabs = SETTINGS_ITEMS.some(item => isActive(item, pathname)) ? SETTINGS_ITEMS.filter(item => canManage || item.href !== '/dashboard/developer')
+  const tabs = SETTINGS_ITEMS.some(item => isActive(item, pathname)) ? SETTINGS_ITEMS.filter(item =>
+    (canManage || item.href !== '/dashboard/developer') && (canManageOrganization || item.href !== '/dashboard/organization'))
     : ['/dashboard/accounts', '/dashboard/connections', '/dashboard/analytics'].includes(pathname)
       ? [{ label: 'Ad accounts', href: '/dashboard/accounts' }, { label: 'Ad platforms', href: '/dashboard/connections' }, { label: 'Analytics & tracking', href: '/dashboard/analytics' }]
       : ['/dashboard/approvals', '/dashboard/audit'].includes(pathname)

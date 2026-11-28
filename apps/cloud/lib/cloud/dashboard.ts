@@ -8,10 +8,12 @@ import { cookies, headers } from 'next/headers';
 import { REQUEST_PATH_HEADER, safeReturnPath } from '@/lib/return-path';
 import { PROJECT_COOKIE } from './auth';
 import { listProjectAccess, type ProjectAccess } from './workspaces';
+import { safeProfileAvatarUrl } from '@/lib/member-profiles';
 
 export interface DashboardTenant {
   userId: string;
   userName: string;
+  userAvatarUrl: string | null;
   email: string;
   organizationId: string;
   organizationName: string;
@@ -44,22 +46,26 @@ export const requireDashboardTenant = cache(async (): Promise<DashboardTenant> =
     organizationName: string;
     onboardingCompletedAt: Date | null;
     onboardingSkippedAt: Date | null;
+    userName: string | null;
+    userAvatarUrl: string | null;
   }>>`
     select membership.organization_id, membership.role, organization.name as organization_name,
-      onboarding.completed_at as onboarding_completed_at, onboarding.skipped_at as onboarding_skipped_at
+      onboarding.completed_at as onboarding_completed_at, onboarding.skipped_at as onboarding_skipped_at,
+      profile.display_name as user_name, private.profile_avatar_url(membership.user_id) as user_avatar_url
     from private.project_memberships membership
     join public.organizations organization on organization.id = membership.organization_id
     left join public.organization_onboarding onboarding on onboarding.organization_id = organization.id
+    left join public.profiles profile on profile.user_id = membership.user_id
     where membership.user_id = ${auth.user.id} and membership.organization_id = ${project.id}
     order by membership.created_at asc
     limit 1
   `;
   const membership = memberships[0];
   if (!membership) throw new Error('No organization membership found for this account.');
-  const meta = auth.user.user_metadata as { full_name?: string } | null;
   return {
     userId: auth.user.id,
-    userName: meta?.full_name?.trim() || auth.user.email?.split('@')[0] || 'Member',
+    userName: membership.userName?.trim() || auth.user.email?.split('@')[0] || 'Member',
+    userAvatarUrl: safeProfileAvatarUrl(membership.userAvatarUrl),
     email: auth.user.email ?? '',
     organizationId: membership.organizationId,
     organizationName: membership.organizationName,

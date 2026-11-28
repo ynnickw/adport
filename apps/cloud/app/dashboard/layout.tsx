@@ -29,7 +29,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   ]);
   return (
     <UpgradeProvider value={{ planId: entitlement.plan.id, canManageBilling: tenant.organizationRole === 'owner', projectId: tenant.organizationId, billingOptions: upgradeBillingOptions(entitlement) }}>
-    <Shell tenant={{ organizationName: tenant.organizationName, userName: tenant.userName, email: tenant.email, role: tenant.role, projectSwitcher: <ProjectSwitcher projects={tenant.projects} currentProjectId={tenant.organizationId} />, planUsage: <SidebarPlanUsage plan={entitlement.plan} usage={usage} /> }} pendingApprovals={pendingApprovals}>
+    <Shell tenant={{ organizationName: tenant.organizationName, userName: tenant.userName, avatarUrl: tenant.userAvatarUrl,
+      role: tenant.role, organizationRole: tenant.organizationRole,
+      projectSwitcher: <ProjectSwitcher projects={tenant.projects} currentProjectId={tenant.organizationId} />,
+      planUsage: <SidebarPlanUsage plan={entitlement.plan} usage={usage} /> }} pendingApprovals={pendingApprovals}>
       {children}
       <ProductAnalytics key={`${tenant.userId}:${tenant.organizationId}`} />
     </Shell>

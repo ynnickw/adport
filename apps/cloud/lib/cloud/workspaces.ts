@@ -154,6 +154,32 @@ export async function renameCompany(userId: string, organizationId: string, name
   });
 }
 
+export async function saveSetupWorkspaceNames(
+  actorUserId: string,
+  projectId: string,
+  input: { organizationName: string; projectName: string; advance: boolean },
+): Promise<void> {
+  const organizationName = checkedName(input.organizationName);
+  const projectName = checkedName(input.projectName);
+  await db().begin(async sql => {
+    const [company] = await sql<Array<{ id: string }>>`
+      select id from public.organization_groups where default_project_id = ${projectId} for update`;
+    if (!company) throw new HttpError('Only the first project can be named with its organization.', 404);
+    await requireOrganizationAdmin(actorUserId, company.id, sql);
+    const organizations = await sql`update public.organization_groups set name = ${organizationName}
+      where id = ${company.id} and name is distinct from ${organizationName}`;
+    const projects = await sql`update public.organizations set name = ${projectName}
+      where id = ${projectId} and name is distinct from ${projectName}`;
+    if (organizations.count || projects.count) await sql`
+      insert into public.audit_events (organization_id, actor_user_id, event, provider, tool, account_id, summary)
+      values (${projectId}, ${actorUserId}, 'settings_updated', 'cloud', 'setup_workspace_names', '*', 'Updated workspace names during setup')`;
+    if (input.advance) await sql`
+      insert into public.organization_onboarding (organization_id, current_step) values (${projectId}, 'connect')
+      on conflict (organization_id) do update set current_step = excluded.current_step
+      where organization_onboarding.current_step = 'welcome'`;
+  });
+}
+
 export async function saveOrganizationMember(input: {
   actorUserId: string; organizationId: string; email?: string; userId?: string;
   role: OrganizationRole; projectIds: string[];
