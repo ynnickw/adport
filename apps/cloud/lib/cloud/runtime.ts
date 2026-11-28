@@ -1,6 +1,7 @@
 import 'server-only';
-import { ANALYTICS_PROVIDERS, AdportError, createContext, selectRuntimeCatalog, PolicyEngine, type ToolSelection, type AdportRuntime, type AnyToolDefinition, type ProviderModule } from '@adport/core';
+import { ANALYTICS_PROVIDERS, CAMPAIGN_PROVIDERS, AdportError, createContext, createToolRegistry, selectRuntimeCatalog, PolicyEngine, toolProvider, type ToolRegistry, type ToolSelection, type AdportRuntime, type AnyToolDefinition, type ProviderModule } from '@adport/core';
 import { toolAccessPath } from '@/lib/tool-access-link';
+import { summarizeToolCatalog } from '@/lib/mcp-tool-selection';
 import { AppleAdsClient, AppleAdsProvider, appleTools } from '@adport/provider-apple';
 import { AnalyticsClient, Ga4Provider, SearchConsoleProvider, gscTools } from '@adport/provider-analytics';
 import { googleOAuthClient } from './google-oauth';
@@ -200,11 +201,10 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
   const discoveryProjects = options.discoveryProjectIds ?? [principal.organizationId];
   const runtime = await createContext({
     providerModules: modules,
-    capabilityProviders: CLOUD_PROVIDERS,
-    analyticsProviders: options.surface === 'mcp' ? ANALYTICS_PROVIDERS.filter(id => discoveryProjects.some(project => providerAllowedForOrganization(id, project))) : undefined,
+    ...(options.surface === 'mcp' ? hostedRegistryOptions(discoveryProjects) : { capabilityProviders: CLOUD_PROVIDERS }),
     engine,
     authorizeToolCall: enforceAccountScope ? (tool, input) => {
-      const platform = tool.namespace === 'analytics' ? String(input.provider) : tool.namespace;
+      const platform = toolProvider(tool, input);
       if (platform !== 'core' && platform !== 'audit' && !connected.has(platform)) {
         if (tool.namespace === 'gtm') return rejectUnavailableGtm(principal, !tool.annotations.readOnly);
         throw new AdportError('NOT_CONNECTED', 'This platform is not connected in the selected project.');
@@ -214,13 +214,21 @@ export async function createTenantRuntime(principal: TenantPrincipal, options: T
     findings: new PostgresFindingsStore(principal.organizationId),
     media,
   });
-  if (options.surface === 'mcp') completeMcpCatalog(runtime, discoveryProjects);
+  if (options.surface === 'mcp') completeMcpCatalog(runtime.registry, discoveryProjects, connected.has('gravity'));
   const selected = options.catalog ? selectRuntimeCatalog(runtime, options.catalog, false, {
     canWrite: principal.scopes.includes('tools:write'), excludedTools: ['recommendation_apply'],
     manageAccessUrl: new URL(toolAccessPath(principal.organizationId, principal.apiKeyId ?? principal.clientId ?? '', principal.apiKeyId ? 'key' : 'oauth',
       principal.oauthOrganizationGrantId ?? principal.oauthOrganizationGroupId), env().ADPORT_CLOUD_BASE_URL).href,
   }) : runtime;
   return enforceAccountScope ? instrumentCloudTools(selected, principal, options.surface ?? 'dashboard') : selected;
+}
+
+function hostedRegistryOptions(projectIds: readonly string[]) {
+  return {
+    capabilityProviders: CLOUD_PROVIDERS,
+    analyticsProviders: ANALYTICS_PROVIDERS.filter(id => projectIds.some(project => providerAllowedForOrganization(id, project))),
+    campaignProviders: CAMPAIGN_PROVIDERS,
+  };
 }
 
 /** Factories define schemas without calling a provider. These handlers never execute. */
@@ -233,18 +241,25 @@ function unavailableTools<T extends object>(provider: string, factory: (provider
 }
 
 /** A stable catalog lets clients use platforms connected after OAuth consent. */
-function completeMcpCatalog(runtime: AdportRuntime, projectIds: readonly string[]): void {
-  const registered = new Set(runtime.registry.list().map(tool => tool.name));
+function completeMcpCatalog(registry: ToolRegistry, projectIds: readonly string[], gravityConnected = false): void {
+  const registered = new Set(registry.list().map(tool => tool.name));
   const catalog = [
     ...(projectIds.some(id => providerAllowedForOrganization('gtm', id)) ? unavailableTools('gtm', gtmTools) : []),
     ...(projectIds.some(id => providerAllowedForOrganization('gsc', id)) ? unavailableTools('gsc', gscTools) : []),
     ...unavailableTools('google', googleTools), ...unavailableTools('meta', metaTools),
     ...unavailableTools('tiktok', tiktokTools), ...unavailableTools('apple', appleTools),
     ...unavailableTools('microsoft', microsoftTools), ...unavailableTools('reddit', redditTools),
-    ...unavailableTools('openai', openaiTools), ...(runtime.ctx.providers.list().some(provider => provider.id === 'gravity') ? [] : unavailableTools('gravity', gravityTools)),
+    ...unavailableTools('openai', openaiTools), ...(gravityConnected ? [] : unavailableTools('gravity', gravityTools)),
     ...unavailableTools('snapchat', snapchatTools), ...unavailableTools('spotify', spotifyTools),
     ...unavailableTools('pinterest', pinterestTools), ...unavailableTools('linkedin', linkedinTools),
     ...unavailableTools('x', xTools),
   ];
-  runtime.registry.register(catalog.filter(tool => !registered.has(tool.name)));
+  registry.register(catalog.filter(tool => !registered.has(tool.name)));
+}
+
+/** Estimate the advertised catalog using definitions only, without loading credentials. */
+export function hostedToolCatalogCounts(projectIds: readonly string[]) {
+  const registry = createToolRegistry(hostedRegistryOptions(projectIds));
+  completeMcpCatalog(registry, projectIds);
+  return summarizeToolCatalog(registry.list());
 }

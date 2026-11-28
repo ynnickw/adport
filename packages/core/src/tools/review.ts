@@ -22,7 +22,7 @@ export interface WriteReview {
 const words = (value: string) => value.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_.]/g, ' ').replace(/\s+/g, ' ').trim();
 const label = (value: string) => { const text = words(value); return text.charAt(0).toUpperCase() + text.slice(1); };
 const isObject = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
-const routing = /^(account_id|pending_operation_id|project_id|campaign_id|ad_group_id|ad_set_id|object_id|advertiser_id|organization_id|service|resource|method|path|endpoint|update_mask)$/i;
+const routing = /^(provider|account_id|pending_operation_id|project_id|campaign_id|ad_group_id|ad_set_id|object_id|advertiser_id|organization_id|service|resource|method|path|endpoint|update_mask)$/i;
 const budget = /^(?:(?:daily|total|lifetime|shared)[_ ]?)?(?:budget|budget_amount|amount_micros|dailyBudget\.value)(?:[_ ]?(?:micros|cents|amount|value))?$/i;
 const status = /^(?:status|entity_status|configured_status|operation_status|delivery)$/i;
 const secret = /(?:access_token|refresh_token|authorization|password|client_secret|private_key)/i;

@@ -88,6 +88,29 @@ it('reveals API key settings in Developer settings when following a capability l
   expect(requests).toHaveLength(1);
 });
 
+it('previews a Standard migration and limits it to connected platforms when saved', async () => {
+  render(<ToastProvider><ToolCatalogEditor organizationId="fixture-project" connection={{ type: 'key', id: 'fixture' }}
+    initialSelection={{ profile: 'full', providers: null }} suggestedProviders={['meta']} scopes={['tools:read']}
+    catalogCounts={[
+      { providers: [], counts: { full: { read: 3, write: 1 }, reporting: { read: 3, write: 0 }, standard: { read: 3, write: 1 } } },
+      { providers: ['meta'], counts: { full: { read: 20, write: 10 }, reporting: { read: 20, write: 0 }, standard: { read: 7, write: 4 } } },
+      { providers: ['google'], counts: { full: { read: 30, write: 15 }, reporting: { read: 30, write: 0 }, standard: { read: 8, write: 2 } } },
+    ]} onSaved={vi.fn()} /></ToastProvider>);
+  fireEvent.click(screen.getByRole('button', { name: /^Tool access/ }));
+  const dialog = within(screen.getByRole('dialog'));
+  expect(dialog.getByRole('status', { name: 'Estimated tool count' }).textContent).toBe('53 → 10 tools with Standard');
+  expect(dialog.getByRole('link', { name: /on-demand tool loading/ }).getAttribute('href')).toBe('/dashboard/developer?toolSearch=1#tool-search');
+  fireEvent.click(dialog.getByRole('button', { name: 'Use Standard' }));
+  expect(dialog.getByRole('status', { name: 'Estimated tool count' }).textContent).toBe('53 → 10 tools after saving');
+  expect(dialog.getByRole('checkbox', { name: 'Meta Ads' })).toHaveProperty('checked', true);
+  expect(dialog.getByRole('checkbox', { name: 'Google Ads' })).toHaveProperty('checked', false);
+  expect(requests).toHaveLength(0);
+  fireEvent.click(dialog.getByRole('button', { name: 'Save tool access' }));
+  await waitFor(() => expect(requests).toHaveLength(1));
+  expect(JSON.parse(requests[0]!.init!.body as string)).toMatchObject({ selection: { profile: 'standard', providers: ['meta'] } });
+  await act(async () => requests[0]!.resolve(Response.json({ selection: { profile: 'standard', providers: ['meta'] } })));
+});
+
 it('keeps unsaved access choices after a failure and discards them only when canceled', async () => {
   render(<ToolCatalogEditor organizationId="fixture-project" name="Claude"
     connection={{ type: 'oauth', client_id: 'client', user_id: 'owner', resource: 'https://app.adport.test/mcp', organization_group_id: null }}
@@ -143,8 +166,8 @@ it.each([false, true])('creates a read-only key unless changes are explicitly se
 it('copies the API tool search configuration with a placeholder for the key', async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
-  render(<ToastProvider><ApiKeyManager organizationId="fixture-project" suggestedProviders={[]} baseUrl="https://app.adport.test" /></ToastProvider>);
-  fireEvent.click(screen.getByText('Tool search for OpenAI and Claude APIs'));
+  render(<ToastProvider><ApiKeyManager organizationId="fixture-project" suggestedProviders={[]} baseUrl="https://app.adport.test" openToolSearch /></ToastProvider>);
+  expect(screen.getByText('Tool search for OpenAI and Claude APIs').closest('details')?.open).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'Copy OpenAI Responses API tool search config' }));
   fireEvent.click(screen.getByRole('button', { name: 'Copy Claude Messages API tool search config' }));
   await waitFor(() => expect(writeText).toHaveBeenCalledTimes(2));

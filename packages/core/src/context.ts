@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { AdportError } from './errors.js';
 import { analyticsTools } from './tools/acquisition.js';
+import { CAMPAIGN_PROVIDERS, campaignMapping, type CampaignProvider } from './tools/campaign-mappings.js';
+import { campaignTools } from './tools/campaigns.js';
 import { auditTools } from './audit/tools.js';
 import { CredentialStore } from './credentials/store.js';
 import { PolicyEngine } from './policy/engine.js';
@@ -29,6 +31,8 @@ export interface CreateContextOptions {
   capabilityProviders?: readonly ToolProvider[];
   /** A hosted multi-project catalog may describe available website platforms before connection. */
   analyticsProviders?: readonly typeof ANALYTICS_PROVIDERS[number][];
+  /** Hosted catalogs can advertise providers which a different selected project may have connected. */
+  campaignProviders?: readonly CampaignProvider[];
   /**
    * Include the credential-free mock provider. Disabled by default so a
    * misconfigured live runtime cannot silently substitute synthetic accounts.
@@ -66,7 +70,7 @@ export function selectRuntimeCatalog(runtime: AdportRuntime, selection: ToolSele
   registry.call = async (name, input, ctx) => {
     const tool = registry.get(name);
     if (tool.sourceProviders && input && typeof input === 'object' && 'provider' in input && !tool.sourceProviders.some(id => id === input.provider)) {
-      throw new AdportError('NOT_CONNECTED', 'This analytics platform is unavailable in the selected connection.');
+      throw new AdportError('NOT_CONNECTED', 'This platform is unavailable in the selected connection.');
     }
     return runtime.registry.call(name, input, ctx);
   };
@@ -83,15 +87,8 @@ export function selectRuntimeCatalog(runtime: AdportRuntime, selection: ToolSele
   } };
 }
 
-export async function createContext(options: CreateContextOptions = {}): Promise<AdportRuntime> {
+export function createToolRegistry(options: Pick<CreateContextOptions, 'providerModules' | 'analyticsProviders' | 'campaignProviders' | 'capabilityProviders' | 'includeMock'> = {}): ToolRegistry {
   const modules = options.providerModules ?? [];
-  const includeMock = options.includeMock ?? false;
-
-  const providers = new ProviderRegistry();
-  const { policy, source } = await loadPolicy(options.policyPath);
-  const engine = options.engine ?? new PolicyEngine(policy);
-  const credentials = new CredentialStore();
-
   const registry = new ToolRegistry();
   registry.register(builtinTools());
   registry.register(capabilityTools(options.capabilityProviders));
@@ -99,16 +96,29 @@ export async function createContext(options: CreateContextOptions = {}): Promise
   registry.register(auditTools());
 
   for (const module of modules) {
-    providers.register(module.provider);
     registry.register(module.tools);
   }
   const sources = options.analyticsProviders ?? ANALYTICS_PROVIDERS.filter(id => modules.some(m => m.provider.id === id && m.provider.acquisitionAnalytics));
   registry.register(analyticsTools(sources));
-  if (includeMock) {
-    providers.register(new MockProvider());
-    registry.register(mockTools());
-  }
+  const campaignSources = options.campaignProviders ?? CAMPAIGN_PROVIDERS.filter(id => modules.some(module =>
+    module.provider.id === id && module.tools.some(tool => tool.name === campaignMapping(id).list)));
+  const writableCampaignSources = campaignSources.filter(id => {
+    const module = modules.find(entry => entry.provider.id === id);
+    return !module || module.tools.some(tool => tool.name === id + '_set_campaign_status' && tool.annotations.readOnly === false);
+  });
+  registry.register(campaignTools(registry, campaignSources, writableCampaignSources));
+  if (options.includeMock) registry.register(mockTools());
+  return registry;
+}
 
+export async function createContext(options: CreateContextOptions = {}): Promise<AdportRuntime> {
+  const providers = new ProviderRegistry();
+  const { policy, source } = await loadPolicy(options.policyPath);
+  const engine = options.engine ?? new PolicyEngine(policy);
+  const credentials = new CredentialStore();
+  const registry = createToolRegistry(options);
+  for (const module of options.providerModules ?? []) providers.register(module.provider);
+  if (options.includeMock) providers.register(new MockProvider());
   const ctx: ToolContext = {
     providers,
     engine,

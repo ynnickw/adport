@@ -54,14 +54,17 @@ it('maps every registered tool to a branded view and supplies a structured revie
         validate: async (_provider: unknown, op: { tool: string }) => { expect(op.tool).toBe(source.name); return { pendingOperationId: 'pending', expiresAt: '2099-01-01T00:00:00Z', preview: planned }; },
         apply: async (_provider: unknown, op: { tool: string }, pending: string) => { expect(op.tool).toBe(source.name); expect(pending).toBe('pending'); return { result: { applied: true, resourceIds: ['example'] }, preview: planned }; },
       } as unknown as PolicyEngine;
-      const args = { account_id: 'example', name: 'Example', status: 'PAUSED', arbitrary_setting: { enabled: false } };
+      const sharedCampaign = source.name === 'campaign_set_status';
+      const args = sharedCampaign
+        ? { provider: 'meta', account_id: '1234567890', campaign_id: '123', status: 'paused' }
+        : { account_id: 'example', name: 'Example', status: 'PAUSED', arbitrary_setting: { enabled: false } };
       const media = { scopeId: 'example', get: async () => undefined, previewWrite: async () => planned, applyWrite: async () => ({ applied: true, resourceIds: [] }) } as unknown as NonNullable<typeof base.ctx.media>;
       const preview = await source.handler(args as never, { ...base.ctx, engine, media });
       const applied = await source.handler({ ...args, pending_operation_id: 'pending' } as never, { ...base.ctx, engine, media });
       for (const result of [preview, applied]) {
         expect(source.output!.safeParse(result).success, source.name).toBe(true);
-        expect(result, source.name).toHaveProperty('preview.review.provider', source.name.startsWith('media_') ? 'media' : source.namespace);
-        expect(result, source.name).toHaveProperty('preview.review.accountId', 'example');
+        expect(result, source.name).toHaveProperty('preview.review.provider', args.provider ?? (source.name.startsWith('media_') ? 'media' : source.namespace));
+        expect(result, source.name).toHaveProperty('preview.review.accountId', args.account_id);
         expect(result, source.name).toHaveProperty('preview.review.fields');
       }
     }

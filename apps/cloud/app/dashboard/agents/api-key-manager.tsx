@@ -10,11 +10,14 @@ import { adportToolSearchConfig } from '@/lib/mcp-tool-search-config';
 import type { ToolProvider, ToolSelection } from '@adport/core/tool-catalog';
 import { ToolCatalogFields } from '@/components/tool-catalog-fields';
 import { ToolCatalogEditor } from '@/components/tool-catalog-editor';
-import { LEGACY_TOOL_SELECTION, toolSelectionFromForm } from '@/lib/mcp-tool-selection';
+import { LEGACY_TOOL_SELECTION, toolSelectionFromForm, type ToolCatalogCountGroup } from '@/lib/mcp-tool-selection';
 
-interface KeySummary { id: string; name: string; keyPrefix: string; createdAt: string; lastUsedAt: string | null; toolSelection?: ToolSelection; }
+interface KeySummary { id: string; name: string; keyPrefix: string; createdAt: string; lastUsedAt: string | null; toolSelection?: ToolSelection; scopes?: string[] }
 
-export function ApiKeyManager({ organizationId, suggestedProviders, baseUrl }: { organizationId: string; suggestedProviders: ToolProvider[]; baseUrl: string }) {
+export function ApiKeyManager({ organizationId, suggestedProviders, baseUrl, catalogCounts, openToolSearch }: {
+  organizationId: string; suggestedProviders: ToolProvider[]; baseUrl: string;
+  catalogCounts?: readonly ToolCatalogCountGroup[]; openToolSearch?: boolean;
+}) {
   const [keys, setKeys] = useState<KeySummary[]>();
   const [createdKey, setCreatedKey] = useState<string>();
   const [name, setName] = useState('');
@@ -96,7 +99,16 @@ export function ApiKeyManager({ organizationId, suggestedProviders, baseUrl }: {
         <div className="row-actions secret-key-actions"><Button type="button" className="button secondary small" onClick={() => void copyKey()}>Copy key</Button><Button type="button" className="link-button" onClick={() => setRevealed(value => !value)}>{revealed ? 'Hide key' : 'Show key'}</Button><Button type="button" className="link-button" onClick={() => { setCreatedKey(undefined); setRevealed(false); }}>Done</Button></div>
       </div> : null}
       {keys?.length === 0 ? <p className="inline-note">No API keys for this project.</p> : null}
-      <div className="row-list">{keys?.map(key => <div className="row-item" key={key.id}><div className="assistant-connection-details"><strong>{key.name}</strong><div className="cell-sub">{key.keyPrefix}… · created {formatDate(key.createdAt)} · {key.lastUsedAt ? `last used ${formatDate(key.lastUsedAt)}` : 'never used'}</div><ToolCatalogEditor organizationId={organizationId} connection={{ type: 'key', id: key.id }} initialSelection={key.toolSelection ?? LEGACY_TOOL_SELECTION} onSaved={() => void load()} /></div><Button className="button danger small" disabled={busy} pending={busyAction === key.id} pendingLabel="Revoking…" onClick={() => void revoke(key.id)}>Revoke</Button></div>)}</div>
+      <div className="row-list">{keys?.map(key => <div className="row-item" key={key.id}>
+        <div className="assistant-connection-details">
+          <strong>{key.name}</strong>
+          <div className="cell-sub">{key.keyPrefix}… · created {formatDate(key.createdAt)} · {key.lastUsedAt ? `last used ${formatDate(key.lastUsedAt)}` : 'never used'}</div>
+          <ToolCatalogEditor organizationId={organizationId} connection={{ type: 'key', id: key.id }}
+            initialSelection={key.toolSelection ?? LEGACY_TOOL_SELECTION} catalogCounts={catalogCounts}
+            scopes={key.scopes} suggestedProviders={suggestedProviders} onSaved={() => void load()} />
+        </div>
+        <Button className="button danger small" disabled={busy} pending={busyAction === key.id} pendingLabel="Revoking…" onClick={() => void revoke(key.id)}>Revoke</Button>
+      </div>)}</div>
       <Disclosure label="Create API key" className="developer-create">
       <form className="stack" onSubmit={event => { event.preventDefault(); void create(toolSelectionFromForm(new FormData(event.currentTarget))); }}>
         <Input value={name} onChange={event => setName(event.target.value)} placeholder="Key name, e.g. Reporting script" aria-label="Key name" />
@@ -105,8 +117,8 @@ export function ApiKeyManager({ organizationId, suggestedProviders, baseUrl }: {
         <div><Button type="submit" className="button secondary" disabled={busy} pending={busyAction === 'create'} pendingLabel="Creating…">Create key</Button></div>
       </form>
       </Disclosure>
-      <Disclosure label="Tool search for OpenAI and Claude APIs">
-        <p>Keep Standard for everyday tasks. For specialist workflows, choose Full for this key and use tool search to load definitions on demand.</p>
+      <Disclosure id="tool-search" label="Tool search for OpenAI and Claude APIs" open={openToolSearch}>
+        <p>Use a Full key for specialist workflows and let your model load its tools on demand. The key’s selected platforms, scopes, and approvals still apply.</p>
         <p>Copy the fields into your model API request. Replace <code>YOUR_ADPORT_API_KEY</code> in your application’s server-side code.</p>
         {adportToolSearchConfig(baseUrl).map(({ name, docsUrl, header, config }) => <div className="stack" key={name}>
           <h3><a href={docsUrl} target="_blank" rel="noreferrer">{name}</a></h3>

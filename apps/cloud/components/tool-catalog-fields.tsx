@@ -6,10 +6,11 @@ import { CLOUD_PROVIDERS } from '@/lib/cloud/types';
 import { Button, Checkbox } from './controls';
 import { InfoTooltip } from './info-tooltip';
 import { providerLabel } from '@/lib/cloud/providers';
-import { TOOL_PROFILE_OPTIONS } from '@/lib/mcp-tool-selection';
+import { standardToolSelection, TOOL_PROFILE_OPTIONS } from '@/lib/mcp-tool-selection';
 
-export function ToolCatalogFields({ initialSelection, disabled = false, manage = false, onSelectionChange }: {
+export function ToolCatalogFields({ initialSelection, suggestedProviders, disabled = false, manage = false, onSelectionChange }: {
   initialSelection: ToolSelection; disabled?: boolean; manage?: boolean; onSelectionChange?: (selection: ToolSelection) => void;
+  suggestedProviders?: readonly ToolProvider[];
 }) {
   const platformControlsId = useId();
   const [profile, setProfile] = useState(initialSelection.profile);
@@ -22,14 +23,19 @@ export function ToolCatalogFields({ initialSelection, disabled = false, manage =
     setProfile(next);
     onSelectionChange?.({ profile: next, providers });
   }
-  function updatePlatforms(next: ToolSelection['providers']) {
+  function updatePlatforms(next: ToolSelection['providers'], nextProfile = profile) {
     setAllPlatforms(next === null);
     if (next !== null) setCustomProviders(next);
-    onSelectionChange?.({ profile, providers: next });
+    onSelectionChange?.({ profile: nextProfile, providers: next });
   }
   function toggle(provider: ToolProvider, checked: boolean) {
     const next = checked ? [...chosen, provider] : chosen.filter(value => value !== provider);
     updatePlatforms(next);
+  }
+  function useStandard() {
+    const selection = standardToolSelection({ profile, providers }, suggestedProviders);
+    setProfile(selection.profile);
+    updatePlatforms(selection.providers, selection.profile);
   }
   const platformSummary = providers === null ? 'All platforms' : providers.length ? `${providers.length} selected` : 'None selected';
   return <div className={`assistant-access-fields${manage ? '' : ' tool-catalog-fields'}`}>
@@ -44,6 +50,7 @@ export function ToolCatalogFields({ initialSelection, disabled = false, manage =
           <InfoTooltip label={`About ${option.label} access`}>{option.details}</InfoTooltip>
         </div>)}
       </div>
+      {manage && profile === 'full' ? <Button className="link-button assistant-use-standard" type="button" onClick={useStandard}>Use Standard</Button> : null}
     </fieldset>
     <div className="tool-platform-field">
       <div className="tool-platform-header">

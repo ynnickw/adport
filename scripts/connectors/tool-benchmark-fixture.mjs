@@ -17,6 +17,21 @@ export const cases = [
     answer: /(?=[\s\S]*(?:23\.45|23,45))(?=[\s\S]*\b120\b)/,
   },
   {
+    id: 'campaign-list',
+    prompt: 'List the Google Ads campaigns in Northwind account 1234567890 with their configured status. Use Adport’s shared campaign listing tool.',
+    tool: 'campaigns_list',
+    args: args => args.provider === 'google' && args.account_id === googleAccount,
+    answer: /(?=[\s\S]*Northwind Search)(?=[\s\S]*enabled)/i,
+  },
+  {
+    id: 'campaign-status-preview',
+    prompt: 'Use Adport’s shared campaign status tool to preview pausing Google Ads campaign 987654321 in Northwind account 1234567890. Show the proposed change and stop at the preview.',
+    tool: 'campaign_set_status',
+    args: args => args.provider === 'google' && args.account_id === googleAccount
+      && args.campaign_id === campaign && args.status === 'paused' && !Object.hasOwn(args, 'pending_operation_id'),
+    answer: /(?=[\s\S]*Northwind Search)(?=[\s\S]*paus)/i,
+  },
+  {
     id: 'budget-preview',
     prompt: 'In Northwind, preview changing Google Ads campaign 987654321 in account 1234567890 to USD 45 per day. Show me the proposed change and stop before applying it.',
     tool: 'google_set_budget',
@@ -68,8 +83,9 @@ export function fixtureResult(catalog, name, args) {
   const tool = catalog.tools.find(tool => tool.name === name);
   if (!tool) return { error: 'This tool is unavailable in the fixture catalog.' };
   const shape = tool.outputSchema?.properties?._adport;
+  const view = shape?.properties?.view?.const;
   const metadata = shape ? { _adport: {
-    tool: name, view: shape.properties.view.const, providerNames: { google: 'Google Ads', meta: 'Meta' },
+    tool: name, ...(view ? { view } : {}), providerNames: { google: 'Google Ads', meta: 'Meta' },
     ...(name === 'projects_list' ? {} : { context: { project_id: north } }),
   } } : {};
   if (name === 'projects_list') return { projects: [
@@ -92,6 +108,15 @@ export function fixtureResult(catalog, name, args) {
       { id: metaAccount, name: 'Northwind Meta', provider: 'meta', currency: 'USD' },
     ].filter(account => !args.provider || account.provider === args.provider), errors: [], ...metadata };
   }
+  if (name === 'campaigns_list') return {
+    provider: 'google', account_id: googleAccount,
+    campaigns: [{ id: campaign, name: 'Northwind Search', status: 'ENABLED' }], truncated: false, ...metadata,
+  };
+  if (name === 'campaign_set_status') return {
+    status: 'pending_validation', applied: false, pending_operation_id: preview,
+    preview: { summary: 'Pause Northwind Search.', changes: ['Status ENABLED → PAUSED'], coercions: [], budgetDeltas: [], serverValidated: false },
+    next_step: 'To apply after approval, repeat with pending_operation_id.', ...metadata,
+  };
   if (name === 'google_set_budget') return {
     status: 'pending_validation', applied: false, pending_operation_id: preview,
     preview: { summary: 'Increase daily budget from USD 30 to USD 45.', changes: [], coercions: [],

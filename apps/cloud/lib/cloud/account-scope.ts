@@ -2,6 +2,7 @@ import 'server-only';
 import {
   AdportError,
   additionalAccountIds,
+  toolProvider,
   type AcquisitionAnalytics,
   type AdProvider,
   type Account,
@@ -48,7 +49,7 @@ export function createAccountScopeAuthorizer(accountIds: Partial<Record<CloudPro
       }
       return;
     }
-    const platform = tool.namespace === 'analytics' && typeof input.provider === 'string' ? input.provider : tool.namespace;
+    const platform = toolProvider(tool, input);
     const allowed = accountIds[platform as CloudProvider] ?? new Set<string>();
     const explicit = typeof input.account_id === 'string'
       ? input.account_id

@@ -1023,6 +1023,9 @@ input:disabled, textarea:disabled { background: rgba(245, 245, 247, 0.8); color:
 .assistant-access-footer .error-callout { margin: 0; }
 .assistant-access-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
 .assistant-access-note { margin: 0; font-size: .75rem; color: var(--muted); }
+.assistant-tool-count { margin: 0 0 .8rem; }
+.assistant-tool-count strong { color: var(--ink); font-variant-numeric: tabular-nums; }
+.assistant-use-standard { margin-top: .55rem; }
 @media (min-width: 640px) {
   .tool-platform-options.assistant-platform-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
