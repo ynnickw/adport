@@ -23,6 +23,19 @@ export const PROVIDER_GALLERY_UI = String.raw`
     let providerGallery=null;
     const galleryStable=value=>JSON.stringify((function sort(v){return Array.isArray(v)?v.map(sort):object(v)?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b)).map(([k,item])=>[k,sort(item)])):v;})(value));
     const galleryItemKey=item=>[item.provider,item.account_id,item.id].join(':');
+    function galleryItems(data,meta) {
+      const creatives=arr(data.creatives);
+      if(meta.tool!=='meta_list_ads' || !Array.isArray(data.ads)) return creatives;
+      const delivery=new Map();
+      for(const ad of data.ads) {
+        if(typeof ad?.effective_status==='string' && ad.effective_status && typeof ad.account_id==='string' && typeof ad.id==='string')
+          delivery.set(galleryItemKey({provider:'meta',account_id:ad.account_id,id:ad.id}),ad.effective_status);
+      }
+      return creatives.map(item=>{
+        const status=delivery.get(galleryItemKey(item));
+        return status?{...item,deliveryStatus:status}:item;
+      });
+    }
     function galleryScope(meta) {
       const args={...meta.refresh?.arguments};delete args[meta.pagination?.cursorInput];
       return galleryStable({tool:meta.tool,provider:meta.provider,account:meta.accountId,project:meta.context?.project_id,filters:args});
@@ -61,12 +74,12 @@ export const PROVIDER_GALLERY_UI = String.raw`
       bindGalleryCard(card,gallery);
     }
     function renderProviderGallery(data,meta) {
-      const previous=providerGallery,previousWrite=previous?.meta.capabilities?.can_write,retain=previous && previous.scope===galleryScope(meta) && app.querySelector('[data-provider-gallery]');
+      const previous=providerGallery,previousWrite=previous?.meta.capabilities?.can_write,retain=meta.accountId && previous && previous.scope===galleryScope(meta) && app.querySelector('[data-provider-gallery]');
       if(!retain) providerGallery={scope:galleryScope(meta),data,meta,items:new Map(),sources:new Map(),seen:new Set(),busy:null,review:null};
       const gallery=providerGallery;gallery.data=data;gallery.meta=meta;
       if(!retain) app.innerHTML=chrome('<div data-provider-notes></div><div class="creative-grid" data-provider-gallery role="region" aria-label="Creative previews" tabindex="0"></div><div data-provider-pages></div>','');
       const root=app.querySelector('[data-provider-gallery]');
-      for(const item of arr(data.creatives)) {
+      for(const item of galleryItems(data,meta)) {
         const key=galleryItemKey(item);gallery.sources.set(key,meta.refresh?.arguments);if(gallery.items.has(key)) {const old=gallery.items.get(key);if(galleryStable(old)!==galleryStable(item) || previousWrite!==meta.capabilities?.can_write) {const card=[...root.querySelectorAll('[data-creative-key]')].find(node=>node.dataset.creativeKey===key);gallery.items.set(key,item);if(card) {if(meta.capabilities?.can_write!==true) card.querySelector('[data-creative-editor]')?.remove();updateGalleryCard(card,old,item,gallery);}}continue;}
         gallery.items.set(key,item);
         const template=document.createElement('template');template.innerHTML=creativeCards([item],galleryMenu);const card=template.content.firstElementChild;card.dataset.creativeKey=key;root.append(card);bindGalleryCard(card,gallery);bindCreativeErrors(card);
@@ -74,7 +87,8 @@ export const PROVIDER_GALLERY_UI = String.raw`
       root.querySelector('.empty')?.remove();if(!gallery.items.size) root.innerHTML='<div class="empty">No creatives to preview.</div>';
       root.classList.toggle('creative-grid-single',gallery.items.size===1);
       app.querySelector('[data-provider-notes]').innerHTML=notices({...data,truncated:false});
-      state.result={structuredContent:{...data,creatives:[...gallery.items.values()],_adport:meta}};renderProviderPages();
+      if(meta.accountId) state.result={structuredContent:{...data,creatives:[...gallery.items.values()],_adport:meta}};
+      renderProviderPages();
     }
     function renderProviderPages(message='') {
       const gallery=providerGallery,area=app.querySelector('[data-provider-pages]');if(!gallery || !area) return;
@@ -148,7 +162,7 @@ export const PROVIDER_GALLERY_UI = String.raw`
         gallery.busy={kind:'refresh',tool:gallery.meta.tool,args};renderProviderPages();
         try {
           const response=await callTool(gallery.meta.tool,args,60000),value=galleryPageValue(response,gallery,args);if(providerGallery!==gallery) return;
-          const updated=value.creatives.find(item=>galleryItemKey(item)===review.key);
+          const updated=galleryItems(value,value._adport).find(item=>galleryItemKey(item)===review.key);
           if(!updated && !(phase==='applied' && review.kind==='remove')) throw new Error('The edited creative is outside this page. Ask your assistant for a fresh view.');
           if(!updated) {
             gallery.items.delete(review.key);gallery.sources.delete(review.key);card?.remove();gallery.seen.clear();

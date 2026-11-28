@@ -21,8 +21,8 @@ export const workflowClusters = [
   {
     slug: 'paid-search-reporting', title: 'Paid search reporting',
     audience: 'For paid search teams', task: 'Compare Google and Microsoft Ads', providers: ['google', 'microsoft'],
-    description: 'Find the campaigns behind a change in weekly search spend and the queries that brought people to your site.',
-    intro: 'When someone asks where the search budget went, give them a report they can trace back to both accounts. Use Adport to read Google Ads and Microsoft Advertising in one conversation. Compare campaign spend for the week, then follow the search terms or the budget that needs a closer look.',
+    description: 'Compare Google and Microsoft Ads spend, review search terms and see how Microsoft buys and reports search ads on DuckDuckGo.',
+    intro: 'Trace weekly search spend to the campaigns and queries behind it. Use Adport to read Google Ads and Microsoft Advertising in one conversation. If you buy search ads that can appear on DuckDuckGo, start with the Microsoft ad group’s distribution settings and check which publishers Microsoft identifies in reporting.',
     firstReport: 'Connect your search accounts on the free plan and ask which campaigns explain this week’s change in spend.',
   },
   {

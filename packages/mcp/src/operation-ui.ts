@@ -11,13 +11,6 @@ export const OPERATION_UI_SCRIPT = String.raw`
     const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
     ${OPERATION_RECONCILIATION_UI}
     const human = value => String(value).replace(/([a-z])([A-Z])/g,'$1 $2').replace(/[_.]/g,' ').replace(/^./,c=>c.toUpperCase());
-    function resultData(result) {
-      if (result?.structuredContent && typeof result.structuredContent === 'object') return result.structuredContent;
-      for (const item of arr(result?.content)) {
-        if (item.type === 'text') { try { const value=JSON.parse(item.text),data=object(value)?value:{value};return result._meta?.adport?{...data,_adport:result._meta.adport}:data; } catch {} }
-      }
-      return Array.isArray(result)?{value:result}:result || {};
-    }
     function dataFields(value, prefix='', depth=0) {
       if (!object(value) || depth>8) return [];
       return Object.entries(value).filter(([key])=>!['_adport','data_source','pending_operation_id'].includes(key)).flatMap(([key,item])=>{
@@ -198,7 +191,7 @@ export const OPERATION_UI_SCRIPT = String.raw`
       else send({jsonrpc:'2.0',id:id++,method:'ui/update-model-context',params:{structuredContent:{adport_operation:facts}}});
     }
     function renderFailure(data,meta,isWrite) {
-      const phase=errorPhase(data),title=phase==='expired'?'Preview expired':phase==='blocked'?'Action blocked':isWrite?'Outcome unconfirmed':'Request failed';
+      const phase=errorPhase(data),title=phase==='expired'?'Preview expired':phase==='blocked'?'Action blocked':isWrite?'Outcome unconfirmed':data.error==='UNREADABLE_TOOL_RESULT'?'Result unreadable':'Request failed';
       app.innerHTML=chrome(operationHeader(title,meta.accountId,meta.provider)+'<p class="operation-note" role="alert">'+esc(data.message || (isWrite?'Check the result before retrying.':'See the tool response for details.'))+'</p>'+(!['expired','blocked'].includes(phase) && isWrite?'<p class="operation-note">Check the current state before retrying.</p>':'')+'<details><summary>Details</summary><pre>'+esc(JSON.stringify(data,null,2))+'</pre></details>','');
     }
 `;

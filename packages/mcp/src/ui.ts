@@ -16,7 +16,7 @@ import { PLANNING_UI } from './planning-ui.js';
 import { READ_PAGE_UI } from './read-page-ui.js';
 import { REPORT_CHART_SCRIPT, REPORT_CHART_STYLES } from './report-chart-ui.js';
 
-export const ADPORT_UI_VERSION = 41;
+export const ADPORT_UI_VERSION = 42;
 export const ADPORT_UI_URI = `ui://adport/insight-card-v${ADPORT_UI_VERSION}.html`;
 export const ADPORT_SUMMARY_UI_URI = `ui://adport/summary-card-v${ADPORT_UI_VERSION}.html`;
 export const ADPORT_UI_DOMAIN = 'https://app.adport.dev';
@@ -365,6 +365,44 @@ ${NATIVE_REPORT_UI_SCRIPT}
 ${REPORT_CHART_SCRIPT}
 ${INSIGHT_UI_SCRIPT}
 ${TREND_UI_SCRIPT}
+    function isToolResult(value) {
+      return object(value) && (Object.hasOwn(value,'structuredContent') || Array.isArray(value.content) && value.content.every(block=>typeof block?.type==='string'))
+        && Object.keys(value).every(key=>['content','structuredContent','_meta','isError'].includes(key));
+    }
+    function textPayload(content) {
+      const blocks=arr(content).filter(block=>block?.type==='text' && typeof block.text==='string');
+      for (const block of blocks) {
+        try { return JSON.parse(block.text); } catch {}
+      }
+      if (blocks.length===1 && content.length===1) {
+        const text=blocks[0].text, first=text.trimStart()[0];
+        if (first==='{' || first==='[') return {error:'UNREADABLE_TOOL_RESULT',message:'The widget could not read the complete tool response. Check the result in the conversation.'};
+        return {message:text};
+      }
+    }
+    function normalizeToolResult(input,hostMeta) {
+      let value=input, envelopeMeta, isError=false, fromText=false;
+      // A host can forward a complete CallToolResult inside another text block.
+      // Stop at the provider payload, including its own result, content or copy.
+      for (let depth=0;depth<8 && isToolResult(value);depth++) {
+        isError ||= value.isError===true;
+        envelopeMeta ??= value._meta?.adport;
+        fromText=value.structuredContent==null;
+        const next=fromText?textPayload(value.content):value.structuredContent;
+        if (next===undefined) break;
+        value=next;
+      }
+      const data=object(value)?value:{value};
+      const meta=hostMeta ?? (fromText?undefined:data._adport) ?? envelopeMeta;
+      let structuredContent=data;
+      if (meta!==data._adport) {
+        structuredContent={...data};
+        if (meta) structuredContent._adport=meta;
+        else delete structuredContent._adport;
+      }
+      return {structuredContent,...(isError?{isError:true}:{})};
+    }
+    function resultData(result) { return result?.structuredContent ?? {}; }
     async function callTool(tool,parameters,timeoutMs=30000) {
       const requestId=id++;
       return new Promise((resolve,reject)=>{
@@ -375,7 +413,7 @@ ${TREND_UI_SCRIPT}
             const request=pendingRequests.get(requestId);if (request) {clearTimeout(request.timer);pendingRequests.delete(requestId);request.resolve(result);}
           },error=>{const request=pendingRequests.get(requestId);if (request) {clearTimeout(request.timer);pendingRequests.delete(requestId);request.reject(error);}});
         } else send({jsonrpc:'2.0',id:requestId,method:'tools/call',params:{name:tool,arguments:parameters}});
-      });
+      }).then(result=>result==null?result:normalizeToolResult(result));
     }
 ${MEDIA_UPLOAD_UI}
 ${MEDIA_LIBRARY_UI}
@@ -383,11 +421,27 @@ ${CREATIVE_UI_SCRIPT}
 ${PROVIDER_GALLERY_UI}
 ${WORKFLOW_UI}
 ${PLANNING_UI}
+    function readPresentation(data) {
+      // Some hosts forward only the public text result. These views need no
+      // account scope, pagination arguments or write capability to display it.
+      const name=state.host.toolInfo?.tool?.name, tool=typeof name==='string'?name.split('__').pop():undefined;
+      if ((!tool || tool==='meta_list_ads') && Array.isArray(data.ads) && Array.isArray(data.creatives) &&
+          data.creatives.every(item=>item?.provider==='meta' && typeof item.id==='string' && typeof item.account_id==='string')) {
+        return {tool:'meta_list_ads',view:'creatives',provider:'meta'};
+      }
+      const rows=data.result?.rows;
+      const appleMetrics=metrics=>object(metrics?.localSpend) && (Object.hasOwn(metrics,'taps') || Object.hasOwn(metrics,'totalInstalls'));
+      if (Array.isArray(rows) && (tool==='apple_report' || !tool && (appleMetrics(data.result.summary?.grandTotal) ||
+          rows.some(row=>appleMetrics(row?.totalMetrics) || arr(row?.granularMetrics).some(appleMetrics))))) {
+        return {tool:'apple_report',view:'records',provider:'apple'};
+      }
+      return {};
+    }
     function render(result) {
       cancelHold();clearTimeout(expiryTimer);trendResize?.disconnect();
       let data=resultData(result);
       if (!object(data)) data={value:data};
-      const meta = data._adport || {};
+      const meta = data._adport || readPresentation(data);
       recordPages=null;
       if(providerGallery && meta.view!=='creatives' && (!providerGallery.review || meta.view!=='operation' || meta.tool!==providerGallery.review.tool || meta.accountId!==providerGallery.meta.accountId || meta.context?.project_id!==providerGallery.meta.context?.project_id)) providerGallery=null;
       syntheticResult = data.data_source === 'synthetic';
@@ -427,12 +481,13 @@ ${PLANNING_UI}
       hostResults.add(fingerprint);
       if (hostResults.size>16) hostResults.delete(hostResults.values().next().value);
     }
-    function acceptResult(result,local=false) {
-      if (!result || typeof result !== 'object') return;
+    function acceptResult(input,local=false,hostMeta) {
+      if (input==null) return;
+      const result=normalizeToolResult(input,hostMeta);
       const incoming=resultData(result);
       if(!local && (providerGalleryIgnoreEcho(incoming) || mediaLibraryIgnoreEcho(incoming) || recordPagesIgnoreEcho(incoming) || readPageIgnoreEcho(incoming) || distributionIgnoreEcho(incoming))) return;
-      if(!local && (app.querySelector('[data-media-gallery]') && uploads.items.length>0 && ['media_prepare_upload','media_finalize_upload','media_get'].includes(incoming?._adport?.tool || result._meta?.adport?.tool) || mediaLibrary?.loading && incoming?._adport?.tool==='media_list' && mediaLibraryProject(incoming,incoming._adport)===mediaLibrary.project)) return;
-      const fingerprint=JSON.stringify(incoming);
+      if(!local && (app.querySelector('[data-media-gallery]') && uploads.items.length>0 && ['media_prepare_upload','media_finalize_upload','media_get'].includes(incoming?._adport?.tool) || mediaLibrary?.loading && incoming?._adport?.tool==='media_list' && mediaLibraryProject(incoming,incoming._adport)===mediaLibrary.project)) return;
+      const fingerprint=(result.isError?'error:':'')+JSON.stringify(incoming);
       // Host state updates can echo an old tool result after a local edit/apply.
       if (!local && state.hasLocalResult && hostResults.has(fingerprint)) return;
       if (local) state.hasLocalResult=true;
@@ -449,8 +504,7 @@ ${PLANNING_UI}
       if (!globals) return;
       const metadata = globals.toolResponseMetadata;
       const envelope = metadata?.mcp_tool_result || metadata?.call_tool_result;
-      if (envelope && typeof envelope === 'object') return acceptResult(envelope);
-      if (globals.toolOutput && typeof globals.toolOutput === 'object') acceptResult({structuredContent:{...globals.toolOutput,...(metadata?.adport?{_adport:metadata.adport}:{})}});
+      acceptResult(object(envelope)?envelope:globals.toolOutput,false,metadata?.adport);
     }
     // Some hosts mount an error result's resource but never relay its payload.
     // This is a delivery fallback, not a claim about tool execution or success.
@@ -484,12 +538,12 @@ ${PLANNING_UI}
       if (message.method === 'ui/notifications/tool-result') acceptResult(message.params);
       if (message.method === 'ui/notifications/tool-cancelled') acceptResult({structuredContent:{cancelled:true,message:message.params?.reason}});
       if (message.method === 'ui/notifications/host-context-changed') {
-        const previousLocale = state.host.locale;
+        const previousHost = state.host;
         state.host = {...state.host,...message.params};
         document.documentElement.dataset.theme = state.host.theme || '';
         // Size/theme updates must not rebuild the DOM: opening Details changes
         // the iframe height, which some hosts echo back as a context update.
-        if (state.result && previousLocale !== state.host.locale) {
+        if (state.result && (previousHost.locale!==state.host.locale || !resultData(state.result)._adport && previousHost.toolInfo?.tool?.name!==state.host.toolInfo?.tool?.name)) {
           const expanded = app.querySelector('details')?.open || false;
           render(state.result);
           const details = app.querySelector('details');
