@@ -39,6 +39,19 @@ describe('provider-specific account picker', () => {
     await expect(AccountsPage({ searchParams: Promise.resolve({ select_provider: 'gtm' }) })).rejects.toThrow('NEXT_REDIRECT:/dashboard/analytics');
   });
 
+  it('puts connected analytics platforms first and links to their filtered sources below', async () => {
+    mocks.connections.mockResolvedValue([
+      { provider: 'gsc', status: 'revoked', scopes: [], connectedAt: new Date() },
+      { provider: 'gtm', status: 'connected', scopes: [], connectedAt: new Date() },
+    ]);
+    const html = renderToStaticMarkup(await AnalyticsPage({ searchParams: Promise.resolve({ select_provider: 'gtm' }) }));
+    expect(html).toMatch(/Analytics platforms[\s\S]*id="platform-gtm"[\s\S]*id="platform-gsc"[\s\S]*id="platform-ga4"[\s\S]*id="account-access"[\s\S]*Source access/);
+    expect(html).toContain('href="/dashboard/analytics?select_provider=gtm#account-access"');
+    expect(html).toContain('href="/dashboard/analytics#account-access"');
+    expect(html).toContain('gtm unique account');
+    expect(html).not.toContain('gsc unique account');
+  });
+
   it.each(OAUTH_PROVIDERS)('only renders %s accounts while preserving workspace limits', (providerFilter) => {
     const html = renderToStaticMarkup(<AccountAccessManager organizationId="org" accounts={accounts} canManage maxActiveAccounts={3} providerFilter={providerFilter} />);
     expect(html).toContain(`${providerFilter} unique account`);

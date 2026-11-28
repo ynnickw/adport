@@ -22,7 +22,7 @@ describe.each([['ga4', GA4_SCOPES], ['gsc', GSC_SCOPES]] as const)('%s cloud OAu
     expect(oauthAvailability('customer')[provider]).toBe(provider === 'gsc');
     expect(oauthAvailability()[provider]).toBe(provider === 'gsc');
     expect(usesAdAccountSlot(provider)).toBe(false);
-    expect(providerAccountsPath(provider)).toBe(`/dashboard/analytics?select_provider=${provider}`);
+    expect(providerAccountsPath(provider)).toBe(`/dashboard/analytics?select_provider=${provider}#account-access`);
   });
   it('uses its read-only scope, independent application, exact callback, state and PKCE', () => {
     vi.stubEnv('ANALYTICS_TEST_ORGANIZATION_IDS', 'internal'); resetEnvForTests();

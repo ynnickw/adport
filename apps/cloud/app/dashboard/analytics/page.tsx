@@ -55,19 +55,21 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
     {params.error ? <div className="error-callout" role="alert">{params.error}</div> : null}
     <SuccessToast message={params.accounts_saved ? params.access_enabled === '1' ? 'Sources enabled for assistants.' : 'Sources saved without enabling new sources.' : undefined} />
     {params.selection_id || params.selection_unavailable ? <div className="error-callout" role="alert">This selection is no longer available. {canManage ? 'Choose the platform again to restart.' : 'Ask an owner or admin to restart it.'}</div> : null}
-    {providerFilter ? <div><Link className="button secondary small" href="/dashboard/analytics">View all sources</Link></div> : null}
-    <PendingAccountSelections connections={pending} canManage={canManage} noun="sources" />
-    {accounts.length ? <div id="account-access"><AccountAccessManager key={tenant.organizationId} category="analytics"
-      organizationId={tenant.organizationId} canManage={canManage} maxActiveAccounts={null} providerFilter={providerFilter}
-      accounts={accounts.map(account => ({ ...account, connectionStatus: analyticsConnections.find(connection => connection.provider === account.provider)?.status ?? 'revoked',
-        accountSelectionId: analyticsConnections.find(connection => connection.provider === account.provider)?.accountSelectionId,
-        accountSelectionUnavailable: analyticsConnections.find(connection => connection.provider === account.provider)?.accountSelectionUnavailable }))} /></div>
-        : !pending.length ? <section id="account-access" className="card"><div className="empty"><h2>No sources yet</h2><p>{canManage ? 'Connect an analytics or tracking platform to choose sources.' : 'Ask a project owner or admin to add a source.'}</p>{addSource}</div></section> : null}
     <section className="dashboard-section">
       <h2>Analytics platforms</h2>
       <ProviderConnections organizationId={tenant.organizationId} projectName={tenant.organizationName} canManage={canManage}
         returnTo="/dashboard/analytics" oauthProviders={providers} connections={views} />
     </section>
+    <PendingAccountSelections connections={pending} canManage={canManage} noun="sources" />
+    {accounts.length > 0 || !pending.length || providerFilter ? <div id="account-access" className="stack">
+      {providerFilter ? <div><Link className="button secondary small" href="/dashboard/analytics#account-access">View all sources</Link></div> : null}
+      {accounts.length ? <AccountAccessManager key={tenant.organizationId} category="analytics"
+        organizationId={tenant.organizationId} canManage={canManage} maxActiveAccounts={null} providerFilter={providerFilter}
+        accounts={accounts.map(account => ({ ...account, connectionStatus: analyticsConnections.find(connection => connection.provider === account.provider)?.status ?? 'revoked',
+          accountSelectionId: analyticsConnections.find(connection => connection.provider === account.provider)?.accountSelectionId,
+          accountSelectionUnavailable: analyticsConnections.find(connection => connection.provider === account.provider)?.accountSelectionUnavailable }))} />
+        : !pending.length ? <section className="card"><div className="empty"><h2>No sources yet</h2><p>{canManage ? 'Connect an analytics or tracking platform to choose sources.' : 'Ask a project owner or admin to add a source.'}</p>{addSource}</div></section> : null}
+    </div> : null}
     </div>
   </main>;
 }
