@@ -94,8 +94,17 @@ export const providers = [
   },
   {
     id: 'microsoft', slug: 'microsoft-ads', name: 'Microsoft Ads', label: 'Your search campaigns. In your agent.',
-    description: 'Connect Microsoft Advertising and Bing Ads to Claude Code or Cursor with Adport MCP. Read campaign reports and preview budget or status changes using your API access.',
-    intro: 'Use your AI agent to work with Microsoft Advertising, including campaigns commonly searched for as Bing Ads. Pull reports, inspect delivery, and prepare changes with an explicit approval step.',
+    description: 'Connect Microsoft Advertising to your AI assistant. Review Bing campaigns, check ad distribution for DuckDuckGo Search, and preview budget or status changes.',
+    intro: 'Use your AI agent to review Microsoft Advertising campaigns, often called Bing Ads. The same account buys search ads that can appear on DuckDuckGo. Read campaign results, inspect ad group distribution and preview supported changes.',
+    cloudSetup: [
+      'Open Connections in the Adport Cloud project for this advertiser. Choose Microsoft Advertising and sign in with a user who can access the intended ad account.',
+      'Select the numeric advertising account ID, save it and enable agent access. A manager login can see several advertisers.',
+      'Authorize your AI assistant for the same project. Ask it to list the search campaign and its ad groups so you can check where the campaign is eligible to serve.',
+    ],
+    guides: [
+      ['/resources/advertise-on-duckduckgo', 'How to advertise on DuckDuckGo'],
+      ['/resources/duckduckgo-ads-reporting', 'What Microsoft reports about DuckDuckGo clicks'],
+    ],
     keywords: ['Microsoft Ads MCP', 'Bing Ads MCP', 'Microsoft Advertising Claude', 'Bing Ads ChatGPT'],
     workflows: [
       ['Turn reports into a conversation', 'Request campaign performance without manually handling report downloads. Adport manages Microsoft’s asynchronous report flow and returns normalized results.'],
